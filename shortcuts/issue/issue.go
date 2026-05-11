@@ -21,6 +21,7 @@ type existingIssue struct {
 
 func Shortcuts() []*common.Shortcut {
 	return []*common.Shortcut{
+		newBatchCloseShortcut(),
 		{
 			Name:        "list",
 			Description: "List issues",

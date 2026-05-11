@@ -122,7 +122,7 @@ skills/
 |-------|------|----------|
 | **gitlink-shared** | 认证、全局参数、API 参考、安全规则、分支约定 | `auth login`, `auth status` |
 | **gitlink-repo** | 仓库管理 | `repo +list`, `repo +create`, `repo +info`, `repo +fork` |
-| **gitlink-issue** | Issue 管理 | `issue +create`, `issue +list`, `issue +view`, `issue +close` |
+| **gitlink-issue** | Issue 管理 | `issue +create`, `issue +list`, `issue +view`, `issue +close`, `issue +batch-close` |
 | **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +review` |
 | **gitlink-branch** | 分支管理 | `branch +list`, `branch +create`, `branch +protect` |
 | **gitlink-release** | 版本发布 | `release +list`, `release +create`, `release +view` |
@@ -169,6 +169,9 @@ gitlink-cli issue +comment -i 123 -b "已修复"
 
 # 关闭 Issue
 gitlink-cli issue +close -i 123
+
+# 预览批量关闭 Issue
+gitlink-cli issue +batch-close --numbers 123,124 --dry-run
 ```
 
 详见: [gitlink-issue/examples/issue-workflow.md](gitlink-issue/examples/issue-workflow.md)

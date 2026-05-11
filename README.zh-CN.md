@@ -27,7 +27,7 @@
 | 分类 | 能力 |
 |------|------|
 | 📦 仓库 | 列出、创建、Fork、删除仓库，查看仓库信息 |
-| 🐛 Issue | 创建、更新、关闭、评论 Issue |
+| 🐛 Issue | 创建、更新、关闭、批量关闭、评论 Issue |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
 | 🌿 分支 | 创建、删除、保护分支 |
 | 🏷️ 发布 | 创建、查看、删除 Release |
@@ -169,6 +169,12 @@ gitlink-cli issue +view --owner Gitlink --repo forgeplus -i 123
 
 # 关闭 Issue
 gitlink-cli issue +close --owner Gitlink --repo forgeplus -i 123
+
+# 预览批量关闭，不修改数据
+gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,124 --dry-run
+
+# 从 CSV 文件批量关闭 Issue
+gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --from issues.csv
 
 # 添加评论
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "已修复"

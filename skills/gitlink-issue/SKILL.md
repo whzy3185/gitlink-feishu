@@ -1,7 +1,7 @@
 ---
 name: gitlink-issue
 version: 2.0.0
-description: "Issue 管理：创建、查看、更新、关闭 Issue，添加评论。当用户需要操作 GitLink Issue 时触发。"
+description: "Issue 管理：创建、查看、更新、关闭/批量关闭 Issue，添加评论。当用户需要操作 GitLink Issue 时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -25,6 +25,7 @@ metadata:
 | `issue +view` | Issue 详情 | 否（公开项目） |
 | `issue +update` | 更新 Issue | 是 |
 | `issue +close` | 关闭 Issue | 是 |
+| `issue +batch-close` | 批量关闭 Issue，支持 `--dry-run` 预览 | 是（dry-run 不写入） |
 | `issue +comment` | 添加评论 | 是 |
 
 ## 使用示例
@@ -44,6 +45,12 @@ gitlink-cli issue +update --number 4 --title "新标题" --body "更新描述"
 
 # 关闭 Issue
 gitlink-cli issue +close --number 4
+
+# 预览批量关闭 Issue，不修改数据
+gitlink-cli issue +batch-close --owner myuser --repo myrepo --numbers 123,124 --dry-run
+
+# 从 CSV 文件批量关闭 Issue
+gitlink-cli issue +batch-close --owner myuser --repo myrepo --from issues.csv
 
 # 添加评论
 gitlink-cli issue +comment --number 4 --body "已修复，请验证"
@@ -73,6 +80,7 @@ gitlink-cli api POST /:owner/:repo/issues/series_update --body '{"ids":[1,2,3],"
 ## API 注意事项
 
 - **Issue 编号（`--number`）是网页 URL 中看到的序号**（如 `issues/4` 中的 `4`），不是数据库内部 ID
+- **批量关闭使用 `--numbers`，同样传网页 URL 中的 Issue 编号**，不是数据库内部 ID
 - Issue 操作使用 v1 API（`/api/v1/`），支持按 Issue 编号查询和操作
 - **创建 Issue 时 CLI 会自动设置 `status_id: 1`（新增）和 `priority_id: 2`（正常）**
 - **更新/关闭 Issue 时必须保留当前 `subject` 和 `description`**，即使只修改状态（CLI 会先读取当前 Issue 并自动带回）

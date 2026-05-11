@@ -27,7 +27,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | Category | Capabilities |
 |----------|-------------|
 | 📦 Repo | List, create, fork, delete repositories, view repo info |
-| 🐛 Issue | Create, update, close, comment on issues |
+| 🐛 Issue | Create, update, close, batch close, comment on issues |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
 | 🌿 Branch | Create, delete, protect branches |
 | 🏷️ Release | Create, view, delete releases |
@@ -169,6 +169,12 @@ gitlink-cli issue +view --owner Gitlink --repo forgeplus -i 123
 
 # Close an issue
 gitlink-cli issue +close --owner Gitlink --repo forgeplus -i 123
+
+# Preview batch close without changing data
+gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,124 --dry-run
+
+# Batch close issues from a CSV file
+gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --from issues.csv
 
 # Add a comment
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "Fixed"

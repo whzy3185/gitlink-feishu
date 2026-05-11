@@ -14,12 +14,12 @@ func TestIssueClosePreservesCurrentDescription(t *testing.T) {
 	var updatePayload map[string]interface{}
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == "GET" && r.URL.Path == "/owner/repo/issues/42.json":
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			writeJSON(t, w, map[string]interface{}{
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
-		case r.Method == "PUT" && r.URL.Path == "/owner/repo/issues/42.json":
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			updatePayload = decodeJSON(t, r)
 			writeJSON(t, w, updatePayload)
 		default:
@@ -28,7 +28,7 @@ func TestIssueClosePreservesCurrentDescription(t *testing.T) {
 	})
 	defer server.Close()
 
-	err := runIssueShortcut(t, server, "close", map[string]string{"id": "42"})
+	err := runIssueShortcut(t, server, "close", map[string]string{"number": "42"})
 	if err != nil {
 		t.Fatalf("close shortcut failed: %v", err)
 	}
@@ -42,12 +42,12 @@ func TestIssueUpdatePreservesCurrentDescriptionWhenChangingTitleAndState(t *test
 	var updatePayload map[string]interface{}
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == "GET" && r.URL.Path == "/owner/repo/issues/42.json":
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			writeJSON(t, w, map[string]interface{}{
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
-		case r.Method == "PUT" && r.URL.Path == "/owner/repo/issues/42.json":
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			updatePayload = decodeJSON(t, r)
 			writeJSON(t, w, updatePayload)
 		default:
@@ -57,9 +57,9 @@ func TestIssueUpdatePreservesCurrentDescriptionWhenChangingTitleAndState(t *test
 	defer server.Close()
 
 	err := runIssueShortcut(t, server, "update", map[string]string{
-		"id":    "42",
-		"title": "New title",
-		"state": "closed",
+		"number": "42",
+		"title":  "New title",
+		"state":  "closed",
 	})
 	if err != nil {
 		t.Fatalf("update shortcut failed: %v", err)
@@ -74,12 +74,12 @@ func TestIssueUpdatePreservesCurrentSubjectWhenChangingDescription(t *testing.T)
 	var updatePayload map[string]interface{}
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == "GET" && r.URL.Path == "/owner/repo/issues/42.json":
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			writeJSON(t, w, map[string]interface{}{
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
-		case r.Method == "PUT" && r.URL.Path == "/owner/repo/issues/42.json":
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			updatePayload = decodeJSON(t, r)
 			writeJSON(t, w, updatePayload)
 		default:
@@ -89,8 +89,8 @@ func TestIssueUpdatePreservesCurrentSubjectWhenChangingDescription(t *testing.T)
 	defer server.Close()
 
 	err := runIssueShortcut(t, server, "update", map[string]string{
-		"id":   "42",
-		"body": "New description",
+		"number": "42",
+		"body":   "New description",
 	})
 	if err != nil {
 		t.Fatalf("update shortcut failed: %v", err)
@@ -98,6 +98,37 @@ func TestIssueUpdatePreservesCurrentSubjectWhenChangingDescription(t *testing.T)
 
 	assertEqual(t, updatePayload["subject"], "Existing title")
 	assertEqual(t, updatePayload["description"], "New description")
+}
+
+func TestBatchClosePreservesCurrentDescription(t *testing.T) {
+	var updatePayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
+				"subject":     "Existing title",
+				"description": "Existing description",
+			})
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			updatePayload = decodeJSON(t, r)
+			writeJSON(t, w, updatePayload)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runIssueShortcut(t, server, "batch-close", map[string]string{
+		"numbers": "42",
+		"dry-run": "false",
+	})
+	if err != nil {
+		t.Fatalf("batch-close shortcut failed: %v", err)
+	}
+
+	assertEqual(t, updatePayload["subject"], "Existing title")
+	assertEqual(t, updatePayload["description"], "Existing description")
+	assertEqual(t, updatePayload["status_id"], float64(5))
 }
 
 func runIssueShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {

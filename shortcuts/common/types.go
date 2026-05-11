@@ -26,6 +26,7 @@ type Flag struct {
 	Usage    string
 	Required bool
 	Default  string
+	Bool     bool
 }
 
 // RuntimeContext provides helpers for shortcut implementations.
