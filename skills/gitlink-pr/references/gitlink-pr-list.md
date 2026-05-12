@@ -41,7 +41,7 @@ GET /{owner}/{repo}/pulls?state={state}&page={page}&limit={limit}
   - `0` = open
   - `1` = merged
   - `2` = closed
-- 返回的每条 PR 包含 `pull_request_id` 字段，用于 `pr +view`、`pr +merge`、`pr +close` 等操作
+- 返回的每条 PR 包含 `pull_request_number` 字段（即网页 URL `/pulls/N` 中的序号），用于 `pr +view`、`pr +merge`、`pr +close` 等操作
 
 ## References
 

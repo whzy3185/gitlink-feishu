@@ -8,30 +8,30 @@
 
 ```bash
 # 查看 PR 详情
-gitlink-cli pr +view --id 14200
+gitlink-cli pr +view --id 3
 
 # 简写
-gitlink-cli pr +view -i 14200
+gitlink-cli pr +view -i 3
 
 # JSON 格式输出
-gitlink-cli pr +view -i 14200 --format json
+gitlink-cli pr +view -i 3 --format json
 ```
 
 ## 参数
 
 | 参数 | 必填 | 说明 |
 |------|------|------|
-| `--id` / `-i` | 是 | PR 编号（`pull_request_id`，从 `pr +list` 或 `pr +create` 获取） |
+| `--id` / `-i` | 是 | PR 序号（`pull_request_number`，即网页 URL `/pulls/N` 中的数字，从 `pr +list` 获取） |
 
 ## API
 
 ```
-GET /{owner}/{repo}/pulls/{id}
+GET /{owner}/{repo}/pulls/{number}
 ```
 
 ## 注意事项
 
-- `--id` 使用的是 `pull_request_id`，可从 `pr +list` 或 `pr +create` 的返回结果中获取
+- `--id` 使用的是 `pull_request_number`（网页 URL 中的序号），可从 `pr +list` 返回的 `pull_request_number` 字段获取
 - 返回内容包含 PR 标题、描述、状态、源/目标分支、作者等详细信息
 - PR 状态字段 `pull_request_status`：`0` = open, `1` = merged, `2` = closed
 - 建议在执行 `pr +merge` 或 `pr +close` 前先用 `pr +view` 确认 PR 当前状态

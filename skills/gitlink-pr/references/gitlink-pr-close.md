@@ -8,22 +8,22 @@
 
 ```bash
 # 关闭 PR
-gitlink-cli pr +close --id 14200
+gitlink-cli pr +close --id 3
 
 # 简写
-gitlink-cli pr +close -i 14200
+gitlink-cli pr +close -i 3
 ```
 
 ## 参数
 
 | 参数 | 必填 | 说明 |
 |------|------|------|
-| `--id` / `-i` | 是 | PR 编号（`pull_request_id`） |
+| `--id` / `-i` | 是 | PR 序号（`pull_request_number`） |
 
 ## API
 
 ```
-POST /{owner}/{repo}/pulls/{id}/refuse_merge
+POST /{owner}/{repo}/pulls/{number}/refuse_merge
 ```
 
 ## Workflow

@@ -8,26 +8,26 @@
 
 ```bash
 # 默认 merge 方式合并
-gitlink-cli pr +merge --id 14200
+gitlink-cli pr +merge --id 3
 
 # 使用 squash 方式
-gitlink-cli pr +merge -i 14200 --method squash
+gitlink-cli pr +merge -i 3 --method squash
 
 # 使用 rebase 方式
-gitlink-cli pr +merge -i 14200 -m rebase
+gitlink-cli pr +merge -i 3 -m rebase
 ```
 
 ## 参数
 
 | 参数 | 必填 | 说明 |
 |------|------|------|
-| `--id` / `-i` | 是 | PR 编号（`pull_request_id`） |
+| `--id` / `-i` | 是 | PR 序号（`pull_request_number`） |
 | `--method` / `-m` | 否 | 合并方式：`merge`、`rebase`、`squash`（默认 `merge`） |
 
 ## API
 
 ```
-POST /{owner}/{repo}/pulls/{id}/pr_merge
+POST /{owner}/{repo}/pulls/{number}/pr_merge
 Body: { "do": "merge" }
 ```
 

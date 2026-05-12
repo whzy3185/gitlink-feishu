@@ -8,28 +8,28 @@
 
 ```bash
 # 查看变更文件
-gitlink-cli pr +files --id 14200
+gitlink-cli pr +files --id 3
 
 # 简写
-gitlink-cli pr +files -i 14200
+gitlink-cli pr +files -i 3
 
 # JSON 格式
-gitlink-cli pr +files -i 14200 --format json
+gitlink-cli pr +files -i 3 --format json
 
 # pr +diff 是等效别名
-gitlink-cli pr +diff -i 14200
+gitlink-cli pr +diff -i 3
 ```
 
 ## 参数
 
 | 参数 | 必填 | 说明 |
 |------|------|------|
-| `--id` / `-i` | 是 | PR 编号（`pull_request_id`） |
+| `--id` / `-i` | 是 | PR 序号（`pull_request_number`） |
 
 ## API
 
 ```
-GET /{owner}/{repo}/pulls/{id}/files
+GET /{owner}/{repo}/pulls/{number}/files
 ```
 
 ## 注意事项

@@ -36,18 +36,18 @@ gitlink-cli pr +list --owner Gitlink --repo forgeplus --state open
 # 创建 PR（源分支必须有实际代码变更）
 gitlink-cli pr +create --title "feat: 新增搜索功能" --head feature/search --base master --body "实现了全文搜索"
 
-# 查看 PR 详情（使用 pull_request_id）
-gitlink-cli pr +view --id 14200
+# 查看 PR 详情（使用 pull_request_number，即网页 URL 中的序号）
+gitlink-cli pr +view --id 3
 
 # 合并 PR（支持 merge/rebase/squash）
-gitlink-cli pr +merge --id 14200
-gitlink-cli pr +merge --id 14200 --method squash
+gitlink-cli pr +merge --id 3
+gitlink-cli pr +merge --id 3 --method squash
 
 # 关闭 PR（拒绝合并）
-gitlink-cli pr +close --id 14200
+gitlink-cli pr +close --id 3
 
 # 查看变更文件（含 diff 内容）
-gitlink-cli pr +files --id 14200
+gitlink-cli pr +files --id 3
 ```
 
 ## 创建 PR 的完整流程
@@ -124,7 +124,7 @@ gitlink-cli api GET /:owner/:repo/pulls/get_branches
 - GitLink 的默认分支通常是 `master`（非 `main`），创建 PR 时注意 `--base` 参数
 - 合并 PR 前建议先用 `pr +view` 确认状态
 - **PR 创建要求源分支与目标分支有实际代码差异**，否则返回"分支内容相同，无需创建合并请求"
-- PR 查看/合并/关闭需要使用 `pull_request_id`（从 `pr +create` 或 `pr +list` 返回）
+- PR 查看/合并/关闭需要使用 `pull_request_number`（即网页 URL `/pulls/N` 中的序号，从 `pr +list` 返回）
 - `pr +merge` 默认使用 merge 方式，可通过 `--method` 指定 rebase 或 squash
 - `pr +diff` 实际调用 `/pulls/:id/files` 端点，返回变更文件列表和 diff 内容
 - `pr +list` 的 `--state` 参数（open/merged/closed）仅影响统计计数，API 返回的列表可能包含所有状态的 PR

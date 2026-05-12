@@ -92,7 +92,7 @@ gitlink-cli api PUT /:owner/:repo/update_file --body '{
 - **源分支与目标分支必须有实际代码差异**，否则 API 返回 "分支内容相同，无需创建合并请求"
 - GitLink 默认主分支为 `master`（非 `main`），`--base` 默认值为 `master`
 - `create_file` 的 `content` 字段**必须 base64 编码**，不编码会返回 "文件已存在" 错误
-- 创建成功后返回的 `pull_request_id` 用于后续 view/merge/close 操作
+- 创建成功后返回的 `pull_request_number` 用于后续 view/merge/close 操作
 - 关联已有 Issue 时，把 Issue 编号或 URL 写入 PR `--body`，或用 `issue +comment` 在 Issue 下补充 PR 链接；不要为了关联 PR 直接用 Raw API 更新 Issue 描述
 
 ## References
