@@ -9,6 +9,11 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
+// v1RepoPath returns the v1 API path prefix: /v1/{owner}/{repo}
+func v1RepoPath(ctx *common.RuntimeContext) string {
+	return fmt.Sprintf("/v1/%s/%s", ctx.Owner, ctx.Repo)
+}
+
 type existingIssue struct {
 	Subject     string
 	Description string
@@ -34,7 +39,7 @@ func Shortcuts() []*common.Shortcut {
 				if s := ctx.Arg("state"); s != "" {
 					q.Set("state", s)
 				}
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/issues", q)
+				env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx)+"/issues", q)
 				if err != nil {
 					return err
 				}
@@ -61,8 +66,9 @@ func Shortcuts() []*common.Shortcut {
 				}
 				body := map[string]interface{}{
 					"subject":     title,
+					"status_id":   1, // 1 = open (required by v1 API)
+					"priority_id": 2, // 2 = normal
 					"done_ratio":  0,
-					"priority_id": 2,
 				}
 				if desc := ctx.Arg("body"); desc != "" {
 					body["description"] = desc
@@ -73,7 +79,7 @@ func Shortcuts() []*common.Shortcut {
 				if m := ctx.Arg("milestone"); m != "" {
 					body["fixed_version_id"] = m
 				}
-				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/issues", body)
+				env, err := ctx.CallAPI("POST", v1RepoPath(ctx)+"/issues", body)
 				if err != nil {
 					return err
 				}
@@ -84,17 +90,17 @@ func Shortcuts() []*common.Shortcut {
 			Name:        "view",
 			Description: "View issue details",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Issue ID or number", Required: true},
+				{Name: "number", Short: "n", Usage: "Issue number (as shown in the web URL)", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, err := ctx.RequireArg("id")
+				number, err := ctx.RequireArg("number")
 				if err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/issues/%s", ctx.RepoPath(), id), nil)
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), nil)
 				if err != nil {
 					return err
 				}
@@ -105,17 +111,17 @@ func Shortcuts() []*common.Shortcut {
 			Name:        "close",
 			Description: "Close an issue",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Issue ID", Required: true},
+				{Name: "number", Short: "n", Usage: "Issue number (as shown in the web URL)", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, err := ctx.RequireArg("id")
+				number, err := ctx.RequireArg("number")
 				if err != nil {
 					return err
 				}
-				current, err := fetchExistingIssue(ctx, id)
+				current, err := fetchExistingIssue(ctx, number)
 				if err != nil {
 					return err
 				}
@@ -125,7 +131,7 @@ func Shortcuts() []*common.Shortcut {
 					"description": current.Description,
 					"status_id":   5, // 5 = closed
 				}
-				env, err := ctx.CallAPI("PUT", fmt.Sprintf("%s/issues/%s", ctx.RepoPath(), id), body)
+				env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), body)
 				if err != nil {
 					return err
 				}
@@ -136,7 +142,7 @@ func Shortcuts() []*common.Shortcut {
 			Name:        "update",
 			Description: "Update an issue",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Issue ID", Required: true},
+				{Name: "number", Short: "n", Usage: "Issue number (as shown in the web URL)", Required: true},
 				{Name: "title", Short: "t", Usage: "New title"},
 				{Name: "body", Short: "b", Usage: "New description"},
 				{Name: "state", Short: "s", Usage: "New state: open, closed, or numeric status_id"},
@@ -145,7 +151,7 @@ func Shortcuts() []*common.Shortcut {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, err := ctx.RequireArg("id")
+				number, err := ctx.RequireArg("number")
 				if err != nil {
 					return err
 				}
@@ -156,7 +162,7 @@ func Shortcuts() []*common.Shortcut {
 					return fmt.Errorf("at least one of --title, --body, or --state is required")
 				}
 
-				current, err := fetchExistingIssue(ctx, id)
+				current, err := fetchExistingIssue(ctx, number)
 				if err != nil {
 					return err
 				}
@@ -178,7 +184,7 @@ func Shortcuts() []*common.Shortcut {
 					}
 					body["status_id"] = statusID
 				}
-				env, err := ctx.CallAPI("PUT", fmt.Sprintf("%s/issues/%s", ctx.RepoPath(), id), body)
+				env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), body)
 				if err != nil {
 					return err
 				}
@@ -189,14 +195,14 @@ func Shortcuts() []*common.Shortcut {
 			Name:        "comment",
 			Description: "Add a comment to an issue",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Issue ID", Required: true},
+				{Name: "number", Short: "n", Usage: "Issue number (as shown in the web URL)", Required: true},
 				{Name: "body", Short: "b", Usage: "Comment body", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, err := ctx.RequireArg("id")
+				number, err := ctx.RequireArg("number")
 				if err != nil {
 					return err
 				}
@@ -205,9 +211,9 @@ func Shortcuts() []*common.Shortcut {
 					return err
 				}
 				payload := map[string]interface{}{
-					"content": body,
+					"notes": body,
 				}
-				env, err := ctx.CallAPI("POST", fmt.Sprintf("/issues/%s/journals", id), payload)
+				env, err := ctx.CallAPI("POST", fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number), payload)
 				if err != nil {
 					return err
 				}
@@ -217,8 +223,8 @@ func Shortcuts() []*common.Shortcut {
 	}
 }
 
-func fetchExistingIssue(ctx *common.RuntimeContext, id string) (*existingIssue, error) {
-	getEnv, err := ctx.CallAPI("GET", fmt.Sprintf("%s/issues/%s", ctx.RepoPath(), id), nil)
+func fetchExistingIssue(ctx *common.RuntimeContext, number string) (*existingIssue, error) {
+	getEnv, err := ctx.CallAPI("GET", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), nil)
 	if err != nil {
 		return nil, err
 	}

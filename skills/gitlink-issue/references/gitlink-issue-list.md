@@ -2,7 +2,7 @@
 
 > **前置条件：** 先阅读 [`../gitlink-shared/SKILL.md`](../../gitlink-shared/SKILL.md) 了解认证、全局参数和安全规则。
 
-List issues for the current repository, with optional state filter and pagination.
+List issues for the current repository, with optional state filter and pagination. Uses the v1 API which returns `project_issues_index` (the issue number visible in the web URL).
 
 ## 命令
 
@@ -35,8 +35,22 @@ gitlink-cli issue +list --format json
 ## API
 
 ```
-GET /{owner}/{repo}/issues?state={state}&page={page}&limit={limit}
+GET /v1/{owner}/{repo}/issues?state={state}&page={page}&limit={limit}
 ```
+
+## 返回字段（v1）
+
+每个 Issue 包含以下关键字段：
+
+| 字段 | 说明 |
+|------|------|
+| `project_issues_index` | Issue 编号（网页 URL 中的序号） |
+| `id` | 数据库内部 ID |
+| `subject` | 标题 |
+| `status_name` / `status_id` | 状态名 / 状态 ID |
+| `author.login` | 作者 |
+| `assigners` | 负责人列表 |
+| `created_at` / `updated_at` | 创建 / 更新时间 |
 
 ## References
 

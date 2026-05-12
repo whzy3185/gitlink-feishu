@@ -7,11 +7,11 @@ Add a comment to an existing issue.
 ## 命令
 
 ```bash
-# Add a comment to issue #42
-gitlink-cli issue +comment -i 42 -b "This has been fixed in commit abc123"
+# Add a comment to issue #4
+gitlink-cli issue +comment -n 4 -b "This has been fixed in commit abc123"
 
 # Add a multi-line comment
-gitlink-cli issue +comment -i 42 -b "Investigation results:
+gitlink-cli issue +comment -n 4 -b "Investigation results:
 - Root cause: null pointer in auth module
 - Fix: add nil check before dereference"
 ```
@@ -20,8 +20,8 @@ gitlink-cli issue +comment -i 42 -b "Investigation results:
 
 | 参数 | 必填 | 说明 |
 |------|------|------|
-| `--id, -i` | **是** | Issue ID |
-| `--body, -b` | **是** | 评论内容（映射为 API 字段 `content`） |
+| `--number, -n` | **是** | Issue 编号（网页 URL 中的序号） |
+| `--body, -b` | **是** | 评论内容（映射为 v1 API 字段 `notes`） |
 | `--owner` | 否 | 仓库所有者（自动从 git remote 解析） |
 | `--repo` | 否 | 仓库名称（自动从 git remote 解析） |
 | `--format` | 否 | 输出格式: `json`/`table`/`yaml` |
@@ -30,14 +30,14 @@ gitlink-cli issue +comment -i 42 -b "Investigation results:
 ## API
 
 ```
-POST /issues/{id}/journals
-Body: { "content": body }
+POST /v1/{owner}/{repo}/issues/{number}/journals
+Body: { "notes": body }
 ```
 
 ## Workflow
 
 1. **Confirm** the comment content with the user before posting.
-2. **Execute** `gitlink-cli issue +comment -i {id} -b "..."`.
+2. **Execute** `gitlink-cli issue +comment -n {number} -b "..."`.
 3. **Report** that the comment was added successfully.
 
 > [!CAUTION]

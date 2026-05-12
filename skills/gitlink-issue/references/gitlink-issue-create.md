@@ -2,7 +2,7 @@
 
 > **前置条件：** 先阅读 [`../gitlink-shared/SKILL.md`](../../gitlink-shared/SKILL.md) 了解认证、全局参数和安全规则。
 
-Create a new issue in the current repository. The `done_ratio` field is automatically set to `0`.
+Create a new issue in the current repository. Uses the v1 API which requires `status_id` and `priority_id` — the CLI automatically sets defaults (`status_id: 1` = open, `priority_id: 2` = normal).
 
 ## 命令
 
@@ -34,15 +34,15 @@ gitlink-cli issue +create -t "Fix CI pipeline" -b "Flaky tests" -a user123 -m 5
 ## API
 
 ```
-POST /{owner}/{repo}/issues
-Body: { "subject": title, "done_ratio": 0, "description": body, ... }
+POST /v1/{owner}/{repo}/issues
+Body: { "subject": title, "status_id": 1, "priority_id": 2, "done_ratio": 0, "description": body, ... }
 ```
 
 ## Workflow
 
 1. **Confirm** the issue title (and optional body) with the user before creating.
 2. **Execute** `gitlink-cli issue +create -t "..." -b "..."`.
-3. **Report** the created issue ID and URL to the user.
+3. **Report** the created issue number and URL to the user.
 
 > [!CAUTION]
 > This is a **Write Operation** -- confirm user intent before executing.

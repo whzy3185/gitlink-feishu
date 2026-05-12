@@ -1,6 +1,6 @@
 ---
 name: gitlink-issue
-version: 1.0.0
+version: 2.0.0
 description: "Issue 管理：创建、查看、更新、关闭 Issue，添加评论。当用户需要操作 GitLink Issue 时触发。"
 metadata:
   requires:
@@ -36,36 +36,34 @@ gitlink-cli issue +list --owner Gitlink --repo forgeplus --state open
 # 创建 Issue
 gitlink-cli issue +create --owner myuser --repo myrepo --title "Bug: 登录失败" --body "复现步骤：..."
 
-# 查看 Issue 详情
-gitlink-cli issue +view --owner Gitlink --repo forgeplus --id 123
+# 查看 Issue 详情（使用网页可见的 Issue 编号）
+gitlink-cli issue +view --owner Gitlink --repo forgeplus --number 4
 
 # 更新 Issue
-gitlink-cli issue +update --id 123 --title "新标题" --body "更新描述"
+gitlink-cli issue +update --number 4 --title "新标题" --body "更新描述"
 
 # 关闭 Issue
-gitlink-cli issue +close --id 123
+gitlink-cli issue +close --number 4
 
 # 添加评论
-gitlink-cli issue +comment --id 123 --body "已修复，请验证"
+gitlink-cli issue +comment --number 4 --body "已修复，请验证"
 ```
 
 ## Raw API 补充
 
 ```bash
-# 获取 Issue 评论列表
-gitlink-cli api GET /issues/:issue_id/journals
+# 获取 Issue 评论列表（使用 v1 API，按 issue number 查询）
+gitlink-cli api GET /v1/:owner/:repo/issues/:number/journals
 
-# 批量更新 Issue
+# 批量更新 Issue（仍使用旧版 API，需传数据库 ID）
 gitlink-cli api POST /:owner/:repo/issues/series_update --body '{"ids":[1,2,3],"status_id":"closed"}'
-
-# Issue 认领
-gitlink-cli api POST /issues/:issue_id/claims
 ```
 
 ## GitLink Issue 字段映射
 
 | gitlink-cli 参数 | GitLink API 字段 | 说明 |
 |------------------|-----------------|------|
+| `--number` / `-n` | `project_issues_index` | Issue 编号（网页 URL 中的序号） |
 | `--title` | `subject` | Issue 标题 |
 | `--body` | `description` | Issue 描述 |
 | `--assignee` | `assigned_to_id` | 指派人 ID |
@@ -74,7 +72,8 @@ gitlink-cli api POST /issues/:issue_id/claims
 
 ## API 注意事项
 
-- **创建 Issue 时必须包含 `done_ratio: 0`**，否则数据库报错（CLI 已自动处理）
+- **Issue 编号（`--number`）是网页 URL 中看到的序号**（如 `issues/4` 中的 `4`），不是数据库内部 ID
+- Issue 操作使用 v1 API（`/api/v1/`），支持按 Issue 编号查询和操作
+- **创建 Issue 时 CLI 会自动设置 `status_id: 1`（开启）和 `priority_id: 2`（正常）**
 - **更新/关闭 Issue 时必须保留当前 `subject` 和 `description`**，即使只修改状态（CLI 会先读取当前 Issue 并自动带回）
-- 使用 Raw API 操作 Issue 时需先 `GET issue`，再把当前 `subject`、`description` 与要修改的字段一起提交，避免清空描述
-- Issue 评论路径为 `/issues/:id/journals`（不带 owner/repo 前缀）
+- v1 API 写操作必须使用 `access_token`（非 `token`）认证，CLI 已自动处理
