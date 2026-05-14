@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -166,5 +167,54 @@ func Shortcuts() []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "comment",
+			Description: "Add a comment to a pull request",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "body", Short: "b", Usage: "Comment body", Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, _ := ctx.RequireArg("id")
+				body, _ := ctx.RequireArg("body")
+
+				prEnv, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
+				if err != nil {
+					return fmt.Errorf("fetch PR: %w", err)
+				}
+				issueID, err := extractIssueID(prEnv)
+				if err != nil {
+					return err
+				}
+
+				payload := map[string]interface{}{
+					"notes": body,
+				}
+				env, err := ctx.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, issueID), payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
 	}
+}
+
+func extractIssueID(env *output.Envelope) (int64, error) {
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return 0, fmt.Errorf("unexpected PR response format")
+	}
+	issue, ok := data["issue"].(map[string]interface{})
+	if !ok {
+		return 0, fmt.Errorf("PR response missing issue field")
+	}
+	idFloat, ok := issue["id"].(float64)
+	if !ok {
+		return 0, fmt.Errorf("PR response missing issue.id field")
+	}
+	return int64(idFloat), nil
 }

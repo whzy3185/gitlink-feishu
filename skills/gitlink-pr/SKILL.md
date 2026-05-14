@@ -26,6 +26,7 @@ metadata:
 | `pr +close` | 关闭 PR | 是 |
 | `pr +files` | 变更文件列表 | 否 |
 | `pr +diff` | 查看提交列表 | 否 |
+| `pr +comment` | 给 PR 添加评论 | 是 |
 
 ## 使用示例
 
@@ -48,6 +49,9 @@ gitlink-cli pr +close --id 3
 
 # 查看变更文件（含 diff 内容）
 gitlink-cli pr +files --id 3
+
+# 给 PR 添加评论
+gitlink-cli pr +comment --id 3 --body "LGTM, ready to merge"
 ```
 
 ## 创建 PR 的完整流程
