@@ -157,7 +157,7 @@ gitlink-cli branch +unprotect --name main
 2. 执行 `branch +unprotect --name <name>`。
 3. 输出结果。
 
-> **注意：** 含 `/` 的分支名（如 `feature/my-branch`）可能无法通过 CLI 解除保护（受限于 Gitea API），需通过 Web 页面操作。
+> **注意：** 含 `/` 的分支名（如 `feature/my-branch`）可能无法通过 CLI 解除保护（受限于 API 路由），需通过 Web 页面操作。
 
 ## References
 
