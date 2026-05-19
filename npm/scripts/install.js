@@ -20,10 +20,7 @@ const RELEASE_BASE = "https://www.gitlink.org.cn";
 const REPO_OWNER = "Gitlink";
 const REPO_NAME = "gitlink-cli";
 
-function getPlatformInfo() {
-  const platform = os.platform();
-  const arch = os.arch();
-
+function getPlatformInfo(platform = os.platform(), arch = os.arch()) {
   const platformMap = {
     darwin: "darwin",
     linux: "linux",
@@ -123,6 +120,7 @@ function fetch(url, options = {}) {
 
 async function findReleaseAsset(platform, arch) {
   const archiveName = getArchiveName(platform, arch);
+  const tagName = `v${VERSION}`;
 
   // Try fetching release info from GitLink API
   const apiUrl = `${RELEASE_BASE}/api/${REPO_OWNER}/${REPO_NAME}/releases.json`;
@@ -133,7 +131,6 @@ async function findReleaseAsset(platform, arch) {
 
     // Find the release matching our version
     let release = null;
-    const tagName = `v${VERSION}`;
 
     if (Array.isArray(releases)) {
       release = releases.find(
@@ -234,9 +231,15 @@ async function downloadAndExtract(url, destDir, platform) {
 }
 
 async function main() {
+  let platformInfo = null;
+  let archiveName = null;
+
   try {
-    const { platform, arch } = getPlatformInfo();
+    platformInfo = getPlatformInfo();
+    const { platform, arch } = platformInfo;
+    archiveName = getArchiveName(platform, arch);
     console.log(`Platform: ${platform}-${arch}`);
+    console.log(`Expected release asset: ${archiveName}`);
 
     const binDir = path.join(__dirname, "..", "bin");
     if (!fs.existsSync(binDir)) {
@@ -264,6 +267,12 @@ async function main() {
     await downloadAndExtract(downloadUrl, binDir, platform);
   } catch (err) {
     console.error(`\nFailed to install ${BINARY_NAME}: ${err.message}`);
+    if (platformInfo) {
+      console.error(`Platform: ${platformInfo.platform}/${platformInfo.arch}`);
+    }
+    if (archiveName) {
+      console.error(`Expected release asset: ${archiveName}`);
+    }
     console.error(
       `\nYou can install manually:\n` +
         `  1. Download from https://www.gitlink.org.cn/${REPO_OWNER}/${REPO_NAME}/releases\n` +
@@ -274,4 +283,13 @@ async function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  getPlatformInfo,
+  getBinaryName,
+  getArchiveName,
+  findReleaseAsset,
+};
