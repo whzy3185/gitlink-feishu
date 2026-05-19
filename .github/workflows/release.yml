@@ -27,171 +27,68 @@ jobs:
         run: |
           mkdir -p dist
           VERSION=${GITHUB_REF#refs/tags/v}
-          
-          for pair in "darwin amd64" "darwin arm64" "linux amd64" "linux arm64"; do
-            GOOS=$(echo $pair | cut -d' ' -f1)
-            GOARCH=$(echo $pair | cut -d' ' -f2)
+          MODULE="github.com/gitlink-org/gitlink-cli"
+          LDFLAGS="-s -w -X ${MODULE}/cmd.Version=${VERSION}"
+
+          for pair in \
+            "darwin amd64" \
+            "darwin arm64" \
+            "linux amd64" \
+            "linux arm64" \
+            "windows amd64" \
+            "windows arm64"; do
+            GOOS=$(echo "$pair" | cut -d' ' -f1)
+            GOARCH=$(echo "$pair" | cut -d' ' -f2)
+            OUT="gitlink-cli"
+            if [ "$GOOS" = "windows" ]; then
+              OUT="gitlink-cli.exe"
+            fi
+
             echo "Building ${GOOS}-${GOARCH}..."
-            GOOS=$GOOS GOARCH=$GOARCH go build -ldflags "-s -w -X 'github.com/gitlink-org/gitlink-cli/cmd.Version=${VERSION}'" -o dist/gitlink-cli .
-            cd dist
-            tar -czf "gitlink-cli_${VERSION}_${GOOS}_${GOARCH}.tar.gz" gitlink-cli
-            rm gitlink-cli
-            cd ..
+            BUILD_DIR="dist/gitlink-cli_${VERSION}_${GOOS}_${GOARCH}"
+            mkdir -p "$BUILD_DIR"
+            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/$OUT" .
+
+            if [ "$GOOS" = "windows" ]; then
+              (cd "$BUILD_DIR" && zip -q "../gitlink-cli_${VERSION}_${GOOS}_${GOARCH}.zip" "$OUT")
+            else
+              tar -czf "dist/gitlink-cli_${VERSION}_${GOOS}_${GOARCH}.tar.gz" -C "$BUILD_DIR" "$OUT"
+            fi
+            rm -rf "$BUILD_DIR"
           done
+
+          ls -lh dist
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.tar.gz
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
           generate_release_notes: true
 
       - name: Build npm package
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
-          mkdir -p npm-pkg/bin npm-pkg/scripts npm-pkg/skills
-          
-          # Copy skills
-          cp -r skills/* npm-pkg/skills/
-          
-          # Copy bin wrappers
-          cp bin/cli.js npm-pkg/bin/ 2>/dev/null || cat > npm-pkg/bin/cli.js << 'NODEEOF'
-          #!/usr/bin/env node
-          const {execFileSync} = require("child_process");
-          const path = require("path");
-          const bin = path.join(__dirname, "..", "bin", "gitlink-cli");
-          try { process.exit(execFileSync(bin, process.argv.slice(2), {stdio:"inherit"}).status); }
-          catch(e) { process.exit(e.status || 1); }
-          NODEEOF
-          
-          cat > npm-pkg/bin/install-skills.js << 'NODEEOF'
-          #!/usr/bin/env node
-          const {execSync} = require("child_process");
-          const path = require("path");
-          const skillsDir = path.join(__dirname, "..", "skills");
-          try {
-            execSync(`npx skills add "${skillsDir}" -y -g`, {stdio:"inherit"});
-          } catch(e) {
-            console.error("Failed to install skills:", e.message);
-            process.exit(1);
-          }
-          NODEEOF
-          
-          # Copy install.js
-          cp scripts/install.js npm-pkg/scripts/ 2>/dev/null || cat > npm-pkg/scripts/install.js << 'NODEEOF'
-          #!/usr/bin/env node
-          "use strict";
-          const os = require("os");
-          const path = require("path");
-          const fs = require("fs");
-          const https = require("https");
-          const http = require("http");
-          const {execSync} = require("child_process");
-          
-          const PACKAGE = require("../package.json");
-          const VERSION = PACKAGE.version;
-          const BINARY_NAME = "gitlink-cli";
-          const RELEASE_BASE = "https://github.com";
-          const REPO_OWNER = "ccfos";
-          const REPO_NAME = "gitlink-cli";
-          
-          function getPlatformInfo() {
-            const platform = os.platform();
-            const arch = os.arch();
-            const pmap = {darwin:"darwin",linux:"linux",win32:"windows"};
-            const amap = {x64:"amd64",arm64:"arm64"};
-            const p=pmap[platform], a=amap[arch];
-            if(!p||!a) throw new Error(`Unsupported: ${platform}-${arch}`);
-            return {platform:p,arch:a};
-          }
-          
-          function fetch(url) {
-            return new Promise((resolve,reject) => {
-              const mod=url.startsWith("https")?https:http;
-              let count=0;
-              function req(u) {
-                if(++count>5) return reject(new Error("Too many redirects"));
-                mod.get(u,(res) => {
-                  if([301,302,307,308].includes(res.statusCode)&&res.headers.location){
-                    let loc=res.headers.location;
-                    if(loc.startsWith("/")){const p=new URL(u);loc=p.protocol+"//"+p.host+loc}
-                    return req(loc);
-                  }
-                  if(res.statusCode!==200) return reject(new Error(`HTTP ${res.statusCode}`));
-                  const c=[];res.on("data",d=>c.push(d));res.on("end",()=>resolve(Buffer.concat(c)));
-                }).on("error",reject);
-              }
-              req(url);
-            });
-          }
-          
-          async function main() {
-            try {
-              const {platform,arch} = getPlatformInfo();
-              const binDir = path.join(__dirname,"..","bin");
-              if(!fs.existsSync(binDir)) fs.mkdirSync(binDir,{recursive:true});
-              const binaryPath = path.join(binDir,BINARY_NAME);
-              
-              if(fs.existsSync(binaryPath)) {
-                try {
-                  const out = execSync(`"${binaryPath}" version`,{encoding:"utf-8",timeout:5000});
-                  if(out.includes(VERSION)) { console.log(`${BINARY_NAME} v${VERSION} already installed.`); return; }
-                } catch(e) {}
-                fs.unlinkSync(binaryPath);
-              }
-              
-              const assetName = `gitlink-cli_${VERSION}_${platform}_${arch}.tar.gz`;
-              const url = `${RELEASE_BASE}/${REPO_OWNER}/${REPO_NAME}/releases/download/v${VERSION}/${assetName}`;
-              console.log(`Downloading ${url}...`);
-              const data = await fetch(url);
-              const tmp = path.join(binDir,"dl.tar.gz");
-              fs.writeFileSync(tmp,data);
-              execSync(`tar -xzf "${tmp}" -C "${binDir}"`,{stdio:"pipe"});
-              fs.unlinkSync(tmp);
-              fs.chmodSync(binaryPath,0o755);
-              console.log(`${BINARY_NAME} v${VERSION} installed.`);
-            } catch(err) {
-              console.warn(`⚠ Binary download failed: ${err.message}`);
-              console.warn(`Skills are installed. Install binary manually:`);
-              console.warn(`npm run postinstall`);
-            }
-          }
-          main();
-          NODEEOF
-          
-          # Create README
-          cp README.md npm-pkg/
-          
-          # Create package.json
-          cat > npm-pkg/package.json << PKGEOF
-          {
-            "name": "@gitlink-ai/cli",
-            "version": "${VERSION}",
-            "description": "GitLink CLI — 面向 AI Agent 的 GitLink 命令行工具",
-            "main": "bin/cli.js",
-            "bin": {
-              "gitlink-cli": "./bin/cli.js",
-              "gitlink-cli-install-skills": "./bin/install-skills.js"
-            },
-            "scripts": {
-              "postinstall": "node scripts/install.js"
-            },
-            "files": [
-              "bin/",
-              "scripts/",
-              "skills/",
-              "README.md",
-              "package.json"
-            ],
-            "repository": {
-              "type": "git",
-              "url": "https://github.com/ccfos/gitlink-cli.git"
-            },
-            "keywords": ["gitlink", "cli", "ai-agent", "skills"],
-            "author": "",
-            "license": "MulanPSL-2.0"
-          }
-          PKGEOF
-          
+          export VERSION
+          rm -rf npm-pkg
+          mkdir -p npm-pkg
+          cp -R npm/. npm-pkg/
+          cp README.md npm-pkg/README.md
+          rm -rf npm-pkg/skills
+          cp -R skills npm-pkg/skills
+
+          node <<'NODE'
+          const fs = require('fs');
+          const pkgPath = 'npm-pkg/package.json';
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          pkg.version = process.env.VERSION;
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+          NODE
+
+          chmod +x npm-pkg/bin/cli.js
+          chmod +x npm-pkg/bin/install-skills.js
+
           cd npm-pkg
           npm publish --access public
         env:

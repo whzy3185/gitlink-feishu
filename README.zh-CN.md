@@ -386,6 +386,16 @@ gitlink-cli auth status   # 显示 "✓ Logged in via GITLINK_TOKEN environment 
 
 Token 优先级：`GITLINK_TOKEN` 环境变量 > keyring/文件存储的 token。不设置环境变量时完全兼容原有交互式登录。
 
+### Q: npm 安装成功但 `gitlink-cli` 提示缺少二进制怎么办？
+
+先尝试重新安装：
+
+```bash
+npm install -g @gitlink-ai/cli
+```
+
+如果仍然失败，请检查 Release 页面是否包含当前平台的资产，例如 Windows x64 对应 `gitlink-cli_<version>_windows_amd64.zip`。也可以从 Release 页面手动下载二进制，或使用 `go install .` 从源码构建。
+
 ### Q: Windows 上凭证存储在哪里？
 
 gitlink-cli 使用 Windows Credential Manager 安全存储 Token。如果 Credential Manager 不可用，会自动降级到文件存储（`~/.config/gitlink-cli/credentials`）。

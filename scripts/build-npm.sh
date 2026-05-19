@@ -74,13 +74,14 @@ rm -rf "$NPM_DIR/skills"
 cp -r "$PROJECT_DIR/skills" "$NPM_DIR/skills"
 
 # Ensure bin dir exists and wrapper is executable
-chmod +x "$NPM_DIR/bin/gitlink-cli"
+chmod +x "$NPM_DIR/bin/cli.js"
+chmod +x "$NPM_DIR/bin/install-skills.js"
 
 echo ""
 echo "=== Done ==="
 echo ""
 echo "Next steps:"
-echo "  1. Upload dist/*.tar.gz to GitLink Release v${VERSION}"
+echo "  1. Upload dist/*.tar.gz and dist/*.zip to GitLink Release v${VERSION}"
 echo "     URL: https://www.gitlink.org.cn/Gitlink/gitlink-cli/releases"
 echo ""
 echo "  2. Publish npm package:"

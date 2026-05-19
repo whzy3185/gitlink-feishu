@@ -407,6 +407,16 @@ gitlink-cli auth status   # Shows "✓ Logged in via GITLINK_TOKEN environment v
 
 Priority: `GITLINK_TOKEN` env var > keyring/file stored token. When the env var is not set, the original interactive login flow works as before.
 
+### Q: What if npm installs successfully but `gitlink-cli` reports a missing binary?
+
+Reinstall first:
+
+```bash
+npm install -g @gitlink-ai/cli
+```
+
+If the error persists, check whether the release page contains the asset for your platform, for example `gitlink-cli_<version>_windows_amd64.zip` on Windows x64. You can also download the binary manually from the release page or build from source with `go install .`.
+
 ### Q: Where are credentials stored on Windows?
 
 gitlink-cli uses Windows Credential Manager for secure token storage. If Credential Manager is unavailable, it automatically falls back to file storage (`~/.config/gitlink-cli/credentials`).
