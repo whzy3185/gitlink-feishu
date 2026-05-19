@@ -11,6 +11,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/pr"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/release"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/repo"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/webhook"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/search"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/user"
 )
@@ -27,6 +28,7 @@ func RegisterAll(root *cobra.Command) {
 		"user":    user.Shortcuts(),
 		"search":  search.Shortcuts(),
 		"ci":      ci.Shortcuts(),
+		"webhook": webhook.Shortcuts(),
 	}
 
 	descriptions := map[string]string{
@@ -39,6 +41,7 @@ func RegisterAll(root *cobra.Command) {
 		"user":    "User operations",
 		"search":  "Search operations",
 		"ci":      "CI/CD operations",
+		"webhook": "Webhook operations",
 	}
 
 	for name, shortcuts := range groups {

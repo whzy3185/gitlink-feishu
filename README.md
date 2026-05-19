@@ -5,7 +5,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue.svg)](https://golang.org)
 [![npm version](https://img.shields.io/npm/v/@gitlink-ai/cli.svg)](https://www.npmjs.com/package/@gitlink-ai/cli)
 
-The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans and AI Agents. Supports **macOS, Linux, and Windows**. Covers repository management, issue tracking, pull requests, CI/CD, and AI-powered workflows, with 40+ commands and 12 AI Agent [Skills](./skills/).
+The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans and AI Agents. Supports **macOS, Linux, and Windows**. Covers repository management, issue tracking, pull requests, webhooks, CI/CD, and AI-powered workflows, with 40+ commands and 13 AI Agent [Skills](./skills/).
 
 **[中文文档](./README.zh-CN.md)**
 
@@ -14,7 +14,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 ## Why gitlink-cli?
 
 - **Agent-Native Design** — 12 structured [Skills](./skills/) out of the box, compatible with Claude Code, OpenClaw, and other AI platforms — Agents can operate GitLink with zero extra setup
-- **Wide Coverage** — Repository, Issue, PR, Branch, Release, CI, Org, Search, User — all core domains covered
+- **Wide Coverage** — Repository, Issue, PR, Webhook, Branch, Release, CI, Org, Search, User — all core domains covered
 - **AI-Friendly & Optimized** — Every command is tested with real Agents, featuring concise parameters, smart defaults, and structured output
 - **Cross-Platform** — Runs on macOS, Linux, and Windows (x64/arm64), install via `npm install -g @gitlink-ai/cli` in one command, binary auto-downloaded
 - **Open Source, Zero Barriers** — MulanPSL-2.0 license, ready to use, just `npm install`
@@ -33,6 +33,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🏷️ Release | Create, view, delete releases |
 | 🏢 Org | Manage organizations, members, teams |
 | 🔧 CI | View builds, logs, CI/CD operations |
+| 🔔 Webhook | Manage repo webhooks and test deliveries |
 | 🔍 Search | Search repositories, users |
 | 👤 User | View user profiles and info |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
@@ -55,7 +56,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 **From npm (recommended):**
 
 ```bash
-# One command: installs CLI binary + all 12 AI Agent Skills
+# One command: installs CLI binary + all 13 AI Agent Skills
 npm install -g @gitlink-ai/cli
 ```
 
@@ -141,6 +142,20 @@ gitlink-cli repo +create -n my-project -d "Project description"
 
 # Fork a repository
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+```
+
+### Webhook Management
+
+```bash
+# List webhooks
+gitlink-cli webhook +list --owner Gitlink --repo forgeplus
+
+# Create a webhook
+gitlink-cli webhook +create --owner Gitlink --repo forgeplus \
+  --url https://example.com/hook --events push,create
+
+# Test a webhook
+gitlink-cli webhook +test --owner Gitlink --repo forgeplus --id 68
 ```
 
 ### Issue Management
