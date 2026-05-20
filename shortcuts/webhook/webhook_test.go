@@ -14,7 +14,7 @@ func TestWebhookCreateBuildsPayload(t *testing.T) {
 	var createPayload map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == "POST" && r.URL.Path == "/v1/owner/repo/webhooks.json":
+		case r.Method == "POST" && r.URL.Path == "/owner/repo/webhooks.json":
 			createPayload = decodeWebhookJSON(t, r)
 			writeWebhookJSON(t, w, map[string]interface{}{"id": float64(1)})
 		default:
@@ -50,7 +50,7 @@ func TestWebhookUpdatePreservesExistingFields(t *testing.T) {
 	var updatePayload map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/webhooks/68.json":
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/webhooks/68.json":
 			writeWebhookJSON(t, w, map[string]interface{}{
 				"id":            float64(68),
 				"type":          "gitea",
@@ -62,7 +62,7 @@ func TestWebhookUpdatePreservesExistingFields(t *testing.T) {
 				"events":        []interface{}{"push", "create"},
 				"active":        true,
 			})
-		case r.Method == "PUT" && r.URL.Path == "/v1/owner/repo/webhooks/68.json":
+		case r.Method == "PUT" && r.URL.Path == "/owner/repo/webhooks/68.json":
 			updatePayload = decodeWebhookJSON(t, r)
 			writeWebhookJSON(t, w, map[string]interface{}{"id": float64(68)})
 		default:
@@ -93,7 +93,7 @@ func TestWebhookTestTriggersDelivery(t *testing.T) {
 	called := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == "POST" && r.URL.Path == "/v1/owner/repo/webhooks/68/tests.json":
+		case r.Method == "POST" && r.URL.Path == "/owner/repo/webhooks/68/tests.json":
 			called = true
 			writeWebhookJSON(t, w, map[string]interface{}{"status": float64(0), "message": "success"})
 		default:
