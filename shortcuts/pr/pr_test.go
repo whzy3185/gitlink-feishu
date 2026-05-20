@@ -1,6 +1,7 @@
 package pr
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -52,6 +53,95 @@ func TestPRCommentPostsToCorrectIssueJournal(t *testing.T) {
 		t.Fatal("journal endpoint was not called")
 	}
 	assertEqual(t, journalPayload["notes"], "LGTM, looks good!")
+}
+
+func TestPRCreateSameRepoBranchUsesSimplePayload(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+base64.RawURLEncoding.EncodeToString([]byte("feature/search"))+"..."+base64.RawURLEncoding.EncodeToString([]byte("master"))+".json":
+			writeJSON(t, w, map[string]interface{}{
+				"commits_count": float64(2),
+				"files_count":   float64(5),
+			})
+		case r.Method == "POST" && r.URL.Path == "/owner/repo/pulls.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"status": float64(0), "pull_request_number": float64(22)})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "create", map[string]string{
+		"title": "feat: search",
+		"head":  "feature/search",
+		"base":  "master",
+		"body":  "Add search support",
+	})
+	if err != nil {
+		t.Fatalf("create shortcut failed: %v", err)
+	}
+
+	assertEqual(t, payload["head"], "feature/search")
+	assertEqual(t, payload["base"], "master")
+	assertEqual(t, payload["is_original"], false)
+	assertEqual(t, payload["commits_count"], float64(2))
+	assertEqual(t, payload["files_count"], float64(5))
+	if _, ok := payload["merge_user_login"]; ok {
+		t.Fatal("same-repo PR should not include merge_user_login")
+	}
+}
+
+func TestPRCreateForkBranchAddsGitLinkForkFields(t *testing.T) {
+	var payload map[string]interface{}
+	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("alice:feature/JIRA-123/fix"))
+	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/alice/fork-repo.json":
+			writeJSON(t, w, map[string]interface{}{
+				"project_id":         float64(1546652),
+				"project_identifier": "fork-repo",
+			})
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+encodedHead+"..."+encodedBase+".json":
+			writeJSON(t, w, map[string]interface{}{
+				"commits_count": float64(3),
+				"files_count":   float64(7),
+			})
+		case r.Method == "POST" && r.URL.Path == "/owner/repo/pulls.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"status": float64(0), "pull_request_number": float64(23)})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "create", map[string]string{
+		"title": "feat: fork support",
+		"head":  "alice/fork-repo:feature/JIRA-123/fix",
+		"base":  "master",
+	})
+	if err != nil {
+		t.Fatalf("create shortcut failed: %v", err)
+	}
+
+	assertEqual(t, payload["head"], "feature/JIRA-123/fix")
+	assertEqual(t, payload["is_original"], true)
+	assertEqual(t, payload["merge_user_login"], "alice")
+	assertEqual(t, payload["merge_project_identifier"], "fork-repo")
+	assertEqual(t, payload["fork_project_id"], float64(1546652))
+	assertEqual(t, payload["commits_count"], float64(3))
+	assertEqual(t, payload["files_count"], float64(7))
+}
+
+func TestParsePRHeadRejectsInvalidForkSyntax(t *testing.T) {
+	_, err := parsePRHead("alice:feature/fork")
+	if err == nil {
+		t.Fatal("expected invalid head syntax to fail")
+	}
 }
 
 func TestPRCommentFailsWhenPRNotFound(t *testing.T) {

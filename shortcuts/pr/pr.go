@@ -1,6 +1,7 @@
 package pr
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/url"
 	"strings"
@@ -108,13 +109,9 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if base == "" {
 					base = "master"
 				}
-				payload := map[string]interface{}{
-					"title": title,
-					"head":  head,
-					"base":  base,
-				}
-				if b := ctx.Arg("body"); b != "" {
-					payload["body"] = b
+				payload, err := buildCreatePRPayload(ctx, title, head, base, ctx.Arg("body"))
+				if err != nil {
+					return err
 				}
 				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/pulls", payload)
 				if err != nil {
@@ -558,4 +555,145 @@ func numberField(m map[string]interface{}, key string) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+type prHeadSpec struct {
+	Branch      string
+	ForkOwner   string
+	ForkRepo    string
+	IsFork      bool
+	CompareHead string
+}
+
+func buildCreatePRPayload(ctx *common.RuntimeContext, title, head, base, body string) (map[string]interface{}, error) {
+	spec, err := parsePRHead(head)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := map[string]interface{}{
+		"title":            title,
+		"head":             spec.Branch,
+		"base":             base,
+		"body":             body,
+		"assigned_to_id":   "",
+		"fixed_version_id": "",
+		"issue_tag_ids":    []string{},
+		"reviewer_ids":     []string{},
+		"receivers_login":  []string{},
+		"priority_id":      "2",
+		"is_original":      spec.IsFork,
+	}
+
+	if spec.IsFork {
+		repoInfo, err := fetchProjectInfo(ctx, spec.ForkOwner, spec.ForkRepo)
+		if err != nil {
+			return nil, err
+		}
+		projectID, err := extractFloatField(repoInfo, "project_id", "id")
+		if err != nil {
+			return nil, fmt.Errorf("resolve fork project id: %w", err)
+		}
+		identifier, err := extractStringField(repoInfo, "project_identifier", "identifier")
+		if err != nil {
+			return nil, fmt.Errorf("resolve fork project identifier: %w", err)
+		}
+		payload["merge_user_login"] = spec.ForkOwner
+		payload["merge_project_identifier"] = identifier
+		payload["fork_project_id"] = int(projectID)
+	}
+
+	compareCounts, err := fetchPRCompareCounts(ctx, spec.CompareHead, base)
+	if err == nil {
+		if commits, ok := compareCounts["commits_count"]; ok {
+			payload["commits_count"] = commits
+		}
+		if files, ok := compareCounts["files_count"]; ok {
+			payload["files_count"] = files
+		}
+	}
+
+	return payload, nil
+}
+
+func parsePRHead(head string) (*prHeadSpec, error) {
+	if head == "" {
+		return nil, fmt.Errorf("source branch cannot be empty")
+	}
+	if !strings.Contains(head, ":") {
+		return &prHeadSpec{
+			Branch:      head,
+			IsFork:      false,
+			CompareHead: head,
+		}, nil
+	}
+
+	parts := strings.SplitN(head, ":", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return nil, fmt.Errorf("invalid --head %q, expected owner/repo:branch", head)
+	}
+
+	repoParts := strings.Split(parts[0], "/")
+	if len(repoParts) != 2 || repoParts[0] == "" || repoParts[1] == "" {
+		return nil, fmt.Errorf("invalid --head %q, expected owner/repo:branch", head)
+	}
+
+	return &prHeadSpec{
+		Branch:      parts[1],
+		ForkOwner:   repoParts[0],
+		ForkRepo:    repoParts[1],
+		IsFork:      true,
+		CompareHead: repoParts[0] + ":" + parts[1],
+	}, nil
+}
+
+func fetchProjectInfo(ctx *common.RuntimeContext, owner, repo string) (map[string]interface{}, error) {
+	env, err := ctx.CallAPI("GET", fmt.Sprintf("/%s/%s", owner, repo), nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetch project info: %w", err)
+	}
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected project info response format")
+	}
+	return data, nil
+}
+
+func fetchPRCompareCounts(ctx *common.RuntimeContext, head, base string) (map[string]int, error) {
+	encodedHead := base64.RawURLEncoding.EncodeToString([]byte(head))
+	encodedBase := base64.RawURLEncoding.EncodeToString([]byte(base))
+	env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/compare/%s...%s", ctx.RepoPath(), encodedHead, encodedBase), nil)
+	if err != nil {
+		return nil, err
+	}
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected compare response format")
+	}
+	result := map[string]int{}
+	if v, ok := data["commits_count"].(float64); ok {
+		result["commits_count"] = int(v)
+	}
+	if v, ok := data["files_count"].(float64); ok {
+		result["files_count"] = int(v)
+	}
+	return result, nil
+}
+
+func extractFloatField(data map[string]interface{}, keys ...string) (float64, error) {
+	for _, key := range keys {
+		if v, ok := data[key].(float64); ok {
+			return v, nil
+		}
+	}
+	return 0, fmt.Errorf("missing numeric field %v", keys)
+}
+
+func extractStringField(data map[string]interface{}, keys ...string) (string, error) {
+	for _, key := range keys {
+		if v, ok := data[key].(string); ok && v != "" {
+			return v, nil
+		}
+	}
+	return "", fmt.Errorf("missing string field %v", keys)
 }

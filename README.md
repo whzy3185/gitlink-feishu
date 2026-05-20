@@ -367,6 +367,10 @@ gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: Search feature
 # Create a PR (from a fork)
 gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: New feature" --head your_username/forgeplus:feature/my-feature --base master
 
+# The fork form auto-resolves GitLink fork metadata
+# so you do not need to pass merge_user_login or fork_project_id yourself
+gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "fix: CLI bug" --head your_username/forgeplus:fix/bug --base master
+
 # View a PR
 gitlink-cli pr +view --owner Gitlink --repo forgeplus -i 42
 
