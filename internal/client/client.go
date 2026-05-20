@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/auth"
@@ -64,7 +67,6 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		fullURL += sep + query.Encode()
 	}
 
-	// Replace path params
 	var bodyReader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -79,8 +81,59 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		return nil, err
 	}
 
+	return c.doRequest(req)
+}
+
+func (c *Client) PostMultipart(path, fileField, filePath string, fields map[string]string) (*output.Envelope, error) {
+	path = normalizeAPIPath(c.BaseURL, path)
+	if idx := strings.Index(path, "?"); idx != -1 {
+		basePath := path[:idx]
+		queryStr := path[idx:]
+		if shouldAppendJSONSuffix(basePath) {
+			path = basePath + ".json" + queryStr
+		}
+	} else if shouldAppendJSONSuffix(path) {
+		path += ".json"
+	}
+	fullURL := c.BaseURL + path
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("open file: %w", err)
+	}
+	defer file.Close()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	part, err := writer.CreateFormFile(fileField, filepath.Base(filePath))
+	if err != nil {
+		return nil, fmt.Errorf("create form file: %w", err)
+	}
+	if _, err := io.Copy(part, file); err != nil {
+		return nil, fmt.Errorf("copy file: %w", err)
+	}
+	for key, value := range fields {
+		if err := writer.WriteField(key, value); err != nil {
+			return nil, fmt.Errorf("write form field %s: %w", key, err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("close multipart writer: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", fullURL, &body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	return c.doRequest(req)
+}
+
+func (c *Client) doRequest(req *http.Request) (*output.Envelope, error) {
 	if c.Debug {
-		fmt.Printf("→ %s %s\n", method, fullURL)
+		fmt.Printf("-> %s %s\n", req.Method, req.URL.String())
 	}
 
 	resp, err := c.HTTP.Do(req)
@@ -95,10 +148,9 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 	}
 
 	if c.Debug {
-		fmt.Printf("← %d %s\n", resp.StatusCode, string(respData[:min(len(respData), 200)]))
+		fmt.Printf("<- %d %s\n", resp.StatusCode, string(respData[:min(len(respData), 200)]))
 	}
 
-	// Check HTTP-level errors
 	if resp.StatusCode >= 400 {
 		return nil, &APIError{
 			StatusCode: resp.StatusCode,
@@ -107,10 +159,8 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		}
 	}
 
-	// Parse JSON
 	var raw map[string]interface{}
 	if err := json.Unmarshal(respData, &raw); err != nil {
-		// Not JSON, return as-is
 		return output.SuccessEnvelope(string(respData), nil), nil
 	}
 
@@ -142,7 +192,6 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		}
 	}
 
-	// Build meta from pagination info
 	var meta *output.Meta
 	if tc, ok := raw["total_count"]; ok {
 		meta = &output.Meta{}

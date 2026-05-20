@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/attachment"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/branch"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/ci"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
@@ -32,45 +33,47 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		tr = translators[0]
 	}
 	groups := map[string][]*common.Shortcut{
-		"repo":      repo.Shortcuts(tr),
-		"issue":     issue.Shortcuts(tr),
-		"label":     label.Shortcuts(),
-		"license":   license.Shortcuts(),
-		"member":    member.Shortcuts(),
-		"milestone": milestone.Shortcuts(),
-		"pipeline":  pipeline.Shortcuts(),
-		"pr":        pr.Shortcuts(tr),
-		"release":   release.Shortcuts(tr),
-		"branch":    branch.Shortcuts(tr),
-		"org":       org.Shortcuts(tr),
-		"user":      user.Shortcuts(tr),
-		"search":    search.Shortcuts(tr),
-		"ci":        ci.Shortcuts(tr),
-		"compare":   compare.Shortcuts(),
-		"webhook":   webhook.Shortcuts(tr),
-		"health":    health.Shortcuts(tr),
-		"workflow":  workflow.Shortcuts(),
+		"attachment": attachment.Shortcuts(),
+		"repo":       repo.Shortcuts(tr),
+		"issue":      issue.Shortcuts(tr),
+		"label":      label.Shortcuts(),
+		"license":    license.Shortcuts(),
+		"member":     member.Shortcuts(),
+		"milestone":  milestone.Shortcuts(),
+		"pipeline":   pipeline.Shortcuts(),
+		"pr":         pr.Shortcuts(tr),
+		"release":    release.Shortcuts(tr),
+		"branch":     branch.Shortcuts(tr),
+		"org":        org.Shortcuts(tr),
+		"user":       user.Shortcuts(tr),
+		"search":     search.Shortcuts(tr),
+		"ci":         ci.Shortcuts(tr),
+		"compare":    compare.Shortcuts(),
+		"webhook":    webhook.Shortcuts(tr),
+		"health":     health.Shortcuts(tr),
+		"workflow":   workflow.Shortcuts(),
 	}
 
 	descriptions := map[string]string{
-		"repo":      tr.T("cmd.repo.short"),
-		"issue":     tr.T("cmd.issue.short"),
-		"label":     "Issue label operations",
-		"license":   "License operations",
-		"member":    "Repository member operations",
-		"milestone": "Milestone operations",
-		"pipeline":  "Pipeline operations",
-		"pr":        tr.T("cmd.pr.short"),
-		"release":   tr.T("cmd.release.short"),
-		"branch":    tr.T("cmd.branch.short"),
-		"org":       tr.T("cmd.org.short"),
-		"user":      tr.T("cmd.user.short"),
-		"search":    tr.T("cmd.search.short"),
-		"ci":        tr.T("cmd.ci.short"),
-		"compare":   "Compare branches, tags, or commits",
-		"webhook":   tr.T("cmd.webhook.short"),
-		"health":    "Project health data collection",
-		"workflow":  "AI agent workflow analysis",
+		"attachment": "Attachment operations",
+		"repo":       tr.T("cmd.repo.short"),
+		"issue":      tr.T("cmd.issue.short"),
+		"label":      "Issue label operations",
+		"license":    "License operations",
+		"member":     "Repository member operations",
+		"milestone":  "Milestone operations",
+		"pipeline":   "Pipeline operations",
+		"pr":         tr.T("cmd.pr.short"),
+		"release":    tr.T("cmd.release.short"),
+		"branch":     tr.T("cmd.branch.short"),
+		"org":        tr.T("cmd.org.short"),
+		"user":       tr.T("cmd.user.short"),
+		"search":     tr.T("cmd.search.short"),
+		"ci":         tr.T("cmd.ci.short"),
+		"compare":    "Compare branches, tags, or commits",
+		"webhook":    tr.T("cmd.webhook.short"),
+		"health":     "Project health data collection",
+		"workflow":   "AI agent workflow analysis",
 	}
 
 	for name, shortcuts := range groups {

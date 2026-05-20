@@ -90,6 +90,11 @@ func (ctx *RuntimeContext) CallAPIWithQuery(method, path string, query url.Value
 	return ctx.Client.Do(method, path, nil, query)
 }
 
+// PostMultipart uploads a file with multipart/form-data through the shared client.
+func (ctx *RuntimeContext) PostMultipart(path, fileField, filePath string, fields map[string]string) (*output.Envelope, error) {
+	return ctx.Client.PostMultipart(path, fileField, filePath, fields)
+}
+
 // PaginateAll fetches all pages.
 func (ctx *RuntimeContext) PaginateAll(path string, params url.Values) ([]json.RawMessage, error) {
 	return ctx.Client.PaginateAll(path, params)
