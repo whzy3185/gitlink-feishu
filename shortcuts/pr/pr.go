@@ -168,6 +168,87 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "reviews",
+			Description: "List pull request reviews",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "status", Short: "s", Usage: "Filter review status: common, approved, rejected"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				q := url.Values{}
+				if status := ctx.Arg("status"); status != "" {
+					if err := validatePRReviewStatus(status); err != nil {
+						return err
+					}
+					q.Set("status", status)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", prReviewsPath(ctx, id), q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "review",
+			Description: "Create a pull request review",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "status", Short: "s", Usage: "Review status: common, approved, rejected", Default: "common"},
+				{Name: "content", Short: "c", Usage: "Review content", Required: true},
+				{Name: "commit", Short: "m", Usage: "Commit SHA to attach the review to"},
+				{Name: "dry-run", Usage: "Preview the review request without creating it", Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				content, err := ctx.RequireArg("content")
+				if err != nil {
+					return err
+				}
+				status := ctx.Arg("status")
+				if status == "" {
+					status = "common"
+				}
+				if err := validatePRReviewStatus(status); err != nil {
+					return err
+				}
+				payload := map[string]interface{}{
+					"content": content,
+					"status":  status,
+				}
+				if commit := ctx.Arg("commit"); commit != "" {
+					payload["commit_id"] = commit
+				}
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"repository":   fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+						"pull_request": id,
+						"dry_run":      true,
+						"action":       "create_review",
+						"payload":      payload,
+					})
+				}
+				env, err := ctx.CallAPI("POST", prReviewsPath(ctx, id), payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "comment",
 			Description: "Add a comment to a pull request",
 			Flags: []common.Flag{
@@ -200,6 +281,19 @@ func Shortcuts() []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+	}
+}
+
+func prReviewsPath(ctx *common.RuntimeContext, id string) string {
+	return fmt.Sprintf("/v1/%s/%s/pulls/%s/reviews", ctx.Owner, ctx.Repo, id)
+}
+
+func validatePRReviewStatus(status string) error {
+	switch status {
+	case "common", "approved", "rejected":
+		return nil
+	default:
+		return fmt.Errorf("invalid --status value %q: use common, approved, or rejected", status)
 	}
 }
 

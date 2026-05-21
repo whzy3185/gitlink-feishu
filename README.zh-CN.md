@@ -200,6 +200,13 @@ gitlink-cli pr +merge --owner Gitlink --repo forgeplus -i 42
 
 # 查看 PR 变更文件
 gitlink-cli pr +files --owner Gitlink --repo forgeplus -i 42
+
+# 查看 PR 审查记录
+gitlink-cli pr +reviews --owner Gitlink --repo forgeplus -i 42
+
+# 预览并通过 PR
+gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM" --dry-run
+gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
 ```
 
 ### 发布管理

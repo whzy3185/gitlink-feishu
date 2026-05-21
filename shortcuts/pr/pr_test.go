@@ -91,6 +91,105 @@ func TestPRCommentFailsWhenIssueFieldMissing(t *testing.T) {
 	}
 }
 
+func TestPRReviewsUsesV1EndpointWithStatusFilter(t *testing.T) {
+	var calledPath string
+	var status string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/pulls/13/reviews.json" {
+			t.Fatalf("unexpected request: %s %s?%s", r.Method, r.URL.Path, r.URL.RawQuery)
+		}
+		calledPath = r.URL.Path
+		status = r.URL.Query().Get("status")
+		writeJSON(t, w, map[string]interface{}{
+			"total_count": float64(1),
+			"reviews": []map[string]interface{}{
+				{
+					"id":      float64(100),
+					"content": "LGTM",
+					"status":  "approved",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "reviews", map[string]string{
+		"id":     "13",
+		"status": "approved",
+	})
+	if err != nil {
+		t.Fatalf("reviews shortcut failed: %v", err)
+	}
+	assertEqual(t, calledPath, "/v1/owner/repo/pulls/13/reviews.json")
+	assertEqual(t, status, "approved")
+}
+
+func TestPRReviewPostsReviewPayload(t *testing.T) {
+	var reviewPayload map[string]interface{}
+	var reviewPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/pulls/13/reviews.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		reviewPath = r.URL.Path
+		reviewPayload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{
+			"id":        float64(101),
+			"content":   "Looks good",
+			"status":    "approved",
+			"commit_id": "abc123",
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review", map[string]string{
+		"id":      "13",
+		"status":  "approved",
+		"content": "Looks good",
+		"commit":  "abc123",
+	})
+	if err != nil {
+		t.Fatalf("review shortcut failed: %v", err)
+	}
+	assertEqual(t, reviewPath, "/v1/owner/repo/pulls/13/reviews.json")
+	assertEqual(t, reviewPayload["content"], "Looks good")
+	assertEqual(t, reviewPayload["status"], "approved")
+	assertEqual(t, reviewPayload["commit_id"], "abc123")
+}
+
+func TestPRReviewDryRunDoesNotCallAPI(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("server should not be called during dry-run: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review", map[string]string{
+		"id":      "13",
+		"status":  "rejected",
+		"content": "Please fix the failing tests",
+		"dry-run": "true",
+	})
+	if err != nil {
+		t.Fatalf("review dry-run failed: %v", err)
+	}
+}
+
+func TestPRReviewRejectsInvalidStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("server should not be called for invalid status: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review", map[string]string{
+		"id":      "13",
+		"status":  "approve",
+		"content": "LGTM",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid review status, got nil")
+	}
+}
+
 func runPRShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
 	t.Helper()
 	shortcut := findPRShortcut(t, name)

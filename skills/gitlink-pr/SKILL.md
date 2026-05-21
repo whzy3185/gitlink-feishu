@@ -1,7 +1,7 @@
 ---
 name: gitlink-pr
 version: 1.0.0
-description: "Pull Request 管理：创建、查看、合并、关闭 PR，查看变更文件和 Diff。当用户需要操作 GitLink PR 时触发。"
+description: "Pull Request 管理：创建、查看、合并、关闭 PR，查看变更文件、Diff 和审查记录。当用户需要操作 GitLink PR 时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -25,7 +25,9 @@ metadata:
 | `pr +merge` | 合并 PR | 是 |
 | `pr +close` | 关闭 PR | 是 |
 | `pr +files` | 变更文件列表 | 否 |
-| `pr +diff` | 查看提交列表 | 否 |
+| `pr +diff` | 查看变更文件和 diff 内容 | 否 |
+| `pr +reviews` | 查看 PR 审查记录 | 否（公开项目） |
+| `pr +review` | 创建 PR 审查（comment/approve/reject） | 是 |
 | `pr +comment` | 给 PR 添加评论 | 是 |
 
 ## 使用示例
@@ -49,6 +51,15 @@ gitlink-cli pr +close --id 3
 
 # 查看变更文件（含 diff 内容）
 gitlink-cli pr +files --id 3
+
+# 查看 PR 审查记录
+gitlink-cli pr +reviews --id 3
+gitlink-cli pr +reviews --id 3 --status approved
+
+# 创建 PR 审查（先 dry-run，再真实提交）
+gitlink-cli pr +review --id 3 --status approved --content "LGTM" --dry-run
+gitlink-cli pr +review --id 3 --status approved --content "LGTM"
+gitlink-cli pr +review --id 3 --status rejected --content "测试未通过，请修复后再合并"
 
 # 给 PR 添加评论
 gitlink-cli pr +comment --id 3 --body "LGTM, ready to merge"
@@ -115,8 +126,11 @@ gitlink-cli api PUT /:owner/:repo/update_file --body '{"filepath":"file.md","con
 # 检查是否可合并
 gitlink-cli api POST /:owner/:repo/pulls/check_can_merge --body '{"head":"dev","base":"main"}'
 
+# 查看 Review 列表
+gitlink-cli api GET /v1/:owner/:repo/pulls/:id/reviews
+
 # 创建 Review
-gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{"body":"LGTM","event":"APPROVE"}'
+gitlink-cli api POST /v1/:owner/:repo/pulls/:id/reviews --body '{"content":"LGTM","status":"approved"}'
 
 # 获取可用分支
 gitlink-cli api GET /:owner/:repo/pulls/get_branches
@@ -131,6 +145,8 @@ gitlink-cli api GET /:owner/:repo/pulls/get_branches
 - PR 查看/合并/关闭需要使用 `pull_request_number`（即网页 URL `/pulls/N` 中的序号，从 `pr +list` 返回）
 - `pr +merge` 默认使用 merge 方式，可通过 `--method` 指定 rebase 或 squash
 - `pr +diff` 实际调用 `/pulls/:id/files` 端点，返回变更文件列表和 diff 内容
+- `pr +reviews` / `pr +review` 使用 v1 API，`--id` 为网页 URL `/pulls/N` 中的 PR 序号
+- `pr +review --status` 支持 `common`、`approved`、`rejected`；写入前建议先使用 `--dry-run` 预览
 - `pr +list` 的 `--state` 参数（open/merged/closed）仅影响统计计数，API 返回的列表可能包含所有状态的 PR
 - PR 状态值：`pull_request_status` 0=open, 1=merged, 2=closed
 - 关联已有 Issue 时，把 Issue 编号或 URL 写入 PR `--body`，或使用 `issue +comment` 留痕；不要用 Raw API 对 Issue 做不完整更新，否则可能清空 Issue 描述

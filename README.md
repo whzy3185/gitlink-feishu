@@ -188,6 +188,13 @@ gitlink-cli pr +merge --owner Gitlink --repo forgeplus -i 42
 
 # View changed files
 gitlink-cli pr +files --owner Gitlink --repo forgeplus -i 42
+
+# List PR reviews
+gitlink-cli pr +reviews --owner Gitlink --repo forgeplus -i 42
+
+# Approve a PR after previewing the request
+gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM" --dry-run
+gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
 ```
 
 ### Branch Management
