@@ -51,6 +51,15 @@ Planned next:
 
 ## 5. Implemented Features
 
+| Command | Status | Main Value |
+|---|---|---|
+| `workflow +triage` | Done | Issue classification, priority, missing information, and actions |
+| `workflow +health` | Done | Repository health score, risk level, and recommendations |
+| `workflow +pr-summary` | Done | PR risk, review focus, test suggestions, and merge checklist |
+| `workflow +repo-report` | Done | Aggregated repository workflow report for maintainers and Agents |
+| `workflow +release-notes` | Planned | Release note generation from PR titles and commits |
+| `workflow +stale` | Planned | Stale issue and PR analysis |
+
 ### workflow +triage
 
 - issue type detection
@@ -157,3 +166,21 @@ Use a small demo repository to show:
 - PR 4: `pr-summary`
 - PR 5: `repo-report`
 - PR 6: `release-notes` / `stale`
+
+## 11. Evaluation Mapping
+
+| Criterion | Evidence |
+|---|---|
+| 功能完整性 20% | Four implemented commands cover Issue triage, health scoring, PR summary, and repo report |
+| 创新性 20% | Agent-native JSON, explainable rules, local-first safety model, repository workflow report |
+| 实用价值 20% | Reduces maintainer triage/review overhead and creates copy-ready markdown reports |
+| 文档与演示 20% | README, design doc, test report, competition write-up, demo script, defense Q&A |
+| 成果落地 20% | Prepared for GitLink official PR, CI verification, and maintainer review iteration |
+
+## 12. Landing Plan
+
+- Push the implementation branch to the public repository.
+- Create a GitLink official PR against `Gitlink/gitlink-cli`.
+- Record CI result and PR URL in `docs/final-submission-checklist.md`.
+- Respond to maintainer review over the expected 1-2 week review cycle.
+- Keep `release-notes` and `stale` as follow-up work instead of expanding this PR further.

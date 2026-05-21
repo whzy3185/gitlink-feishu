@@ -54,6 +54,12 @@ Planned next:
 - Expanded fetch-layer boundary coverage for empty responses, label and author normalization, error-in-body handling, alternative activity timestamps, release shapes, CI unavailability, and PR summary normalization.
 - Added `workflow +repo-report` with local JSON input, read-only partial fetch aggregation,
   report score, overall risk level, markdown/table/json rendering, and tests.
+- Added competition submission materials:
+  - `docs/competition-submit.zh-CN.md`
+  - `docs/demo-script.md`
+  - `docs/final-submission-checklist.md`
+  - `docs/defense-qa.md`
+- Updated PR draft, test report, competition solution, and continuation notes for final submission readiness.
 
 ## Current Go Toolchain Status
 
@@ -126,6 +132,10 @@ Planned next:
 - `README.md`
 - `docs/competition-solution.md`
 - `docs/pr-draft.md`
+- `docs/competition-submit.zh-CN.md`
+- `docs/demo-script.md`
+- `docs/final-submission-checklist.md`
+- `docs/defense-qa.md`
 - `docs/workflow-agent-design.md`
 - `docs/workflow-agent-test-report.md`
 - `shortcuts/workflow/api_types.go`
@@ -152,6 +162,10 @@ Planned next:
 - `workflow +release-notes` is not implemented.
 - `workflow +stale` is not implemented.
 - Remote write operations remain intentionally deferred.
+- GitLink official PR is not created yet.
+- CI screenshot/result is not recorded yet.
+- Demo video is not recorded yet.
+- Final competition submission links are not filled in yet.
 
 ## Known Issues
 
@@ -180,7 +194,7 @@ Planned next:
 
 ## Next Minimal Executable Task
 
-Design workflow +release-notes with read-only PR titles and commit messages; implement with httptest mock first; do not add LLM or write operations.
+Create GitLink official PR and record CI result.
 
 ## How To Continue After Interruption
 
@@ -190,9 +204,9 @@ Design workflow +release-notes with read-only PR titles and commit messages; imp
 4. Set temporary GOPROXY if dependency download fails: `https://goproxy.cn,direct`.
 5. Run `go test ./shortcuts/workflow`.
 6. Run `go test ./...`.
-7. Start `workflow +release-notes` design only after confirming the existing workflow tests still pass.
+7. Create the GitLink official PR before adding more features.
 8. Keep all new workflow commands read-only by default.
 
 ## Recommended Next Codex Instruction
 
-Design workflow +release-notes with read-only PR titles and commit messages; implement with httptest mock first; do not add LLM or write operations.
+Create GitLink official PR from branch `codex/workflow-agent`, then record PR URL and CI result in `docs/final-submission-checklist.md`.

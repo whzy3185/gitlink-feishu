@@ -136,3 +136,39 @@ gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report
 ## Conclusion
 
 The rule-based Agent Workflow prototype, including the read-only fetch layer, is implemented, tested, and locally runnable.
+
+## Final Verification
+
+Final verification should be run before opening the official GitLink PR:
+
+```bash
+gofmt -w shortcuts/workflow/*.go shortcuts/register.go
+go test ./shortcuts/workflow
+go test ./...
+```
+
+Expected result:
+
+- `go test ./shortcuts/workflow` passes.
+- `go test ./...` passes.
+- No remote write operation is performed by workflow commands.
+
+## Competition Demo Commands
+
+Prefer local fixtures for stable demos:
+
+```bash
+gitlink-cli workflow +triage --from shortcuts/workflow/testdata/issue_bug.json --format table
+gitlink-cli workflow +health --from shortcuts/workflow/testdata/health_good.json --format markdown
+gitlink-cli workflow +pr-summary --from shortcuts/workflow/testdata/pr_summary.json --format markdown
+gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format markdown
+```
+
+Read-only remote smoke commands:
+
+```bash
+gitlink-cli workflow +triage --owner Gitlink --repo gitlink-cli --state open --limit 5 --format table
+gitlink-cli workflow +health --owner Gitlink --repo gitlink-cli --stale-days 30 --format table
+gitlink-cli workflow +pr-summary --owner Gitlink --repo gitlink-cli --number 1 --format markdown
+gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
+```

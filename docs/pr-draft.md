@@ -1,68 +1,113 @@
-# PR Draft: Add workflow agent commands for issue triage, repository health, PR summaries, and repo reports
+# feat(workflow): add agent workflow commands for repository maintenance
 
 ## Summary
 
-This PR adds `workflow +triage`, `workflow +health`, `workflow +pr-summary`,
-and `workflow +repo-report` with safe read-only analysis modes:
+This PR adds four read-only workflow commands for repository maintenance:
 
-- local flags
-- local JSON input
-- read-only GitLink fetch mode
+- `workflow +triage`
+- `workflow +health`
+- `workflow +pr-summary`
+- `workflow +repo-report`
 
-It also adds stable `json`, `table`, and `markdown` rendering for Agent consumption.
+The commands provide rule-based, explainable analysis with stable `json`, concise `table`,
+and copy-friendly `markdown` output.
 
 ## Motivation
 
-- Help maintainers triage issues faster
-- Provide a structured repository health overview
-- Summarize pull requests with review focus, test suggestions, and merge checklist output
-- Generate a repository workflow report that aggregates health, issue triage, and PR signals
-- Give AI Agents stable machine-readable output
-- Keep the workflow local-first and safe by default
-- Avoid any dependency on external LLM APIs
+Open-source maintainers often spend time on repetitive information organization before
+making actual decisions:
+
+- Issue triage cost
+- PR review cost
+- repository health visibility
+- Agent needs stable structured output
+
+This PR adds workflow-level analysis on top of the existing GitLink CLI shortcut architecture
+without introducing LLM dependencies or remote write behavior.
 
 ## Changes
 
-- New `shortcuts/workflow` rule engine and DTOs
-- Local command layer for `workflow +triage` and `workflow +health`
-- Local and remote command layer for `workflow +pr-summary`
-- Local and partial remote aggregation for `workflow +repo-report`
-- Workflow-local renderer for `json`, `table`, and `markdown`
-- Read-only GitLink fetch and normalization helpers
-- Unit tests for rules, fetch normalization, rendering, and command wiring
-- Competition and test documentation updates
+### `workflow +triage`
+
+- Classifies issues by type
+- Scores priority and confidence
+- Detects missing bug-report information
+- Produces risk flags, recommended actions, suggested comments, and reasoning
+
+### `workflow +health`
+
+- Scores repository health
+- Covers issue/PR backlog, activity, release, CI, docs, license, contributing, and Agent readiness signals
+- Tolerates unknown metrics without failing the command
+
+### `workflow +pr-summary`
+
+- Summarizes PR metadata, changed files, and commits
+- Produces change type, risk level, review focus, test suggestions, merge checklist, and reasoning
+- Supports local JSON input and remote read-only PR fetch
+
+### `workflow +repo-report`
+
+- Aggregates health, issue triage, and PR summary signals
+- Produces a repository workflow report with score, risk level, recommendations, and reasoning
+- Supports partial read-only remote aggregation when optional sections are unavailable
 
 ## Safety
 
 - Remote mode is read-only
-- No comment, label, close, approve, reject, merge, or release write actions
-- Health scoring tolerates unknown or unavailable metrics
+- No LLM dependency
+- No labels/comments/close operations
+- No PR approve/reject/merge operations
+- No `internal/output` change
+- No new third-party dependency
 - Test fixtures do not contain secrets or tokens
 
 ## Tests
 
-- `gofmt -w shortcuts/workflow/*.go shortcuts/register.go`
-- `go test ./shortcuts/workflow`
-- `go test ./...`
-- `httptest` coverage for API normalization and fetch tolerance
-- Manual command examples in local and remote read-only modes
-- PR summary tests for change type, risk level, partial fetch failures, renderers, and command wiring
-- Repo report tests for aggregation, partial fetch behavior, renderers, local JSON input, and command wiring
+```bash
+gofmt -w shortcuts/workflow/*.go shortcuts/register.go
+go test ./shortcuts/workflow
+go test ./...
+```
+
+Coverage includes:
+
+- triage rules
+- health scoring
+- PR summary rules
+- repo report aggregation
+- fetch normalization
+- partial failure handling
+- `json` / `table` / `markdown` rendering
+- local `--from` fixtures
+- command wiring tests
+
+## Documentation
+
+- `README.md`
+- `docs/workflow-agent-design.md`
+- `docs/workflow-agent-test-report.md`
+- `docs/competition-solution.md`
+- `docs/competition-submit.zh-CN.md`
+- `docs/demo-script.md`
+- `docs/final-submission-checklist.md`
+- `docs/defense-qa.md`
+- `skills/gitlink-workflow/SKILL.md`
+- `WORK_CONTINUATION.md`
 
 ## Known Limitations
 
-- Real API response shapes may still require minor normalization tweaks
+- `workflow +release-notes` is not implemented.
+- `workflow +stale` is not implemented.
+- Real GitLink API shapes may require follow-up normalization.
 - Remote `workflow +repo-report` PR aggregation currently uses PR list metadata;
-  detailed file and commit analysis remains available through `workflow +pr-summary --number`
-- Write operations are intentionally deferred to a later PR
-- `release-notes` and `stale` are planned next
+  detailed changed-file and commit analysis is available through `workflow +pr-summary --number`.
 
-## Screenshots or Examples
+## Examples
 
 ```bash
-gitlink-cli workflow +triage --title "Token leaked in logs" --body "The access token appears in command output" --format json
-gitlink-cli workflow +health --repository Gitlink/gitlink-cli --open-issues 3 --open-prs 1 --has-readme --has-license --has-contributing --agent-readiness-known --agent-readiness-score 9 --format table
-gitlink-cli workflow +triage --owner Gitlink --repo gitlink-cli --state open --limit 5 --format table
-gitlink-cli workflow +pr-summary --owner Gitlink --repo gitlink-cli --number 1 --format markdown
-gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
+gitlink-cli workflow +triage --from shortcuts/workflow/testdata/issue_bug.json --format table
+gitlink-cli workflow +health --from shortcuts/workflow/testdata/health_good.json --format markdown
+gitlink-cli workflow +pr-summary --from shortcuts/workflow/testdata/pr_summary.json --format markdown
+gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format markdown
 ```
