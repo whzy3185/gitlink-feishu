@@ -93,7 +93,6 @@ Coverage includes:
 - `docs/final-submission-checklist.md`
 - `docs/defense-qa.md`
 - `skills/gitlink-workflow/SKILL.md`
-- `WORK_CONTINUATION.md`
 
 ## Known Limitations
 
