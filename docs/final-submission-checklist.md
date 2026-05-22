@@ -2,11 +2,12 @@
 
 ## Repository Links
 
-- GitHub repository:
-- GitHub branch:
-- GitLink fork:
-- GitLink official PR:
-- CI result:
+- GitHub repository: 待填写
+- GitHub branch: 待填写
+- GitLink fork: 待填写
+- GitLink official PR: 待填写
+- CI result: 待填写
+- Competition submission: 待填写
 
 ## Core Files
 
@@ -35,9 +36,9 @@
 
 ## Demo Assets
 
-- demo video:
-- screenshots:
-- command output logs:
+- demo video: 待填写
+- screenshots: 待填写
+- command output logs: 待填写
 
 ## Before Submission
 
