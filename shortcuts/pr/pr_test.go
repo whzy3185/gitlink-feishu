@@ -91,6 +91,79 @@ func TestPRCommentFailsWhenIssueFieldMissing(t *testing.T) {
 	}
 }
 
+func TestPRVersionsUsesV1Endpoint(t *testing.T) {
+	var calledPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/pulls/13/versions.json" {
+			t.Fatalf("unexpected request: %s %s?%s", r.Method, r.URL.Path, r.URL.RawQuery)
+		}
+		calledPath = r.URL.Path
+		writeJSON(t, w, map[string]interface{}{
+			"total_count": float64(2),
+			"versions": []map[string]interface{}{
+				{
+					"id":              float64(16039),
+					"head_commit_sha": "aaaaaaaa",
+				},
+				{
+					"id":              float64(16040),
+					"head_commit_sha": "bbbbbbbb",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "versions", map[string]string{
+		"id": "13",
+	})
+	if err != nil {
+		t.Fatalf("versions shortcut failed: %v", err)
+	}
+	assertEqual(t, calledPath, "/v1/owner/repo/pulls/13/versions.json")
+}
+
+func TestPRVersionDiffUsesV1EndpointWithFileFilter(t *testing.T) {
+	var calledPath string
+	var filepath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/pulls/13/versions/16040/diff.json" {
+			t.Fatalf("unexpected request: %s %s?%s", r.Method, r.URL.Path, r.URL.RawQuery)
+		}
+		calledPath = r.URL.Path
+		filepath = r.URL.Query().Get("filepath")
+		writeJSON(t, w, map[string]interface{}{
+			"diff": "--- a/shortcuts/pr/pr.go\n+++ b/shortcuts/pr/pr.go\n",
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "version-diff", map[string]string{
+		"id":         "13",
+		"version-id": "16040",
+		"file":       "shortcuts/pr/pr.go",
+	})
+	if err != nil {
+		t.Fatalf("version-diff shortcut failed: %v", err)
+	}
+	assertEqual(t, calledPath, "/v1/owner/repo/pulls/13/versions/16040/diff.json")
+	assertEqual(t, filepath, "shortcuts/pr/pr.go")
+}
+
+func TestPRVersionDiffRequiresVersionID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("server should not be called when version-id is missing: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "version-diff", map[string]string{
+		"id": "13",
+	})
+	if err == nil {
+		t.Fatal("expected error when version-id is missing, got nil")
+	}
+}
+
 func runPRShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
 	t.Helper()
 	shortcut := findPRShortcut(t, name)

@@ -168,6 +168,64 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "versions",
+			Description: "List pull request patchset versions",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", prV1Path(ctx, id)+"/versions", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "version-diff",
+			Description: "Show diff for a pull request patchset version",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "version-id", Short: "v", Usage: "Patchset version ID", Required: true},
+				{Name: "file", Short: "f", Usage: "Filter diff by file path"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				versionID, err := ctx.RequireArg("version-id")
+				if err != nil {
+					return err
+				}
+				path := fmt.Sprintf("%s/versions/%s/diff", prV1Path(ctx, id), versionID)
+				if file := ctx.Arg("file"); file != "" {
+					q := url.Values{}
+					q.Set("filepath", file)
+					env, err := ctx.CallAPIWithQuery("GET", path, q)
+					if err != nil {
+						return err
+					}
+					return ctx.Output(env)
+				}
+				env, err := ctx.CallAPI("GET", path, nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "comment",
 			Description: "Add a comment to a pull request",
 			Flags: []common.Flag{
@@ -201,6 +259,10 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func prV1Path(ctx *common.RuntimeContext, id string) string {
+	return fmt.Sprintf("/v1/%s/%s/pulls/%s", ctx.Owner, ctx.Repo, id)
 }
 
 func extractIssueID(env *output.Envelope) (int64, error) {

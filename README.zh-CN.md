@@ -214,6 +214,12 @@ gitlink-cli pr +merge --owner Gitlink --repo forgeplus -i 42
 
 # 查看 PR 变更文件
 gitlink-cli pr +files --owner Gitlink --repo forgeplus -i 42
+
+# 查看 PR patchset/version 列表
+gitlink-cli pr +versions --owner Gitlink --repo forgeplus -i 42
+
+# 查看指定 patchset/version diff
+gitlink-cli pr +version-diff --owner Gitlink --repo forgeplus -i 42 --version-id 16040
 ```
 
 ### 发布管理

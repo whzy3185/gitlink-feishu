@@ -123,7 +123,7 @@ skills/
 | **gitlink-shared** | 认证、全局参数、API 参考、安全规则、分支约定 | `auth login`, `auth status` |
 | **gitlink-repo** | 仓库管理 | `repo +list`, `repo +create`, `repo +info`, `repo +fork` |
 | **gitlink-issue** | Issue 管理 | `issue +create`, `issue +list`, `issue +view`, `issue +close`, `issue +batch-close` |
-| **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +review` |
+| **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +versions`, `pr +version-diff` |
 | **gitlink-branch** | 分支管理 | `branch +list`, `branch +create`, `branch +delete`, `branch +protect` |
 | **gitlink-release** | 版本发布 | `release +list`, `release +create`, `release +view` |
 

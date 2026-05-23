@@ -203,6 +203,12 @@ gitlink-cli pr +merge --owner Gitlink --repo forgeplus -i 42
 
 # View changed files
 gitlink-cli pr +files --owner Gitlink --repo forgeplus -i 42
+
+# List PR patchset versions
+gitlink-cli pr +versions --owner Gitlink --repo forgeplus -i 42
+
+# View a patchset version diff
+gitlink-cli pr +version-diff --owner Gitlink --repo forgeplus -i 42 --version-id 16040
 ```
 
 ### Branch Management
