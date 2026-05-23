@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -44,6 +45,7 @@ func Shortcuts() []*common.Shortcut {
 				if err != nil {
 					return err
 				}
+				normalizeIssueListIDs(env)
 				return ctx.Output(env)
 			},
 		},
@@ -221,6 +223,36 @@ func Shortcuts() []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+	}
+}
+
+// normalizeIssueListIDs adds "number" (project_issues_index) and renames
+// "id" to "database_id" so the user-facing output uses the project-level
+// issue number, not the global database primary key.
+func normalizeIssueListIDs(env *output.Envelope) {
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return
+	}
+	issues, ok := data["issues"].([]interface{})
+	if !ok {
+		return
+	}
+	for i, item := range issues {
+		issue, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		// Copy project_issues_index to top-level "number"
+		if num, ok := issue["project_issues_index"]; ok {
+			issue["number"] = num
+		}
+		// Rename "id" (global database PK) to "database_id"
+		if id, ok := issue["id"]; ok {
+			issue["database_id"] = id
+			delete(issue, "id")
+		}
+		issues[i] = issue
 	}
 }
 
