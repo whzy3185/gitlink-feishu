@@ -198,6 +198,9 @@ gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --from issues.cs
 
 # Add a comment
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "Fixed"
+
+# List issue assigners
+gitlink-cli issue +assigners --owner Gitlink --repo forgeplus
 ```
 
 ### Pull Requests

@@ -209,6 +209,9 @@ gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --from issues.cs
 
 # 添加评论
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "已修复"
+
+# 列出 Issue 负责人
+gitlink-cli issue +assigners --owner Gitlink --repo forgeplus
 ```
 
 ### Pull Request
