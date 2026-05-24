@@ -218,6 +218,9 @@ gitlink-cli pr +view --owner Gitlink --repo forgeplus -i 42
 # Merge a PR
 gitlink-cli pr +merge --owner Gitlink --repo forgeplus -i 42
 
+# Reopen a closed PR
+gitlink-cli pr +reopen --owner Gitlink --repo forgeplus -i 42
+
 # View changed files
 gitlink-cli pr +files --owner Gitlink --repo forgeplus -i 42
 

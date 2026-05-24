@@ -24,6 +24,7 @@ metadata:
 | `pr +view` | PR 详情 | 否（公开项目） |
 | `pr +merge` | 合并 PR | 是 |
 | `pr +close` | 关闭 PR | 是 |
+| `pr +reopen` | 重开已关闭的 PR | 是 |
 | `pr +files` | 变更文件列表 | 否 |
 | `pr +diff` | 查看变更文件和 diff 内容 | 否 |
 | `pr +versions` | 查看 PR patchset/version 列表 | 否 |
@@ -50,6 +51,9 @@ gitlink-cli pr +merge --id 3 --method squash
 
 # 关闭 PR（拒绝合并）
 gitlink-cli pr +close --id 3
+
+# 重开已关闭的 PR
+gitlink-cli pr +reopen --id 3
 
 # 查看变更文件（含 diff 内容）
 gitlink-cli pr +files --id 3
@@ -157,7 +161,7 @@ gitlink-cli api GET /v1/:owner/:repo/pulls/:id/versions/:version_id/diff
 - GitLink 的默认分支通常是 `master`（非 `main`），创建 PR 时注意 `--base` 参数
 - 合并 PR 前建议先用 `pr +view` 确认状态
 - **PR 创建要求源分支与目标分支有实际代码差异**，否则返回"分支内容相同，无需创建合并请求"
-- PR 查看/合并/关闭需要使用 `pull_request_number`（即网页 URL `/pulls/N` 中的序号，从 `pr +list` 返回）
+- PR 查看/合并/关闭/重开需要使用 `pull_request_number`（即网页 URL `/pulls/N` 中的序号，从 `pr +list` 返回）
 - `pr +merge` 默认使用 merge 方式，可通过 `--method` 指定 rebase 或 squash
 - `pr +diff` 实际调用 `/pulls/:id/files` 端点，返回变更文件列表和 diff 内容
 - `pr +versions` / `pr +version-diff` 使用 v1 API，`--id` 为网页 URL `/pulls/N` 中的 PR 序号，`--version-id` 为 patchset/version id

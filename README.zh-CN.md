@@ -229,6 +229,9 @@ gitlink-cli pr +view --owner Gitlink --repo forgeplus -i 42
 # 合并 PR
 gitlink-cli pr +merge --owner Gitlink --repo forgeplus -i 42
 
+# 重开已关闭的 PR
+gitlink-cli pr +reopen --owner Gitlink --repo forgeplus -i 42
+
 # 查看 PR 变更文件
 gitlink-cli pr +files --owner Gitlink --repo forgeplus -i 42
 
