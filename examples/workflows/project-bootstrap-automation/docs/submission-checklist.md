@@ -14,7 +14,7 @@
 
 ## 验证状态
 
-- `go test ./examples/workflows/project-bootstrap-automation/scripts`：通过
+- `go test ./scripts`：通过
 - `.\scripts\run_demo.ps1`：通过
 - dry-run 生成 7 个 gitlink-cli 调用计划，满足赛题要求
 - `.\scripts\run_demo.ps1 -Config examples\verification_comment_config.json -Apply -PublishIssueNumber 4`：通过，3 个真实 gitlink-cli 调用状态均为 `ok`
