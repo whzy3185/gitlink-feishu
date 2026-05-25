@@ -88,6 +88,56 @@ func getOrCreateRepo(db *sql.DB, repoName, owner string) (int, error) {
 	return int(lastID), nil
 }
 
+func getOrCreateTag(db *sql.DB, repoID int, tagName string) (int, error) {
+	var id int
+	err := db.QueryRow("SELECT id FROM tags WHERE repo_id = ? AND name = ?", repoID, tagName).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	res, err := db.Exec("INSERT INTO tags (repo_id, name) VALUES (?, ?)", repoID, tagName)
+	if err != nil {
+		return 0, fmt.Errorf("insert tag %q for repo %d: %w", tagName, repoID, err)
+	}
+	lastID, _ := res.LastInsertId()
+	return int(lastID), nil
+}
+
+func savePullTags(db *sql.DB, pullID int, tagIDs []int) {
+	if len(tagIDs) == 0 {
+		return
+	}
+	for _, tagID := range tagIDs {
+		db.Exec("INSERT OR IGNORE INTO pull_tags (pull_id, tag_id) VALUES (?, ?)", pullID, tagID)
+	}
+}
+
+func saveIssueTags(db *sql.DB, issueID int, tagIDs []int) {
+	if len(tagIDs) == 0 {
+		return
+	}
+	for _, tagID := range tagIDs {
+		db.Exec("INSERT OR IGNORE INTO issue_tags (issue_id, tag_id) VALUES (?, ?)", issueID, tagID)
+	}
+}
+
+func extractTagNames(data map[string]interface{}, key string) []string {
+	rawTags, ok := data[key].([]interface{})
+	if !ok {
+		return nil
+	}
+	var names []string
+	for _, item := range rawTags {
+		tag, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if name, ok := tag["name"].(string); ok && name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 func savePull(db *sql.DB, repoID int, pr map[string]interface{}) {
 	// id: pull_request_id preferred, fallback to id
 	var prID float64
@@ -128,6 +178,16 @@ func savePull(db *sql.DB, repoID int, pr map[string]interface{}) {
 	db.Exec(`INSERT OR REPLACE INTO pulls (id, repo_id, number, creater_id, status, processor_id, create_time, close_time)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		int(prID), repoID, int(prNumber), createrID, status, processorID, createTime, nil)
+
+	// Save tags
+	tagNames := extractTagNames(pr, "issue_tags")
+	var tagIDs []int
+	for _, name := range tagNames {
+		if tid, err := getOrCreateTag(db, repoID, name); err == nil {
+			tagIDs = append(tagIDs, tid)
+		}
+	}
+	savePullTags(db, int(prID), tagIDs)
 }
 
 func saveIssue(db *sql.DB, repoID int, issue map[string]interface{}, issueNumber int, listUpdatedAt string) {
@@ -165,4 +225,14 @@ func saveIssue(db *sql.DB, repoID int, issue map[string]interface{}, issueNumber
 	db.Exec(`INSERT OR REPLACE INTO issues (id, repo_id, number, creater_id, processor_id, create_time, close_time, status)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		int(issueID), repoID, issueNumber, createrID, processorID, createTime, closeTime, status)
+
+	// Save tags
+	tagNames := extractTagNames(issue, "tags")
+	var tagIDs []int
+	for _, name := range tagNames {
+		if tid, err := getOrCreateTag(db, repoID, name); err == nil {
+			tagIDs = append(tagIDs, tid)
+		}
+	}
+	saveIssueTags(db, int(issueID), tagIDs)
 }

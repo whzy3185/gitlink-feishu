@@ -134,13 +134,8 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 								issueNumber = int(v)
 							}
 
-							detail, err := fetchIssueDetail(ctx, ctx.Owner, ctx.Repo, int(issueID))
-							if err != nil {
-								fmt.Fprintf(os.Stderr, "  Error fetching issue %d detail: %v\n", int(issueID), err)
-								continue
-							}
 							listUpdatedAt, _ := issue["updated_at"].(string)
-							saveIssue(db, repoID, detail, issueNumber, listUpdatedAt)
+							saveIssue(db, repoID, issue, issueNumber, listUpdatedAt)
 						}
 						if len(issues) < 20 {
 							break
@@ -153,7 +148,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				fmt.Fprintf(os.Stderr, "  Total Issues: %d\n", len(seenIssueIDs))
 				if issueAgg != nil {
 					fmt.Fprintf(os.Stderr, "  API aggregates: total=%v, open=%v, closed=%v\n",
-						issueAgg["all_count"], issueAgg["open_count"], issueAgg["close_count"])
+						issueAgg["total_count"], issueAgg["opened_count"], issueAgg["closed_count"])
 				}
 
 				fmt.Fprintf(os.Stderr, "\nData saved to %s\n", dbPath)

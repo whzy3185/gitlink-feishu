@@ -60,21 +60,6 @@ func fetchIssueListPage(ctx *common.RuntimeContext, owner, repo, state string, p
 	return issues, data
 }
 
-func fetchIssueDetail(ctx *common.RuntimeContext, owner, repo string, issueID int) (map[string]interface{}, error) {
-	env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/issues/%d", v1RepoPath(owner, repo), issueID), nil)
-	if err != nil {
-		return nil, err
-	}
-	if !env.OK {
-		return nil, fmt.Errorf("API error fetching issue %d", issueID)
-	}
-	data, ok := env.Data.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected response format for issue %d", issueID)
-	}
-	return data, nil
-}
-
 func sleep() {
 	time.Sleep(300 * time.Millisecond)
 }

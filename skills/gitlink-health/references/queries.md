@@ -67,6 +67,48 @@ CREATE TABLE pulls (
 
 API 字段映射：`status` ← `pull_request_status`（0=open, 1=merged, 2=closed），`creater_id` ← `author_login`。
 
+### tags
+
+```sql
+CREATE TABLE tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    FOREIGN KEY (repo_id) REFERENCES repos(id),
+    UNIQUE(repo_id, name)
+);
+```
+
+API 字段映射：`name` ← `name`，先调用 `GET /:owner/:repo/tags` 批量写入，后续 PR/Issue 保存时只做关联查询。
+
+### issue_tags
+
+```sql
+CREATE TABLE issue_tags (
+    issue_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (issue_id, tag_id)
+);
+```
+
+关系表：一个 Issue 可关联多个 tag。写入来源：Issue detail 中的 `tags` 数组。
+
+### pull_tags
+
+```sql
+CREATE TABLE pull_tags (
+    pull_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    FOREIGN KEY (pull_id) REFERENCES pulls(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (pull_id, tag_id)
+);
+```
+
+关系表：一个 PR 可关联多个 tag。写入来源：PR list 中的 `issue_tags` 数组。
+
 ## 1. 确定目标仓库
 
 数据库可能包含多个仓库的数据，查询前需先获取目标仓库的 `repo_id`：
@@ -332,6 +374,54 @@ FROM (
     UNION
     SELECT creater_id FROM issues WHERE repo_id = <repo_id> AND creater_id IS NOT NULL
 );
+```
+
+### 标签列表
+
+```sql
+SELECT name FROM tags WHERE repo_id = <repo_id> ORDER BY name;
+```
+
+### 按标签统计 Issue 数量
+
+```sql
+SELECT t.name, COUNT(*) as issue_count
+FROM tags t
+JOIN issue_tags it ON t.id = it.tag_id
+JOIN issues i ON it.issue_id = i.id
+WHERE t.repo_id = <repo_id>
+GROUP BY t.id
+ORDER BY issue_count DESC;
+```
+
+### 按标签统计 PR 数量
+
+```sql
+SELECT t.name, COUNT(*) as pr_count
+FROM tags t
+JOIN pull_tags pt ON t.id = pt.tag_id
+JOIN pulls p ON pt.pull_id = p.id
+WHERE t.repo_id = <repo_id>
+GROUP BY t.id
+ORDER BY pr_count DESC;
+```
+
+### 查询某 Issue 的所有标签
+
+```sql
+SELECT t.name
+FROM tags t
+JOIN issue_tags it ON t.id = it.tag_id
+WHERE it.issue_id = <issue_id>;
+```
+
+### 查询某 PR 的所有标签
+
+```sql
+SELECT t.name
+FROM tags t
+JOIN pull_tags pt ON t.id = pt.tag_id
+WHERE pt.pull_id = <pull_id>;
 ```
 
 ---

@@ -49,3 +49,35 @@ CREATE INDEX IF NOT EXISTS idx_pulls_repo_id ON pulls(repo_id);
 CREATE INDEX IF NOT EXISTS idx_pulls_status ON pulls(status);
 CREATE INDEX IF NOT EXISTS idx_pulls_create_time ON pulls(create_time);
 CREATE INDEX IF NOT EXISTS idx_pulls_creater_id ON pulls(creater_id);
+
+CREATE TABLE IF NOT EXISTS tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    FOREIGN KEY (repo_id) REFERENCES repos(id),
+    UNIQUE(repo_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tags_repo_id ON tags(repo_id);
+
+CREATE TABLE IF NOT EXISTS issue_tags (
+    issue_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (issue_id, tag_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_issue_tags_issue_id ON issue_tags(issue_id);
+CREATE INDEX IF NOT EXISTS idx_issue_tags_tag_id ON issue_tags(tag_id);
+
+CREATE TABLE IF NOT EXISTS pull_tags (
+    pull_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    FOREIGN KEY (pull_id) REFERENCES pulls(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (pull_id, tag_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pull_tags_pull_id ON pull_tags(pull_id);
+CREATE INDEX IF NOT EXISTS idx_pull_tags_tag_id ON pull_tags(tag_id);
