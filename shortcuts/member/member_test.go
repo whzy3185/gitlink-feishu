@@ -79,6 +79,26 @@ func TestMemberBatchAddDryRunDoesNotCallAPI(t *testing.T) {
 	}
 }
 
+func TestMemberBatchAddReturnsErrorWhenAnyRequestFails(t *testing.T) {
+	server := newMemberTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/owner/repo/collaborators.json")
+		payload := decodeJSON(t, r)
+		if int(payload["user_id"].(float64)) == 102 {
+			http.Error(w, "member add failed", http.StatusBadRequest)
+			return
+		}
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	})
+	defer server.Close()
+
+	err := runMemberShortcut(t, server, "batch-add", map[string]string{
+		"user-ids": "101,102",
+	})
+	if err == nil {
+		t.Fatal("expected batch-add to return an error when one request fails")
+	}
+}
+
 func TestMemberRemove(t *testing.T) {
 	var payload map[string]interface{}
 	server := newMemberTestServer(t, func(w http.ResponseWriter, r *http.Request) {

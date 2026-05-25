@@ -216,22 +216,38 @@ func runBatchAdd(ctx *common.RuntimeContext) error {
 	}
 
 	results := make([]map[string]interface{}, 0, len(userIDs))
+	succeeded := 0
+	failed := 0
 	for _, userID := range userIDs {
 		env, err := ctx.CallAPI("POST", collaboratorsPath(ctx), map[string]interface{}{"user_id": userID})
 		result := map[string]interface{}{"user_id": userID}
 		if err != nil {
 			result["ok"] = false
 			result["error"] = err.Error()
+			failed++
 		} else {
 			result["ok"] = env.OK
 			result["data"] = env.Data
+			if env.OK {
+				succeeded++
+			} else {
+				failed++
+			}
 		}
 		results = append(results, result)
 	}
-	return ctx.OutputData(map[string]interface{}{
-		"count":   len(userIDs),
-		"results": results,
-	})
+	if err := ctx.OutputData(map[string]interface{}{
+		"count":     len(userIDs),
+		"succeeded": succeeded,
+		"failed":    failed,
+		"results":   results,
+	}); err != nil {
+		return err
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d of %d member(s) failed to add", failed, len(userIDs))
+	}
+	return nil
 }
 
 func collaboratorsPath(ctx *common.RuntimeContext) string {
