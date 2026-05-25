@@ -1,0 +1,17 @@
+{
+  "project": {
+    "name": "Open Research Toolkit",
+    "description": "A reproducible GitLink project initialized by an end-to-end automation workflow.",
+    "language": "Go",
+    "license": "MulanPSL-2.0"
+  },
+  "repository": {
+    "owner": "puygob236",
+    "name": "gitlink-bootstrap-demo"
+  },
+  "branches": [],
+  "issues": [],
+  "publish": {
+    "issue_number": 4
+  }
+}

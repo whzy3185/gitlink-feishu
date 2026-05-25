@@ -1,0 +1,64 @@
+{
+  "project": {
+    "name": "Open Research Toolkit",
+    "description": "A reproducible GitLink project initialized by an end-to-end automation workflow.",
+    "language": "Go",
+    "license": "MulanPSL-2.0"
+  },
+  "repository": {
+    "owner": "puygob236",
+    "name": "gitlink-bootstrap-demo"
+  },
+  "branches": [
+    {
+      "name": "develop",
+      "from": "master",
+      "create": true,
+      "protect": false
+    },
+    {
+      "name": "release/v0.1",
+      "from": "master",
+      "create": true,
+      "protect": false
+    }
+  ],
+  "issues": [
+    {
+      "title": "完善项目 README 与快速开始文档",
+      "type": "documentation",
+      "priority": "normal",
+      "tasks": [
+        "补充项目背景和目标用户",
+        "补充安装与运行步骤",
+        "补充最小示例"
+      ],
+      "acceptance": "README 能支撑新贡献者在 10 分钟内完成本地启动。"
+    },
+    {
+      "title": "建立基础 CI 检查",
+      "type": "ci",
+      "priority": "high",
+      "tasks": [
+        "添加测试命令",
+        "添加 lint 或格式检查",
+        "在 PR 中展示检查结果"
+      ],
+      "acceptance": "每次 push 和 PR 均能触发基础检查。"
+    },
+    {
+      "title": "规划 v0.1 版本里程碑",
+      "type": "release",
+      "priority": "normal",
+      "tasks": [
+        "整理 v0.1 范围",
+        "确定验收标准",
+        "准备 Release Notes 模板"
+      ],
+      "acceptance": "形成可执行的 v0.1 版本任务列表。"
+    }
+  ],
+  "publish": {
+    "issue_number": 0
+  }
+}

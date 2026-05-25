@@ -1,0 +1,144 @@
+{
+  "mode": "dry-run",
+  "commands": [
+    {
+      "command": [
+        "gitlink-cli",
+        "repo",
+        "+info",
+        "--owner",
+        "puygob236",
+        "--repo",
+        "gitlink-bootstrap-demo",
+        "--format",
+        "json"
+      ],
+      "status": "planned",
+      "returncode": null,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "gitlink-cli",
+        "branch",
+        "+list",
+        "--owner",
+        "puygob236",
+        "--repo",
+        "gitlink-bootstrap-demo",
+        "--format",
+        "json"
+      ],
+      "status": "planned",
+      "returncode": null,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "gitlink-cli",
+        "branch",
+        "+create",
+        "--owner",
+        "puygob236",
+        "--repo",
+        "gitlink-bootstrap-demo",
+        "--name",
+        "develop",
+        "--from",
+        "master",
+        "--format",
+        "json"
+      ],
+      "status": "planned",
+      "returncode": null,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "gitlink-cli",
+        "branch",
+        "+create",
+        "--owner",
+        "puygob236",
+        "--repo",
+        "gitlink-bootstrap-demo",
+        "--name",
+        "release/v0.1",
+        "--from",
+        "master",
+        "--format",
+        "json"
+      ],
+      "status": "planned",
+      "returncode": null,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "gitlink-cli",
+        "issue",
+        "+create",
+        "--owner",
+        "puygob236",
+        "--repo",
+        "gitlink-bootstrap-demo",
+        "--title",
+        "完善项目 README 与快速开始文档",
+        "--body",
+        "仓库: `puygob236/gitlink-bootstrap-demo`\n\n类型: documentation\n优先级: normal\n\n## 任务清单\n\n- [ ] 补充项目背景和目标用户\n- [ ] 补充安装与运行步骤\n- [ ] 补充最小示例\n\n## 验收标准\n\nREADME 能支撑新贡献者在 10 分钟内完成本地启动。\n",
+        "--format",
+        "json"
+      ],
+      "status": "planned",
+      "returncode": null,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "gitlink-cli",
+        "issue",
+        "+create",
+        "--owner",
+        "puygob236",
+        "--repo",
+        "gitlink-bootstrap-demo",
+        "--title",
+        "建立基础 CI 检查",
+        "--body",
+        "仓库: `puygob236/gitlink-bootstrap-demo`\n\n类型: ci\n优先级: high\n\n## 任务清单\n\n- [ ] 添加测试命令\n- [ ] 添加 lint 或格式检查\n- [ ] 在 PR 中展示检查结果\n\n## 验收标准\n\n每次 push 和 PR 均能触发基础检查。\n",
+        "--format",
+        "json"
+      ],
+      "status": "planned",
+      "returncode": null,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "gitlink-cli",
+        "issue",
+        "+create",
+        "--owner",
+        "puygob236",
+        "--repo",
+        "gitlink-bootstrap-demo",
+        "--title",
+        "规划 v0.1 版本里程碑",
+        "--body",
+        "仓库: `puygob236/gitlink-bootstrap-demo`\n\n类型: release\n优先级: normal\n\n## 任务清单\n\n- [ ] 整理 v0.1 范围\n- [ ] 确定验收标准\n- [ ] 准备 Release Notes 模板\n\n## 验收标准\n\n形成可执行的 v0.1 版本任务列表。\n",
+        "--format",
+        "json"
+      ],
+      "status": "planned",
+      "returncode": null,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}
