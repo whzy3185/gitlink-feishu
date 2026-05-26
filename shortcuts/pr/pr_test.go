@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
+	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -51,6 +52,87 @@ func TestPRCommentPostsToCorrectIssueJournal(t *testing.T) {
 		t.Fatal("journal endpoint was not called")
 	}
 	assertEqual(t, journalPayload["notes"], "LGTM, looks good!")
+}
+
+func TestPRViewAddsClosedAtFromIssueJournal(t *testing.T) {
+	var issueJournalCalled bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/pulls/37.json":
+			writeJSON(t, w, map[string]interface{}{
+				"issue": map[string]interface{}{
+					"id": float64(142756),
+				},
+				"pull_request": map[string]interface{}{
+					"status":             float64(2),
+					"pull_request_staus": "closed",
+				},
+			})
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/142756/journals.json":
+			issueJournalCalled = true
+			writeJSON(t, w, map[string]interface{}{
+				"journals": []map[string]interface{}{
+					{
+						"operate_category": "pull_request",
+						"operate_content":  "创建了<b>合并请求</b>",
+						"created_at":       "2026-05-24 21:43",
+					},
+					{
+						"operate_category": "status",
+						"operate_content":  "<b>拒绝了</b>合并请求",
+						"created_at":       "2026-05-25 08:58",
+						"updated_at":       "2026-05-25 08:58",
+					},
+				},
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	env, err := runPRShortcutWithOutput(t, server, "view", map[string]string{
+		"id": "37",
+	})
+	if err != nil {
+		t.Fatalf("view shortcut failed: %v", err)
+	}
+	if !issueJournalCalled {
+		t.Fatal("issue journal endpoint was not called")
+	}
+	data := env.Data.(map[string]interface{})
+	assertEqual(t, data["closed_at"], "2026-05-25 08:58")
+	prData := data["pull_request"].(map[string]interface{})
+	assertEqual(t, prData["closed_at"], "2026-05-25 08:58")
+}
+
+func TestPRViewDoesNotFetchJournalsForOpenPR(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/owner/repo/pulls/45.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"issue": map[string]interface{}{
+				"id": float64(142793),
+			},
+			"pull_request": map[string]interface{}{
+				"status":             float64(0),
+				"pull_request_staus": "open",
+			},
+		})
+	}))
+	defer server.Close()
+
+	env, err := runPRShortcutWithOutput(t, server, "view", map[string]string{
+		"id": "45",
+	})
+	if err != nil {
+		t.Fatalf("view shortcut failed: %v", err)
+	}
+	data := env.Data.(map[string]interface{})
+	if _, ok := data["closed_at"]; ok {
+		t.Fatal("open PR should not include closed_at")
+	}
 }
 
 func TestPRCommentFailsWhenPRNotFound(t *testing.T) {
@@ -265,18 +347,40 @@ func TestPRReviewRejectsInvalidStatus(t *testing.T) {
 
 func runPRShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
 	t.Helper()
+	_, err := runPRShortcutWithOutput(t, server, name, args)
+	return err
+}
+
+func runPRShortcutWithOutput(t *testing.T, server *httptest.Server, name string, args map[string]string) (*output.Envelope, error) {
+	t.Helper()
 	shortcut := findPRShortcut(t, name)
+	client := &client.Client{
+		HTTP:    server.Client(),
+		BaseURL: server.URL,
+	}
 	ctx := &common.RuntimeContext{
-		Client: &client.Client{
-			HTTP:    server.Client(),
-			BaseURL: server.URL,
-		},
+		Client: client,
 		Owner:  "owner",
 		Repo:   "repo",
 		Format: "json",
 		Args:   args,
 	}
-	return shortcut.Run(ctx)
+	err := shortcut.Run(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if name != "view" {
+		return nil, nil
+	}
+	id := args["id"]
+	env, err := client.Do("GET", fmt.Sprintf("/owner/repo/pulls/%s", id), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := enrichPullRequestClosedAt(ctx, env); err != nil {
+		return nil, err
+	}
+	return env, nil
 }
 
 func findPRShortcut(t *testing.T, name string) *common.Shortcut {

@@ -3,6 +3,7 @@ package pr
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
@@ -82,6 +83,9 @@ func Shortcuts() []*common.Shortcut {
 				id, _ := ctx.RequireArg("id")
 				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
 				if err != nil {
+					return err
+				}
+				if err := enrichPullRequestClosedAt(ctx, env); err != nil {
 					return err
 				}
 				return ctx.Output(env)
@@ -369,4 +373,94 @@ func extractIssueID(env *output.Envelope) (int64, error) {
 		return 0, fmt.Errorf("PR response missing issue.id field")
 	}
 	return int64(idFloat), nil
+}
+
+func enrichPullRequestClosedAt(ctx *common.RuntimeContext, env *output.Envelope) error {
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	pr, ok := data["pull_request"].(map[string]interface{})
+	if !ok || !isClosedPullRequest(pr) || stringField(pr, "closed_at") != "" {
+		return nil
+	}
+	issue, ok := data["issue"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	issueID, ok := numberField(issue, "id")
+	if !ok {
+		return nil
+	}
+	journalsEnv, err := ctx.CallAPI("GET", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, int64(issueID)), nil)
+	if err != nil {
+		return err
+	}
+	closedAt := extractPullRequestClosedAt(journalsEnv)
+	if closedAt == "" {
+		return nil
+	}
+	pr["closed_at"] = closedAt
+	data["closed_at"] = closedAt
+	return nil
+}
+
+func isClosedPullRequest(pr map[string]interface{}) bool {
+	if stringField(pr, "pull_request_staus") == "closed" || stringField(pr, "state") == "closed" {
+		return true
+	}
+	status, ok := numberField(pr, "status")
+	return ok && int(status) == 2
+}
+
+func extractPullRequestClosedAt(env *output.Envelope) string {
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	rawJournals, ok := data["journals"].([]interface{})
+	if !ok {
+		return ""
+	}
+	for i := len(rawJournals) - 1; i >= 0; i-- {
+		journal, ok := rawJournals[i].(map[string]interface{})
+		if !ok || stringField(journal, "operate_category") != "status" {
+			continue
+		}
+		content := stringField(journal, "operate_content")
+		if !isPullRequestCloseOperation(content) {
+			continue
+		}
+		if updatedAt := stringField(journal, "updated_at"); updatedAt != "" {
+			return updatedAt
+		}
+		if createdAt := stringField(journal, "created_at"); createdAt != "" {
+			return createdAt
+		}
+	}
+	return ""
+}
+
+func isPullRequestCloseOperation(content string) bool {
+	content = strings.ToLower(content)
+	return strings.Contains(content, "合并请求") &&
+		(strings.Contains(content, "拒绝") || strings.Contains(content, "关闭") || strings.Contains(content, "closed"))
+}
+
+func stringField(m map[string]interface{}, key string) string {
+	v, _ := m[key].(string)
+	return v
+}
+
+func numberField(m map[string]interface{}, key string) (float64, bool) {
+	switch v := m[key].(type) {
+	case float64:
+		return v, true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	default:
+		return 0, false
+	}
 }
