@@ -67,6 +67,7 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		fullURL += sep + query.Encode()
 	}
 
+	// Replace path params
 	var bodyReader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -151,6 +152,7 @@ func (c *Client) doRequest(req *http.Request) (*output.Envelope, error) {
 		fmt.Printf("<- %d %s\n", resp.StatusCode, string(respData[:min(len(respData), 200)]))
 	}
 
+	// Check HTTP-level errors
 	if resp.StatusCode >= 400 {
 		return nil, &APIError{
 			StatusCode: resp.StatusCode,
@@ -159,8 +161,10 @@ func (c *Client) doRequest(req *http.Request) (*output.Envelope, error) {
 		}
 	}
 
+	// Parse JSON
 	var raw map[string]interface{}
 	if err := json.Unmarshal(respData, &raw); err != nil {
+		// Not JSON, return as-is
 		return output.SuccessEnvelope(string(respData), nil), nil
 	}
 
@@ -192,6 +196,7 @@ func (c *Client) doRequest(req *http.Request) (*output.Envelope, error) {
 		}
 	}
 
+	// Build meta from pagination info
 	var meta *output.Meta
 	if tc, ok := raw["total_count"]; ok {
 		meta = &output.Meta{}
