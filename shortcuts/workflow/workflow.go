@@ -122,7 +122,7 @@ func runTriage(ctx *common.RuntimeContext) error {
 		Since:  ctx.Arg("since"),
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("%w\nhint: use --title or --from issues.json for local rule analysis", err)
 	}
 	results := make([]TriageResult, 0, len(issues))
 	for _, issue := range issues {
@@ -199,11 +199,31 @@ func collectIssuesFromArgs(ctx *common.RuntimeContext) ([]IssueInput, error) {
 }
 
 func hasLocalTriageInput(ctx *common.RuntimeContext) bool {
-	return strings.TrimSpace(ctx.Arg("from")) != "" || strings.TrimSpace(ctx.Arg("title")) != ""
+	if strings.TrimSpace(ctx.Arg("from")) != "" || strings.TrimSpace(ctx.Arg("title")) != "" {
+		return true
+	}
+	// When user passes triage-specific flags without --title or --from,
+	// treat it as local input so argument validation kicks in early.
+	for _, name := range []string{"body", "number", "author", "url", "labels"} {
+		if strings.TrimSpace(ctx.Arg(name)) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func hasLocalHealthInput(ctx *common.RuntimeContext) bool {
-	return strings.TrimSpace(ctx.Arg("from")) != "" || strings.TrimSpace(ctx.Arg("repository")) != ""
+	if strings.TrimSpace(ctx.Arg("from")) != "" || strings.TrimSpace(ctx.Arg("repository")) != "" {
+		return true
+	}
+	// When user passes any health-flag value (even invalid ones like
+	// --open-issues abc), stay in local mode so parseIntArg validates them.
+	for _, name := range []string{"open-issues", "stale-issues", "open-prs", "stale-prs", "recent-activity-known", "recent-activity-days", "release-known", "has-recent-release", "ci-known", "ci-passing", "has-readme", "has-license", "has-contributing", "agent-readiness-known", "agent-readiness-score"} {
+		if strings.TrimSpace(ctx.Arg(name)) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func collectHealthFromArgs(ctx *common.RuntimeContext) (HealthInput, error) {
