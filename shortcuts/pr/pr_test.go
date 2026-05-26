@@ -263,6 +263,29 @@ func TestPRReviewRejectsInvalidStatus(t *testing.T) {
 	}
 }
 
+func TestPRReopenUsesV1Endpoint(t *testing.T) {
+	var calledPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/pulls/13/reopen.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		calledPath = r.URL.Path
+		writeJSON(t, w, map[string]interface{}{
+			"status":  0,
+			"message": "success",
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "reopen", map[string]string{
+		"id": "13",
+	})
+	if err != nil {
+		t.Fatalf("reopen shortcut failed: %v", err)
+	}
+	assertEqual(t, calledPath, "/v1/owner/repo/pulls/13/reopen.json")
+}
+
 func runPRShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
 	t.Helper()
 	shortcut := findPRShortcut(t, name)

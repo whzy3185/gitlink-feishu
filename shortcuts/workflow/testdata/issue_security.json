@@ -1,0 +1,9 @@
+{
+  "number": 21,
+  "title": "Token leaked in logs",
+  "body": "The access token appears in command output. This looks like a possible secret leak and auth problem.",
+  "state": "open",
+  "author": "bob",
+  "url": "https://example.com/issues/21",
+  "labels": ["security", "urgent"]
+}

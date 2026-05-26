@@ -53,6 +53,31 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "readme",
+			Description: "Show repository README content",
+			Flags: []common.Flag{
+				{Name: "ref", Usage: "Branch, tag, or commit SHA"},
+				{Name: "path", Usage: "README directory path"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				q := url.Values{}
+				if ref := ctx.Arg("ref"); ref != "" {
+					q.Set("ref", ref)
+				}
+				if path := ctx.Arg("path"); path != "" {
+					q.Set("filepath", path)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/readme", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "create",
 			Description: "Create a new repository",
 			Flags: []common.Flag{

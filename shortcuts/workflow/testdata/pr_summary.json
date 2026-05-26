@@ -1,0 +1,37 @@
+{
+  "repository": "Gitlink/gitlink-cli",
+  "number": 1,
+  "title": "feat: add workflow PR summary",
+  "author": "alice",
+  "state": "open",
+  "base_branch": "master",
+  "head_branch": "feature/workflow-pr-summary",
+  "body": "Add a read-only workflow PR summary command for maintainers and agents.",
+  "changed_files": [
+    {
+      "filename": "shortcuts/workflow/pr_summary.go",
+      "status": "added",
+      "additions": 120,
+      "deletions": 0,
+      "changes": 120
+    },
+    {
+      "filename": "docs/workflow-agent-design.md",
+      "status": "modified",
+      "additions": 18,
+      "deletions": 2,
+      "changes": 20
+    }
+  ],
+  "commits": [
+    {
+      "sha": "abc1234",
+      "message": "feat: add workflow PR summary",
+      "author": "alice",
+      "date": "2026-05-20T10:00:00Z"
+    }
+  ],
+  "additions": 138,
+  "deletions": 2,
+  "source": "local-json"
+}

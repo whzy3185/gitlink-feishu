@@ -132,6 +132,27 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "reopen",
+			Description: "Reopen a closed pull request",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("POST", prV1Path(ctx, id)+"/reopen", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "files",
 			Description: "List changed files in a pull request",
 			Flags: []common.Flag{

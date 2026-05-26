@@ -1,0 +1,18 @@
+{
+  "repository": "Gitlink/gitlink-cli",
+  "open_issues": 3,
+  "open_prs": 1,
+  "stale_issues": 0,
+  "stale_prs": 0,
+  "recent_activity_known": true,
+  "recent_activity_days": 3,
+  "release_known": true,
+  "has_recent_release": true,
+  "ci_known": true,
+  "ci_passing": true,
+  "has_readme": true,
+  "has_license": true,
+  "has_contributing": true,
+  "agent_readiness_known": true,
+  "agent_readiness_score": 9
+}

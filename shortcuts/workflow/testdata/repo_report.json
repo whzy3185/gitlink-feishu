@@ -1,0 +1,134 @@
+{
+  "repository": "Gitlink/gitlink-cli",
+  "health": {
+    "repository": "Gitlink/gitlink-cli",
+    "open_issues": 8,
+    "open_prs": 3,
+    "stale_issues": 2,
+    "stale_prs": 1,
+    "recent_activity_known": true,
+    "recent_activity_days": 3,
+    "release_known": true,
+    "has_recent_release": true,
+    "ci_known": false,
+    "ci_passing": false,
+    "has_readme": true,
+    "has_license": true,
+    "has_contributing": true,
+    "agent_readiness_known": true,
+    "agent_readiness_score": 9
+  },
+  "issues": [
+    {
+      "number": 1,
+      "title": "Install failed on Windows",
+      "body": "go install failed with error",
+      "state": "open",
+      "author": "alice",
+      "labels": ["bug"]
+    },
+    {
+      "number": 2,
+      "title": "README typo in installation guide",
+      "body": "The docs example has a typo.",
+      "state": "open",
+      "author": "bob",
+      "labels": ["docs"]
+    },
+    {
+      "number": 3,
+      "title": "Command crashes on login",
+      "body": "panic on login",
+      "state": "open",
+      "author": "carol",
+      "labels": ["bug"]
+    }
+  ],
+  "pull_requests": [
+    {
+      "repository": "Gitlink/gitlink-cli",
+      "number": 11,
+      "title": "docs: update workflow examples",
+      "author": "dana",
+      "state": "open",
+      "base_branch": "master",
+      "head_branch": "docs/workflow",
+      "changed_files": [
+        {
+          "filename": "docs/workflow-agent-design.md",
+          "status": "modified",
+          "additions": 20,
+          "deletions": 4,
+          "changes": 24
+        }
+      ],
+      "commits": [
+        {
+          "sha": "1111111",
+          "message": "docs: update workflow examples",
+          "author": "dana"
+        }
+      ],
+      "additions": 20,
+      "deletions": 4,
+      "source": "local-json"
+    },
+    {
+      "repository": "Gitlink/gitlink-cli",
+      "number": 12,
+      "title": "feat: add workflow command",
+      "author": "erin",
+      "state": "open",
+      "base_branch": "master",
+      "head_branch": "feature/workflow",
+      "changed_files": [
+        {
+          "filename": "shortcuts/workflow/workflow.go",
+          "status": "modified",
+          "additions": 70,
+          "deletions": 8,
+          "changes": 78
+        }
+      ],
+      "commits": [
+        {
+          "sha": "2222222",
+          "message": "feat: add workflow command",
+          "author": "erin"
+        }
+      ],
+      "additions": 70,
+      "deletions": 8,
+      "source": "local-json"
+    },
+    {
+      "repository": "Gitlink/gitlink-cli",
+      "number": 13,
+      "title": "fix: normalize API client errors",
+      "author": "frank",
+      "state": "open",
+      "base_branch": "master",
+      "head_branch": "fix/client-errors",
+      "changed_files": [
+        {
+          "filename": "internal/client/client.go",
+          "status": "modified",
+          "additions": 30,
+          "deletions": 12,
+          "changes": 42
+        }
+      ],
+      "commits": [
+        {
+          "sha": "3333333",
+          "message": "fix: normalize API client errors",
+          "author": "frank"
+        }
+      ],
+      "additions": 30,
+      "deletions": 12,
+      "source": "local-json"
+    }
+  ],
+  "source": "local-json"
+}

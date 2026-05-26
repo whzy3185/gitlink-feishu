@@ -1,0 +1,9 @@
+{
+  "number": 12,
+  "title": "Install failed on Windows",
+  "body": "go install failed with error. Expected behavior: install succeeds. Actual behavior: the command returns a build failure. Version: v1.0.0. OS: Windows 11. Output: build failed with exit code 1.",
+  "state": "open",
+  "author": "alice",
+  "url": "https://example.com/issues/12",
+  "labels": ["bug"]
+}

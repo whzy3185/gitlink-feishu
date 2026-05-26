@@ -101,6 +101,49 @@ gitlink-cli pr +list --state merged --format json
 gitlink-cli api GET /:owner/:repo/activity --format json
 ```
 
+## Workflow: PR Summary (Read-only)
+
+Use `workflow +pr-summary` when a maintainer or Agent needs a structured PR review summary, review focus, test suggestions, or a markdown report that can be copied into a PR discussion.
+
+```bash
+# Read-only GitLink fetch mode
+gitlink-cli workflow +pr-summary --owner Gitlink --repo gitlink-cli --number 1 --format markdown
+
+# Local JSON input mode for Agent pipelines
+gitlink-cli workflow +pr-summary --from shortcuts/workflow/testdata/pr_summary.json --format json
+```
+
+Rules:
+- Prefer `--format json` when another Agent consumes the output.
+- Prefer `--format markdown` when a human maintainer needs a report.
+- This command is read-only: it does not comment, approve, reject, merge, label, or close pull requests.
+- Do not use LLM APIs for this workflow; it is rule-based and explainable.
+
+## Workflow: Repo Report (Read-only)
+
+Use `workflow +repo-report` when a maintainer or Agent needs a single repository workflow report
+that aggregates health, issue triage, and PR review signals.
+适用于需要生成仓库治理报告、比赛材料、维护者汇总或 Agent 综合分析的场景。
+
+```bash
+# Maintainer report
+gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
+
+# Agent-readable report
+gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format json
+
+# Local fixture mode
+gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format json
+```
+
+Rules:
+- Prefer `--format json` when another Agent consumes the output.
+- Prefer `--format markdown` for maintainer reports, competition materials, and review handoff.
+- Treat remote mode as read-only aggregation only.
+- Do not perform remote write operations.
+- Do not comment, label, close, approve, reject, or merge from this workflow.
+- PR details in remote report mode may be partial; use `workflow +pr-summary --number <n>` for a focused PR review.
+
 ## 最佳实践
 
 - 所有工作流命令使用 `--format json` 以便解析输出

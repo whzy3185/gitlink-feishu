@@ -1,0 +1,18 @@
+{
+  "repository": "demo/repo",
+  "open_issues": 60,
+  "open_prs": 12,
+  "stale_issues": 25,
+  "stale_prs": 6,
+  "recent_activity_known": true,
+  "recent_activity_days": 120,
+  "release_known": true,
+  "has_recent_release": false,
+  "ci_known": false,
+  "ci_passing": false,
+  "has_readme": false,
+  "has_license": false,
+  "has_contributing": false,
+  "agent_readiness_known": true,
+  "agent_readiness_score": 2
+}
