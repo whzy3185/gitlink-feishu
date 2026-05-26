@@ -39,12 +39,13 @@ CREATE TABLE IF NOT EXISTS pulls (
     status TEXT CHECK(status IN ('merged', 'closed', 'open')),
     processor_id INTEGER,
     create_time TIMESTAMP,
-    close_time TIMESTAMP,
+    merged_at TIMESTAMP,
     FOREIGN KEY (repo_id) REFERENCES repos(id),
     FOREIGN KEY (creater_id) REFERENCES users(id),
     FOREIGN KEY (processor_id) REFERENCES users(id)
 );
 
+CREATE INDEX IF NOT EXISTS idx_pulls_merged_at ON pulls(merged_at);
 CREATE INDEX IF NOT EXISTS idx_pulls_repo_id ON pulls(repo_id);
 CREATE INDEX IF NOT EXISTS idx_pulls_status ON pulls(status);
 CREATE INDEX IF NOT EXISTS idx_pulls_create_time ON pulls(create_time);

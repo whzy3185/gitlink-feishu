@@ -114,9 +114,9 @@ skills/
 │   └── SKILL.md                       # PM 操作指南
 ├── gitlink-health/                    # 项目健康度分析
 │   ├── SKILL.md                       # 健康度分析指南
-│   ├── collector/
-│   │   ├── fetcher.py                 # 数据采集脚本
-│   │   └── schema.sql                 # 建表 SQL
+│   ├── data/
+│   │   ├── .gitignore                 # 忽略 *.db 文件
+│   │   └── .gitkeep                   # 占位文件
 │   ├── references/
 │   │   └── queries.md                 # SQL 查询参考
 │   └── asset/

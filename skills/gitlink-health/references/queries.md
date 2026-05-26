@@ -58,14 +58,14 @@ CREATE TABLE pulls (
     status TEXT CHECK(status IN ('merged', 'closed', 'open')),
     processor_id INTEGER,       -- 指派人 → users.id（nullable，来自 list 的 assign_user_login）
     create_time TIMESTAMP,      -- 创建时间，ISO 格式
-    close_time TIMESTAMP,       -- 始终为 NULL（API 不提供）
+    merged_at TIMESTAMP,        -- 合并时间（从 PR 详情 API 获取）
     FOREIGN KEY (repo_id) REFERENCES repos(id),
     FOREIGN KEY (creater_id) REFERENCES users(id),
     FOREIGN KEY (processor_id) REFERENCES users(id)
 );
 ```
 
-API 字段映射：`status` ← `pull_request_status`（0=open, 1=merged, 2=closed），`creater_id` ← `author_login`。
+API 字段映射：`status` ← `pull_request_status`（0=open, 1=merged, 2=closed），`creater_id` ← `author_login`；`merged_at` 需要调用 PR 详情 API（`GET /:owner/:repo/pulls/:number`）获取。
 
 ### tags
 

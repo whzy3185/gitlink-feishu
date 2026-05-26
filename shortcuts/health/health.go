@@ -113,7 +113,10 @@ func fetchPRs(ctx *common.RuntimeContext, db *sql.DB, repoID int, state string, 
 			return nil
 		}
 		fmt.Fprintf(os.Stderr, "  PR list: state=%s, page=%d...\n", state, page)
-		prs, _ := fetchPRListPage(ctx, state, page, 20)
+		prs, err := fetchPRListPage(ctx, state, page, 20)
+		if err != nil {
+			return err
+		}
 		if len(prs) == 0 {
 			break
 		}
@@ -140,7 +143,28 @@ func fetchPRs(ctx *common.RuntimeContext, db *sql.DB, repoID int, state string, 
 			if dup {
 				continue
 			}
-			savePull(db, repoID, pr)
+
+			// For merged PRs: try list response first, fall back to detail API
+			mergedAt := ""
+			if state == "merged" {
+				mergedAt = mergeTimeFromList(pr)
+				if mergedAt == "" {
+					if prNumFloat, ok := pr["pull_request_number"].(float64); ok && prNumFloat > 0 {
+						prNum := int(prNumFloat)
+						if err := limiter.Wait(egCtx); err != nil {
+							return nil
+						}
+						fmt.Fprintf(os.Stderr, "  PR detail #%d...\n", prNum)
+						if ma, err := fetchPRDetail(ctx, prNum); err != nil {
+							fmt.Fprintf(os.Stderr, "  PR detail #%d: %v\n", prNum, err)
+						} else {
+							mergedAt = ma
+						}
+					}
+				}
+			}
+
+			savePull(db, repoID, pr, mergedAt)
 		}
 		if len(prs) < 20 {
 			break
@@ -160,7 +184,10 @@ func fetchIssues(ctx *common.RuntimeContext, db *sql.DB, repoID int, state strin
 			return nil
 		}
 		fmt.Fprintf(os.Stderr, "  Issue list: state=%s, page=%d...\n", state, page)
-		issues, _ := fetchIssueListPage(ctx, ctx.Owner, ctx.Repo, state, page, 20)
+		issues, err := fetchIssueListPage(ctx, ctx.Owner, ctx.Repo, state, page, 20)
+		if err != nil {
+			return err
+		}
 		if len(issues) == 0 {
 			break
 		}

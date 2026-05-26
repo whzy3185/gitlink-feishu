@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"os"
 
 	_ "modernc.org/sqlite"
 )
@@ -103,7 +104,9 @@ func savePullTags(db *sql.DB, pullID int, tagIDs []int) {
 		return
 	}
 	for _, tagID := range tagIDs {
-		db.Exec("INSERT OR IGNORE INTO pull_tags (pull_id, tag_id) VALUES (?, ?)", pullID, tagID)
+		if _, err := db.Exec("INSERT OR IGNORE INTO pull_tags (pull_id, tag_id) VALUES (?, ?)", pullID, tagID); err != nil {
+			fmt.Fprintf(os.Stderr, "  DB error: save pull_tags (pull=%d tag=%d): %v\n", pullID, tagID, err)
+		}
 	}
 }
 
@@ -112,7 +115,9 @@ func saveIssueTags(db *sql.DB, issueID int, tagIDs []int) {
 		return
 	}
 	for _, tagID := range tagIDs {
-		db.Exec("INSERT OR IGNORE INTO issue_tags (issue_id, tag_id) VALUES (?, ?)", issueID, tagID)
+		if _, err := db.Exec("INSERT OR IGNORE INTO issue_tags (issue_id, tag_id) VALUES (?, ?)", issueID, tagID); err != nil {
+			fmt.Fprintf(os.Stderr, "  DB error: save issue_tags (issue=%d tag=%d): %v\n", issueID, tagID, err)
+		}
 	}
 }
 
@@ -134,7 +139,22 @@ func extractTagNames(data map[string]interface{}, key string) []string {
 	return names
 }
 
-func savePull(db *sql.DB, repoID int, pr map[string]interface{}) {
+// mergeTimeFromList tries to extract merged_at directly from the list API response
+// (preferred, avoids an extra API call per PR).
+func mergeTimeFromList(pr map[string]interface{}) string {
+	for _, key := range []string{"merged_at", "mergedAt", "pr_merge_time", "merge_time"} {
+		if v, _ := pr[key].(string); v != "" {
+			return v
+		}
+		// Some APIs return numeric timestamps
+		if v, ok := pr[key].(float64); ok && v > 0 {
+			return fmt.Sprintf("%.0f", v)
+		}
+	}
+	return ""
+}
+
+func savePull(db *sql.DB, repoID int, pr map[string]interface{}, mergedAt string) {
 	// id: pull_request_id preferred, fallback to id
 	var prID float64
 	if v, ok := pr["pull_request_id"].(float64); ok && v > 0 {
@@ -171,9 +191,19 @@ func savePull(db *sql.DB, repoID int, pr map[string]interface{}) {
 		processorID = &pid
 	}
 
-	db.Exec(`INSERT OR REPLACE INTO pulls (id, repo_id, number, creater_id, status, processor_id, create_time, close_time)
+	// Priority: explicit mergedAt arg > list response field > nil
+	var mergedAtVal interface{} = nil
+	if mergedAt != "" {
+		mergedAtVal = mergedAt
+	} else if ma := mergeTimeFromList(pr); ma != "" {
+		mergedAtVal = ma
+	}
+
+	if _, err := db.Exec(`INSERT OR REPLACE INTO pulls (id, repo_id, number, creater_id, status, processor_id, create_time, merged_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		int(prID), repoID, int(prNumber), createrID, status, processorID, createTime, nil)
+		int(prID), repoID, int(prNumber), createrID, status, processorID, createTime, mergedAtVal); err != nil {
+		fmt.Fprintf(os.Stderr, "  DB error: save pull %d: %v\n", int(prID), err)
+	}
 
 	// Save tags
 	tagNames := extractTagNames(pr, "issue_tags")
@@ -205,7 +235,7 @@ func saveIssue(db *sql.DB, repoID int, issue map[string]interface{}, issueNumber
 	statusName := extractStatusName(issue)
 	var status string
 	var closeTime interface{}
-	if statusName == "关闭" {
+	if statusName == "关闭" || statusName == "Closed" {
 		status = "close"
 		if v, _ := issue["closed_on"].(string); v != "" {
 			closeTime = v
@@ -218,9 +248,11 @@ func saveIssue(db *sql.DB, repoID int, issue map[string]interface{}, issueNumber
 		status = "open"
 	}
 
-	db.Exec(`INSERT OR REPLACE INTO issues (id, repo_id, number, creater_id, processor_id, create_time, close_time, status)
+	if _, err := db.Exec(`INSERT OR REPLACE INTO issues (id, repo_id, number, creater_id, processor_id, create_time, close_time, status)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		int(issueID), repoID, issueNumber, createrID, processorID, createTime, closeTime, status)
+		int(issueID), repoID, issueNumber, createrID, processorID, createTime, closeTime, status); err != nil {
+		fmt.Fprintf(os.Stderr, "  DB error: save issue %d: %v\n", int(issueID), err)
+	}
 
 	// Save tags
 	tagNames := extractTagNames(issue, "tags")
