@@ -57,9 +57,11 @@ func TestPRCommentPostsToCorrectIssueJournal(t *testing.T) {
 
 func TestPRCreateSameRepoBranchUsesSimplePayload(t *testing.T) {
 	var payload map[string]interface{}
+	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("feature/search"))
+	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+base64.RawURLEncoding.EncodeToString([]byte("feature/search"))+"..."+base64.RawURLEncoding.EncodeToString([]byte("master"))+".json":
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+encodedHead+"..."+encodedBase+".json":
 			writeJSON(t, w, map[string]interface{}{
 				"commits_count": float64(2),
 				"files_count":   float64(5),
@@ -135,6 +137,44 @@ func TestPRCreateForkBranchAddsGitLinkForkFields(t *testing.T) {
 	assertEqual(t, payload["fork_project_id"], float64(1546652))
 	assertEqual(t, payload["commits_count"], float64(3))
 	assertEqual(t, payload["files_count"], float64(7))
+}
+
+func TestFetchPRCompareCountsUsesURLSafeBase64(t *testing.T) {
+	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("alice:feature/fork"))
+	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
+
+	if encodedHead != "YWxpY2U6ZmVhdHVyZS9mb3Jr" {
+		t.Fatalf("unexpected encoded head: %s", encodedHead)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		wantPath := "/owner/repo/compare/" + encodedHead + "..." + encodedBase + ".json"
+		if r.Method != "GET" || r.URL.Path != wantPath {
+			t.Fatalf("unexpected request: %s %s, want GET %s", r.Method, r.URL.Path, wantPath)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"commits_count": float64(4),
+			"files_count":   float64(9),
+		})
+	}))
+	defer server.Close()
+
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{
+			HTTP:    server.Client(),
+			BaseURL: server.URL,
+		},
+		Owner: "owner",
+		Repo:  "repo",
+	}
+
+	counts, err := fetchPRCompareCounts(ctx, "alice:feature/fork", "master")
+	if err != nil {
+		t.Fatalf("fetchPRCompareCounts failed: %v", err)
+	}
+
+	assertEqual(t, counts["commits_count"], 4)
+	assertEqual(t, counts["files_count"], 9)
 }
 
 func TestParsePRHeadRejectsInvalidForkSyntax(t *testing.T) {
