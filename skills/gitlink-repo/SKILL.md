@@ -98,6 +98,17 @@ gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --yes
 gitlink-cli repo +delete --owner myuser --repo old-project
 ```
 
+## Repository Units
+
+Use these shortcuts to inspect or update the repository navigation modules shown in GitLink:
+
+```bash
+gitlink-cli repo +units --owner Gitlink --repo forgeplus
+gitlink-cli repo +set-units --owner Gitlink --repo forgeplus --units code,issues,pulls,wiki
+```
+
+Allowed unit values: `code`, `issues`, `pulls`, `devops`, `versions`, `wiki`, `services`, `resources`.
+
 ## Raw API 补充
 
 Shortcuts 未覆盖的仓库操作可用 Raw API：

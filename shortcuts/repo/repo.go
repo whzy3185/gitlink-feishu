@@ -82,6 +82,41 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "units",
+			Description: tr.T("cmd.repo.units.short"),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", repoUnitsPath(ctx), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "set-units",
+			Description: tr.T("cmd.repo.set_units.short"),
+			Flags: []common.Flag{
+				{Name: "units", Short: "u", Usage: tr.T("flag.repo.units"), Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				units, err := parseRepoUnits(ctx.Arg("units"))
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("POST", repoUnitsPath(ctx), map[string]interface{}{"unit_types": units})
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "tree",
 			Description: tr.T("cmd.repo.tree.short"),
 			Flags: []common.Flag{
@@ -597,4 +632,42 @@ func parseRepoPositiveInt(value, name string) (int, error) {
 		return 0, fmt.Errorf("invalid --%s %q: use a positive integer", name, value)
 	}
 	return parsed, nil
+}
+
+func repoUnitsPath(ctx *common.RuntimeContext) string {
+	return ctx.RepoPath() + "/project_units"
+}
+
+func parseRepoUnits(raw string) ([]string, error) {
+	allowed := map[string]bool{
+		"code":      true,
+		"issues":    true,
+		"pulls":     true,
+		"devops":    true,
+		"versions":  true,
+		"wiki":      true,
+		"services":  true,
+		"resources": true,
+	}
+
+	seen := map[string]bool{}
+	units := []string{}
+	for _, part := range strings.Split(raw, ",") {
+		unit := strings.ToLower(strings.TrimSpace(part))
+		if unit == "" {
+			continue
+		}
+		if !allowed[unit] {
+			return nil, fmt.Errorf("invalid repository unit %q; allowed values: code,issues,pulls,devops,versions,wiki,services,resources", unit)
+		}
+		if seen[unit] {
+			continue
+		}
+		seen[unit] = true
+		units = append(units, unit)
+	}
+	if len(units) == 0 {
+		return nil, fmt.Errorf("at least one repository unit is required")
+	}
+	return units, nil
 }
