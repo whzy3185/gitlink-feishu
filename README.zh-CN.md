@@ -109,6 +109,7 @@
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
 | 👥 成员 | 列出、添加、移除仓库成员，调整角色，生成和接受邀请链接 |
 | 🌿 分支 | 创建、删除、保护分支 |
+| 🏷️ 标签 | 列出、搜索、查看、删除 Git 标签 |
 | 🏷️ 发布 | 创建、编辑、更新、查看、删除 Release |
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
@@ -444,6 +445,22 @@ gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved 
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
 ```
 
+### 标签管理
+
+```bash
+# 列出标签及提交详情
+gitlink-cli tag +list --owner Gitlink --repo forgeplus --page 1 --limit 20
+
+# 无分页列出标签名称
+gitlink-cli tag +names --owner Gitlink --repo forgeplus -k v1
+
+# 查看标签详情
+gitlink-cli tag +view --owner Gitlink --repo forgeplus --name v1.0.0
+
+# 删除标签
+gitlink-cli tag +delete --owner Gitlink --repo forgeplus --name release/v1.0.0
+```
+
 ### 发布管理
 
 ```bash
@@ -615,6 +632,7 @@ git push gitlink
 | `gitlink-issue` | Issue 操作（创建、更新、关闭、批量更新/删除、评论等） |
 | `gitlink-pr` | Pull Request 操作（创建、合并、Review 等） |
 | `gitlink-member` | 仓库成员与邀请链接管理 |
+| `gitlink-tag` | Git 标签管理（列表、搜索、查看、删除） |
 | `gitlink-release` | 发布管理（创建、编辑、更新、查看、删除等） |
 | `gitlink-org` | 组织管理（成员、团队等） |
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |
