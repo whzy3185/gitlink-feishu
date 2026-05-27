@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -149,6 +150,68 @@ func TestRepoReadmeUsesRepositoryReadmeEndpoint(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("readme shortcut failed: %v", err)
+	}
+}
+
+func TestRepoUnitsUsesProjectUnitsEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/project_units.json")
+		writeJSON(t, w, []string{"code", "issues", "pulls"})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "units", nil); err != nil {
+		t.Fatalf("units shortcut failed: %v", err)
+	}
+}
+
+func TestRepoSetUnitsSendsValidatedUnitTypes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/owner/repo/project_units.json")
+		var body struct {
+			UnitTypes []string `json:"unit_types"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		want := []string{"code", "issues", "pulls"}
+		if !reflect.DeepEqual(body.UnitTypes, want) {
+			t.Fatalf("unit_types = %#v, want %#v", body.UnitTypes, want)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"status":  0,
+			"message": "success",
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "set-units", map[string]string{
+		"units": " code,issues,pulls,issues ",
+	})
+	if err != nil {
+		t.Fatalf("set-units shortcut failed: %v", err)
+	}
+}
+
+func TestRepoSetUnitsRejectsInvalidUnitBeforeRequest(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "set-units", map[string]string{"units": "code,invalid"})
+	if err == nil {
+		t.Fatalf("expected invalid unit error")
+	}
+	if called {
+		t.Fatalf("server was called for invalid unit")
+	}
+}
+
+func TestParseRepoUnitsRejectsEmptyInput(t *testing.T) {
+	if _, err := parseRepoUnits(" , "); err == nil {
+		t.Fatalf("expected empty unit list error")
 	}
 }
 
