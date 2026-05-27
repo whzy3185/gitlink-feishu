@@ -114,6 +114,7 @@
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
 | 📖 Wiki | 列出、查看、创建、更新、删除 Wiki 页面 |
+| 🔔 通知 | 列出、已读、删除用户消息 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 📊 数据集 | 按项目查询科研数据集 |
 | 👤 用户 | 查看用户资料和信息 |
@@ -305,6 +306,25 @@ gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n 
 
 # 删除 Wiki 页面
 gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 12345 -n old-page
+```
+
+### 通知管理
+
+```bash
+# 列出当前用户未读系统消息
+gitlink-cli notification +list --type notification --status unread
+
+# 列出指定用户的 @我消息
+gitlink-cli notification +list --user Mengz --type atme
+
+# 标记消息为已读
+gitlink-cli notification +read --type atme --ids 101,102
+
+# 将全部未读系统消息标记为已读
+gitlink-cli notification +read --type notification --ids -1
+
+# 删除消息
+gitlink-cli notification +delete --type notification --ids 101,102
 ```
 
 ### 成员管理
@@ -619,6 +639,7 @@ git push gitlink
 | `gitlink-org` | 组织管理（成员、团队等） |
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |
 | `gitlink-pipeline` | 流水线工作流操作（运行、日志、启停、删除等） |
+| `gitlink-notification` | 用户消息（列表、标记已读、删除） |
 | `gitlink-search` | 搜索功能（仓库、用户等） |
 | `gitlink-user` | 用户管理（个人信息等） |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |
