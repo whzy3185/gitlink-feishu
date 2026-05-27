@@ -96,6 +96,7 @@
 | 分类 | 能力 |
 |------|------|
 | 📦 仓库 | 列出、创建、Fork、删除仓库，查看仓库信息、洞察数据和互动状态 |
+| Wiki | 创建、更新、查看、列出和删除 Wiki 页面 |
 | 🐛 Issue | 创建、更新、关闭、批量关闭、评论 Issue |
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
@@ -255,6 +256,23 @@ gitlink-cli repo +create -n my-project -d "项目描述"
 
 # Fork 仓库
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+```
+
+### Wiki 管理
+
+```bash
+# 列出和查看 Wiki 页面
+gitlink-cli wiki +pages --owner Gitlink --repo forgeplus --project-id 123
+gitlink-cli wiki +view --owner Gitlink --repo forgeplus --project-id 123 --page Home
+
+# 创建或更新 Wiki 页面
+gitlink-cli wiki +create --owner Gitlink --repo forgeplus \
+  --project-id 123 --page Home --title Home --content "Welcome to Wiki"
+gitlink-cli wiki +update --owner Gitlink --repo forgeplus \
+  --project-id 123 --page Home --title Home --content "Updated content"
+
+# 预览删除 Wiki 页面
+gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 123 --page Home --dry-run
 ```
 
 ### Webhook 管理
@@ -517,6 +535,7 @@ git push gitlink
 |-------|------|
 | `gitlink-shared` | 认证、全局参数、安全规则、API 注意事项 |
 | `gitlink-repo` | 仓库操作（创建、查看、删除、Fork、洞察数据等） |
+| `gitlink-wiki` | Wiki 操作（创建、更新、查看、列表、删除） |
 | `gitlink-issue` | Issue 操作（创建、更新、关闭、评论等） |
 | `gitlink-pr` | Pull Request 操作（创建、合并、Review 等） |
 | `gitlink-member` | 仓库成员与邀请链接管理 |

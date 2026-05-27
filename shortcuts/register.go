@@ -22,6 +22,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/search"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/user"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/webhook"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/wiki"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
 )
 
@@ -49,6 +50,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"compare":   compare.Shortcuts(),
 		"webhook":   webhook.Shortcuts(tr),
 		"health":    health.Shortcuts(tr),
+		"wiki":      wiki.Shortcuts(),
 		"workflow":  workflow.Shortcuts(),
 	}
 
@@ -70,6 +72,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"compare":   "Compare branches, tags, or commits",
 		"webhook":   tr.T("cmd.webhook.short"),
 		"health":    "Project health data collection",
+		"wiki":      "Wiki operations",
 		"workflow":  "AI agent workflow analysis",
 	}
 

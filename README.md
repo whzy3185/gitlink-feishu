@@ -96,6 +96,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | Category | Capabilities |
 |----------|-------------|
 | 📦 Repo | List, create, fork, delete repositories, view repo info, insights, and interactions |
+| Wiki | Create, update, view, list, and delete wiki pages |
 | 🐛 Issue | Create, update, close, batch close, comment on issues |
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
@@ -244,6 +245,23 @@ gitlink-cli repo +create -n my-project -d "Project description"
 
 # Fork a repository
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+```
+
+### Wiki Management
+
+```bash
+# List and view wiki pages
+gitlink-cli wiki +pages --owner Gitlink --repo forgeplus --project-id 123
+gitlink-cli wiki +view --owner Gitlink --repo forgeplus --project-id 123 --page Home
+
+# Create or update wiki pages
+gitlink-cli wiki +create --owner Gitlink --repo forgeplus \
+  --project-id 123 --page Home --title Home --content "Welcome to Wiki"
+gitlink-cli wiki +update --owner Gitlink --repo forgeplus \
+  --project-id 123 --page Home --title Home --content "Updated content"
+
+# Preview wiki page deletion
+gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 123 --page Home --dry-run
 ```
 
 ### Webhook Management
@@ -638,6 +656,7 @@ See [skills/README.md](skills/README.md) for details.
 |-------|-------------|
 | `gitlink-shared` | Authentication, global parameters, safety rules, API notes |
 | `gitlink-repo` | Repository operations (create, view, delete, fork, insights, etc.) |
+| `gitlink-wiki` | Wiki operations (create, update, view, list, delete) |
 | `gitlink-issue` | Issue operations (create, update, close, comment, etc.) |
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
 | `gitlink-member` | Repository member and invite link management |
