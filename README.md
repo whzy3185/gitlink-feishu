@@ -96,6 +96,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | Category | Capabilities |
 |----------|-------------|
 | 📦 Repo | List, create, fork, delete repositories, view repo info, insights, and interactions |
+| ⭐ Reaction | Follow, unfollow, like, unlike, list watchers and stargazers |
 | 🐛 Issue | Create, update, close, batch close, comment on issues |
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
@@ -244,6 +245,24 @@ gitlink-cli repo +create -n my-project -d "Project description"
 
 # Fork a repository
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+```
+
+### Repository Reactions
+
+```bash
+# List repository watchers
+gitlink-cli reaction +watchers --owner Gitlink --repo forgeplus
+
+# List repository stargazers
+gitlink-cli reaction +stargazers --owner Gitlink --repo forgeplus
+
+# Follow or unfollow a repository
+gitlink-cli reaction +follow --owner Gitlink --repo forgeplus
+gitlink-cli reaction +unfollow --owner Gitlink --repo forgeplus
+
+# Like or unlike a repository
+gitlink-cli reaction +like --owner Gitlink --repo forgeplus
+gitlink-cli reaction +unlike --owner Gitlink --repo forgeplus
 ```
 
 ### Webhook Management
@@ -638,6 +657,7 @@ See [skills/README.md](skills/README.md) for details.
 |-------|-------------|
 | `gitlink-shared` | Authentication, global parameters, safety rules, API notes |
 | `gitlink-repo` | Repository operations (create, view, delete, fork, insights, etc.) |
+| `gitlink-reaction` | Repository reactions (follow, like, watchers, stargazers) |
 | `gitlink-issue` | Issue operations (create, update, close, comment, etc.) |
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
 | `gitlink-member` | Repository member and invite link management |
