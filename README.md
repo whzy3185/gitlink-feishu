@@ -115,6 +115,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
 | 📖 Wiki | List, view, create, update, and delete wiki pages |
+| 🔔 Notification | List, read, and delete user messages |
 | 🔍 Search | Search repositories, users |
 | 📊 Dataset | Query research datasets by project |
 | 👤 User | View user profiles and info |
@@ -294,6 +295,25 @@ gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n 
 
 # Delete a wiki page
 gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 12345 -n old-page
+```
+
+### Notifications
+
+```bash
+# List current user's unread notifications
+gitlink-cli notification +list --type notification --status unread
+
+# List @me messages for an explicit user
+gitlink-cli notification +list --user Mengz --type atme
+
+# Mark messages as read
+gitlink-cli notification +read --type atme --ids 101,102
+
+# Mark all unread notifications as read
+gitlink-cli notification +read --type notification --ids -1
+
+# Delete messages
+gitlink-cli notification +delete --type notification --ids 101,102
 ```
 
 ### Member Management
@@ -745,6 +765,7 @@ See [skills/README.md](./skills/README.md) for details.
 | `gitlink-release` | Release management (create, edit, update, view, delete, etc.) |
 | `gitlink-ci` | CI/CD operations (builds, logs, etc.) |
 | `gitlink-pipeline` | Pipeline workflow operations (runs, logs, enable, disable, delete, etc.) |
+| `gitlink-notification` | User messages (list, mark read, delete) |
 | `gitlink-search` | Search (repositories, users, etc.) |
 | `gitlink-org` | Organization management (members, teams, etc.) |
 | `gitlink-user` | User management (profile info, etc.) |
