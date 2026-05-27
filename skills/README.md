@@ -1,6 +1,6 @@
 # GitLink CLI Skills 指南
 
-[![GitLink](https://img.shields.io/badge/GitLink-wbtiger%2Fgitlink--cli-green)](https://www.gitlink.org.cn/wbtiger/gitlink-cli)
+[![GitLink](https://img.shields.io/badge/GitLink-Gitlink%2Fgitlink--cli-green)](https://www.gitlink.org.cn/Gitlink/gitlink-cli)
 
 欢迎使用 GitLink CLI Skills！本指南帮助你快速上手和充分利用 gitlink-cli 的所有功能。
 
