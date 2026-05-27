@@ -107,7 +107,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
 | 🔍 Search | Search repositories, users |
-| 👤 User | View user profiles and info |
+| 👤 User | View profiles, manage public keys, inspect user statistics |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
 | 🤖 Workflow | AI-powered issue triage, PR review, release notes |
 
@@ -477,6 +477,24 @@ gitlink-cli search +repos -k "machine learning"
 gitlink-cli search +users -k "zhangsan"
 ```
 
+### User Operations
+
+```bash
+# Current authenticated user and detailed profile
+gitlink-cli user +me
+gitlink-cli user +current --format json
+
+# Public key management
+gitlink-cli user +keys --page 1 --limit 20
+gitlink-cli user +key-create --title "work laptop" --key-file ~/.ssh/id_rsa.pub --dry-run
+gitlink-cli user +key-delete --id 7 --dry-run
+
+# User statistics
+gitlink-cli user +activity --login zhangsan
+gitlink-cli user +headmap --login zhangsan --year 2026
+gitlink-cli user +develop --login zhangsan --start-time 1704067200 --end-time 1735689599
+```
+
 ### Workflow Agent Commands
 
 `workflow` provides rule-based repository analysis for maintainers and AI Agents. It currently supports:
@@ -647,7 +665,7 @@ See [skills/README.md](skills/README.md) for details.
 | `gitlink-pipeline` | Pipeline workflow operations (runs, logs, enable, disable, delete, etc.) |
 | `gitlink-search` | Search (repositories, users, etc.) |
 | `gitlink-org` | Organization management (members, teams, etc.) |
-| `gitlink-user` | User management (profile info, etc.) |
+| `gitlink-user` | User management (profiles, public keys, statistics, etc.) |
 | `gitlink-pm` | Project management (sprints, kanban, weekly reports, etc.) |
 | `gitlink-workflow` | AI-powered workflows (issue triage, PR review, release notes, etc.) |
 | `gitlink-health` | Project health analysis (PR/Issue metrics aggregation, health reports) |

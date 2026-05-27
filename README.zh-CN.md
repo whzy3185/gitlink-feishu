@@ -106,7 +106,7 @@
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
 | 🔍 搜索 | 搜索仓库、用户 |
-| 👤 用户 | 查看用户资料和信息 |
+| 👤 用户 | 查看资料、管理 Public Keys、查询用户统计 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
 | 🤖 工作流 | AI 驱动的 Issue 分类、PR Review、Release Notes |
 
@@ -455,6 +455,24 @@ gitlink-cli search +repos -k "machine learning"
 gitlink-cli search +users -k "zhangsan"
 ```
 
+### 用户操作
+
+```bash
+# 当前登录用户和详细资料
+gitlink-cli user +me
+gitlink-cli user +current --format json
+
+# Public Key 管理
+gitlink-cli user +keys --page 1 --limit 20
+gitlink-cli user +key-create --title "work laptop" --key-file ~/.ssh/id_rsa.pub --dry-run
+gitlink-cli user +key-delete --id 7 --dry-run
+
+# 用户统计
+gitlink-cli user +activity --login zhangsan
+gitlink-cli user +headmap --login zhangsan --year 2026
+gitlink-cli user +develop --login zhangsan --start-time 1704067200 --end-time 1735689599
+```
+
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：
@@ -525,7 +543,7 @@ git push gitlink
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |
 | `gitlink-pipeline` | 流水线工作流操作（运行、日志、启停、删除等） |
 | `gitlink-search` | 搜索功能（仓库、用户等） |
-| `gitlink-user` | 用户管理（个人信息等） |
+| `gitlink-user` | 用户管理（资料、Public Keys、统计等） |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |
 | `gitlink-workflow` | AI 自动化工作流（Issue 分类、PR Review、Release Notes 等） |
 
