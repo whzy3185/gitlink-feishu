@@ -28,7 +28,7 @@
       name: ssh执行命令
       task: ssh_cmd@1.1.1
       input:
-        ssh_pass: ((gitlink_cli.ecs_ssh_key))
+        ssh_pass: '"pdl@#YwC$WRWFyHKxC8nyu!4"'
         ssh_ip: '"8.136.61.14"'
         ssh_port: '"22"'
         ssh_user: '"root"'
