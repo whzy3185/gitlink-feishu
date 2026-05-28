@@ -98,6 +98,10 @@ skills/
 │   ├── SKILL.md                       # 搜索操作指南
 │   └── examples/
 │       └── search-workflow.md         # 搜索工作流
+├── gitlink-attachment/                # 附件管理
+│   └── SKILL.md                       # 附件上传与删除指南
+├── gitlink-meta/                      # 公开元数据查询
+│   └── SKILL.md                       # 许可证和 .gitignore 模板查询指南
 ├── gitlink-user/                      # 用户管理
 │   └── SKILL.md                       # 用户操作指南
 ├── gitlink-org/                       # 组织管理
@@ -150,6 +154,8 @@ skills/
 | **gitlink-org** | 组织管理 | `org +list`, `org +info`, `org +members` |
 | **gitlink-ci** | CI/CD | `ci +builds`, `ci +logs` |
 | **gitlink-pipeline** | 流水线工作流 | `pipeline +runs`, `pipeline +run`, `pipeline +logs` |
+| **gitlink-attachment** | 附件管理 | `attachment +upload`, `attachment +delete` |
+| **gitlink-meta** | 公开元数据查询 | `meta +licenses`, `meta +ignores` |
 | **gitlink-pm** | 项目管理 | 通过 Raw API 访问 |
 | **gitlink-workflow** | AI 工作流 | Issue 分类、PR Review、Release Notes |
 | **gitlink-health** | 开源项目健康度 | 详情见SKILL.md |
@@ -226,6 +232,20 @@ gitlink-cli org +info -i Gitlink
 
 详见: [gitlink-search/examples/search-workflow.md](gitlink-search/examples/search-workflow.md)
 
+### 场景 5：附件和模板元数据
+
+```bash
+# 查询创建仓库时可用的模板元数据
+gitlink-cli meta +licenses --name MIT
+gitlink-cli meta +ignores --name Go
+
+# 先 dry-run，再上传附件
+gitlink-cli attachment +upload --file screenshot.png --description "复现截图" --dry-run
+gitlink-cli attachment +upload --file screenshot.png --description "复现截图"
+```
+
+详见: [gitlink-attachment/SKILL.md](gitlink-attachment/SKILL.md)、[gitlink-meta/SKILL.md](gitlink-meta/SKILL.md)
+
 ---
 
 ## 📚 文档导航
@@ -249,10 +269,12 @@ gitlink-cli org +info -i Gitlink
 - [gitlink-pr/SKILL.md](gitlink-pr/SKILL.md) - PR 命令
 - [gitlink-issue/examples/issue-workflow.md](gitlink-issue/examples/issue-workflow.md) - Issue 工作流
 
-**发布和搜索**:
+**发布、搜索和附件**:
 - [gitlink-release/SKILL.md](gitlink-release/SKILL.md) - Release 命令
 - [gitlink-pipeline/SKILL.md](gitlink-pipeline/SKILL.md) - Pipeline 命令
 - [gitlink-search/SKILL.md](gitlink-search/SKILL.md) - 搜索命令
+- [gitlink-attachment/SKILL.md](gitlink-attachment/SKILL.md) - 附件命令
+- [gitlink-meta/SKILL.md](gitlink-meta/SKILL.md) - 公开元数据命令
 
 **组织和用户**:
 - [gitlink-org/SKILL.md](gitlink-org/SKILL.md) - 组织命令

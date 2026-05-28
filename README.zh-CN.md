@@ -5,7 +5,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue.svg)](https://golang.org)
 [![npm version](https://img.shields.io/npm/v/@gitlink-ai/cli.svg)](https://www.npmjs.com/package/@gitlink-ai/cli)
 
-[GitLink（确实开源）](https://www.gitlink.org.cn) 官方 CLI 工具 — 为人类和 AI Agent 双重设计。支持 **macOS、Linux、Windows**，覆盖仓库管理、Issue 追踪、Pull Request、Webhook、成员协作、CI/CD 和 AI 自动化工作流，包含 40+ 命令和 AI Agent [Skills](./skills/)。
+[GitLink（确实开源）](https://www.gitlink.org.cn) 官方 CLI 工具 — 为人类和 AI Agent 双重设计。支持 **macOS、Linux、Windows**，覆盖仓库管理、Issue 追踪、Pull Request、Webhook、附件、元数据查询、成员协作、CI/CD 和 AI 自动化工作流，包含 40+ 命令和 AI Agent [Skills](./skills/)。
 
 **[English](./README.md)**
 
@@ -83,7 +83,7 @@
 ## 为什么选择 gitlink-cli？
 
 - **Agent-Native 设计** — 开箱即用结构化 [Skills](./skills/)，兼容 Claude Code — Agent 零配置即可操作 GitLink
-- **广泛覆盖** — 仓库、Issue、PR、Webhook、成员、分支、Release、CI、Pipeline、组织、搜索、用户等常用工作流均提供高层命令
+- **广泛覆盖** — 仓库、Issue、PR、Webhook、附件、元数据、成员、分支、Release、CI、Pipeline、组织、搜索、用户等常用工作流均提供高层命令
 - **AI 友好 & 优化** — 每条命令都经过真实 Agent 测试，简洁参数、智能默认值、结构化输出
 - **跨平台** — macOS、Linux、Windows (x64/arm64) 全支持，`npm` 一条命令安装
 - **开源零门槛** — 木兰宽松许可证第2版（MulanPSL-2.0），`npm install` 即用
@@ -105,6 +105,8 @@
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
+| 📎 附件 | 上传文件、删除附件，支持 dry-run 预览 |
+| 🧭 元数据 | 查询许可证模板和 .gitignore 模板 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 👤 用户 | 查看用户资料和信息 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
@@ -455,6 +457,25 @@ gitlink-cli search +repos -k "machine learning"
 gitlink-cli search +users -k "zhangsan"
 ```
 
+### 附件和元数据
+
+```bash
+# 查询许可证模板
+gitlink-cli meta +licenses --name MIT
+
+# 查询 .gitignore 模板
+gitlink-cli meta +ignores --name Go
+
+# 预览附件上传，不修改线上数据
+gitlink-cli attachment +upload --file screenshot.png --description "issue screenshot" --dry-run
+
+# 上传附件
+gitlink-cli attachment +upload --file screenshot.png --description "issue screenshot"
+
+# 预览删除附件
+gitlink-cli attachment +delete --uuid <uuid> --dry-run
+```
+
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：
@@ -524,6 +545,8 @@ git push gitlink
 | `gitlink-org` | 组织管理（成员、团队等） |
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |
 | `gitlink-pipeline` | 流水线工作流操作（运行、日志、启停、删除等） |
+| `gitlink-attachment` | 附件上传与删除操作 |
+| `gitlink-meta` | 许可证和 .gitignore 模板查询 |
 | `gitlink-search` | 搜索功能（仓库、用户等） |
 | `gitlink-user` | 用户管理（个人信息等） |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |
@@ -558,6 +581,8 @@ gitlink-cli/
 │   ├── pipeline/             # Pipeline shortcuts
 │   ├── search/               # 搜索 shortcuts
 │   ├── user/                 # 用户 shortcuts
+│   ├── attachment/           # 附件 shortcuts
+│   ├── meta/                 # 元数据 shortcuts
 │   └── register.go           # 注册入口
 ├── skills/                   # AI Agent Skills
 │   ├── README.md             # Skills 使用指南
