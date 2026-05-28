@@ -550,6 +550,25 @@ gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --ye
 ```
 
 > 注意：`dataset +list`（平台数据集查询）已在生产 gitlink.org.cn 验证可用。按仓库的 `+view`/`+create`/`+update` 遵循已发布的 OpenAPI 契约，但生产环境尚未部署（当前返回 404），待平台上线后即可生效。
+
+### 用户账号
+
+```bash
+# 查看当前登录用户
+gitlink-cli user +me
+
+# 列出 SSH 公钥
+gitlink-cli user +keys
+
+# 通过内容或文件添加 SSH 公钥
+gitlink-cli user +add-key --title laptop --key "ssh-ed25519 AAAA..."
+gitlink-cli user +add-key --title laptop --from ~/.ssh/id_ed25519.pub
+gitlink-cli user +add-key --from ~/.ssh/id_rsa.pub
+
+# 删除 SSH 公钥
+gitlink-cli user +delete-key --id 123
+```
+
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：
@@ -620,7 +639,7 @@ git push gitlink
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |
 | `gitlink-pipeline` | 流水线工作流操作（运行、日志、启停、删除等） |
 | `gitlink-search` | 搜索功能（仓库、用户等） |
-| `gitlink-user` | 用户管理（个人信息等） |
+| `gitlink-user` | 用户管理（个人信息、SSH 公钥等） |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |
 | `gitlink-workflow` | AI 自动化工作流（Issue 分类、PR Review、Release Notes 等） |
 
