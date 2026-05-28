@@ -272,29 +272,18 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.issue.comment.short"),
 			Flags: appendIssueNumberFlags(
 				common.Flag{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
+				common.Flag{Name: "parent-id", Usage: "Parent comment ID when creating a child comment"},
+				common.Flag{Name: "reply-id", Usage: "Reply target comment ID"},
+				common.Flag{Name: "attachment-ids", Usage: "Comma-separated attachment IDs"},
+				common.Flag{Name: "receivers", Short: "r", Usage: "Comma-separated @ receiver login names"},
+				common.Flag{Name: "dry-run", Usage: "Preview the request body without creating the comment", Bool: true, Default: "false"},
 			),
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				number, err := issueNumberArg(ctx)
-				if err != nil {
-					return err
-				}
-				body, err := ctx.RequireArg("body")
-				if err != nil {
-					return err
-				}
-				payload := map[string]interface{}{
-					"notes": body,
-				}
-				env, err := ctx.CallAPI("POST", fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number), payload)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
+			Run: runIssueComment,
 		},
+		newIssueCommentsShortcut(),
+		newIssueCommentUpdateShortcut(),
+		newIssueCommentDeleteShortcut(),
+		newIssueCommentChildrenShortcut(),
 		{
 			Name:        "assigners",
 			Description: "List issue assigners",

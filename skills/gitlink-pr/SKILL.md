@@ -1,7 +1,7 @@
 ---
 name: gitlink-pr
 version: 1.0.0
-description: "Pull Request 管理：创建、查看、合并、关闭 PR，查看变更文件、Diff 和 patchset/version。当用户需要操作 GitLink PR 时触发。"
+description: "Pull Request 管理：创建、查看、合并、关闭 PR，查看变更文件、Diff、patchset/version、审查和 Review 评论。当用户需要操作 GitLink PR 时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -31,7 +31,11 @@ metadata:
 | `pr +version-diff` | 查看指定 patchset/version diff | 否 |
 | `pr +reviews` | 查看 PR 审查记录，支持状态过滤 | 否 |
 | `pr +review` | 创建 PR 审查（支持 dry-run 预览） | 是 |
-| `pr +comment` | 给 PR 添加评论 | 是 |
+| `pr +review-comments` | 查看 PR Review 行评论 | 否 |
+| `pr +review-comment` | 创建 PR Review 行评论（支持 dry-run 预览） | 是 |
+| `pr +review-comment-update` | 更新 PR Review 行评论（支持 dry-run 预览） | 是 |
+| `pr +review-comment-delete` | 删除 PR Review 行评论（支持 dry-run 预览） | 是 |
+| `pr +comment` | 给 PR 添加普通评论 | 是 |
 
 ## 使用示例
 
@@ -76,7 +80,17 @@ gitlink-cli pr +reviews --id 3 --status approved
 gitlink-cli pr +review --id 3 --status approved --content "LGTM, ready to merge"
 gitlink-cli pr +review --id 3 --status approved --content "LGTM" --dry-run
 
-# 给 PR 添加评论
+# 查看 PR Review 行评论
+gitlink-cli pr +review-comments --id 3 --state opened --path README.md
+
+# 创建 PR Review 行评论（需要 review-id、commit、line-code 和 path，先 dry-run）
+gitlink-cli pr +review-comment --id 3   --review-id 10   --commit abc123   --line-code abc123_0_10   --path README.md   --note "这里需要修改"   --type problem   --dry-run
+
+# 更新/解决/删除 PR Review 行评论（先 dry-run）
+gitlink-cli pr +review-comment-update --id 3 --comment-id 200 --state resolved --dry-run
+gitlink-cli pr +review-comment-delete --id 3 --comment-id 200 --dry-run
+
+# 给 PR 添加普通评论
 gitlink-cli pr +comment --id 3 --body "LGTM, ready to merge"
 ```
 
@@ -148,6 +162,8 @@ gitlink-cli api POST /v1/:owner/:repo/pulls/:id/reviews --body '{"content":"LGTM
 gitlink-cli api GET /v1/:owner/:repo/pulls/:id/reviews
 gitlink-cli api GET /v1/:owner/:repo/pulls/:id/reviews?status=approved
 
+# PR Review 评论接口已由 pr +review-comments / +review-comment / +review-comment-update / +review-comment-delete 覆盖。
+
 # 获取可用分支
 gitlink-cli api GET /:owner/:repo/pulls/get_branches
 
@@ -172,3 +188,14 @@ gitlink-cli api GET /v1/:owner/:repo/pulls/:id/versions/:version_id/diff
 - `pr +list` 的 `--state` 参数会映射为 GitLink API 的 `status` 筛选；需要查看所有 PR 时传 `--state all`
 - PR 状态值：`pull_request_status` 0=open, 1=merged, 2=closed
 - 关联已有 Issue 时，把 Issue 编号或 URL 写入 PR `--body`，或使用 `issue +comment` 留痕；不要用 Raw API 对 Issue 做不完整更新，否则可能清空 Issue 描述
+
+
+## PR Review 评论注意事项
+
+- `pr +review-comment` 面向代码行级 Review 评论，不等同于 `pr +comment` 普通评论。
+- `--id` 是网页 URL `/pulls/N` 中的 PR 序号。
+- `--review-id` 可通过 `pr +reviews --id N` 获取。
+- `--line-code`、`--commit`、`--path` 应来自 GitLink diff / review 上下文；不确定时先用 `pr +files`、`pr +versions`、`pr +version-diff` 获取上下文。
+- `--type comment` 表示普通行评论，`--type problem` 表示需要回应的问题评论。
+- `--state opened|resolved|disabled` 用于筛选或更新 Review 评论状态。
+- 创建、更新、删除 Review 评论前必须先使用 `--dry-run` 向用户展示请求体。

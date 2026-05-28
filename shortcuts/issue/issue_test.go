@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -23,6 +24,7 @@ func runShortcut(t *testing.T, server *httptest.Server, name string, args map[st
 		Repo:   "repo",
 		Format: "json",
 		Args:   args,
+		Tr:     i18n.Default(),
 	}
 	if ctx.Args == nil {
 		ctx.Args = map[string]string{}
@@ -1124,6 +1126,183 @@ func TestNormalizeIssueStatus(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("normalizeIssueStatus(%q) = %v, want %v", tt.input, got, tt.want)
 			}
+		}
+	}
+}
+
+func TestIssueCommentsListBuildsQuery(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		query := r.URL.Query()
+		assertEqual(t, query.Get("category"), "comment")
+		assertEqual(t, query.Get("keyword"), "fixed")
+		assertEqual(t, query.Get("sort_by"), "created_on")
+		assertEqual(t, query.Get("sort_direction"), "desc")
+		assertEqual(t, query.Get("page"), "2")
+		assertEqual(t, query.Get("limit"), "5")
+		writeJSON(t, w, map[string]interface{}{"total_count": 0, "journals": []interface{}{}})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comments", map[string]string{
+		"number":         "42",
+		"category":       "comment",
+		"keyword":        "fixed",
+		"sort-by":        "created_on",
+		"sort-direction": "desc",
+		"page":           "2",
+		"limit":          "5",
+	})
+	if err != nil {
+		t.Fatalf("comments shortcut failed: %v", err)
+	}
+}
+
+func TestIssueCommentPostsPayloadWithOptions(t *testing.T) {
+	var payload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"id": 58, "notes": "please check"})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment", map[string]string{
+		"number":         "42",
+		"body":           "please check",
+		"parent-id":      "7",
+		"reply-id":       "8",
+		"attachment-ids": "10,11,10",
+		"receivers":      "alice,bob,alice",
+	})
+	if err != nil {
+		t.Fatalf("comment shortcut failed: %v", err)
+	}
+
+	assertEqual(t, payload["notes"], "please check")
+	assertEqual(t, payload["parent_id"], float64(7))
+	assertEqual(t, payload["reply_id"], float64(8))
+	assertNumberSlice(t, payload["attachment_ids"], []float64{10, 11})
+	assertStringSlice(t, payload["receivers_login"], []string{"alice", "bob"})
+}
+
+func TestIssueCommentUpdateDryRunDoesNotCallAPI(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-update", map[string]string{
+		"number":     "42",
+		"comment-id": "58",
+		"body":       "updated",
+		"dry-run":    "true",
+	})
+	if err != nil {
+		t.Fatalf("comment-update dry-run failed: %v", err)
+	}
+}
+
+func TestIssueCommentUpdatePayload(t *testing.T) {
+	var payload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/issues/42/journals/58.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"id": 58, "notes": "updated"})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-update", map[string]string{
+		"number":         "42",
+		"comment-id":     "58",
+		"body":           "updated",
+		"attachment-ids": "12",
+		"receivers":      "alice",
+	})
+	if err != nil {
+		t.Fatalf("comment-update shortcut failed: %v", err)
+	}
+	assertEqual(t, payload["notes"], "updated")
+	assertNumberSlice(t, payload["attachment_ids"], []float64{12})
+	assertStringSlice(t, payload["receivers_login"], []string{"alice"})
+}
+
+func TestIssueCommentDeleteUsesV1Endpoint(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/issues/42/journals/58.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-delete", map[string]string{
+		"number":     "42",
+		"comment-id": "58",
+	})
+	if err != nil {
+		t.Fatalf("comment-delete shortcut failed: %v", err)
+	}
+}
+
+func TestIssueCommentChildrenBuildsQuery(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42/journals/58/children_journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		query := r.URL.Query()
+		assertEqual(t, query.Get("keyword"), "reply")
+		assertEqual(t, query.Get("page"), "3")
+		assertEqual(t, query.Get("limit"), "7")
+		writeJSON(t, w, map[string]interface{}{"total_count": 0, "journals": []interface{}{}})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-children", map[string]string{
+		"number":     "42",
+		"comment-id": "58",
+		"keyword":    "reply",
+		"page":       "3",
+		"limit":      "7",
+	})
+	if err != nil {
+		t.Fatalf("comment-children shortcut failed: %v", err)
+	}
+}
+
+func TestIssueCommentRejectsInvalidCategory(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("server should not be called for invalid category: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comments", map[string]string{
+		"number":   "42",
+		"category": "invalid",
+	})
+	if err == nil {
+		t.Fatal("expected invalid category to return an error")
+	}
+}
+
+func assertStringSlice(t *testing.T, got interface{}, want []string) {
+	t.Helper()
+	values, ok := got.([]interface{})
+	if !ok {
+		t.Fatalf("got %T, want []interface{}", got)
+	}
+	if len(values) != len(want) {
+		t.Fatalf("got %v, want %v", values, want)
+	}
+	for i, value := range values {
+		if value != want[i] {
+			t.Fatalf("got %v, want %v", values, want)
 		}
 	}
 }

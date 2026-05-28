@@ -531,3 +531,178 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
 	}
 }
+
+func TestPRReviewCommentsListBuildsQuery(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/pulls/13/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		query := r.URL.Query()
+		assertEqual(t, query.Get("keyword"), "todo")
+		assertEqual(t, query.Get("review_id"), "10")
+		assertEqual(t, query.Get("need_respond"), "true")
+		assertEqual(t, query.Get("state"), "opened")
+		assertEqual(t, query.Get("parent_id"), "200")
+		assertEqual(t, query.Get("path"), "README.md")
+		assertEqual(t, query.Get("is_full"), "true")
+		assertEqual(t, query.Get("sort_by"), "created_on")
+		assertEqual(t, query.Get("sort_direction"), "desc")
+		writeJSON(t, w, map[string]interface{}{"total_count": 0, "journals": []interface{}{}})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comments", map[string]string{
+		"id":             "13",
+		"keyword":        "todo",
+		"review-id":      "10",
+		"need-respond":   "true",
+		"state":          "opened",
+		"parent-id":      "200",
+		"path":           "README.md",
+		"is-full":        "true",
+		"sort-by":        "created_on",
+		"sort-direction": "desc",
+	})
+	if err != nil {
+		t.Fatalf("review-comments shortcut failed: %v", err)
+	}
+}
+
+func TestPRReviewCommentPostsPayload(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/pulls/13/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"id": 200, "note": "please fix"})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comment", map[string]string{
+		"id":        "13",
+		"note":      "please fix",
+		"review-id": "10",
+		"type":      "problem",
+		"commit":    "abc123",
+		"line-code": "abc123_0_10",
+		"path":      "README.md",
+		"parent-id": "199",
+		"diff-json": `{"name":"README.md","addition":1}`,
+	})
+	if err != nil {
+		t.Fatalf("review-comment shortcut failed: %v", err)
+	}
+
+	assertEqual(t, payload["type"], "problem")
+	assertEqual(t, payload["note"], "please fix")
+	assertEqual(t, payload["review_id"], "10")
+	assertEqual(t, payload["commit_id"], "abc123")
+	assertEqual(t, payload["line_code"], "abc123_0_10")
+	assertEqual(t, payload["path"], "README.md")
+	assertEqual(t, payload["parent_id"], float64(199))
+	diff, ok := payload["diff"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("diff type = %T, want map", payload["diff"])
+	}
+	assertEqual(t, diff["name"], "README.md")
+	assertEqual(t, diff["addition"], float64(1))
+}
+
+func TestPRReviewCommentDryRunDoesNotCallAPI(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("server should not be called during dry-run: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comment", map[string]string{
+		"id":        "13",
+		"note":      "please fix",
+		"review-id": "10",
+		"commit":    "abc123",
+		"line-code": "abc123_0_10",
+		"path":      "README.md",
+		"dry-run":   "true",
+	})
+	if err != nil {
+		t.Fatalf("review-comment dry-run failed: %v", err)
+	}
+}
+
+func TestPRReviewCommentUpdatePayload(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PUT" || r.URL.Path != "/v1/owner/repo/pulls/13/journals/200.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"id": 200, "note": "fixed", "state": "resolved"})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comment-update", map[string]string{
+		"id":         "13",
+		"comment-id": "200",
+		"note":       "fixed",
+		"commit":     "def456",
+		"state":      "resolved",
+	})
+	if err != nil {
+		t.Fatalf("review-comment-update shortcut failed: %v", err)
+	}
+	assertEqual(t, payload["note"], "fixed")
+	assertEqual(t, payload["commit_id"], "def456")
+	assertEqual(t, payload["state"], "resolved")
+}
+
+func TestPRReviewCommentDeleteUsesV1Endpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/pulls/13/journals/200.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comment-delete", map[string]string{
+		"id":         "13",
+		"comment-id": "200",
+	})
+	if err != nil {
+		t.Fatalf("review-comment-delete shortcut failed: %v", err)
+	}
+}
+
+func TestPRReviewCommentRejectsInvalidInputs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("server should not be called for invalid input: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	if err := runPRShortcut(t, server, "review-comment", map[string]string{
+		"id":        "13",
+		"note":      "please fix",
+		"review-id": "10",
+		"type":      "todo",
+		"commit":    "abc123",
+		"line-code": "abc123_0_10",
+		"path":      "README.md",
+	}); err == nil {
+		t.Fatal("expected invalid review comment type to fail")
+	}
+
+	if err := runPRShortcut(t, server, "review-comment-update", map[string]string{
+		"id":         "13",
+		"comment-id": "200",
+		"state":      "done",
+	}); err == nil {
+		t.Fatal("expected invalid review comment state to fail")
+	}
+
+	if err := runPRShortcut(t, server, "review-comments", map[string]string{
+		"id":           "13",
+		"need-respond": "maybe",
+	}); err == nil {
+		t.Fatal("expected invalid need-respond to fail")
+	}
+}

@@ -1,7 +1,7 @@
 ---
 name: gitlink-issue
 version: 2.0.0
-description: "Issue 管理：创建、查看、更新、关闭/批量关闭 Issue，添加评论。当用户需要操作 GitLink Issue 时触发。"
+description: "Issue 管理：创建、查看、更新、关闭/批量关闭 Issue，管理评论/操作记录。当用户需要操作 GitLink Issue 时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -26,7 +26,11 @@ metadata:
 | `issue +update` | 更新 Issue | 是 |
 | `issue +close` | 关闭 Issue | 是 |
 | `issue +batch-close` | 批量关闭 Issue，支持 `--dry-run` 预览 | 是（dry-run 不写入） |
-| `issue +comment` | 添加评论 | 是 |
+| `issue +comment` | 添加评论，支持回复、附件、@接收人和 dry-run | 是 |
+| `issue +comments` | 查看 Issue 评论和操作记录 | 否（公开项目） |
+| `issue +comment-update` | 更新 Issue 评论，支持 dry-run | 是 |
+| `issue +comment-delete` | 删除 Issue 评论，支持 dry-run | 是 |
+| `issue +comment-children` | 查看评论的子评论 | 否（公开项目） |
 | `issue +assigners` | 查询 Issue 负责人列表 | 否（公开项目） |
 | `issue +authors` | 查询 Issue 发布人列表 | 否（公开项目） |
 | `issue +statuses` | 查询 Issue 状态列表 | 否（公开项目） |
@@ -63,6 +67,20 @@ gitlink-cli issue +batch-close --owner myuser --repo myrepo --from issues.csv
 # 添加评论
 gitlink-cli issue +comment --number 4 --body "已修复，请验证"
 
+# 回复评论 / @用户 / 携带附件（写操作先 dry-run）
+gitlink-cli issue +comment --number 4 --body "请 @alice 复核" --receivers alice --attachment-ids 10,11 --dry-run
+
+# 查看评论和操作记录
+gitlink-cli issue +comments --number 4 --category all --page 1 --limit 20
+gitlink-cli issue +comments --number 4 --category comment --keyword "复现"
+
+# 更新/删除评论（先 dry-run）
+gitlink-cli issue +comment-update --number 4 --comment-id 58 --body "更新后的评论" --dry-run
+gitlink-cli issue +comment-delete --number 4 --comment-id 58 --dry-run
+
+# 查看子评论
+gitlink-cli issue +comment-children --number 4 --comment-id 58
+
 # 查询 Issue 负责人
 gitlink-cli issue +assigners --owner Gitlink --repo forgeplus --keyword alice
 
@@ -73,8 +91,7 @@ gitlink-cli issue +authors --owner Gitlink --repo forgeplus --keyword bob
 ## Raw API 补充
 
 ```bash
-# 获取 Issue 评论列表（使用 v1 API，按 issue number 查询）
-gitlink-cli api GET /v1/:owner/:repo/issues/:number/journals
+# Issue 评论相关接口已由 issue +comments / +comment-update / +comment-delete / +comment-children 覆盖。
 
 # 批量更新 Issue（仍使用旧版 API，需传数据库 ID）
 gitlink-cli api POST /:owner/:repo/issues/series_update --body '{"ids":[1,2,3],"status_id":"closed"}'
@@ -103,7 +120,7 @@ gitlink-cli api POST /:owner/:repo/issues/series_update --body '{"ids":[1,2,3],"
 - **Issue 编号（`--number`）是网页 URL 中看到的序号**（如 `issues/4` 中的 `4`），不是数据库内部 ID
 - `--id` / `-i` 仅作为 `--number` / `-n` 的兼容别名，传入的仍然是网页 URL 中的 Issue 编号
 - **批量关闭使用 `--numbers`，同样传网页 URL 中的 Issue 编号**，不是数据库内部 ID
-- Issue 操作使用 v1 API（`/api/v1/`），支持按 Issue 编号查询和操作
+- Issue 操作和 Issue 评论操作使用 v1 API（`/api/v1/`），支持按 Issue 编号查询和操作
 - **创建 Issue 时 CLI 会自动设置 `status_id: 1`（新增）和 `priority_id: 2`（正常）**
 - **更新/关闭 Issue 时必须保留当前 `subject` 和 `description`**，即使只修改状态（CLI 会先读取当前 Issue 并自动带回）
 - v1 API 写操作必须使用 `access_token`（非 `token`）认证，CLI 已自动处理
