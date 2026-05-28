@@ -28,10 +28,10 @@
       name: ssh执行命令
       task: ssh_cmd@1.1.1
       input:
-        ssh_pass: '"pdl@#YwC$WRWFyHKxC8nyu!4"'
         ssh_ip: '"8.136.61.14"'
         ssh_port: '"22"'
         ssh_user: '"root"'
+        ssh_private_key: ((gitlink_cli.ecs_ssh_key))
         ssh_cmd: '"cd /opt/gitlink-cli && git pull && go build -o /usr/local/bin/gitlink-cli . && gitlink-cli version"'
       needs:
         - git_clone_0
