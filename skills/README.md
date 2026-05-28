@@ -138,7 +138,7 @@ skills/
 | **gitlink-issue** | Issue 管理 | `issue +create`, `issue +list`, `issue +view`, `issue +close`, `issue +batch-close` |
 | **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +versions`, `pr +version-diff`, `pr +reviews`, `pr +review` |
 | **gitlink-member** | 仓库成员管理 | `member +list`, `member +add`, `member +batch-add`, `member +role`, `member +invite-link` |
-| **gitlink-branch** | 分支管理 | `branch +list`, `branch +create`, `branch +delete`, `branch +protect` |
+| **gitlink-branch** | 分支管理 | `branch +list`, `branch +all`, `branch +create`, `branch +delete`, `branch +set-default`, `branch +restore` |
 | **gitlink-release** | 版本发布 | `release +list`, `release +create`, `release +edit`, `release +update`, `release +view` |
 
 ### 辅助 Skills

@@ -108,7 +108,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
 | 👥 Member | List, add, remove repository members, change roles, create and accept invite links |
-| 🌿 Branch | Create, delete, list, protect, unprotect branches |
+| 🌿 Branch | List, create, delete, restore, set default, protect, unprotect branches |
 | 🏷️ Release | Create, edit, update, view, delete releases |
 | 🏢 Org | Manage organizations, members, teams |
 | 🔧 CI | View builds, logs, CI/CD operations |
@@ -406,14 +406,24 @@ gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved 
 ### Branch Management
 
 ```bash
-# List branches
-gitlink-cli branch +list --owner Gitlink --repo forgeplus
+# List branches, including deleted branches when needed
+gitlink-cli branch +list --owner Gitlink --repo forgeplus --keyword feature
+gitlink-cli branch +list --owner Gitlink --repo forgeplus --state deleted
 
-# Create a branch
-gitlink-cli branch +create --name feature/new-feature
+# List all branches without pagination
+gitlink-cli branch +all --owner Gitlink --repo forgeplus
 
-# Delete a branch
-gitlink-cli branch +delete --name feature/old-feature
+# Create a branch, with dry-run preview
+gitlink-cli branch +create --owner Gitlink --repo forgeplus --name feature/new-feature --from master --dry-run
+
+# Delete a branch, with dry-run preview
+gitlink-cli branch +delete --owner Gitlink --repo forgeplus --name feature/old-feature --dry-run
+
+# Set default branch
+gitlink-cli branch +set-default --owner Gitlink --repo forgeplus --name develop --dry-run
+
+# Restore a deleted branch
+gitlink-cli branch +restore --owner Gitlink --repo forgeplus --branch-id 7 --name feature/old-feature --dry-run
 
 # Protect a branch
 gitlink-cli branch +protect --name main
