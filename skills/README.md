@@ -100,6 +100,8 @@ skills/
 │       └── search-workflow.md         # 搜索工作流
 ├── gitlink-user/                      # 用户管理
 │   └── SKILL.md                       # 用户操作指南
+├── gitlink-notification/              # 通知消息管理
+│   └── SKILL.md                       # 消息与设置操作指南
 ├── gitlink-org/                       # 组织管理
 │   ├── SKILL.md                       # 组织操作指南
 │   └── examples/
@@ -147,6 +149,7 @@ skills/
 |-------|------|----------|
 | **gitlink-search** | 搜索功能 | `search +repos`, `search +users` |
 | **gitlink-user** | 用户管理 | `user +me`, `user +info` |
+| **gitlink-notification** | 通知消息管理 | `notification +list`, `notification +mark-read`, `notification +settings-update` |
 | **gitlink-org** | 组织管理 | `org +list`, `org +info`, `org +members` |
 | **gitlink-ci** | CI/CD | `ci +builds`, `ci +logs` |
 | **gitlink-pipeline** | 流水线工作流 | `pipeline +runs`, `pipeline +run`, `pipeline +logs` |
@@ -254,9 +257,10 @@ gitlink-cli org +info -i Gitlink
 - [gitlink-pipeline/SKILL.md](gitlink-pipeline/SKILL.md) - Pipeline 命令
 - [gitlink-search/SKILL.md](gitlink-search/SKILL.md) - 搜索命令
 
-**组织和用户**:
+**组织、用户和通知**:
 - [gitlink-org/SKILL.md](gitlink-org/SKILL.md) - 组织命令
 - [gitlink-user/SKILL.md](gitlink-user/SKILL.md) - 用户命令
+- [gitlink-notification/SKILL.md](gitlink-notification/SKILL.md) - 通知消息命令
 
 ---
 

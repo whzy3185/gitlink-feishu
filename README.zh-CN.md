@@ -5,7 +5,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue.svg)](https://golang.org)
 [![npm version](https://img.shields.io/npm/v/@gitlink-ai/cli.svg)](https://www.npmjs.com/package/@gitlink-ai/cli)
 
-[GitLink（确实开源）](https://www.gitlink.org.cn) 官方 CLI 工具 — 为人类和 AI Agent 双重设计。支持 **macOS、Linux、Windows**，覆盖仓库管理、Issue 追踪、Pull Request、Webhook、成员协作、CI/CD 和 AI 自动化工作流，包含 40+ 命令和 AI Agent [Skills](./skills/)。
+[GitLink（确实开源）](https://www.gitlink.org.cn) 官方 CLI 工具 — 为人类和 AI Agent 双重设计。支持 **macOS、Linux、Windows**，覆盖仓库管理、Issue 追踪、Pull Request、Webhook、通知消息、成员协作、CI/CD 和 AI 自动化工作流，包含 40+ 命令和 AI Agent [Skills](./skills/)。
 
 **[English](./README.md)**
 
@@ -83,7 +83,7 @@
 ## 为什么选择 gitlink-cli？
 
 - **Agent-Native 设计** — 开箱即用结构化 [Skills](./skills/)，兼容 Claude Code — Agent 零配置即可操作 GitLink
-- **广泛覆盖** — 仓库、Issue、PR、Webhook、成员、分支、Release、CI、Pipeline、组织、搜索、用户等常用工作流均提供高层命令
+- **广泛覆盖** — 仓库、Issue、PR、Webhook、通知消息、成员、分支、Release、CI、Pipeline、组织、搜索、用户等常用工作流均提供高层命令
 - **AI 友好 & 优化** — 每条命令都经过真实 Agent 测试，简洁参数、智能默认值、结构化输出
 - **跨平台** — macOS、Linux、Windows (x64/arm64) 全支持，`npm` 一条命令安装
 - **开源零门槛** — 木兰宽松许可证第2版（MulanPSL-2.0），`npm install` 即用
@@ -105,6 +105,7 @@
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
+| 🔔 通知消息 | 查看消息、标记已读、删除消息、创建 @我通知、管理消息设置 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 👤 用户 | 查看用户资料和信息 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
@@ -455,6 +456,27 @@ gitlink-cli search +repos -k "machine learning"
 gitlink-cli search +users -k "zhangsan"
 ```
 
+### 通知消息管理
+
+```bash
+# 查看未读 @我消息
+gitlink-cli notification +list --user zhangsan --type atme --status unread
+
+# 预览标记已读，不修改线上数据
+gitlink-cli notification +mark-read --user zhangsan --ids 101,102 --dry-run
+
+# 按 ID 删除消息
+gitlink-cli notification +delete --user zhangsan --ids 101,102 --type notification
+
+# 创建绑定到 Issue、PR 或 Journal 的 @我通知
+gitlink-cli notification +create-atme --user zhangsan --receivers lisi,wangwu --atmeable-type Issue --atmeable-id 99 --dry-run
+
+# 查看并更新消息设置，未指定的配置会保留原值
+gitlink-cli notification +platform-settings
+gitlink-cli notification +settings --user zhangsan
+gitlink-cli notification +settings-update --user zhangsan --notification Normal::Project=true --email Normal::Project=false --dry-run
+```
+
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：
@@ -526,6 +548,7 @@ git push gitlink
 | `gitlink-pipeline` | 流水线工作流操作（运行、日志、启停、删除等） |
 | `gitlink-search` | 搜索功能（仓库、用户等） |
 | `gitlink-user` | 用户管理（个人信息等） |
+| `gitlink-notification` | 通知消息操作与设置管理 |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |
 | `gitlink-workflow` | AI 自动化工作流（Issue 分类、PR Review、Release Notes 等） |
 
@@ -558,6 +581,7 @@ gitlink-cli/
 │   ├── pipeline/             # Pipeline shortcuts
 │   ├── search/               # 搜索 shortcuts
 │   ├── user/                 # 用户 shortcuts
+│   ├── notification/         # 通知消息 shortcuts
 │   └── register.go           # 注册入口
 ├── skills/                   # AI Agent Skills
 │   ├── README.md             # Skills 使用指南
@@ -565,6 +589,7 @@ gitlink-cli/
 │   ├── gitlink-repo/         # 仓库 Skill
 │   ├── gitlink-issue/        # Issue Skill
 │   ├── gitlink-pr/           # PR Skill
+│   ├── gitlink-notification/ # 通知消息 Skill
 │   ├── gitlink-pm/           # 项目管理 Skill
 │   └── ...
 ├── doc/                      # 设计文档

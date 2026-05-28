@@ -5,7 +5,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue.svg)](https://golang.org)
 [![npm version](https://img.shields.io/npm/v/@gitlink-ai/cli.svg)](https://www.npmjs.com/package/@gitlink-ai/cli)
 
-The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans and AI Agents. Supports **macOS, Linux, and Windows**. Covers repository management, issue tracking, pull requests, webhooks, member collaboration, CI/CD, and AI-powered workflows, with 40+ commands and AI Agent [Skills](./skills/).
+The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans and AI Agents. Supports **macOS, Linux, and Windows**. Covers repository management, issue tracking, pull requests, webhooks, notifications, member collaboration, CI/CD, and AI-powered workflows, with 40+ commands and AI Agent [Skills](./skills/).
 
 **[中文文档](./README.zh-CN.md)**
 
@@ -83,7 +83,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 ## Why gitlink-cli?
 
 - **Agent-Native Design** — Structured [Skills](./skills/) out of the box, compatible with Claude Code, OpenClaw, and other AI platforms — Agents can operate GitLink with zero extra setup
-- **Wide Coverage** — Repository, Issue, PR, Webhook, Member, Branch, Release, CI, Pipeline, Org, Search, and User workflows are covered by high-level commands
+- **Wide Coverage** — Repository, Issue, PR, Webhook, Notification, Member, Branch, Release, CI, Pipeline, Org, Search, and User workflows are covered by high-level commands
 - **AI-Friendly & Optimized** — Every command is tested with real Agents, featuring concise parameters, smart defaults, and structured output
 - **Cross-Platform** — Runs on macOS, Linux, and Windows (x64/arm64), install via `npm install -g @gitlink-ai/cli` in one command, binary auto-downloaded
 - **Open Source, Zero Barriers** — MulanPSL-2.0 license, ready to use, just `npm install`
@@ -106,6 +106,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔧 CI | View builds, logs, CI/CD operations |
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
+| 🔔 Notification | List messages, mark read, delete, create @me notifications, manage message settings |
 | 🔍 Search | Search repositories, users |
 | 👤 User | View user profiles and info |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
@@ -477,6 +478,27 @@ gitlink-cli search +repos -k "machine learning"
 gitlink-cli search +users -k "zhangsan"
 ```
 
+### Notification Management
+
+```bash
+# List unread @me messages
+gitlink-cli notification +list --user zhangsan --type atme --status unread
+
+# Preview marking messages as read
+gitlink-cli notification +mark-read --user zhangsan --ids 101,102 --dry-run
+
+# Delete messages by IDs
+gitlink-cli notification +delete --user zhangsan --ids 101,102 --type notification
+
+# Create @me notifications attached to an issue, PR, or journal
+gitlink-cli notification +create-atme --user zhangsan --receivers lisi,wangwu --atmeable-type Issue --atmeable-id 99 --dry-run
+
+# Inspect and update message settings while preserving unspecified keys
+gitlink-cli notification +platform-settings
+gitlink-cli notification +settings --user zhangsan
+gitlink-cli notification +settings-update --user zhangsan --notification Normal::Project=true --email Normal::Project=false --dry-run
+```
+
 ### Workflow Agent Commands
 
 `workflow` provides rule-based repository analysis for maintainers and AI Agents. It currently supports:
@@ -648,6 +670,7 @@ See [skills/README.md](skills/README.md) for details.
 | `gitlink-search` | Search (repositories, users, etc.) |
 | `gitlink-org` | Organization management (members, teams, etc.) |
 | `gitlink-user` | User management (profile info, etc.) |
+| `gitlink-notification` | Notification/message operations and settings |
 | `gitlink-pm` | Project management (sprints, kanban, weekly reports, etc.) |
 | `gitlink-workflow` | AI-powered workflows (issue triage, PR review, release notes, etc.) |
 | `gitlink-health` | Project health analysis (PR/Issue metrics aggregation, health reports) |
@@ -681,6 +704,7 @@ gitlink-cli/
 │   ├── pipeline/             # Pipeline shortcuts
 │   ├── search/               # Search shortcuts
 │   ├── user/                 # User shortcuts
+│   ├── notification/         # Notification shortcuts
 │   └── register.go           # Registration entry point
 ├── skills/                   # AI Agent Skills
 │   ├── README.md             # Skills guide
@@ -688,6 +712,7 @@ gitlink-cli/
 │   ├── gitlink-repo/         # Repository skill
 │   ├── gitlink-issue/        # Issue skill
 │   ├── gitlink-pr/           # PR skill
+│   ├── gitlink-notification/ # Notification skill
 │   ├── gitlink-pm/           # Project management skill
 │   └── ...
 ├── doc/                      # Design documents
