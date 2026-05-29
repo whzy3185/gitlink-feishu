@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  check:
+    name: Build, Test, Vet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test -race ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -s -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Files not formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
