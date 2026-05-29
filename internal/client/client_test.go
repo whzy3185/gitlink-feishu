@@ -25,3 +25,21 @@ func TestNormalizeAPIPathKeepsAPIPrefixForNonAPIBaseURL(t *testing.T) {
 		t.Fatalf("normalizeAPIPath() = %q, want %q", got, want)
 	}
 }
+
+func TestShouldAppendJSONSuffixSkipsRawFilePath(t *testing.T) {
+	if shouldAppendJSONSuffix("/Gitlink/forgeplus/raw/master/README.md") {
+		t.Fatal("raw file path should not get .json suffix")
+	}
+}
+
+func TestShouldAppendJSONSuffixKeepsRawRepositoryName(t *testing.T) {
+	if !shouldAppendJSONSuffix("/users/raw/projects") {
+		t.Fatal("regular API path should get .json suffix")
+	}
+}
+
+func TestShouldAppendJSONSuffixSkipsExistingJSONPath(t *testing.T) {
+	if shouldAppendJSONSuffix("/projects.json") {
+		t.Fatal("existing .json path should not get another suffix")
+	}
+}

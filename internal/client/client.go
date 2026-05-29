@@ -49,10 +49,10 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 	if idx := strings.Index(path, "?"); idx != -1 {
 		basePath := path[:idx]
 		queryStr := path[idx:]
-		if !strings.HasSuffix(basePath, ".json") {
+		if shouldAppendJSONSuffix(basePath) {
 			path = basePath + ".json" + queryStr
 		}
-	} else if !strings.HasSuffix(path, ".json") {
+	} else if shouldAppendJSONSuffix(path) {
 		path += ".json"
 	}
 	fullURL := c.BaseURL + path
@@ -158,6 +158,19 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 	}
 
 	return output.SuccessEnvelope(raw, meta), nil
+}
+
+func shouldAppendJSONSuffix(path string) bool {
+	if strings.HasSuffix(path, ".json") {
+		return false
+	}
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i, part := range parts {
+		if part == "raw" && i >= 2 && i+2 < len(parts) {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeAPIPath(baseURL, path string) string {
