@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
-	authCmd "github.com/gitlink-org/gitlink-cli/cmd/auth"
 	apiCmd "github.com/gitlink-org/gitlink-cli/cmd/api"
+	authCmd "github.com/gitlink-org/gitlink-cli/cmd/auth"
+	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	configCmd "github.com/gitlink-org/gitlink-cli/cmd/config"
 	"github.com/gitlink-org/gitlink-cli/shortcuts"
 )
@@ -16,9 +16,9 @@ import (
 var Version = "dev"
 
 var rootCmd = &cobra.Command{
-	Use:   "gitlink-cli",
-	Short: "GitLink CLI — command-line tool for gitlink.org.cn",
-	Long:  `gitlink-cli is a command-line interface for the GitLink (确实开源) platform, providing repository management, issue tracking, pull requests, CI/CD, and AI-powered workflows.`,
+	Use:           "gitlink-cli",
+	Short:         "GitLink CLI — command-line tool for gitlink.org.cn",
+	Long:          `gitlink-cli is a command-line interface for the GitLink (确实开源) platform, providing repository management, issue tracking, pull requests, CI/CD, and AI-powered workflows.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
