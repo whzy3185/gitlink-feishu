@@ -1,0 +1,25 @@
+#!/bin/sh
+# Pre-commit hook: run fmt + vet + test before every commit.
+# Install: make hooks
+
+set -e
+
+echo "=== gofmt ==="
+unformatted=$(gofmt -s -l .)
+if [ -n "$unformatted" ]; then
+  echo "ERROR: these files are not formatted:"
+  echo "$unformatted"
+  echo "Run: gofmt -s -w ."
+  exit 1
+fi
+echo "  OK"
+
+echo "=== go vet ==="
+go vet ./...
+echo "  OK"
+
+echo "=== go test ==="
+go test -race ./...
+echo "  OK"
+
+echo "=== pre-commit passed ==="
