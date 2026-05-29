@@ -100,6 +100,55 @@ func TestIssueUpdatePreservesCurrentSubjectWhenChangingDescription(t *testing.T)
 	assertEqual(t, updatePayload["description"], "New description")
 }
 
+func TestIssueUpdatePreservesCurrentMetadata(t *testing.T) {
+	var updatePayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
+				"subject":        "Existing title",
+				"description":    "Existing description",
+				"priority":       map[string]interface{}{"id": 2, "name": "normal"},
+				"tracker":        map[string]interface{}{"id": 1, "name": "bug"},
+				"fixed_version":  map[string]interface{}{"id": 9, "name": "v1"},
+				"assigned_to_id": 7,
+				"issue_tags": []map[string]interface{}{
+					{"id": 3, "name": "bug"},
+					{"id": 4, "name": "cli"},
+				},
+			})
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			updatePayload = decodeJSON(t, r)
+			writeJSON(t, w, updatePayload)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runIssueShortcut(t, server, "update", map[string]string{
+		"number": "42",
+		"title":  "New title",
+	})
+	if err != nil {
+		t.Fatalf("update shortcut failed: %v", err)
+	}
+
+	assertEqual(t, updatePayload["subject"], "New title")
+	assertEqual(t, updatePayload["description"], "Existing description")
+	assertEqual(t, updatePayload["priority_id"], float64(2))
+	assertEqual(t, updatePayload["tracker_id"], float64(1))
+	assertEqual(t, updatePayload["fixed_version_id"], float64(9))
+	assertEqual(t, updatePayload["assigned_to_id"], float64(7))
+
+	tagIDs, ok := updatePayload["issue_tag_ids"].([]interface{})
+	if !ok {
+		t.Fatalf("issue_tag_ids = %T, want []interface{}", updatePayload["issue_tag_ids"])
+	}
+	assertEqual(t, tagIDs[0], float64(3))
+	assertEqual(t, tagIDs[1], float64(4))
+}
+
 func TestBatchClosePreservesCurrentDescription(t *testing.T) {
 	var updatePayload map[string]interface{}
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {

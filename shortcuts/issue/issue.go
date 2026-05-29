@@ -18,6 +18,7 @@ func v1RepoPath(ctx *common.RuntimeContext) string {
 type existingIssue struct {
 	Subject     string
 	Description string
+	Metadata    map[string]interface{}
 }
 
 func Shortcuts() []*common.Shortcut {
@@ -134,6 +135,7 @@ func Shortcuts() []*common.Shortcut {
 					"description": current.Description,
 					"status_id":   5, // 5 = closed
 				}
+				copyIssueMetadata(body, current.Metadata)
 				env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), body)
 				if err != nil {
 					return err
@@ -174,6 +176,7 @@ func Shortcuts() []*common.Shortcut {
 					"subject":     current.Subject,
 					"description": current.Description,
 				}
+				copyIssueMetadata(body, current.Metadata)
 				if t := ctx.Arg("title"); t != "" {
 					body["subject"] = t
 				}
@@ -315,7 +318,88 @@ func fetchExistingIssue(ctx *common.RuntimeContext, number string) (*existingIss
 	return &existingIssue{
 		Subject:     subject,
 		Description: description,
+		Metadata:    existingIssueMetadata(issueData),
 	}, nil
+}
+
+func existingIssueMetadata(issueData map[string]interface{}) map[string]interface{} {
+	metadata := map[string]interface{}{}
+	copyIDValue(metadata, "priority_id", issueData["priority_id"])
+	copyNestedIDValue(metadata, "priority_id", issueData["priority"])
+	copyIDValue(metadata, "tracker_id", issueData["tracker_id"])
+	copyNestedIDValue(metadata, "tracker_id", issueData["tracker"])
+	copyIDValue(metadata, "fixed_version_id", issueData["fixed_version_id"])
+	copyNestedIDValue(metadata, "fixed_version_id", issueData["fixed_version"])
+	copyIDValue(metadata, "assigned_to_id", issueData["assigned_to_id"])
+	copyNestedIDValue(metadata, "assigned_to_id", issueData["assigned_to"])
+
+	if ids := issueTagIDs(issueData["issue_tags"]); len(ids) > 0 {
+		metadata["issue_tag_ids"] = ids
+	}
+	return metadata
+}
+
+func copyIssueMetadata(body map[string]interface{}, metadata map[string]interface{}) {
+	for key, value := range metadata {
+		body[key] = value
+	}
+}
+
+func copyNestedIDValue(dst map[string]interface{}, dstKey string, value interface{}) {
+	object, ok := value.(map[string]interface{})
+	if !ok {
+		return
+	}
+	copyIDValue(dst, dstKey, object["id"])
+}
+
+func copyIDValue(dst map[string]interface{}, dstKey string, value interface{}) {
+	switch v := value.(type) {
+	case int:
+		dst[dstKey] = v
+	case int64:
+		dst[dstKey] = v
+	case float64:
+		dst[dstKey] = int(v)
+	case string:
+		if strings.TrimSpace(v) != "" {
+			dst[dstKey] = v
+		}
+	}
+}
+
+func issueTagIDs(value interface{}) []interface{} {
+	tags, ok := value.([]interface{})
+	if !ok {
+		return nil
+	}
+	ids := make([]interface{}, 0, len(tags))
+	for _, tag := range tags {
+		tagData, ok := tag.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if id, ok := normalizedIDValue(tagData["id"]); ok {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+func normalizedIDValue(value interface{}) (interface{}, bool) {
+	switch v := value.(type) {
+	case int:
+		return v, true
+	case int64:
+		return v, true
+	case float64:
+		return int(v), true
+	case string:
+		if strings.TrimSpace(v) != "" {
+			return v, true
+		}
+	}
+	return nil, false
 }
 
 func normalizeIssueStatus(state string) (interface{}, error) {
