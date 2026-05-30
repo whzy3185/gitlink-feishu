@@ -36,7 +36,7 @@ func FetchHealthInput(ctx *common.RuntimeContext, opts HealthFetchOptions) (Heal
 	} else {
 		input.OpenIssues = len(issues)
 		input.StaleIssues = countStaleItems(issues, staleDays)
-		input.RecentActivityKnown, input.RecentActivityDays, input = updateRecentActivity(input, latestTimeFromItems(issues, input.RecentActivityDays))
+		input.RecentActivityKnown, input.RecentActivityDays, input = updateRecentActivity(input, latestTimeFromItems(issues))
 	}
 
 	if prs, err := fetchAllListItems(ctx, workflowRepoPath(owner, repo)+"/pulls", issueListQuery("open"), 100); err != nil {
@@ -44,7 +44,7 @@ func FetchHealthInput(ctx *common.RuntimeContext, opts HealthFetchOptions) (Heal
 	} else {
 		input.OpenPRs = len(prs)
 		input.StalePRs = countStaleItems(prs, staleDays)
-		input.RecentActivityKnown, input.RecentActivityDays, input = updateRecentActivity(input, latestTimeFromItems(prs, input.RecentActivityDays))
+		input.RecentActivityKnown, input.RecentActivityDays, input = updateRecentActivity(input, latestTimeFromItems(prs))
 	}
 
 	if opts.IncludeRelease {
@@ -54,7 +54,7 @@ func FetchHealthInput(ctx *common.RuntimeContext, opts HealthFetchOptions) (Heal
 		} else {
 			input.ReleaseKnown = true
 			input.HasRecentRelease = len(releases) > 0
-			input.RecentActivityKnown, input.RecentActivityDays, input = updateRecentActivity(input, latestTimeFromItems(releases, input.RecentActivityDays))
+			input.RecentActivityKnown, input.RecentActivityDays, input = updateRecentActivity(input, latestTimeFromItems(releases))
 		}
 	}
 
@@ -152,7 +152,7 @@ func applyAgentReadinessEstimate(input *HealthInput) {
 		score++
 	}
 	input.AgentReadinessKnown = true
-	input.AgentReadinessScore = clampInt(score, 0, 10)
+	input.AgentReadinessScore = clampInt(score, 10)
 }
 
 func countStaleItems(items []map[string]interface{}, staleDays int) int {
@@ -187,7 +187,7 @@ func itemActivityTime(item map[string]interface{}) time.Time {
 	)
 }
 
-func latestTimeFromItems(items []map[string]interface{}, currentDays int) time.Time {
+func latestTimeFromItems(items []map[string]interface{}) time.Time {
 	latest := time.Time{}
 	for _, item := range items {
 		latest = apiLatestTime(latest, itemActivityTime(item))
@@ -280,10 +280,7 @@ func buildPassing(item map[string]interface{}) bool {
 			}
 		}
 	}
-	if apiBool(item["success"]) {
-		return true
-	}
-	return false
+	return apiBool(item["success"])
 }
 
 func uniqueScoringNotes(notes []ScoringNote) []ScoringNote {

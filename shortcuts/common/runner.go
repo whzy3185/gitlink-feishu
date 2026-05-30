@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -49,7 +50,9 @@ func MountShortcut(parent *cobra.Command, s *Shortcut) {
 			cmd.Flags().String(f.Name, f.Default, f.Usage)
 		}
 		if f.Required {
-			cmd.MarkFlagRequired(f.Name)
+			if err := cmd.MarkFlagRequired(f.Name); err != nil {
+				panic(fmt.Sprintf("failed to mark flag %s as required: %v", f.Name, err))
+			}
 		}
 	}
 

@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -78,7 +77,9 @@ func AnalyzeIssue(input IssueInput, lang string) TriageResult {
 }
 
 func normalizeIssueText(input IssueInput) string {
-	parts := []string{input.Title, input.Body}
+	parts := make([]string, 2, 2+len(input.Labels))
+	parts[0] = input.Title
+	parts[1] = input.Body
 	parts = append(parts, input.Labels...)
 	return strings.ToLower(strings.Join(parts, "\n"))
 }
@@ -158,7 +159,7 @@ func calculateConfidence(detectedType string, scores map[string]int, matchedRule
 	if detectedType == IssueTypeSecurity || detectedType == IssueTypeBug || detectedType == IssueTypeCI {
 		confidence += 10
 	}
-	return clampInt(confidence, 0, 100)
+	return clampInt(confidence, 100)
 }
 
 func detectMissingInformation(text string, detectedType string, lang string) []string {
@@ -297,10 +298,4 @@ func uniqueStrings(values []string) []string {
 		unique = append(unique, value)
 	}
 	return unique
-}
-
-func sortedStrings(values []string) []string {
-	copied := append([]string(nil), values...)
-	sort.Strings(copied)
-	return copied
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -68,7 +69,8 @@ func runAPI(c *cobra.Command, args []string) error {
 
 	env, err := cli.Do(method, path, body, query)
 	if err != nil {
-		if apiErr, ok := err.(*client.APIError); ok {
+		var apiErr *client.APIError
+		if errors.As(err, &apiErr) {
 			errEnv := output.ErrorEnvelope(apiErr.Code, apiErr.Message, "")
 			return output.Print(errEnv, resolveFormat())
 		}

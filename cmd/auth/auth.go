@@ -51,7 +51,7 @@ func loginWithPassword() error {
 	username = strings.TrimSpace(username)
 
 	fmt.Print("Password: ")
-	passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
+	passwordBytes, err := term.ReadPassword(syscall.Stdin)
 	if err != nil {
 		return fmt.Errorf("failed to read password: %w", err)
 	}

@@ -3,7 +3,7 @@ package workflow
 func ScoreHealth(input HealthInput, lang string) HealthResult {
 	lang = normalizeLang(lang)
 
-	metrics := []HealthMetric{}
+	metrics := make([]HealthMetric, 0, 8)
 	notes := []ScoringNote{}
 	recommendations := []string{}
 
@@ -73,7 +73,7 @@ func ScoreHealth(input HealthInput, lang string) HealthResult {
 
 	healthScore := 0
 	if maxTotal > 0 {
-		healthScore = clampInt(total*100/maxTotal, 0, 100)
+		healthScore = clampInt(total*100/maxTotal, 100)
 	}
 	if len(recommendations) == 0 {
 		recommendations = append(recommendations, message(lang, "rec_maintain"))
@@ -99,7 +99,7 @@ func scoreIssueBacklog(input HealthInput, lang string) HealthMetric {
 	} else if input.OpenIssues > 10 {
 		score -= 2
 	}
-	score = clampInt(score, 0, 20)
+	score = clampInt(score, 20)
 
 	status := "good"
 	reason := message(lang, "health_issue_backlog_good")
@@ -120,7 +120,7 @@ func scorePRBacklog(input HealthInput, lang string) HealthMetric {
 	} else if input.OpenPRs > 5 {
 		score -= 2
 	}
-	score = clampInt(score, 0, 20)
+	score = clampInt(score, 20)
 
 	status := "good"
 	reason := message(lang, "health_pr_backlog_good")
@@ -195,7 +195,7 @@ func scoreAgentReadiness(input HealthInput, lang string) (HealthMetric, ScoringN
 	if !input.AgentReadinessKnown {
 		return HealthMetric{Name: "agent_readiness", Status: "unknown", Score: 5, MaxScore: 10, Reason: message(lang, "health_agent_unknown")}, ScoringNote{Metric: "agent_readiness", Note: message(lang, "health_agent_unknown")}
 	}
-	score := clampInt(input.AgentReadinessScore, 0, 10)
+	score := clampInt(input.AgentReadinessScore, 10)
 	status := "attention"
 	if score >= 8 {
 		status = "good"
@@ -228,9 +228,9 @@ func riskLevel(score int) string {
 	}
 }
 
-func clampInt(value int, minValue int, maxValue int) int {
-	if value < minValue {
-		return minValue
+func clampInt(value, maxValue int) int {
+	if value < 0 {
+		return 0
 	}
 	if value > maxValue {
 		return maxValue

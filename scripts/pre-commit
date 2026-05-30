@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pre-commit hook: run fmt + vet + test before every commit.
+# Pre-commit hook: run fmt + vet + lint + test before every commit.
 # Install: make hooks
 
 set -e
@@ -16,6 +16,10 @@ echo "  OK"
 
 echo "=== go vet ==="
 go vet ./...
+echo "  OK"
+
+echo "=== golangci-lint ==="
+golangci-lint run ./...
 echo "  OK"
 
 echo "=== go test ==="

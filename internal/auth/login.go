@@ -102,7 +102,7 @@ func Login(username, password string) (*LoginResult, error) {
 	if _, verifyErr := GetCurrentUser(); verifyErr != nil {
 		// Clean up the bad token
 		_ = DeleteToken()
-		return nil, fmt.Errorf("login failed: credentials not accepted by API (%v)", verifyErr)
+		return nil, fmt.Errorf("login failed: credentials not accepted by API (%w)", verifyErr)
 	}
 
 	return &result, nil

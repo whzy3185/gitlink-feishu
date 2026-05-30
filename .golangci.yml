@@ -1,0 +1,56 @@
+version: "2"
+
+linters:
+  default: none
+
+  enable:
+    # Core: catch real bugs
+    - errcheck       # unchecked errors
+    - govet          # suspicious constructs
+    - ineffassign    # wasted assignments
+    - staticcheck    # comprehensive bug detection
+    - unused         # dead code
+
+    # Error handling
+    - errorlint      # errors.As / %w best practices
+
+    # Security
+    - gosec          # security issues
+
+    # Typos
+    - misspell       # spelling mistakes in identifiers
+
+  settings:
+    gosec:
+      excludes:
+        - G104  # errcheck already handles unchecked errors
+        - G304  # file inclusion by variable is expected for CLI tools
+
+  exclusions:
+    paths:
+      - vendor/
+      - npm/
+      - skills/
+      - docs/
+    rules:
+      # Idiomatic Go: defer Close() error is intentionally ignored
+      - linters: [errcheck]
+        text: "Error return value of .*(resp\\.Body\\.Close|file\\.Close).*is not checked"
+      # Output formatting: fmt.Fprint* errors are low-value
+      - linters: [errcheck]
+        text: "Error return value of `fmt\\.Fprintf?"
+      # Test helpers: FlagSet.Set is setup code
+      - linters: [errcheck]
+        text: "Error return value of .*FlagSet.*\\.Set"
+      # Best-effort output rendering
+      - linters: [errcheck]
+        path: render\.go$
+      # errorlint: type assertions are fine in tests
+      - linters: [errorlint]
+        path: _test\.go$
+      # gosec: tests are not attack surface
+      - linters: [gosec]
+        path: _test\.go$
+      # apiInt: intentional uint64->int truncation for API response parsing
+      - linters: [gosec]
+        text: "G115: integer overflow conversion uint64 -> int"

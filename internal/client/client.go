@@ -56,7 +56,7 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		path += ".json"
 	}
 	fullURL := c.BaseURL + path
-	if query != nil && len(query) > 0 {
+	if len(query) > 0 {
 		sep := "?"
 		if strings.Contains(fullURL, "?") {
 			sep = "&"

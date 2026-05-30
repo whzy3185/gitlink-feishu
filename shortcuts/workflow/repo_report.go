@@ -264,7 +264,7 @@ func computeRepoReportScore(baseScore int, hasHealth bool, issueSummary RepoIssu
 	if issueSummary.Total == 0 && prSummary.Total == 0 && !hasHealth {
 		score = 50
 	}
-	return clampInt(score, 0, 100)
+	return clampInt(score, 100)
 }
 
 func hasSecurityP0(results []TriageResult) bool {

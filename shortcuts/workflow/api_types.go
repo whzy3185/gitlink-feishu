@@ -59,7 +59,7 @@ func normalizeAPIData(data interface{}) (interface{}, error) {
 			return nil, nil
 		}
 		var decoded interface{}
-		if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
+		if json.Unmarshal([]byte(trimmed), &decoded) != nil {
 			return v, nil
 		}
 		return decoded, nil
@@ -133,6 +133,8 @@ func apiString(v interface{}) string {
 	switch value := v.(type) {
 	case string:
 		return value
+	case json.Number:
+		return value.String()
 	case fmt.Stringer:
 		return value.String()
 	case float64:
@@ -149,8 +151,6 @@ func apiString(v interface{}) string {
 		return strconv.FormatUint(value, 10)
 	case uint32:
 		return strconv.FormatUint(uint64(value), 10)
-	case json.Number:
-		return value.String()
 	case bool:
 		return strconv.FormatBool(value)
 	default:
