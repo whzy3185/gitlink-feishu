@@ -93,13 +93,14 @@ func Shortcuts() []*common.Shortcut {
 			Name:        "view",
 			Description: "View issue details",
 			Flags: []common.Flag{
-				{Name: "number", Short: "n", Usage: "Issue number (as shown in the web URL)", Required: true},
+				{Name: "number", Short: "n", Usage: "Issue number (as shown in the web URL)"},
+				{Name: "id", Usage: "Alias for --number; uses the issue number from the web URL"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				number, err := ctx.RequireArg("number")
+				number, err := issueNumberArg(ctx)
 				if err != nil {
 					return err
 				}
@@ -330,4 +331,14 @@ func normalizeIssueStatus(state string) (interface{}, error) {
 		}
 		return nil, fmt.Errorf("invalid --state %q: use open, closed, or a numeric status_id", state)
 	}
+}
+
+func issueNumberArg(ctx *common.RuntimeContext) (string, error) {
+	if number := strings.TrimSpace(ctx.Arg("number")); number != "" {
+		return number, nil
+	}
+	if id := strings.TrimSpace(ctx.Arg("id")); id != "" {
+		return id, nil
+	}
+	return "", fmt.Errorf("required flag --number (or --id alias) not set")
 }

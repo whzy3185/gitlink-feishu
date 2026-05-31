@@ -153,6 +153,28 @@ func TestIssueViewMissingNumber(t *testing.T) {
 	}
 }
 
+func TestIssueViewAcceptsIDAsNumberAlias(t *testing.T) {
+	var requestedPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedPath = r.URL.Path
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/29.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(w, map[string]interface{}{
+			"project_issues_index": 29,
+			"subject":              "Issue from web URL",
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "view", map[string]string{"id": "29"})
+	if err != nil {
+		t.Fatalf("view shortcut failed: %v", err)
+	}
+
+	assertEqual(t, requestedPath, "/v1/owner/repo/issues/29.json")
+}
+
 // --- close ---
 
 func TestIssueClose(t *testing.T) {
