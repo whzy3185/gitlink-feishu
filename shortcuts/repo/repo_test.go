@@ -179,13 +179,13 @@ func TestRepoCreate(t *testing.T) {
 func TestRepoCreateWithOptions(t *testing.T) {
 	var body map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/users/me.json":
+		switch r.URL.Path {
+		case "/users/me.json":
 			writeJSON(w, map[string]interface{}{
 				"login":   "creator",
 				"user_id": float64(42),
 			})
-		case r.URL.Path == "/creator/my-repo.json":
+		case "/creator/my-repo.json":
 			json.NewDecoder(r.Body).Decode(&body)
 			writeJSON(w, map[string]interface{}{"name": "my-repo"})
 		default:

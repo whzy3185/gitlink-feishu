@@ -8,23 +8,23 @@ on:
 
 jobs:
   check:
-    name: Build, Test, Vet
+    name: Build, Lint, Test
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: Build
         run: go build ./...
 
-      - name: Test
-        run: go test -race ./...
+      - name: Lint
+        run: make lint
 
-      - name: Vet
-        run: go vet ./...
+      - name: Test
+        run: make test
 
       - name: Check formatting
-        run: |
-          unformatted=$(gofmt -s -l .)
-          if [ -n "$unformatted" ]; then
-            echo "Files not formatted:"
-            echo "$unformatted"
-            exit 1
-          fi
+        run: make fmt

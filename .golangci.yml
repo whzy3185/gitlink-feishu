@@ -45,6 +45,9 @@ linters:
       # Best-effort output rendering
       - linters: [errcheck]
         path: render\.go$
+      # errcheck: test helpers intentionally ignore return values
+      - linters: [errcheck]
+        path: _test\.go$
       # errorlint: type assertions are fine in tests
       - linters: [errorlint]
         path: _test\.go$
