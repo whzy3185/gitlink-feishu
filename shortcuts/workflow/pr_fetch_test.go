@@ -214,3 +214,112 @@ func TestFetchPRSummaryInputRespectsLimits(t *testing.T) {
 		t.Fatalf("files/commits lengths = %d/%d, want 1/1", len(input.ChangedFiles), len(input.Commits))
 	}
 }
+
+func TestPrAPIObjectRecursiveUnwrap(t *testing.T) {
+	got := prAPIObject(map[string]interface{}{
+		"data": map[string]interface{}{"number": float64(1), "title": "test"},
+	})
+	if got == nil || got["number"] != float64(1) {
+		t.Fatalf("recursive unwrap via data: got %v", got)
+	}
+
+	got = prAPIObject(map[string]interface{}{
+		"pull_request": map[string]interface{}{"number": float64(2)},
+	})
+	if got == nil || got["number"] != float64(2) {
+		t.Fatalf("recursive unwrap via pull_request: got %v", got)
+	}
+
+	got = prAPIObject(map[string]interface{}{
+		"pr": map[string]interface{}{"number": float64(3)},
+	})
+	if got == nil || got["number"] != float64(3) {
+		t.Fatalf("recursive unwrap via pr: got %v", got)
+	}
+}
+
+func TestPrAPIObjectSlicePaths(t *testing.T) {
+	got := prAPIObject([]interface{}{
+		map[string]interface{}{"number": float64(42), "title": "single"},
+	})
+	if got == nil || got["number"] != float64(42) {
+		t.Fatalf("single-element slice: got %v", got)
+	}
+
+	if got := prAPIObject([]interface{}{}); got != nil {
+		t.Fatalf("empty slice: expected nil, got %v", got)
+	}
+	if got := prAPIObject([]interface{}{map[string]interface{}{"a": "b"}, map[string]interface{}{"c": "d"}}); got != nil {
+		t.Fatalf("multi-element slice: expected nil, got %v", got)
+	}
+	if got := prAPIObject([]interface{}{"not-a-map"}); got != nil {
+		t.Fatalf("non-map element: expected nil, got %v", got)
+	}
+}
+
+func TestPrAPIObjectNonMapNonSlice(t *testing.T) {
+	if got := prAPIObject(42); got != nil {
+		t.Fatalf("int: expected nil, got %v", got)
+	}
+	if got := prAPIObject("plain string"); got != nil {
+		t.Fatalf("string: expected nil, got %v", got)
+	}
+}
+
+func TestPrBranchStringMapKeys(t *testing.T) {
+	got := prBranchString(map[string]interface{}{"ref": "refs/heads/main", "branch": "main"})
+	if got != "refs/heads/main" {
+		t.Fatalf("ref key: got %q, want refs/heads/main", got)
+	}
+
+	got = prBranchString(map[string]interface{}{"name": "feature-branch"})
+	if got != "feature-branch" {
+		t.Fatalf("name key: got %q, want feature-branch", got)
+	}
+
+	got = prBranchString(map[string]interface{}{"branch": "dev"})
+	if got != "dev" {
+		t.Fatalf("branch key: got %q, want dev", got)
+	}
+
+	got = prBranchString(map[string]interface{}{"title": "My Title"})
+	if got != "My Title" {
+		t.Fatalf("title key: got %q, want My Title", got)
+	}
+
+	got = prBranchString(map[string]interface{}{"other": "value"})
+	if got != "" {
+		t.Fatalf("no matching keys: got %q, want empty", got)
+	}
+
+	got = prBranchString(map[string]interface{}{})
+	if got != "" {
+		t.Fatalf("empty map: got %q, want empty", got)
+	}
+}
+
+func TestPrBranchStringNonMap(t *testing.T) {
+	if got := prBranchString("direct-string"); got != "direct-string" {
+		t.Fatalf("string: got %q, want direct-string", got)
+	}
+	if got := prBranchString(42); got != "42" {
+		t.Fatalf("int: got %q, want 42", got)
+	}
+	if got := prBranchString(true); got != "true" {
+		t.Fatalf("bool: got %q, want true", got)
+	}
+	if got := prBranchString(nil); got != "" {
+		t.Fatalf("nil: got %q, want empty", got)
+	}
+}
+
+func TestPrAPIObjectDoubleWrap(t *testing.T) {
+	got := prAPIObject(map[string]interface{}{
+		"data": map[string]interface{}{
+			"pull_request": map[string]interface{}{"id": float64(99), "title": "nested"},
+		},
+	})
+	if got == nil || got["id"] != float64(99) {
+		t.Fatalf("double wrap: got %v", got)
+	}
+}

@@ -284,3 +284,123 @@ func TestReadPRSummaryInput(t *testing.T) {
 		t.Fatalf("got = %+v, want input fields", got)
 	}
 }
+
+func TestReadPRSummaryInputMissingFile(t *testing.T) {
+	_, err := readPRSummaryInput("/nonexistent/pr_summary.json")
+	if err == nil {
+		t.Fatal("expected error for missing file")
+	}
+}
+
+func TestReadPRSummaryInputBadJSON(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bad.json")
+	if err := os.WriteFile(path, []byte("{invalid json}"), 0600); err != nil {
+		t.Fatalf("os.WriteFile error: %v", err)
+	}
+	_, err := readPRSummaryInput(path)
+	if err == nil {
+		t.Fatal("expected error for bad JSON")
+	}
+}
+
+func TestReadPRSummaryInputEmpty(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "empty.json")
+	if err := os.WriteFile(path, []byte("{}"), 0600); err != nil {
+		t.Fatalf("os.WriteFile error: %v", err)
+	}
+	_, err := readPRSummaryInput(path)
+	if err == nil {
+		t.Fatal("expected error for empty input (no title, no number)")
+	}
+}
+
+func TestPrFocusText(t *testing.T) {
+	tests := []struct {
+		lang, key, want string
+	}{
+		{"en", "shortcuts", "Check shortcut command compatibility and flag behavior."},
+		{"zh-CN", "shortcuts", "检查 shortcuts 命令兼容性和参数行为。"},
+		{"en", "registration", "Confirm command registration and shortcut mounting compatibility."},
+		{"zh-CN", "registration", "确认命令注册和 shortcut 挂载兼容。"},
+		{"en", "client", "Check API error handling and response normalization."},
+		{"zh-CN", "client", "检查 API 错误处理和响应归一化。"},
+		{"en", "output", "Check output format compatibility and stability."},
+		{"zh-CN", "output", "检查输出格式兼容性和稳定性。"},
+		{"en", "auth", "Check credential handling and security boundaries."},
+		{"zh-CN", "auth", "检查凭据处理和安全边界。"},
+		{"en", "docs", "Check that documentation examples match implementation."},
+		{"zh-CN", "docs", "检查文档示例是否与实现一致。"},
+		{"en", "tests", "Check that tests reflect behavior and failure paths."},
+		{"zh-CN", "tests", "检查测试是否真实覆盖行为和失败路径。"},
+		{"en", "api", "Check fetch/API failure fallback and normalization."},
+		{"zh-CN", "api", "检查 fetch/API 失败时的降级和归一化。"},
+		{"en", "security", "Confirm no credential leakage or unsafe remote write operation."},
+		{"zh-CN", "security", "确认没有凭据泄露或不安全的远端写操作。"},
+		{"en", "unknown_key", "unknown_key"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.lang+"/"+tt.key, func(t *testing.T) {
+			if got := prFocusText(tt.lang, tt.key); got != tt.want {
+				t.Fatalf("prFocusText(%q, %q) = %q, want %q", tt.lang, tt.key, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPrTestText(t *testing.T) {
+	tests := []struct {
+		lang, key, want string
+	}{
+		{"en", "go_all", "Run `go test ./...`."},
+		{"zh-CN", "go_all", "运行 `go test ./...`。"},
+		{"en", "workflow", "Run `go test ./shortcuts/workflow`."},
+		{"zh-CN", "workflow", "运行 `go test ./shortcuts/workflow`。"},
+		{"en", "docs", "Manually check README and documentation examples."},
+		{"zh-CN", "docs", "手动检查 README 和文档示例命令。"},
+		{"en", "fetch", "Run httptest mocks and a read-only remote smoke check if needed."},
+		{"zh-CN", "fetch", "运行 httptest mock，必要时执行只读远端 smoke。"},
+		{"en", "render", "Verify json/table/markdown output structures."},
+		{"zh-CN", "render", "验证 json/table/markdown 输出结构。"},
+		{"en", "unknown", "unknown"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.lang+"/"+tt.key, func(t *testing.T) {
+			if got := prTestText(tt.lang, tt.key); got != tt.want {
+				t.Fatalf("prTestText(%q, %q) = %q, want %q", tt.lang, tt.key, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPrChecklistText(t *testing.T) {
+	tests := []struct {
+		lang, key, want string
+	}{
+		{"en", "tests", "Tests pass."},
+		{"zh-CN", "tests", "测试通过。"},
+		{"en", "readme", "README updated if command behavior changed."},
+		{"zh-CN", "readme", "命令行为变化已更新 README。"},
+		{"en", "no_write", "No remote write operation introduced."},
+		{"zh-CN", "no_write", "未引入远端写操作。"},
+		{"en", "json_stable", "JSON output remains stable."},
+		{"zh-CN", "json_stable", "JSON 输出字段保持稳定。"},
+		{"en", "errors", "Error handling is covered."},
+		{"zh-CN", "errors", "错误处理已覆盖。"},
+		{"en", "credentials", "Confirm no credential leakage."},
+		{"zh-CN", "credentials", "确认没有凭据泄露。"},
+		{"en", "api_fallback", "Verify API failure fallback."},
+		{"zh-CN", "api_fallback", "验证 API 失败时的降级路径。"},
+		{"en", "registration", "Confirm command registration compatibility."},
+		{"zh-CN", "registration", "确认命令注册兼容。"},
+		{"en", "contract", "Review output contract for Agent consumers."},
+		{"zh-CN", "contract", "复核 Agent 消费的输出协议。"},
+		{"en", "unknown", "unknown"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.lang+"/"+tt.key, func(t *testing.T) {
+			if got := prChecklistText(tt.lang, tt.key); got != tt.want {
+				t.Fatalf("prChecklistText(%q, %q) = %q, want %q", tt.lang, tt.key, got, tt.want)
+			}
+		})
+	}
+}

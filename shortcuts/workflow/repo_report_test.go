@@ -2,8 +2,12 @@ package workflow
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/gitlink-org/gitlink-cli/internal/client"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
 func TestAnalyzeRepoReportAggregatesHealthIssuesAndPRs(t *testing.T) {
@@ -137,6 +141,134 @@ func TestReadRepoReportInput(t *testing.T) {
 	}
 	if input.Repository == "" || len(input.Issues) == 0 || len(input.PullRequests) == 0 {
 		t.Fatalf("input = %+v, want populated fixture", input)
+	}
+}
+
+func TestRunRepoReportFromFile(t *testing.T) {
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{HTTP: http.DefaultClient, BaseURL: "http://localhost"},
+		Args: map[string]string{
+			"from": "testdata/repo_report.json",
+			"lang": "en",
+		},
+		Format: "json",
+	}
+	err := runRepoReport(ctx)
+	if err != nil {
+		t.Fatalf("runRepoReport error: %v", err)
+	}
+}
+
+func TestRunRepoReportFromFileMarkdown(t *testing.T) {
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{HTTP: http.DefaultClient, BaseURL: "http://localhost"},
+		Args: map[string]string{
+			"from": "testdata/repo_report.json",
+			"lang": "en",
+		},
+		Format: "markdown",
+	}
+	err := runRepoReport(ctx)
+	if err != nil {
+		t.Fatalf("runRepoReport error: %v", err)
+	}
+}
+
+func TestRunRepoReportFromFileChinese(t *testing.T) {
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{HTTP: http.DefaultClient, BaseURL: "http://localhost"},
+		Args: map[string]string{
+			"from": "testdata/repo_report.json",
+			"lang": "zh-CN",
+		},
+		Format: "markdown",
+	}
+	err := runRepoReport(ctx)
+	if err != nil {
+		t.Fatalf("runRepoReport error: %v", err)
+	}
+}
+
+func TestRunRepoReportMissingFile(t *testing.T) {
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{HTTP: http.DefaultClient, BaseURL: "http://localhost"},
+		Args: map[string]string{
+			"from": "testdata/does_not_exist.json",
+		},
+	}
+	err := runRepoReport(ctx)
+	if err == nil {
+		t.Fatal("expected error for missing file")
+	}
+}
+
+func TestRunRepoReportBadJSON(t *testing.T) {
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{HTTP: http.DefaultClient, BaseURL: "http://localhost"},
+		Args: map[string]string{
+			"from": "testdata/../workflow_test.go",
+		},
+	}
+	err := runRepoReport(ctx)
+	if err == nil {
+		t.Fatal("expected error for non-JSON file")
+	}
+}
+
+func TestCollectRepoReportInputWithFlags(t *testing.T) {
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{HTTP: http.DefaultClient, BaseURL: "http://localhost"},
+		Args: map[string]string{
+			"issue-limit":    "5",
+			"pr-limit":       "3",
+			"stale-days":     "14",
+			"include-issues": "false",
+			"include-prs":    "true",
+			"include-health": "false",
+			"lang":           "en",
+		},
+		Owner: "owner",
+		Repo:  "repo",
+	}
+	// This will try to make HTTP calls; verify it fails cleanly (no panic)
+	_, _, err := collectRepoReportInput(ctx)
+	if err != nil {
+		t.Logf("expected network error: %v", err)
+	}
+}
+
+func TestRepoReportText(t *testing.T) {
+	keys := []string{
+		"title", "overview", "health", "issues", "prs", "recommendations",
+		"reasoning", "not_available", "health_missing", "critical_signal",
+		"rec_security_issues", "rec_missing_info", "rec_high_risk_prs",
+		"rec_health", "rec_maintain_report", "rec_review_report",
+	}
+	for _, lang := range []string{"en", "zh-CN"} {
+		for _, key := range keys {
+			got := repoReportText(lang, key)
+			if got == "" {
+				t.Fatalf("repoReportText(%q, %q) returned empty", lang, key)
+			}
+			if got == key {
+				t.Logf("repoReportText(%q, %q) returned key itself: %q", lang, key, got)
+			}
+		}
+	}
+	// Default case: unknown key returns the key itself
+	if got := repoReportText("en", "nonexistent_key"); got != "nonexistent_key" {
+		t.Fatalf("default case: got %q, want nonexistent_key", got)
+	}
+}
+
+func TestRepoReportTextChineseDistinct(t *testing.T) {
+	// Verify Chinese text is actually different from English
+	for _, key := range []string{"title", "health", "issues", "prs", "recommendations", "not_available"} {
+		en := repoReportText("en", key)
+		zh := repoReportText("zh-CN", key)
+		if en == zh {
+			t.Fatalf("repoReportText: key %q has same text for en and zh-CN: %q", key, en)
+		}
 	}
 }
 

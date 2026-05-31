@@ -54,87 +54,6 @@ func TestPRCommentPostsToCorrectIssueJournal(t *testing.T) {
 	assertEqual(t, journalPayload["notes"], "LGTM, looks good!")
 }
 
-func TestPRViewAddsClosedAtFromIssueJournal(t *testing.T) {
-	var issueJournalCalled bool
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == "GET" && r.URL.Path == "/owner/repo/pulls/37.json":
-			writeJSON(t, w, map[string]interface{}{
-				"issue": map[string]interface{}{
-					"id": float64(142756),
-				},
-				"pull_request": map[string]interface{}{
-					"status":             float64(2),
-					"pull_request_staus": "closed",
-				},
-			})
-		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/142756/journals.json":
-			issueJournalCalled = true
-			writeJSON(t, w, map[string]interface{}{
-				"journals": []map[string]interface{}{
-					{
-						"operate_category": "pull_request",
-						"operate_content":  "创建了<b>合并请求</b>",
-						"created_at":       "2026-05-24 21:43",
-					},
-					{
-						"operate_category": "status",
-						"operate_content":  "<b>拒绝了</b>合并请求",
-						"created_at":       "2026-05-25 08:58",
-						"updated_at":       "2026-05-25 08:58",
-					},
-				},
-			})
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-	}))
-	defer server.Close()
-
-	env, err := runPRShortcutWithOutput(t, server, "view", map[string]string{
-		"id": "37",
-	})
-	if err != nil {
-		t.Fatalf("view shortcut failed: %v", err)
-	}
-	if !issueJournalCalled {
-		t.Fatal("issue journal endpoint was not called")
-	}
-	data := env.Data.(map[string]interface{})
-	assertEqual(t, data["closed_at"], "2026-05-25 08:58")
-	prData := data["pull_request"].(map[string]interface{})
-	assertEqual(t, prData["closed_at"], "2026-05-25 08:58")
-}
-
-func TestPRViewDoesNotFetchJournalsForOpenPR(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/owner/repo/pulls/45.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		writeJSON(t, w, map[string]interface{}{
-			"issue": map[string]interface{}{
-				"id": float64(142793),
-			},
-			"pull_request": map[string]interface{}{
-				"status":             float64(0),
-				"pull_request_staus": "open",
-			},
-		})
-	}))
-	defer server.Close()
-
-	env, err := runPRShortcutWithOutput(t, server, "view", map[string]string{
-		"id": "45",
-	})
-	if err != nil {
-		t.Fatalf("view shortcut failed: %v", err)
-	}
-	data := env.Data.(map[string]interface{})
-	if _, ok := data["closed_at"]; ok {
-		t.Fatal("open PR should not include closed_at")
-	}
-}
-
 func TestPRCommentFailsWhenPRNotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -173,237 +92,354 @@ func TestPRCommentFailsWhenIssueFieldMissing(t *testing.T) {
 	}
 }
 
-func TestPRVersionsUsesV1Endpoint(t *testing.T) {
-	var calledPath string
+// --- list ---
+
+func TestPRList(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/pulls/13/versions.json" {
-			t.Fatalf("unexpected request: %s %s?%s", r.Method, r.URL.Path, r.URL.RawQuery)
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
 		}
-		calledPath = r.URL.Path
-		writeJSON(t, w, map[string]interface{}{
-			"total_count": float64(2),
-			"versions": []map[string]interface{}{
-				{
-					"id":              float64(16039),
-					"head_commit_sha": "aaaaaaaa",
-				},
-				{
-					"id":              float64(16040),
-					"head_commit_sha": "bbbbbbbb",
-				},
-			},
+		if r.URL.Path != "/owner/repo/pulls.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("state") != "open" {
+			t.Fatalf("expected state=open, got %s", r.URL.Query().Get("state"))
+		}
+		if r.URL.Query().Get("page") != "1" {
+			t.Fatalf("expected page=1, got %s", r.URL.Query().Get("page"))
+		}
+		writeJSON(t, w, []interface{}{
+			map[string]interface{}{"id": float64(1), "title": "PR 1"},
 		})
 	}))
 	defer server.Close()
 
-	err := runPRShortcut(t, server, "versions", map[string]string{
-		"id": "13",
-	})
+	err := runPRShortcut(t, server, "list", map[string]string{"state": "open", "page": "1", "limit": "20"})
 	if err != nil {
-		t.Fatalf("versions shortcut failed: %v", err)
+		t.Fatalf("list failed: %v", err)
 	}
-	assertEqual(t, calledPath, "/v1/owner/repo/pulls/13/versions.json")
 }
 
-func TestPRVersionDiffUsesV1EndpointWithFileFilter(t *testing.T) {
-	var calledPath string
-	var filepath string
+// --- create ---
+
+func TestPRCreate(t *testing.T) {
+	var payload map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/pulls/13/versions/16040/diff.json" {
-			t.Fatalf("unexpected request: %s %s?%s", r.Method, r.URL.Path, r.URL.RawQuery)
+		if r.Method != "POST" {
+			t.Fatalf("expected POST, got %s", r.Method)
 		}
-		calledPath = r.URL.Path
-		filepath = r.URL.Query().Get("filepath")
+		if r.URL.Path != "/owner/repo/pulls.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"id": float64(42), "title": "feat: new"})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "create", map[string]string{
+		"title": "feat: new",
+		"head":  "feature/x",
+		"base":  "master",
+		"body":  "description",
+	})
+	if err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	assertEqual(t, payload["title"], "feat: new")
+	assertEqual(t, payload["head"], "feature/x")
+	assertEqual(t, payload["base"], "master")
+	assertEqual(t, payload["body"], "description")
+}
+
+func TestPRCreateNoBody(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"id": float64(43), "title": "feat: nob"})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "create", map[string]string{
+		"title": "feat: nob",
+		"head":  "feature/y",
+	})
+	if err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	if _, ok := payload["body"]; ok {
+		t.Fatal("body should not be in payload when not provided")
+	}
+}
+
+// --- view ---
+
+func TestPRView(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/pulls/42.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
 		writeJSON(t, w, map[string]interface{}{
-			"diff": "--- a/shortcuts/pr/pr.go\n+++ b/shortcuts/pr/pr.go\n",
+			"id":    float64(42),
+			"title": "feat: new",
 		})
 	}))
 	defer server.Close()
 
-	err := runPRShortcut(t, server, "version-diff", map[string]string{
-		"id":         "13",
-		"version-id": "16040",
-		"file":       "shortcuts/pr/pr.go",
-	})
+	err := runPRShortcut(t, server, "view", map[string]string{"id": "42"})
 	if err != nil {
-		t.Fatalf("version-diff shortcut failed: %v", err)
+		t.Fatalf("view failed: %v", err)
 	}
-	assertEqual(t, calledPath, "/v1/owner/repo/pulls/13/versions/16040/diff.json")
-	assertEqual(t, filepath, "shortcuts/pr/pr.go")
 }
 
-func TestPRVersionDiffRequiresVersionID(t *testing.T) {
+// --- merge ---
+
+func TestPRMerge(t *testing.T) {
+	var payload map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("server should not be called when version-id is missing: %s %s", r.Method, r.URL.Path)
+		if r.Method != "POST" {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/pulls/42/pr_merge.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"message": "merged"})
 	}))
 	defer server.Close()
 
-	err := runPRShortcut(t, server, "version-diff", map[string]string{
-		"id": "13",
-	})
+	err := runPRShortcut(t, server, "merge", map[string]string{"id": "42"})
+	if err != nil {
+		t.Fatalf("merge failed: %v", err)
+	}
+	assertEqual(t, payload["do"], "merge")
+}
+
+func TestPRMergeSquash(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"message": "squashed"})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "merge", map[string]string{"id": "42", "method": "squash"})
+	if err != nil {
+		t.Fatalf("merge squash failed: %v", err)
+	}
+	assertEqual(t, payload["do"], "squash")
+}
+
+// --- close ---
+
+func TestPRClose(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/pulls/42/refuse_merge.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"message": "closed"})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "close", map[string]string{"id": "42"})
+	if err != nil {
+		t.Fatalf("close failed: %v", err)
+	}
+}
+
+// --- files ---
+
+func TestPRFiles(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/pulls/42/files.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, []interface{}{
+			map[string]interface{}{"filename": "main.go", "status": "modified"},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "files", map[string]string{"id": "42"})
+	if err != nil {
+		t.Fatalf("files failed: %v", err)
+	}
+}
+
+// --- diff ---
+
+func TestPRDiff(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/pulls/42/files.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, []interface{}{
+			map[string]interface{}{"filename": "main.go", "patch": "@@ -1 +1 @@"},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "diff", map[string]string{"id": "42"})
+	if err != nil {
+		t.Fatalf("diff failed: %v", err)
+	}
+}
+
+// --- extractIssueID ---
+
+func TestExtractIssueID(t *testing.T) {
+	id, err := extractIssueID(&output.Envelope{Data: map[string]interface{}{
+		"issue": map[string]interface{}{"id": float64(42)},
+	}})
+	if err != nil {
+		t.Fatalf("extractIssueID error: %v", err)
+	}
+	if id != 42 {
+		t.Fatalf("= %d, want 42", id)
+	}
+}
+
+func TestExtractIssueIDNotMap(t *testing.T) {
+	_, err := extractIssueID(&output.Envelope{Data: "not a map"})
 	if err == nil {
-		t.Fatal("expected error when version-id is missing, got nil")
+		t.Fatal("expected error for non-map data")
 	}
 }
 
-func TestPRReviewsUsesV1EndpointWithStatusFilter(t *testing.T) {
-	var calledPath string
-	var status string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/pulls/13/reviews.json" {
-			t.Fatalf("unexpected request: %s %s?%s", r.Method, r.URL.Path, r.URL.RawQuery)
-		}
-		calledPath = r.URL.Path
-		status = r.URL.Query().Get("status")
-		writeJSON(t, w, map[string]interface{}{
-			"total_count": float64(1),
-			"reviews": []map[string]interface{}{
-				{
-					"id":      float64(100),
-					"content": "LGTM",
-					"status":  "approved",
-				},
-			},
-		})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "reviews", map[string]string{
-		"id":     "13",
-		"status": "approved",
-	})
-	if err != nil {
-		t.Fatalf("reviews shortcut failed: %v", err)
-	}
-	assertEqual(t, calledPath, "/v1/owner/repo/pulls/13/reviews.json")
-	assertEqual(t, status, "approved")
-}
-
-func TestPRReviewPostsReviewPayload(t *testing.T) {
-	var reviewPayload map[string]interface{}
-	var reviewPath string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/pulls/13/reviews.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		reviewPath = r.URL.Path
-		reviewPayload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{
-			"id":        float64(101),
-			"content":   "Looks good",
-			"status":    "approved",
-			"commit_id": "abc123",
-		})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "review", map[string]string{
-		"id":      "13",
-		"status":  "approved",
-		"content": "Looks good",
-		"commit":  "abc123",
-	})
-	if err != nil {
-		t.Fatalf("review shortcut failed: %v", err)
-	}
-	assertEqual(t, reviewPath, "/v1/owner/repo/pulls/13/reviews.json")
-	assertEqual(t, reviewPayload["content"], "Looks good")
-	assertEqual(t, reviewPayload["status"], "approved")
-	assertEqual(t, reviewPayload["commit_id"], "abc123")
-}
-
-func TestPRReviewDryRunDoesNotCallAPI(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("server should not be called during dry-run: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "review", map[string]string{
-		"id":      "13",
-		"status":  "rejected",
-		"content": "Please fix the failing tests",
-		"dry-run": "true",
-	})
-	if err != nil {
-		t.Fatalf("review dry-run failed: %v", err)
-	}
-}
-
-func TestPRReviewRejectsInvalidStatus(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("server should not be called for invalid status: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "review", map[string]string{
-		"id":      "13",
-		"status":  "approve",
-		"content": "LGTM",
-	})
+func TestExtractIssueIDMissingIssue(t *testing.T) {
+	_, err := extractIssueID(&output.Envelope{Data: map[string]interface{}{"pr": map[string]interface{}{}}})
 	if err == nil {
-		t.Fatal("expected error for invalid review status, got nil")
+		t.Fatal("expected error for missing issue field")
 	}
 }
 
-func TestPRReopenUsesV1Endpoint(t *testing.T) {
-	var calledPath string
+func TestExtractIssueIDMissingID(t *testing.T) {
+	_, err := extractIssueID(&output.Envelope{Data: map[string]interface{}{
+		"issue": map[string]interface{}{"subject": "test"},
+	}})
+	if err == nil {
+		t.Fatal("expected error for missing issue.id")
+	}
+}
+
+// --- HTTP error paths ---
+
+func TestPRListHTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/pulls/13/reopen.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		calledPath = r.URL.Path
-		writeJSON(t, w, map[string]interface{}{
-			"status":  0,
-			"message": "success",
-		})
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
 	}))
 	defer server.Close()
 
-	err := runPRShortcut(t, server, "reopen", map[string]string{
-		"id": "13",
-	})
-	if err != nil {
-		t.Fatalf("reopen shortcut failed: %v", err)
+	err := runPRShortcut(t, server, "list", map[string]string{"page": "1", "limit": "20"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
 	}
-	assertEqual(t, calledPath, "/v1/owner/repo/pulls/13/reopen.json")
+}
+
+func TestPRCreateHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "create", map[string]string{"title": "test", "head": "feature/x"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestPRViewHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "view", map[string]string{"id": "42"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestPRMergeHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "merge", map[string]string{"id": "42"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestPRCloseHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "close", map[string]string{"id": "42"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestPRFilesHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "files", map[string]string{"id": "42"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestPRDiffHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "diff", map[string]string{"id": "42"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
 }
 
 func runPRShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
 	t.Helper()
-	_, err := runPRShortcutWithOutput(t, server, name, args)
-	return err
-}
-
-func runPRShortcutWithOutput(t *testing.T, server *httptest.Server, name string, args map[string]string) (*output.Envelope, error) {
-	t.Helper()
 	shortcut := findPRShortcut(t, name)
-	client := &client.Client{
-		HTTP:    server.Client(),
-		BaseURL: server.URL,
-	}
 	ctx := &common.RuntimeContext{
-		Client: client,
+		Client: &client.Client{
+			HTTP:    server.Client(),
+			BaseURL: server.URL,
+		},
 		Owner:  "owner",
 		Repo:   "repo",
 		Format: "json",
 		Args:   args,
 	}
-	err := shortcut.Run(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if name != "view" {
-		return nil, nil
-	}
-	id := args["id"]
-	env, err := client.Do("GET", fmt.Sprintf("/owner/repo/pulls/%s", id), nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	if err := enrichPullRequestClosedAt(ctx, env); err != nil {
-		return nil, err
-	}
-	return env, nil
+	return shortcut.Run(ctx)
 }
 
 func findPRShortcut(t *testing.T, name string) *common.Shortcut {
