@@ -12,7 +12,7 @@ import (
 
 func TestNotificationList(t *testing.T) {
 	server := newNotificationTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/users/testuser/messages")
+		assertRequest(t, r, "GET", "/users/testuser/messages.json")
 		writeJSON(t, w, map[string]interface{}{"total_count": 1, "messages": []interface{}{}})
 	})
 	defer server.Close()
@@ -24,7 +24,7 @@ func TestNotificationList(t *testing.T) {
 
 func TestNotificationView(t *testing.T) {
 	server := newNotificationTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/users/testuser/messages/42")
+		assertRequest(t, r, "GET", "/users/testuser/messages/42.json")
 		writeJSON(t, w, map[string]interface{}{"id": 42, "subject": "test notification"})
 	})
 	defer server.Close()
@@ -36,7 +36,7 @@ func TestNotificationView(t *testing.T) {
 
 func TestNotificationRead(t *testing.T) {
 	server := newNotificationTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "PATCH", "/users/testuser/messages/42")
+		assertRequest(t, r, "PATCH", "/users/testuser/messages/42.json")
 		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
 	})
 	defer server.Close()
@@ -48,7 +48,7 @@ func TestNotificationRead(t *testing.T) {
 
 func TestNotificationDelete(t *testing.T) {
 	server := newNotificationTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "DELETE", "/users/testuser/messages/42")
+		assertRequest(t, r, "DELETE", "/users/testuser/messages/42.json")
 		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
 	})
 	defer server.Close()
