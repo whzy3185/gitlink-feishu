@@ -106,7 +106,7 @@ func Shortcuts() []*common.Shortcut {
 }
 
 func labelPath(ctx *common.RuntimeContext) string {
-	return fmt.Sprintf("/v1/%s/%s/labels", ctx.Owner, ctx.Repo)
+	return fmt.Sprintf("/%s/%s/labels", ctx.Owner, ctx.Repo)
 }
 
 func labelItemPath(ctx *common.RuntimeContext, id string) string {
