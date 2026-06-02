@@ -1,0 +1,41 @@
+version: 2
+name: gitlink_cli_ci
+description: "gitlink-cli 代码提交时自动执行 CI 检查（构建、测试、格式化）"
+trigger:
+  webhook: gitlink@1.0.0
+  event:
+    - ref: push
+      ruleset-operator: AND
+global:
+  concurrent: 1
+workflow:
+  - ref: start
+    name: 开始
+    task: start
+  - ref: git_clone_0
+    name: 拉取代码
+    task: git_clone@1.2.9
+    input:
+      remote_url: '"https://gitlink.org.cn/jiangtx/gitlink-cli.git"'
+      ref: '"refs/heads/jtx_branch"'
+      commit_id: '""'
+      depth: 1
+    needs:
+      - start
+  - ref: ssh_cmd_0
+    name: CI 检查
+    task: ssh_cmd@1.1.1
+    input:
+      ssh_pass: ((gitlink_cli_ci.ssh_pass))
+      ssh_ip: '"121.41.212.97"'
+      ssh_port: '"22"'
+      ssh_user: '"root"'
+      ssh_cmd: >-
+        "cd /root && rm -rf gitlink-cli && git clone --depth=1 -b jtx_branch https://gitlink.org.cn/jiangtx/gitlink-cli.git && cd gitlink-cli && export PATH=$PATH:/usr/local/go/bin && export GOPROXY=https://goproxy.cn,direct && go version && go build ./... && go vet ./... && go test -race ./... && output=$(gofmt -s -l .) && if [ -n \"$output\" ]; then echo '格式化检查失败:' && echo \"$output\" && exit 1; fi && echo '所有 CI 检查通过'"
+    needs:
+      - git_clone_0
+  - ref: end
+    name: 结束
+    task: end
+    needs:
+      - ssh_cmd_0
