@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -19,7 +18,7 @@ func Shortcuts() []*common.Shortcut {
 				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
-				login, err := resolveLogin()
+				login, err := resolveLogin(ctx)
 				if err != nil {
 					return err
 				}
@@ -40,7 +39,7 @@ func Shortcuts() []*common.Shortcut {
 				{Name: "id", Short: "i", Usage: "Notification ID", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
-				login, err := resolveLogin()
+				login, err := resolveLogin(ctx)
 				if err != nil {
 					return err
 				}
@@ -62,7 +61,7 @@ func Shortcuts() []*common.Shortcut {
 				{Name: "id", Short: "i", Usage: "Notification ID", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
-				login, err := resolveLogin()
+				login, err := resolveLogin(ctx)
 				if err != nil {
 					return err
 				}
@@ -84,7 +83,7 @@ func Shortcuts() []*common.Shortcut {
 				{Name: "id", Short: "i", Usage: "Notification ID", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
-				login, err := resolveLogin()
+				login, err := resolveLogin(ctx)
 				if err != nil {
 					return err
 				}
@@ -102,11 +101,10 @@ func Shortcuts() []*common.Shortcut {
 	}
 }
 
-// resolveLogin returns the current user login from global flags.
-func resolveLogin() (string, error) {
-	login := cmdutil.Owner
-	if login == "" {
+// resolveLogin returns the user login from the runtime context.
+func resolveLogin(ctx *common.RuntimeContext) (string, error) {
+	if ctx.Owner == "" {
 		return "", fmt.Errorf("provide --owner (your login) or set it via config")
 	}
-	return login, nil
+	return ctx.Owner, nil
 }
