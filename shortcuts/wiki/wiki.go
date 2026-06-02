@@ -1,7 +1,7 @@
 package wiki
 
 import (
-	"net/url"
+	"fmt"
 
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
@@ -12,22 +12,11 @@ func Shortcuts() []*common.Shortcut {
 		{
 			Name:        "list",
 			Description: "List wiki pages",
-			Flags: []common.Flag{
-				{Name: "project-id", Short: "p", Usage: "GitLink project ID (required)", Required: true},
-			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				projectID, err := ctx.RequireArg("project-id")
-				if err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("owner", ctx.Owner)
-				q.Set("repo", ctx.Repo)
-				q.Set("projectId", projectID)
-				env, err := ctx.CallAPIWithQuery("GET", "/api/wiki/wikiPages", q)
+				env, err := ctx.CallAPI("GET", wikiPagesPath(ctx), nil)
 				if err != nil {
 					return err
 				}
@@ -35,4 +24,8 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func wikiPagesPath(ctx *common.RuntimeContext) string {
+	return fmt.Sprintf("/%s/%s/wiki/pages", ctx.Owner, ctx.Repo)
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -13,25 +12,18 @@ import (
 
 func TestWikiList(t *testing.T) {
 	server := newWikiTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/api/wiki/wikiPages.json")
-		assertQuery(t, r, "owner", "owner")
-		assertQuery(t, r, "repo", "repo")
-		assertQuery(t, r, "projectId", "12345")
+		assertRequest(t, r, "GET", "/owner/repo/wiki/pages.json")
 		writeJSON(t, w, map[string]interface{}{
-			"message": "success",
-			"data": map[string]interface{}{
-				"wiki_pages": []interface{}{
-					map[string]interface{}{"title": "Home", "slug": "home"},
-					map[string]interface{}{"title": "Getting Started", "slug": "getting-started"},
-				},
+			"total_count": 2,
+			"wiki_pages": []interface{}{
+				map[string]interface{}{"title": "Home", "slug": "home"},
+				map[string]interface{}{"title": "Getting Started", "slug": "getting-started"},
 			},
 		})
 	})
 	defer server.Close()
 
-	if err := runWikiShortcut(t, server, "list", map[string]string{
-		"project-id": "12345",
-	}); err != nil {
+	if err := runWikiShortcut(t, server, "list", nil); err != nil {
 		t.Fatalf("list shortcut failed: %v", err)
 	}
 }
@@ -44,7 +36,7 @@ func runWikiShortcut(t *testing.T, server *httptest.Server, name string, args ma
 	ctx := &common.RuntimeContext{
 		Client: &client.Client{
 			HTTP:    server.Client(),
-			BaseURL: server.URL + "/api",
+			BaseURL: server.URL,
 		},
 		Owner:  "owner",
 		Repo:   "repo",
@@ -80,14 +72,6 @@ func assertRequest(t *testing.T, r *http.Request, method, path string) {
 	}
 }
 
-func assertQuery(t *testing.T, r *http.Request, key, value string) {
-	t.Helper()
-	got := r.URL.Query().Get(key)
-	if got != value {
-		t.Fatalf("query param %q: got %q, want %q", key, got, value)
-	}
-}
-
 func writeJSON(t *testing.T, w http.ResponseWriter, payload interface{}) {
 	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
@@ -95,21 +79,3 @@ func writeJSON(t *testing.T, w http.ResponseWriter, payload interface{}) {
 		t.Fatalf("failed to write response: %v", err)
 	}
 }
-
-func decodeJSON(t *testing.T, r *http.Request) map[string]interface{} {
-	t.Helper()
-	var m map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
-		t.Fatalf("failed to decode request body: %v", err)
-	}
-	return m
-}
-
-func assertEqual(t *testing.T, got, want interface{}) {
-	t.Helper()
-	if got != want {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-}
-
-var _ = url.Values{} // ensure net/url import is used if needed later
