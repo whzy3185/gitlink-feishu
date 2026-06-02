@@ -12,7 +12,7 @@ import (
 
 func TestLabelList(t *testing.T) {
 	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/v1/owner/repo/labels.json")
+		assertRequest(t, r, "GET", "/owner/repo/labels.json")
 		writeJSON(t, w, []interface{}{})
 	})
 	defer server.Close()
@@ -25,7 +25,7 @@ func TestLabelList(t *testing.T) {
 func TestLabelCreate(t *testing.T) {
 	var payload map[string]interface{}
 	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "POST", "/v1/owner/repo/labels.json")
+		assertRequest(t, r, "POST", "/owner/repo/labels.json")
 		payload = decodeJSON(t, r)
 		writeJSON(t, w, map[string]interface{}{"id": 1})
 	})
@@ -41,7 +41,7 @@ func TestLabelCreate(t *testing.T) {
 func TestLabelUpdate(t *testing.T) {
 	var payload map[string]interface{}
 	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "PATCH", "/v1/owner/repo/labels/3.json")
+		assertRequest(t, r, "PATCH", "/owner/repo/labels/3.json")
 		payload = decodeJSON(t, r)
 		writeJSON(t, w, map[string]interface{}{"id": 3})
 	})
@@ -56,7 +56,7 @@ func TestLabelUpdate(t *testing.T) {
 
 func TestLabelDelete(t *testing.T) {
 	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "DELETE", "/v1/owner/repo/labels/3.json")
+		assertRequest(t, r, "DELETE", "/owner/repo/labels/3.json")
 		writeJSON(t, w, map[string]interface{}{"status": 0})
 	})
 	defer server.Close()
