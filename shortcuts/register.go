@@ -10,6 +10,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/compare"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/issue"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/member"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/notification"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/milestone"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/org"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/pr"
@@ -41,6 +42,7 @@ func RegisterAll(root *cobra.Command) {
 		"workflow": workflow.Shortcuts(),
 		"wiki":     wiki.Shortcuts(),
 		"label":    label.Shortcuts(),
+		"notification": notification.Shortcuts(),
 	}
 
 	descriptions := map[string]string{
@@ -60,6 +62,7 @@ func RegisterAll(root *cobra.Command) {
 		"workflow": "AI agent workflow analysis",
 		"wiki":     "Wiki page operations",
 		"label":    "Label operations",
+		"notification": "Notification operations",
 	}
 
 	for name, shortcuts := range groups {

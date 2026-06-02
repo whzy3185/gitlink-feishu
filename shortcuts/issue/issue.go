@@ -82,6 +82,9 @@ func Shortcuts() []*common.Shortcut {
 				if m := ctx.Arg("milestone"); m != "" {
 					body["fixed_version_id"] = m
 				}
+				if l := ctx.Arg("label"); l != "" {
+					body["label_id"] = l
+				}
 				env, err := ctx.CallAPI("POST", v1RepoPath(ctx)+"/issues", body)
 				if err != nil {
 					return err
