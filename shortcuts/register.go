@@ -17,6 +17,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/search"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/user"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/webhook"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/wiki"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
 )
 
@@ -37,6 +38,7 @@ func RegisterAll(root *cobra.Command) {
 		"compare":  compare.Shortcuts(),
 		"webhook":  webhook.Shortcuts(),
 		"workflow": workflow.Shortcuts(),
+		"wiki":     wiki.Shortcuts(),
 	}
 
 	descriptions := map[string]string{
@@ -54,6 +56,7 @@ func RegisterAll(root *cobra.Command) {
 		"compare":  "Compare branches, tags, or commits",
 		"webhook":  "Webhook operations",
 		"workflow": "AI agent workflow analysis",
+		"wiki":     "Wiki page operations",
 	}
 
 	for name, shortcuts := range groups {
