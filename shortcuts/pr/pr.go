@@ -330,6 +330,20 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
+
+				// Also post a journal comment so the review is visible in the PR conversation.
+				prEnv, journalErr := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
+				if journalErr == nil {
+					if issueID, extractErr := extractIssueID(prEnv); extractErr == nil {
+						statusLabel := map[string]string{
+							"approved": "approved", "rejected": "rejected", "common": "commented",
+						}[status]
+						summary := fmt.Sprintf("## Review: %s\n\n%s", statusLabel, content)
+						ctx.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, issueID),
+							map[string]interface{}{"notes": summary})
+					}
+				}
+
 				return ctx.Output(env)
 			},
 		},
