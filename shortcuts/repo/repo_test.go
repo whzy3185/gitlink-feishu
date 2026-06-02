@@ -300,3 +300,247 @@ func TestRepoCreateUserNoLogin(t *testing.T) {
 		t.Fatal("expected error when user response has no login")
 	}
 }
+
+// --- languages ---
+
+func TestRepoLanguages(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/languages.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(w, map[string]interface{}{
+			"Go":    float64(85.5),
+			"Shell": float64(14.5),
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "languages", nil)
+	if err != nil {
+		t.Fatalf("languages failed: %v", err)
+	}
+}
+
+func TestRepoLanguagesHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "languages", nil)
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+// --- contributors ---
+
+func TestRepoContributors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/contributors.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("page") != "1" {
+			t.Fatalf("expected page=1, got %s", r.URL.Query().Get("page"))
+		}
+		if r.URL.Query().Get("limit") != "20" {
+			t.Fatalf("expected limit=20, got %s", r.URL.Query().Get("limit"))
+		}
+		writeJSON(w, map[string]interface{}{
+			"total_count": float64(1),
+			"data":        []interface{}{map[string]interface{}{"login": "alice", "contributions": float64(42)}},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "contributors", map[string]string{"page": "1", "limit": "20"})
+	if err != nil {
+		t.Fatalf("contributors failed: %v", err)
+	}
+}
+
+func TestRepoContributorsHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "contributors", map[string]string{"page": "1", "limit": "20"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+// --- files ---
+
+func TestRepoFiles(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/files.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(w, []interface{}{
+			map[string]interface{}{"name": "README.md", "type": "file"},
+			map[string]interface{}{"name": "src", "type": "dir"},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "files", nil)
+	if err != nil {
+		t.Fatalf("files failed: %v", err)
+	}
+}
+
+func TestRepoFilesWithRef(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("ref") != "main" {
+			t.Fatalf("expected ref=main, got %s", r.URL.Query().Get("ref"))
+		}
+		if r.URL.Query().Get("filepath") != "src" {
+			t.Fatalf("expected filepath=src, got %s", r.URL.Query().Get("filepath"))
+		}
+		writeJSON(w, []interface{}{})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "files", map[string]string{"ref": "main", "path": "src"})
+	if err != nil {
+		t.Fatalf("files with ref failed: %v", err)
+	}
+}
+
+func TestRepoFilesHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "files", nil)
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+// --- tags ---
+
+func TestRepoTags(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/tags.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("page") != "1" {
+			t.Fatalf("expected page=1, got %s", r.URL.Query().Get("page"))
+		}
+		if r.URL.Query().Get("limit") != "20" {
+			t.Fatalf("expected limit=20, got %s", r.URL.Query().Get("limit"))
+		}
+		writeJSON(w, map[string]interface{}{
+			"total_count": float64(1),
+			"data":        []interface{}{map[string]interface{}{"name": "v1.0.0"}},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "tags", map[string]string{"page": "1", "limit": "20"})
+	if err != nil {
+		t.Fatalf("tags failed: %v", err)
+	}
+}
+
+func TestRepoTagsHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "tags", map[string]string{"page": "1", "limit": "20"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+// --- commits ---
+
+func TestRepoCommits(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/commits.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("page") != "1" {
+			t.Fatalf("expected page=1, got %s", r.URL.Query().Get("page"))
+		}
+		if r.URL.Query().Get("limit") != "20" {
+			t.Fatalf("expected limit=20, got %s", r.URL.Query().Get("limit"))
+		}
+		writeJSON(w, map[string]interface{}{
+			"total_count": float64(1),
+			"data": []interface{}{
+				map[string]interface{}{"sha": "abc123", "message": "initial commit"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "commits", map[string]string{"page": "1", "limit": "20"})
+	if err != nil {
+		t.Fatalf("commits failed: %v", err)
+	}
+}
+
+func TestRepoCommitsWithFilters(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("sha") != "main" {
+			t.Fatalf("expected sha=main, got %s", r.URL.Query().Get("sha"))
+		}
+		if r.URL.Query().Get("path") != "src/main.go" {
+			t.Fatalf("expected path=src/main.go, got %s", r.URL.Query().Get("path"))
+		}
+		writeJSON(w, map[string]interface{}{
+			"total_count": float64(1),
+			"data":        []interface{}{},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "commits", map[string]string{
+		"sha":   "main",
+		"path":  "src/main.go",
+		"page":  "1",
+		"limit": "20",
+	})
+	if err != nil {
+		t.Fatalf("commits with filters failed: %v", err)
+	}
+}
+
+func TestRepoCommitsHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "commits", map[string]string{"page": "1", "limit": "20"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
