@@ -258,8 +258,14 @@ gitlink-cli issue +list --owner Gitlink --repo forgeplus
 # 创建 Issue
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: 登录失败" -b "复现步骤..."
 
+# 创建带元数据的 Issue
+gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: 登录失败" --priority-id 3 --tag-ids 4,5 --assigner-ids 7
+
 # 查看 Issue
 gitlink-cli issue +view --owner Gitlink --repo forgeplus -i 123
+
+# 更新 Issue 元数据
+gitlink-cli issue +update --owner Gitlink --repo forgeplus --number 123 --priority-id 4 --branch bugfix/login --due-date 2026-06-15
 
 # 关闭 Issue
 gitlink-cli issue +close --owner Gitlink --repo forgeplus -i 123
@@ -279,6 +285,10 @@ gitlink-cli issue +assigners --owner Gitlink --repo forgeplus
 # 列出 Issue 发布人
 gitlink-cli issue +authors --owner Gitlink --repo forgeplus
 ```
+
+`issue +view`、`issue +update`、`issue +close` 和 `issue +comment` 推荐使用
+`--number` / `-n` 传网页 URL 中的 Issue 编号。`--id` / `-i` 是同一网页 Issue
+编号的兼容别名，不是数据库内部 ID。
 
 ### 标签管理
 

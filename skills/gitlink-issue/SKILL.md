@@ -79,15 +79,23 @@ gitlink-cli api POST /:owner/:repo/issues/series_update --body '{"ids":[1,2,3],"
 | gitlink-cli 参数 | GitLink API 字段 | 说明 |
 |------------------|-----------------|------|
 | `--number` / `-n` | `project_issues_index` | Issue 编号（网页 URL 中的序号） |
+| `--id` / `-i` | `project_issues_index` | `--number` 的兼容别名，不是数据库内部 ID |
 | `--title` | `subject` | Issue 标题 |
 | `--body` | `description` | Issue 描述 |
 | `--assignee` | `assigned_to_id` | 指派人 ID |
 | `--milestone` | `fixed_version_id` | 里程碑 ID |
 | `--state` | `status_id` | 状态（open=1，closed=5，也可直接传数字 ID） |
+| `--priority-id` | `priority_id` | 优先级 ID |
+| `--tag-ids` / `--label` | `issue_tag_ids` | Issue 标签 ID 数组 |
+| `--assigner-ids` | `assigner_ids` | 负责人 ID 数组 |
+| `--branch` | `branch_name` | 关联分支 |
+| `--start-date` | `start_date` | 开始日期 |
+| `--due-date` | `due_date` | 截止日期 |
 
 ## API 注意事项
 
 - **Issue 编号（`--number`）是网页 URL 中看到的序号**（如 `issues/4` 中的 `4`），不是数据库内部 ID
+- `--id` / `-i` 仅作为 `--number` / `-n` 的兼容别名，传入的仍然是网页 URL 中的 Issue 编号
 - **批量关闭使用 `--numbers`，同样传网页 URL 中的 Issue 编号**，不是数据库内部 ID
 - Issue 操作使用 v1 API（`/api/v1/`），支持按 Issue 编号查询和操作
 - **创建 Issue 时 CLI 会自动设置 `status_id: 1`（新增）和 `priority_id: 2`（正常）**

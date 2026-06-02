@@ -247,8 +247,14 @@ gitlink-cli issue +list --owner Gitlink --repo forgeplus
 # Create an issue
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: Login failed" -b "Steps to reproduce..."
 
+# Create an issue with metadata
+gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: Login failed" --priority-id 3 --tag-ids 4,5 --assigner-ids 7
+
 # View an issue
 gitlink-cli issue +view --owner Gitlink --repo forgeplus -i 123
+
+# Update issue metadata
+gitlink-cli issue +update --owner Gitlink --repo forgeplus --number 123 --priority-id 4 --branch bugfix/login --due-date 2026-06-15
 
 # Close an issue
 gitlink-cli issue +close --owner Gitlink --repo forgeplus -i 123
@@ -268,6 +274,11 @@ gitlink-cli issue +assigners --owner Gitlink --repo forgeplus
 # List issue authors
 gitlink-cli issue +authors --owner Gitlink --repo forgeplus
 ```
+
+`issue +view`, `issue +update`, `issue +close`, and `issue +comment` prefer
+`--number` / `-n` for the issue number shown in the web URL. `--id` / `-i`
+is accepted as a compatibility alias for the same web issue number, not the
+global database ID.
 
 ### Label Management
 

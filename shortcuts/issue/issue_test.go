@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -14,11 +15,17 @@ func runShortcut(t *testing.T, server *httptest.Server, name string, args map[st
 	t.Helper()
 	shortcut := findShortcut(t, name)
 	ctx := &common.RuntimeContext{
-		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+		Client: &client.Client{
+			HTTP:    server.Client(),
+			BaseURL: server.URL,
+		},
 		Owner:  "owner",
 		Repo:   "repo",
 		Format: "json",
 		Args:   args,
+	}
+	if ctx.Args == nil {
+		ctx.Args = map[string]string{}
 	}
 	return shortcut.Run(ctx)
 }
@@ -34,9 +41,25 @@ func findShortcut(t *testing.T, name string) *common.Shortcut {
 	return nil
 }
 
-func writeJSON(w http.ResponseWriter, v interface{}) {
+func newIssueTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(handler)
+}
+
+func writeJSON(t *testing.T, w http.ResponseWriter, v interface{}) {
+	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		t.Fatalf("failed to write response: %v", err)
+	}
+}
+
+func writeText(t *testing.T, w http.ResponseWriter, status int, text string) {
+	t.Helper()
+	w.WriteHeader(status)
+	if _, err := w.Write([]byte(text)); err != nil {
+		t.Fatalf("write response: %v", err)
+	}
 }
 
 func decodeJSON(t *testing.T, r *http.Request) map[string]interface{} {
@@ -55,10 +78,26 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	}
 }
 
+func assertNumberSlice(t *testing.T, got interface{}, want []float64) {
+	t.Helper()
+	values, ok := got.([]interface{})
+	if !ok {
+		t.Fatalf("got %v (%T), want numeric slice", got, got)
+	}
+	if len(values) != len(want) {
+		t.Fatalf("got %v, want %v", values, want)
+	}
+	for i, value := range values {
+		if value != want[i] {
+			t.Fatalf("got %v, want %v", values, want)
+		}
+	}
+}
+
 // --- list ---
 
 func TestIssueList(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			t.Fatalf("expected GET, got %s", r.Method)
 		}
@@ -68,10 +107,10 @@ func TestIssueList(t *testing.T) {
 		if r.URL.Query().Get("state") != "open" {
 			t.Fatalf("expected state=open, got %s", r.URL.Query().Get("state"))
 		}
-		writeJSON(w, []interface{}{
+		writeJSON(t, w, []interface{}{
 			map[string]interface{}{"id": float64(1), "subject": "bug"},
 		})
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "list", map[string]string{"state": "open", "page": "1", "limit": "20"})
@@ -84,7 +123,7 @@ func TestIssueList(t *testing.T) {
 
 func TestIssueCreate(t *testing.T) {
 	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Fatalf("expected POST, got %s", r.Method)
 		}
@@ -92,8 +131,8 @@ func TestIssueCreate(t *testing.T) {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		payload = decodeJSON(t, r)
-		writeJSON(w, map[string]interface{}{"id": float64(1), "subject": "bug"})
-	}))
+		writeJSON(t, w, map[string]interface{}{"id": float64(1), "subject": "bug"})
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "create", map[string]string{
@@ -109,10 +148,45 @@ func TestIssueCreate(t *testing.T) {
 	assertEqual(t, payload["assigned_to_id"], "alice")
 }
 
+func TestIssueCreateSupportsMetadataFields(t *testing.T) {
+	var createPayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/issues.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		createPayload = decodeJSON(t, r)
+		writeJSON(t, w, createPayload)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "create", map[string]string{
+		"title":        "New issue",
+		"body":         "With metadata",
+		"priority-id":  "3",
+		"tag-ids":      "4,5",
+		"assigner-ids": "7,8",
+		"branch":       "feature/metadata",
+		"start-date":   "2026-05-01",
+		"due-date":     "2026-05-31",
+	})
+	if err != nil {
+		t.Fatalf("create shortcut failed: %v", err)
+	}
+
+	assertEqual(t, createPayload["subject"], "New issue")
+	assertEqual(t, createPayload["description"], "With metadata")
+	assertEqual(t, createPayload["priority_id"], float64(3))
+	assertNumberSlice(t, createPayload["issue_tag_ids"], []float64{4, 5})
+	assertNumberSlice(t, createPayload["assigner_ids"], []float64{7, 8})
+	assertEqual(t, createPayload["branch_name"], "feature/metadata")
+	assertEqual(t, createPayload["start_date"], "2026-05-01")
+	assertEqual(t, createPayload["due_date"], "2026-05-31")
+}
+
 func TestIssueCreateMissingTitle(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("no API call expected")
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "create", map[string]string{})
@@ -121,18 +195,18 @@ func TestIssueCreateMissingTitle(t *testing.T) {
 	}
 }
 
-// --- view ---
+// --- view/id alias ---
 
 func TestIssueView(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			t.Fatalf("expected GET, got %s", r.Method)
 		}
 		if r.URL.Path != "/v1/owner/repo/issues/42.json" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		writeJSON(w, map[string]interface{}{"id": float64(42), "subject": "bug"})
-	}))
+		writeJSON(t, w, map[string]interface{}{"id": float64(42), "subject": "bug"})
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "view", map[string]string{"number": "42"})
@@ -142,9 +216,9 @@ func TestIssueView(t *testing.T) {
 }
 
 func TestIssueViewMissingNumber(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("no API call expected")
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "view", map[string]string{})
@@ -153,47 +227,64 @@ func TestIssueViewMissingNumber(t *testing.T) {
 	}
 }
 
-func TestIssueViewAcceptsIDAsNumberAlias(t *testing.T) {
+func TestIssueViewAcceptsIDAlias(t *testing.T) {
 	var requestedPath string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		requestedPath = r.URL.Path
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/29.json" {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42.json" {
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		writeJSON(w, map[string]interface{}{
-			"project_issues_index": 29,
+		writeJSON(t, w, map[string]interface{}{
+			"project_issues_index": 42,
 			"subject":              "Issue from web URL",
 		})
-	}))
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "view", map[string]string{"id": "29"})
+	err := runShortcut(t, server, "view", map[string]string{"id": "42"})
 	if err != nil {
 		t.Fatalf("view shortcut failed: %v", err)
 	}
+	assertEqual(t, requestedPath, "/v1/owner/repo/issues/42.json")
+}
 
-	assertEqual(t, requestedPath, "/v1/owner/repo/issues/29.json")
+func TestIssueNumberTakesPrecedenceOverIDAlias(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"subject": "Existing title"})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "view", map[string]string{
+		"number": "42",
+		"id":     "99",
+	})
+	if err != nil {
+		t.Fatalf("view shortcut failed: %v", err)
+	}
 }
 
 // --- close ---
 
 func TestIssueClose(t *testing.T) {
 	var patchPayload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
-			writeJSON(w, map[string]interface{}{
+			writeJSON(t, w, map[string]interface{}{
 				"id":          float64(42),
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			patchPayload = decodeJSON(t, r)
-			writeJSON(w, patchPayload)
+			writeJSON(t, w, patchPayload)
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "close", map[string]string{"number": "42"})
@@ -205,11 +296,67 @@ func TestIssueClose(t *testing.T) {
 	assertEqual(t, patchPayload["status_id"], float64(5))
 }
 
+func TestIssueCloseAcceptsIDAlias(t *testing.T) {
+	var updatePayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
+				"subject":     "Existing title",
+				"description": "Existing description",
+			})
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			updatePayload = decodeJSON(t, r)
+			writeJSON(t, w, updatePayload)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "close", map[string]string{"id": "42"})
+	if err != nil {
+		t.Fatalf("close shortcut failed: %v", err)
+	}
+	assertEqual(t, updatePayload["status_id"], float64(5))
+}
+
+func TestIssueClosePreservesCurrentMetadata(t *testing.T) {
+	var updatePayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
+				"subject":  "Existing title",
+				"priority": map[string]interface{}{"id": 3},
+				"tags": []map[string]interface{}{
+					{"id": 4},
+				},
+			})
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			updatePayload = decodeJSON(t, r)
+			writeJSON(t, w, updatePayload)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "close", map[string]string{"number": "42"})
+	if err != nil {
+		t.Fatalf("close shortcut failed: %v", err)
+	}
+	assertEqual(t, updatePayload["subject"], "Existing title")
+	assertEqual(t, updatePayload["status_id"], float64(5))
+	assertEqual(t, updatePayload["priority_id"], float64(3))
+	assertNumberSlice(t, updatePayload["issue_tag_ids"], []float64{4})
+}
+
 func TestIssueCloseFetchFails(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		writeJSON(w, map[string]interface{}{"error": "not found"})
-	}))
+		writeJSON(t, w, map[string]interface{}{"error": "not found"})
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "close", map[string]string{"number": "999"})
@@ -222,21 +369,21 @@ func TestIssueCloseFetchFails(t *testing.T) {
 
 func TestIssueUpdateTitle(t *testing.T) {
 	var patchPayload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
-			writeJSON(w, map[string]interface{}{
+			writeJSON(t, w, map[string]interface{}{
 				"id":          float64(42),
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			patchPayload = decodeJSON(t, r)
-			writeJSON(w, patchPayload)
+			writeJSON(t, w, patchPayload)
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "update", map[string]string{"number": "42", "title": "New title", "state": "closed"})
@@ -250,21 +397,21 @@ func TestIssueUpdateTitle(t *testing.T) {
 
 func TestIssueUpdateDescription(t *testing.T) {
 	var patchPayload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
-			writeJSON(w, map[string]interface{}{
+			writeJSON(t, w, map[string]interface{}{
 				"id":          float64(42),
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			patchPayload = decodeJSON(t, r)
-			writeJSON(w, patchPayload)
+			writeJSON(t, w, patchPayload)
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "update", map[string]string{"number": "42", "body": "New description"})
@@ -277,21 +424,21 @@ func TestIssueUpdateDescription(t *testing.T) {
 
 func TestIssueUpdateNumericState(t *testing.T) {
 	var patchPayload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
-			writeJSON(w, map[string]interface{}{
+			writeJSON(t, w, map[string]interface{}{
 				"id":          float64(42),
 				"subject":     "bug",
 				"description": "desc",
 			})
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			patchPayload = decodeJSON(t, r)
-			writeJSON(w, map[string]interface{}{"id": float64(42)})
+			writeJSON(t, w, map[string]interface{}{"id": float64(42)})
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "update", map[string]string{"number": "42", "state": "3"})
@@ -301,11 +448,128 @@ func TestIssueUpdateNumericState(t *testing.T) {
 	assertEqual(t, patchPayload["status_id"], float64(3))
 }
 
-func TestIssueUpdateInvalidState(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestIssueUpdateAcceptsIDAlias(t *testing.T) {
+	var updatePayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
-			writeJSON(w, map[string]interface{}{
+			writeJSON(t, w, map[string]interface{}{
+				"subject":     "Existing title",
+				"description": "Existing description",
+			})
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			updatePayload = decodeJSON(t, r)
+			writeJSON(t, w, updatePayload)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "update", map[string]string{
+		"id":    "42",
+		"title": "New title",
+	})
+	if err != nil {
+		t.Fatalf("update shortcut failed: %v", err)
+	}
+	assertEqual(t, updatePayload["subject"], "New title")
+	assertEqual(t, updatePayload["description"], "Existing description")
+}
+
+func TestIssueUpdatePreservesCurrentMetadata(t *testing.T) {
+	var updatePayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
+				"subject":     "Existing title",
+				"description": "Existing description",
+				"status":      map[string]interface{}{"id": 1},
+				"priority":    map[string]interface{}{"id": 2},
+				"tags": []map[string]interface{}{
+					{"id": 7},
+					{"id": 8},
+				},
+				"assigners": []map[string]interface{}{
+					{"id": 9},
+				},
+				"branch_name": "main",
+				"start_date":  "2026-05-01",
+				"due_date":    "2026-05-31",
+			})
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			updatePayload = decodeJSON(t, r)
+			writeJSON(t, w, updatePayload)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "update", map[string]string{
+		"number": "42",
+		"title":  "New title",
+	})
+	if err != nil {
+		t.Fatalf("update shortcut failed: %v", err)
+	}
+	assertEqual(t, updatePayload["subject"], "New title")
+	assertEqual(t, updatePayload["description"], "Existing description")
+	assertEqual(t, updatePayload["status_id"], float64(1))
+	assertEqual(t, updatePayload["priority_id"], float64(2))
+	assertNumberSlice(t, updatePayload["issue_tag_ids"], []float64{7, 8})
+	assertNumberSlice(t, updatePayload["assigner_ids"], []float64{9})
+	assertEqual(t, updatePayload["branch_name"], "main")
+	assertEqual(t, updatePayload["start_date"], "2026-05-01")
+	assertEqual(t, updatePayload["due_date"], "2026-05-31")
+}
+
+func TestIssueUpdateSupportsMetadataFields(t *testing.T) {
+	var updatePayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
+				"subject":     "Existing title",
+				"description": "Existing description",
+			})
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			updatePayload = decodeJSON(t, r)
+			writeJSON(t, w, updatePayload)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "update", map[string]string{
+		"number":       "42",
+		"priority-id":  "4",
+		"tag-ids":      "6,7",
+		"assigner-ids": "8",
+		"branch":       "bugfix/metadata",
+		"start-date":   "2026-06-01",
+		"due-date":     "2026-06-15",
+	})
+	if err != nil {
+		t.Fatalf("update shortcut failed: %v", err)
+	}
+	assertEqual(t, updatePayload["subject"], "Existing title")
+	assertEqual(t, updatePayload["description"], "Existing description")
+	assertEqual(t, updatePayload["priority_id"], float64(4))
+	assertNumberSlice(t, updatePayload["issue_tag_ids"], []float64{6, 7})
+	assertNumberSlice(t, updatePayload["assigner_ids"], []float64{8})
+	assertEqual(t, updatePayload["branch_name"], "bugfix/metadata")
+	assertEqual(t, updatePayload["start_date"], "2026-06-01")
+	assertEqual(t, updatePayload["due_date"], "2026-06-15")
+}
+
+func TestIssueUpdateInvalidState(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
 				"id":          float64(42),
 				"subject":     "bug",
 				"description": "desc",
@@ -313,7 +577,7 @@ func TestIssueUpdateInvalidState(t *testing.T) {
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "update", map[string]string{"number": "42", "state": "invalid"})
@@ -323,9 +587,9 @@ func TestIssueUpdateInvalidState(t *testing.T) {
 }
 
 func TestIssueUpdateNoChanges(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("no API call expected")
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "update", map[string]string{"number": "42"})
@@ -334,11 +598,34 @@ func TestIssueUpdateNoChanges(t *testing.T) {
 	}
 }
 
+func TestIssueRejectsInvalidMetadataIDs(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("invalid metadata should not call API, got %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	cases := []struct {
+		name string
+		args map[string]string
+	}{
+		{name: "bad priority", args: map[string]string{"title": "x", "priority-id": "abc"}},
+		{name: "empty tag", args: map[string]string{"title": "x", "tag-ids": "1,,2"}},
+		{name: "label conflicts with tag ids", args: map[string]string{"title": "x", "label": "1", "tag-ids": "2"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := runShortcut(t, server, "create", tc.args); err == nil {
+				t.Fatal("expected metadata validation error")
+			}
+		})
+	}
+}
+
 // --- comment ---
 
 func TestIssueComment(t *testing.T) {
 	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Fatalf("expected POST, got %s", r.Method)
 		}
@@ -346,8 +633,8 @@ func TestIssueComment(t *testing.T) {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		payload = decodeJSON(t, r)
-		writeJSON(w, map[string]interface{}{"id": float64(1), "message": "ok"})
-	}))
+		writeJSON(t, w, map[string]interface{}{"id": float64(1), "message": "ok"})
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "comment", map[string]string{"number": "42", "body": "test comment"})
@@ -357,10 +644,31 @@ func TestIssueComment(t *testing.T) {
 	assertEqual(t, payload["notes"], "test comment")
 }
 
+func TestIssueCommentAcceptsIDAlias(t *testing.T) {
+	var commentPayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		commentPayload = decodeJSON(t, r)
+		writeJSON(t, w, commentPayload)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment", map[string]string{
+		"id":   "42",
+		"body": "Fixed",
+	})
+	if err != nil {
+		t.Fatalf("comment shortcut failed: %v", err)
+	}
+	assertEqual(t, commentPayload["notes"], "Fixed")
+}
+
 func TestIssueCommentMissingBody(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("no API call expected")
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "comment", map[string]string{"number": "42"})
@@ -369,24 +677,52 @@ func TestIssueCommentMissingBody(t *testing.T) {
 	}
 }
 
+func TestIssueNumberOrIDIsRequired(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	cases := []struct {
+		name string
+		args map[string]string
+	}{
+		{name: "view", args: map[string]string{}},
+		{name: "close", args: map[string]string{}},
+		{name: "update", args: map[string]string{"title": "New title"}},
+		{name: "comment", args: map[string]string{"body": "Fixed"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := runShortcut(t, server, tc.name, tc.args)
+			if err == nil {
+				t.Fatal("expected missing issue number error")
+			}
+			if !strings.Contains(err.Error(), "--number") || !strings.Contains(err.Error(), "--id") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 // --- batch-close ---
 
 func TestBatchClosePreservesCurrentDescription(t *testing.T) {
 	var updatePayload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
-			writeJSON(w, map[string]interface{}{
+			writeJSON(t, w, map[string]interface{}{
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			updatePayload = decodeJSON(t, r)
-			writeJSON(w, updatePayload)
+			writeJSON(t, w, updatePayload)
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "batch-close", map[string]string{
@@ -396,16 +732,15 @@ func TestBatchClosePreservesCurrentDescription(t *testing.T) {
 	if err != nil {
 		t.Fatalf("batch-close shortcut failed: %v", err)
 	}
-
 	assertEqual(t, updatePayload["subject"], "Existing title")
 	assertEqual(t, updatePayload["description"], "Existing description")
 	assertEqual(t, updatePayload["status_id"], float64(5))
 }
 
 func TestBatchCloseDryRun(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("no API call expected in dry-run mode")
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "batch-close", map[string]string{
@@ -418,9 +753,9 @@ func TestBatchCloseDryRun(t *testing.T) {
 }
 
 func TestBatchCloseNoNumbers(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("no API call expected")
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "batch-close", map[string]string{})
@@ -430,53 +765,90 @@ func TestBatchCloseNoNumbers(t *testing.T) {
 }
 
 func TestBatchCloseFetchFails(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("not found"))
-	}))
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeText(t, w, http.StatusNotFound, "not found")
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "batch-close", map[string]string{
-		"numbers": "99",
-	})
+	err := runShortcut(t, server, "batch-close", map[string]string{"numbers": "99"})
 	if err == nil {
 		t.Fatal("expected error when fetch fails")
 	}
 }
 
 func TestBatchCloseWithFailedClose(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/1.json":
-			writeJSON(w, map[string]interface{}{"subject": "Issue 1", "description": "desc1"})
+			writeJSON(t, w, map[string]interface{}{"subject": "Issue 1", "description": "desc1"})
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/2.json":
-			writeJSON(w, map[string]interface{}{"subject": "Issue 2", "description": "desc2"})
+			writeJSON(t, w, map[string]interface{}{"subject": "Issue 2", "description": "desc2"})
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/1.json":
-			writeJSON(w, map[string]interface{}{"subject": "Issue 1", "description": "desc1", "status_id": float64(5)})
+			writeJSON(t, w, map[string]interface{}{"subject": "Issue 1", "description": "desc1", "status_id": float64(5)})
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/2.json":
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("server error"))
+			writeText(t, w, http.StatusInternalServerError, "server error")
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-	}))
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "batch-close", map[string]string{
-		"numbers": "1, 2",
-	})
+	err := runShortcut(t, server, "batch-close", map[string]string{"numbers": "1, 2"})
 	if err == nil {
 		t.Fatal("expected error when some issues fail to close")
+	}
+}
+
+// --- issue users ---
+
+func TestIssueAssignersShortcutWithKeyword(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issue_assigners.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		assertEqual(t, r.URL.Query().Get("keyword"), "alice")
+		writeJSON(t, w, map[string]interface{}{
+			"total_count": 1,
+			"assigners": []map[string]interface{}{
+				{"id": 7, "name": "Alice", "login": "alice"},
+			},
+		})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "assigners", map[string]string{"keyword": "alice"})
+	if err != nil {
+		t.Fatalf("assigners shortcut failed: %v", err)
+	}
+}
+
+func TestIssueAuthorsShortcutWithKeyword(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issue_authors.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		assertEqual(t, r.URL.Query().Get("keyword"), "bob")
+		writeJSON(t, w, map[string]interface{}{
+			"total_count": 1,
+			"authors": []map[string]interface{}{
+				{"id": 8, "name": "Bob", "login": "bob"},
+			},
+		})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "authors", map[string]string{"keyword": "bob"})
+	if err != nil {
+		t.Fatalf("authors shortcut failed: %v", err)
 	}
 }
 
 // --- HTTP error paths ---
 
 func TestIssueListHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeText(t, w, http.StatusInternalServerError, "server error")
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "list", map[string]string{"page": "1", "limit": "20"})
@@ -486,10 +858,9 @@ func TestIssueListHTTPError(t *testing.T) {
 }
 
 func TestIssueCreateHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeText(t, w, http.StatusInternalServerError, "server error")
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "create", map[string]string{"title": "test"})
@@ -499,10 +870,9 @@ func TestIssueCreateHTTPError(t *testing.T) {
 }
 
 func TestIssueViewHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeText(t, w, http.StatusInternalServerError, "server error")
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "view", map[string]string{"number": "42"})
@@ -512,10 +882,9 @@ func TestIssueViewHTTPError(t *testing.T) {
 }
 
 func TestIssueCommentHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeText(t, w, http.StatusInternalServerError, "server error")
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "comment", map[string]string{"number": "42", "body": "test"})
@@ -525,19 +894,18 @@ func TestIssueCommentHTTPError(t *testing.T) {
 }
 
 func TestIssueUpdateHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
-			writeJSON(w, map[string]interface{}{
+			writeJSON(t, w, map[string]interface{}{
 				"id": float64(42), "subject": "bug", "description": "desc",
 			})
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("server error"))
+			writeText(t, w, http.StatusInternalServerError, "server error")
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "update", map[string]string{"number": "42", "title": "new"})
@@ -547,19 +915,18 @@ func TestIssueUpdateHTTPError(t *testing.T) {
 }
 
 func TestIssueCloseHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
-			writeJSON(w, map[string]interface{}{
+			writeJSON(t, w, map[string]interface{}{
 				"id": float64(42), "subject": "bug", "description": "desc",
 			})
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("server error"))
+			writeText(t, w, http.StatusInternalServerError, "server error")
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-	}))
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "close", map[string]string{"number": "42"})
@@ -569,9 +936,9 @@ func TestIssueCloseHTTPError(t *testing.T) {
 }
 
 func TestFetchExistingIssueBadData(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, "not a map")
-	}))
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, "not a map")
+	})
 	defer server.Close()
 
 	ctx := &common.RuntimeContext{
@@ -586,9 +953,9 @@ func TestFetchExistingIssueBadData(t *testing.T) {
 }
 
 func TestFetchExistingIssueNoSubject(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]interface{}{"id": float64(1)})
-	}))
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, map[string]interface{}{"id": float64(1)})
+	})
 	defer server.Close()
 
 	ctx := &common.RuntimeContext{
