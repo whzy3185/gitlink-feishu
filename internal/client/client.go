@@ -107,10 +107,21 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		}
 	}
 
+	// Detect HTML responses (GitLink returns login pages when auth is missing)
+	if detectHTMLResponse(respData) {
+		msg := "服务器返回了 HTML 页面而非 JSON 数据"
+		suggestion := suggestHTMLFix()
+		return output.ErrorEnvelope(resp.StatusCode, msg, suggestion),
+			&APIError{
+				StatusCode: resp.StatusCode,
+				Code:       "HTML_RESPONSE",
+				Message:    msg + "\n" + suggestion,
+			}
+	}
+
 	// Parse JSON
 	var raw map[string]interface{}
 	if err := json.Unmarshal(respData, &raw); err != nil {
-		// Not JSON, return as-is
 		return output.SuccessEnvelope(string(respData), nil), nil
 	}
 
@@ -214,4 +225,27 @@ func suggestFix(code int) string {
 	default:
 		return ""
 	}
+}
+
+func detectHTMLResponse(data []byte) bool {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
+		return false
+	}
+	prefixes := []string{"<!DOCTYPE", "<html", "<HTML", "<!doctype"}
+	for _, p := range prefixes {
+		if bytes.HasPrefix(trimmed, []byte(p)) {
+			return true
+		}
+	}
+	return false
+}
+
+func suggestHTMLFix() string {
+	return "API 返回了 HTML 页面而非 JSON 数据。" +
+		"可能原因：\n" +
+		"  1. 未登录或 Token 已过期 → 运行 gitlink-cli auth login\n" +
+		"  2. Token 权限不足 → 在 GitLink 平台重新生成 Token\n" +
+		"  3. API 端点不存在 → 检查路径是否正确\n" +
+		"  4. 使用 Shortcut 命令替代 Raw API → 运行 gitlink-cli --help 查看可用命令"
 }
