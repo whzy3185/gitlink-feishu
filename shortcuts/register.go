@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gitlink-org/gitlink-cli/shortcuts/branch"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/label"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/ci"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/compare"
@@ -39,6 +40,7 @@ func RegisterAll(root *cobra.Command) {
 		"webhook":  webhook.Shortcuts(),
 		"workflow": workflow.Shortcuts(),
 		"wiki":     wiki.Shortcuts(),
+		"label":    label.Shortcuts(),
 	}
 
 	descriptions := map[string]string{
@@ -57,6 +59,7 @@ func RegisterAll(root *cobra.Command) {
 		"webhook":  "Webhook operations",
 		"workflow": "AI agent workflow analysis",
 		"wiki":     "Wiki page operations",
+		"label":    "Label operations",
 	}
 
 	for name, shortcuts := range groups {
