@@ -5,19 +5,21 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List pull requests",
+			Description: tr.T("cmd.pr.list.short"),
 			Flags: []common.Flag{
-				{Name: "state", Short: "s", Usage: "Filter: open, merged, closed", Default: "open"},
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "state", Short: "s", Usage: tr.T("flag.pr.state"), Default: "open"},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -38,12 +40,12 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: "Create a pull request",
+			Description: tr.T("cmd.pr.create.short"),
 			Flags: []common.Flag{
-				{Name: "title", Short: "t", Usage: "PR title", Required: true},
-				{Name: "body", Short: "b", Usage: "PR description"},
-				{Name: "head", Usage: "Source branch", Required: true},
-				{Name: "base", Usage: "Target branch", Default: "master"},
+				{Name: "title", Short: "t", Usage: tr.T("flag.pr.title"), Required: true},
+				{Name: "body", Short: "b", Usage: tr.T("flag.pr.body")},
+				{Name: "head", Usage: tr.T("flag.pr.head"), Required: true},
+				{Name: "base", Usage: tr.T("flag.pr.base"), Default: "master"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -72,9 +74,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "view",
-			Description: "View pull request details",
+			Description: tr.T("cmd.pr.view.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -93,10 +95,10 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "merge",
-			Description: "Merge a pull request",
+			Description: tr.T("cmd.pr.merge.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
-				{Name: "method", Short: "m", Usage: "Merge method: merge, rebase, squash", Default: "merge"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "method", Short: "m", Usage: tr.T("flag.pr.merge_method"), Default: "merge"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -119,9 +121,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "close",
-			Description: "Close a pull request",
+			Description: tr.T("cmd.pr.close.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -158,9 +160,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "files",
-			Description: "List changed files in a pull request",
+			Description: tr.T("cmd.pr.files.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -176,9 +178,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "diff",
-			Description: "Show diff for a pull request",
+			Description: tr.T("cmd.pr.diff.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -194,9 +196,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "versions",
-			Description: "List pull request patchset versions",
+			Description: tr.T("cmd.pr.versions.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -215,11 +217,11 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "version-diff",
-			Description: "Show diff for a pull request patchset version",
+			Description: tr.T("cmd.pr.version_diff.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
-				{Name: "version-id", Short: "v", Usage: "Patchset version ID", Required: true},
-				{Name: "file", Short: "f", Usage: "Filter diff by file path"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "version-id", Short: "v", Usage: tr.T("flag.pr.version_id"), Required: true},
+				{Name: "file", Short: "f", Usage: tr.T("flag.pr.file")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -252,10 +254,10 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "reviews",
-			Description: "List pull request reviews",
+			Description: tr.T("cmd.pr.reviews.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
-				{Name: "status", Short: "s", Usage: "Filter review status: common, approved, rejected"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "status", Short: "s", Usage: tr.T("flag.pr.review_status_filter")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -281,13 +283,13 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "review",
-			Description: "Create a pull request review",
+			Description: tr.T("cmd.pr.review.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
-				{Name: "status", Short: "s", Usage: "Review status: common, approved, rejected", Default: "common"},
-				{Name: "content", Short: "c", Usage: "Review content", Required: true},
-				{Name: "commit", Short: "m", Usage: "Commit SHA to attach the review to"},
-				{Name: "dry-run", Usage: "Preview the review request without creating it", Bool: true, Default: "false"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "status", Short: "s", Usage: tr.T("flag.pr.review_status"), Default: "common"},
+				{Name: "content", Short: "c", Usage: tr.T("flag.pr.review_content"), Required: true},
+				{Name: "commit", Short: "m", Usage: tr.T("flag.pr.review_commit")},
+				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -333,10 +335,10 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "comment",
-			Description: "Add a comment to a pull request",
+			Description: tr.T("cmd.pr.comment.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
-				{Name: "body", Short: "b", Usage: "Comment body", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -365,6 +367,13 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }
 
 func prV1Path(ctx *common.RuntimeContext, id string) string {

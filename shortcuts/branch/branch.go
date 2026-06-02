@@ -4,17 +4,19 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List branches",
+			Description: tr.T("cmd.branch.list.short"),
 			Flags: []common.Flag{
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -32,10 +34,10 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: "Create a branch",
+			Description: tr.T("cmd.branch.create.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Branch name", Required: true},
-				{Name: "from", Short: "f", Usage: "Source branch or commit", Default: "master"},
+				{Name: "name", Short: "n", Usage: tr.T("flag.branch.name"), Required: true},
+				{Name: "from", Short: "f", Usage: tr.T("flag.branch.from"), Default: "master"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -59,9 +61,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "delete",
-			Description: "Delete a branch",
+			Description: tr.T("cmd.branch.delete.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Branch name", Required: true},
+				{Name: "name", Short: "n", Usage: tr.T("flag.branch.name"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -80,9 +82,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "protect",
-			Description: "Set branch protection",
+			Description: tr.T("cmd.branch.protect.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Branch name", Required: true},
+				{Name: "name", Short: "n", Usage: tr.T("flag.branch.name"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -101,9 +103,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "unprotect",
-			Description: "Remove branch protection",
+			Description: tr.T("cmd.branch.unprotect.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Branch name", Required: true},
+				{Name: "name", Short: "n", Usage: tr.T("flag.branch.name"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -118,4 +120,11 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

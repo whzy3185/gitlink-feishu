@@ -13,14 +13,19 @@ import (
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/client"
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 )
 
-func NewAPICmd() *cobra.Command {
+func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
+	tr := i18n.Default()
+	if len(translators) > 0 && translators[0] != nil {
+		tr = translators[0]
+	}
 	apiCmd := &cobra.Command{
 		Use:   "api <METHOD> <PATH>",
-		Short: "Make raw API requests to GitLink",
-		Long:  `Send arbitrary HTTP requests to the GitLink API. Authentication is injected automatically.`,
+		Short: tr.T("cmd.api.short"),
+		Long:  tr.T("cmd.api.long"),
 		Example: `  gitlink-cli api GET /users/me
   gitlink-cli api GET /projects --query 'page=1&limit=10'
   gitlink-cli api POST /:owner/:repo/issues --body '{"subject":"Bug","description":"..."}'
@@ -29,11 +34,11 @@ func NewAPICmd() *cobra.Command {
 		RunE: runAPI,
 	}
 
-	apiCmd.Flags().String("body", "", "Request body (JSON string)")
-	apiCmd.Flags().String("body-file", "", "Read request body JSON from a file")
-	apiCmd.Flags().Bool("body-stdin", false, "Read request body JSON from stdin")
-	apiCmd.Flags().String("query", "", "Query parameters (key=val&key2=val2)")
-	apiCmd.Flags().StringSlice("header", nil, "Additional headers (key:value)")
+	apiCmd.Flags().String("body", "", tr.T("flag.api.body"))
+	apiCmd.Flags().String("body-file", "", tr.T("flag.api.body_file"))
+	apiCmd.Flags().Bool("body-stdin", false, tr.T("flag.api.body_stdin"))
+	apiCmd.Flags().String("query", "", tr.T("flag.api.query"))
+	apiCmd.Flags().StringSlice("header", nil, tr.T("flag.api.header"))
 
 	return apiCmd
 }

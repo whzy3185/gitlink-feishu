@@ -4,18 +4,20 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List releases",
+			Description: tr.T("cmd.release.list.short"),
 			Flags: []common.Flag{
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -33,13 +35,13 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: "Create a release",
+			Description: tr.T("cmd.release.create.short"),
 			Flags: []common.Flag{
-				{Name: "tag", Short: "t", Usage: "Tag name", Required: true},
-				{Name: "name", Short: "n", Usage: "Release name", Required: true},
-				{Name: "body", Short: "b", Usage: "Release notes"},
-				{Name: "target", Usage: "Target branch", Default: "master"},
-				{Name: "prerelease", Usage: "Mark as prerelease (true/false)", Default: "false"},
+				{Name: "tag", Short: "t", Usage: tr.T("flag.release.tag"), Required: true},
+				{Name: "name", Short: "n", Usage: tr.T("flag.release.name"), Required: true},
+				{Name: "body", Short: "b", Usage: tr.T("flag.release.body")},
+				{Name: "target", Usage: tr.T("flag.release.target"), Default: "master"},
+				{Name: "prerelease", Usage: tr.T("flag.release.prerelease"), Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -69,9 +71,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "view",
-			Description: "View release details",
+			Description: tr.T("cmd.release.view.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Release ID or tag", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.release.id_or_tag"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -87,9 +89,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "delete",
-			Description: "Delete a release",
+			Description: tr.T("cmd.release.delete.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Release ID", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.release.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -116,4 +118,11 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GitLink CLI locale messages",
+  "type": "object",
+  "additionalProperties": {
+    "type": "string",
+    "minLength": 1
+  },
+  "propertyNames": {
+    "pattern": "^(cmd|flag|error|output|prompt|success|warning|table)\\.[a-z0-9_.-]+$"
+  }
+}

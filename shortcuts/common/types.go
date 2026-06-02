@@ -2,12 +2,14 @@ package common
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/client"
 	"github.com/gitlink-org/gitlink-cli/internal/context"
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 )
 
@@ -15,6 +17,7 @@ import (
 type Shortcut struct {
 	Name        string
 	Description string
+	Long        string
 	Flags       []Flag
 	Run         func(ctx *RuntimeContext) error
 }
@@ -36,10 +39,15 @@ type RuntimeContext struct {
 	Repo   string
 	Format string
 	Args   map[string]string
+	Tr     *i18n.Translator
 }
 
 // NewRuntimeContext creates a RuntimeContext with auto-resolved owner/repo.
-func NewRuntimeContext(args map[string]string) (*RuntimeContext, error) {
+func NewRuntimeContext(args map[string]string, translators ...*i18n.Translator) (*RuntimeContext, error) {
+	tr := i18n.Default()
+	if len(translators) > 0 && translators[0] != nil {
+		tr = translators[0]
+	}
 	cli, err := client.New()
 	if err != nil {
 		return nil, err
@@ -57,6 +65,7 @@ func NewRuntimeContext(args map[string]string) (*RuntimeContext, error) {
 		Repo:   cmdutil.Repo,
 		Format: format,
 		Args:   args,
+		Tr:     tr,
 	}, nil
 }
 
@@ -113,7 +122,7 @@ func (ctx *RuntimeContext) Arg(name string) string {
 func (ctx *RuntimeContext) RequireArg(name string) (string, error) {
 	v := ctx.Arg(name)
 	if v == "" {
-		return "", fmt.Errorf("required flag --%s is missing", name)
+		return "", errors.New(ctx.Tr.Tf("error.missing_required_flag", i18n.Args{"name": name}))
 	}
 	return v, nil
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -22,11 +23,12 @@ var allowedWebhookEvents = map[string]bool{
 }
 
 // Shortcuts returns webhook management shortcuts.
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List repository webhooks",
+			Description: tr.T("cmd.webhook.list.short"),
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
@@ -40,9 +42,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "view",
-			Description: "View webhook details",
+			Description: tr.T("cmd.webhook.view.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Webhook ID", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.webhook.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -61,40 +63,40 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: "Create a repository webhook",
+			Description: tr.T("cmd.webhook.create.short"),
 			Flags: []common.Flag{
-				{Name: "url", Short: "u", Usage: "Webhook target URL", Required: true},
-				{Name: "events", Short: "e", Usage: "Comma-separated events, for example: push,issues_only", Required: true},
-				{Name: "type", Short: "t", Usage: "Webhook type: gitea/slack/discord/dingtalk/telegram/msteams/feishu/matrix/jianmu/softbot", Default: "gitea"},
-				{Name: "content-type", Usage: "Payload content type: json or form", Default: "json"},
-				{Name: "http-method", Usage: "HTTP method: POST or GET", Default: "POST"},
-				{Name: "secret", Short: "s", Usage: "Webhook secret"},
-				{Name: "branch-filter", Usage: "Branch glob filter for push/create/delete events", Default: "*"},
-				{Name: "active", Usage: "Whether the webhook is active: true or false", Default: "true"},
+				{Name: "url", Short: "u", Usage: tr.T("flag.webhook.url"), Required: true},
+				{Name: "events", Short: "e", Usage: tr.T("flag.webhook.events"), Required: true},
+				{Name: "type", Short: "t", Usage: tr.T("flag.webhook.type"), Default: "gitea"},
+				{Name: "content-type", Usage: tr.T("flag.webhook.content_type"), Default: "json"},
+				{Name: "http-method", Usage: tr.T("flag.webhook.http_method"), Default: "POST"},
+				{Name: "secret", Short: "s", Usage: tr.T("flag.webhook.secret")},
+				{Name: "branch-filter", Usage: tr.T("flag.webhook.branch_filter"), Default: "*"},
+				{Name: "active", Usage: tr.T("flag.webhook.active"), Default: "true"},
 			},
 			Run: runCreate,
 		},
 		{
 			Name:        "update",
-			Description: "Update a repository webhook while preserving unspecified fields when available",
+			Description: tr.T("cmd.webhook.update.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Webhook ID", Required: true},
-				{Name: "url", Short: "u", Usage: "Webhook target URL"},
-				{Name: "events", Short: "e", Usage: "Comma-separated events, for example: push,issues_only"},
-				{Name: "type", Short: "t", Usage: "Webhook type: gitea/slack/discord/dingtalk/telegram/msteams/feishu/matrix/jianmu/softbot"},
-				{Name: "content-type", Usage: "Payload content type: json or form"},
-				{Name: "http-method", Usage: "HTTP method: POST or GET"},
-				{Name: "secret", Short: "s", Usage: "Webhook secret. Pass it again if the server does not return existing secrets."},
-				{Name: "branch-filter", Usage: "Branch glob filter for push/create/delete events"},
-				{Name: "active", Usage: "Whether the webhook is active: true or false"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.webhook.id"), Required: true},
+				{Name: "url", Short: "u", Usage: tr.T("flag.webhook.url")},
+				{Name: "events", Short: "e", Usage: tr.T("flag.webhook.events")},
+				{Name: "type", Short: "t", Usage: tr.T("flag.webhook.type")},
+				{Name: "content-type", Usage: tr.T("flag.webhook.content_type")},
+				{Name: "http-method", Usage: tr.T("flag.webhook.http_method")},
+				{Name: "secret", Short: "s", Usage: tr.T("flag.webhook.secret_update")},
+				{Name: "branch-filter", Usage: tr.T("flag.webhook.branch_filter")},
+				{Name: "active", Usage: tr.T("flag.webhook.active")},
 			},
 			Run: runUpdate,
 		},
 		{
 			Name:        "delete",
-			Description: "Delete a repository webhook",
+			Description: tr.T("cmd.webhook.delete.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Webhook ID", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.webhook.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -113,9 +115,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "test",
-			Description: "Trigger a test delivery for a webhook",
+			Description: tr.T("cmd.webhook.test.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Webhook ID", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.webhook.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -134,9 +136,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "tasks",
-			Description: "List webhook delivery tasks",
+			Description: tr.T("cmd.webhook.tasks.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Webhook ID", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.webhook.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -154,6 +156,13 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }
 
 func runCreate(ctx *common.RuntimeContext) error {

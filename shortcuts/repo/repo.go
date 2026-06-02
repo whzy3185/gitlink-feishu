@@ -4,19 +4,21 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List repositories for a user or organization",
+			Description: tr.T("cmd.repo.list.short"),
 			Flags: []common.Flag{
-				{Name: "user", Short: "u", Usage: "User login (default: current user)"},
-				{Name: "category", Short: "c", Usage: "Filter: manage/mirror/sync/fork/all (default: manage)", Default: "manage"},
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "user", Short: "u", Usage: tr.T("flag.user"), Default: ""},
+				{Name: "category", Short: "c", Usage: tr.T("flag.repo.category"), Default: "manage"},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				user := ctx.Arg("user")
@@ -40,7 +42,7 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "info",
-			Description: "Show repository details",
+			Description: tr.T("cmd.repo.info.short"),
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
@@ -79,11 +81,11 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: "Create a new repository",
+			Description: tr.T("cmd.repo.create.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Repository name", Required: true},
-				{Name: "description", Short: "d", Usage: "Repository description"},
-				{Name: "private", Usage: "Make repository private (true/false)", Default: "false"},
+				{Name: "name", Short: "n", Usage: tr.T("flag.repo.name"), Required: true},
+				{Name: "description", Short: "d", Usage: tr.T("flag.repo.description")},
+				{Name: "private", Usage: tr.T("flag.repo.private"), Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				name, err := ctx.RequireArg("name")
@@ -121,7 +123,7 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "fork",
-			Description: "Fork a repository",
+			Description: tr.T("cmd.repo.fork.short"),
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
@@ -135,7 +137,7 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "delete",
-			Description: "Delete a repository",
+			Description: tr.T("cmd.repo.delete.short"),
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
@@ -148,4 +150,11 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

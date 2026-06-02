@@ -17,6 +17,7 @@ type Config struct {
 	Format  string `yaml:"default_format"`
 	Editor  string `yaml:"editor,omitempty"`
 	Pager   string `yaml:"pager,omitempty"`
+	Lang    string `yaml:"lang,omitempty"`
 }
 
 func DefaultConfig() *Config {
@@ -85,6 +86,8 @@ func Get(key string) (string, error) {
 		return cfg.Editor, nil
 	case "pager":
 		return cfg.Pager, nil
+	case "lang":
+		return cfg.Lang, nil
 	default:
 		return "", nil
 	}
@@ -104,6 +107,8 @@ func Set(key, value string) error {
 		cfg.Editor = value
 	case "pager":
 		cfg.Pager = value
+	case "lang":
+		cfg.Lang = value
 	}
 	return Save(cfg)
 }
