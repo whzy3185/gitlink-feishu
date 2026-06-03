@@ -4,17 +4,19 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "builds",
-			Description: "List CI builds",
+			Description: tr.T("cmd.ci.builds.short"),
 			Flags: []common.Flag{
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -32,11 +34,11 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "logs",
-			Description: "View build logs",
+			Description: tr.T("cmd.ci.logs.short"),
 			Flags: []common.Flag{
-				{Name: "build", Short: "b", Usage: "Build number", Required: true},
-				{Name: "stage", Short: "s", Usage: "Stage number", Default: "1"},
-				{Name: "step", Usage: "Step number", Default: "1"},
+				{Name: "build", Short: "b", Usage: tr.T("flag.ci.build"), Required: true},
+				{Name: "stage", Short: "s", Usage: tr.T("flag.ci.stage"), Default: "1"},
+				{Name: "step", Usage: tr.T("flag.ci.step"), Default: "1"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -60,9 +62,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "restart",
-			Description: "Restart a build",
+			Description: tr.T("cmd.ci.restart.short"),
 			Flags: []common.Flag{
-				{Name: "build", Short: "b", Usage: "Build number", Required: true},
+				{Name: "build", Short: "b", Usage: tr.T("flag.ci.build"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -78,9 +80,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "stop",
-			Description: "Stop a build",
+			Description: tr.T("cmd.ci.stop.short"),
 			Flags: []common.Flag{
-				{Name: "build", Short: "b", Usage: "Build number", Required: true},
+				{Name: "build", Short: "b", Usage: tr.T("flag.ci.build"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -95,4 +97,11 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

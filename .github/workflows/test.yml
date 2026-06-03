@@ -1,0 +1,30 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Validate i18n messages
+        run: go run ./internal/i18n/cmd/check
+
+      - name: Scan i18n key references
+        run: go run ./internal/i18n/cmd/check --scan-code
+
+      - name: Run Go tests
+        run: go test ./...

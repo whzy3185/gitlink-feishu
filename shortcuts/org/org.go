@@ -4,17 +4,19 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List organizations",
+			Description: tr.T("cmd.org.list.short"),
 			Flags: []common.Flag{
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				q := url.Values{}
@@ -29,9 +31,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "info",
-			Description: "Show organization details",
+			Description: tr.T("cmd.org.info.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Organization ID or login", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.org.id_or_login"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				id, _ := ctx.RequireArg("id")
@@ -44,11 +46,11 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "members",
-			Description: "List organization members",
+			Description: tr.T("cmd.org.members.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Organization ID", Required: true},
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.org.id"), Required: true},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				id, _ := ctx.RequireArg("id")
@@ -64,10 +66,10 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: "Create an organization",
+			Description: tr.T("cmd.org.create.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Organization name", Required: true},
-				{Name: "description", Short: "d", Usage: "Description"},
+				{Name: "name", Short: "n", Usage: tr.T("flag.org.name"), Required: true},
+				{Name: "description", Short: "d", Usage: tr.T("flag.description")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				name, _ := ctx.RequireArg("name")
@@ -85,4 +87,11 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

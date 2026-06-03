@@ -6,4 +6,5 @@ var (
 	Repo   string
 	Format string
 	Debug  bool
+	Lang   string
 )
