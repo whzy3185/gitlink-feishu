@@ -23,7 +23,7 @@ metadata:
 | `pr +create` | 创建 PR | 是 |
 | `pr +view` | PR 详情 | 否（公开项目） |
 | `pr +merge` | 合并 PR | 是 |
-| `pr +close` | 关闭 PR | 是 |
+| `pr +refuse` | 拒绝并关闭 PR | 是 |
 | `pr +reopen` | 重开已关闭的 PR | 是 |
 | `pr +files` | 变更文件列表 | 否 |
 | `pr +diff` | 查看变更文件和 diff 内容 | 否 |
@@ -49,8 +49,8 @@ gitlink-cli pr +view --id 3
 gitlink-cli pr +merge --id 3
 gitlink-cli pr +merge --id 3 --method squash
 
-# 关闭 PR（拒绝合并）
-gitlink-cli pr +close --id 3
+# 拒绝 PR（拒绝合并并关闭）
+gitlink-cli pr +refuse --id 3
 
 # 重开已关闭的 PR
 gitlink-cli pr +reopen --id 3

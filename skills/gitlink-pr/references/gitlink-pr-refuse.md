@@ -1,17 +1,17 @@
-# pr +close
+# pr +refuse
 
 > **前置条件：** 先阅读 [`../../gitlink-shared/SKILL.md`](../../gitlink-shared/SKILL.md) 了解认证、全局参数和安全规则。
 
-关闭（拒绝合并）一个 Pull Request。
+拒绝一个 Pull Request（调用 `refuse_merge`，拒绝合并并关闭 PR）。
 
 ## 命令
 
 ```bash
-# 关闭 PR
-gitlink-cli pr +close --id 3
+# 拒绝 PR
+gitlink-cli pr +refuse --id 3
 
 # 简写
-gitlink-cli pr +close -i 3
+gitlink-cli pr +refuse -i 3
 ```
 
 ## 参数
@@ -29,16 +29,17 @@ POST /{owner}/{repo}/pulls/{number}/refuse_merge
 ## Workflow
 
 > [!CAUTION]
-> This is a **Write Operation** -- confirm user intent before executing.
+> This is a **destructive Write Operation** -- confirm user intent before executing.
 
 1. 使用 `pr +view -i <id>` 确认 PR 状态为 open（`pull_request_status: 0`）
-2. 确认用户确实要关闭此 PR（此操作会拒绝合并）
-3. 执行 `pr +close -i <id>`
+2. 确认用户确实要**拒绝**此 PR（此操作不可逆，会关闭 PR 并标记为已拒绝）
+3. 执行 `pr +refuse -i <id>`
 
 ## 注意事项
 
 - 此操作调用 `refuse_merge` 端点，即**拒绝合并**
-- 关闭后 PR 状态变为 closed（`pull_request_status: 2`）
+- 拒绝后 PR 状态变为 closed（`pull_request_status: 2`）
+- ⛔ **不要用 `pr +refuse` 代替 `pr +merge`**：如果 PR 已被手动合并到 master，不要使用此命令来关闭 PR
 - 需要对仓库有相应权限
 
 ## References

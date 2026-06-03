@@ -120,8 +120,8 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "close",
-			Description: tr.T("cmd.pr.close.short"),
+				Name:        "refuse",
+				Description: "Refuse and close a pull request",
 			Flags: []common.Flag{
 				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
