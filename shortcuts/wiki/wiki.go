@@ -125,8 +125,10 @@ func Shortcuts() []*common.Shortcut {
 					"projectId":      projectID,
 					"pageName":       name,
 					"title":          name,
-					"message":        ctx.Arg("message"),
 					"content_base64": base64.StdEncoding.EncodeToString([]byte(content)),
+				}
+				if msg := ctx.Arg("message"); msg != "" {
+					body["message"] = msg
 				}
 				return callWikiAPI(ctx, "PUT", "/wiki/open/updateWiki", body, nil)
 			},
