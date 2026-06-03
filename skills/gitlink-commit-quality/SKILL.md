@@ -62,7 +62,7 @@ metadata:
 gitlink-cli pr +diff --id <pr_id> --owner <owner> --repo <repo> --format json
 
 # 或通过 Raw API 获取提交详情
-gitlink-cli api GET /:owner/:repo/pulls/:pr_id/commits --format json
+gitlink-cli pr +commits --format json
 ```
 
 ### Commit Message 质量检查清单

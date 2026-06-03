@@ -7,7 +7,7 @@
 ### 读取文件内容
 
 ```bash
-gitlink-cli api GET /:owner/:repo/raw/<branch>/<filepath>
+gitlink-cli repo +raw --ref=<branch>/<filepath>
 ```
 
 **说明：** 直接返回文件原始内容，用于检查 LICENSE、README、CONTRIBUTING 等文件。
@@ -15,7 +15,7 @@ gitlink-cli api GET /:owner/:repo/raw/<branch>/<filepath>
 ### 获取文件列表
 
 ```bash
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=<path>&ref=<branch>' --format json
+gitlink-cli repo +files --query 'filepath=<path>&ref=<branch>' --format json
 ```
 
 | 字段 | 类型 | 说明 |
@@ -45,7 +45,7 @@ gitlink-cli repo +info --owner <owner> --repo <repo> --format json
 ### 获取贡献者列表
 
 ```bash
-gitlink-cli api GET /:owner/:repo/contributors --format json
+gitlink-cli repo +contributors --format json
 ```
 
 用于检查贡献者是否签署了 CLA/DCO。

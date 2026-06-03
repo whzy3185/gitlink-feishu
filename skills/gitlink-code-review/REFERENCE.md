@@ -160,7 +160,7 @@ gitlink-cli repo +info --owner <owner> --repo <repo> --format json
 ### 获取仓库文件列表
 
 ```bash
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=<path>&ref=<branch>' --format json
+gitlink-cli repo +files --query 'filepath=<path>&ref=<branch>' --format json
 ```
 
 **返回字段说明：**
@@ -177,7 +177,7 @@ gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=<path>&ref=<bran
 ### 获取仓库语言统计
 
 ```bash
-gitlink-cli api GET /:owner/:repo/languages --format json
+gitlink-cli repo +languages --format json
 ```
 
 **返回示例：**
@@ -188,7 +188,7 @@ gitlink-cli api GET /:owner/:repo/languages --format json
 ### 获取仓库原始文件
 
 ```bash
-gitlink-cli api GET /:owner/:repo/raw/<branch>/<filepath>
+gitlink-cli repo +raw --ref=<branch>/<filepath>
 ```
 
 ---
@@ -213,7 +213,7 @@ gitlink-cli user +me --format json
 ### 获取用户信息
 
 ```bash
-gitlink-cli api GET /users/:user_id --format json
+gitlink-cli user +info --login --format json
 ```
 
 | 字段 | 类型 | 说明 |

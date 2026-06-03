@@ -39,10 +39,10 @@ metadata:
 
 ```bash
 # 1. 获取仓库文件结构
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=&ref=master'
+gitlink-cli repo +files --query 'filepath=&ref=master'
 
 # 2. 读取 LICENSE 文件
-gitlink-cli api GET /:owner/:repo/raw/master/LICENSE
+gitlink-cli repo +raw --ref=master/LICENSE
 
 # 3. 检查关键文档是否存在
 # 检查以下文件是否存在：
@@ -54,14 +54,14 @@ gitlink-cli api GET /:owner/:repo/raw/master/LICENSE
 # - README.md
 
 # 4. 获取依赖配置
-gitlink-cli api GET /:owner/:repo/raw/master/package.json    # Node.js
-gitlink-cli api GET /:owner/:repo/raw/master/go.mod           # Go
-gitlink-cli api GET /:owner/:repo/raw/master/requirements.txt # Python
-gitlink-cli api GET /:owner/:repo/raw/master/Cargo.toml       # Rust
-gitlink-cli api GET /:owner/:repo/raw/master/pom.xml          # Java/Maven
+gitlink-cli repo +raw --ref=master/package.json    # Node.js
+gitlink-cli repo +raw --ref=master/go.mod           # Go
+gitlink-cli repo +raw --ref=master/requirements.txt # Python
+gitlink-cli repo +raw --ref=master/Cargo.toml       # Rust
+gitlink-cli repo +raw --ref=master/pom.xml          # Java/Maven
 
 # 5. 获取源文件检查（按语言采样）
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=src&ref=master'
+gitlink-cli repo +files --query 'filepath=src&ref=master'
 
 # 6. 获取仓库基本信息
 gitlink-cli repo +info --owner <owner> --repo <repo> --format json
@@ -146,7 +146,7 @@ gitlink-cli repo +info --owner <owner> --repo <repo> --format json
 
 ```bash
 # 1. 获取依赖配置文件
-gitlink-cli api GET /:owner/:repo/raw/master/package.json
+gitlink-cli repo +raw --ref=master/package.json
 ```
 
 ### 许可证兼容性参考
@@ -181,10 +181,10 @@ gitlink-cli api GET /:owner/:repo/raw/master/package.json
 
 ```bash
 # 1. 遍历源文件目录
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=src&ref=master'
+gitlink-cli repo +files --query 'filepath=src&ref=master'
 
 # 2. 采样检查源文件头部（取前 5-10 行）
-gitlink-cli api GET /:owner/:repo/raw/master/src/main.py
+gitlink-cli repo +raw --ref=master/src/main.py
 ```
 
 ### 标准版权声明模板
@@ -210,16 +210,16 @@ gitlink-cli api GET /:owner/:repo/raw/master/src/main.py
 
 ```bash
 # 获取文件内容
-gitlink-cli api GET /:owner/:repo/raw/<branch>/<path>
+gitlink-cli repo +raw --ref=<branch>/<path>
 
 # 获取文件列表（遍历目录）
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=<path>&ref=<branch>'
+gitlink-cli repo +files --query 'filepath=<path>&ref=<branch>'
 
 # 获取仓库信息
-gitlink-cli api GET /:owner/:repo --format json
+gitlink-cli repo +info --format json
 
 # 获取贡献者列表
-gitlink-cli api GET /:owner/:repo/contributors --format json
+gitlink-cli repo +contributors --format json
 ```
 
 ## 注意事项

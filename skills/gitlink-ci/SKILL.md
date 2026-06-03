@@ -45,11 +45,11 @@ gitlink-cli ci +stop --build 42
 
 ```bash
 # 激活 CI
-gitlink-cli api POST /:owner/:repo/activate
+gitlink-cli ci +activate
 
 # 停用 CI
-gitlink-cli api DELETE /:owner/:repo/deactivate
+gitlink-cli ci +deactivate
 
 # CI 授权状态
-gitlink-cli api GET /:owner/:repo/ci_authorize
+gitlink-cli ci +authorize
 ```

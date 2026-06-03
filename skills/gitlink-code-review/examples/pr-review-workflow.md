@@ -117,7 +117,7 @@ gitlink-cli pr +diff --id 42 --format json
 
 ```bash
 # 提交整体 Review 评论
-gitlink-cli api POST /Gitlink/forgeplus/pulls/42/reviews --body '{
+gitlink-cli pr +review --id 42 --owner Gitlink --repo forgeplus --body '{
   "body": "## PR #42 代码审查报告\n\n### 🔴 Critical\n\n1. **JWT Secret 硬编码** — `src/config.py:15`\n   JWT_SECRET 硬编码在源码中。建议使用 `os.getenv(\"JWT_SECRET\")`。\n\n2. **SQL 注入风险** — `src/auth/login.py:42`\n   直接拼接用户输入到 SQL 查询。建议使用参数化查询。\n\n### 🟡 Warning\n\n1. **密码明文存储** — 建议使用 bcrypt 哈希处理。\n\n### 总体评价\n\n代码整体结构清晰，测试覆盖良好。建议修复 Critical 问题后合并。",
   "event": "COMMENT"
 }'
@@ -160,5 +160,5 @@ gitlink-cli pr +files --id <id> --format json
 gitlink-cli pr +diff --id <id> --format json
 
 # 提交 Review
-gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{"body":"...","event":"COMMENT"}'
+gitlink-cli pr +review --body '{"body":"...","event":"COMMENT"}'
 ```
