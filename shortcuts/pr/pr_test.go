@@ -232,9 +232,9 @@ func TestPRMergeSquash(t *testing.T) {
 	assertEqual(t, payload["do"], "squash")
 }
 
-// --- close ---
+// --- refuse ---
 
-func TestPRClose(t *testing.T) {
+func TestPRRefuse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Fatalf("expected POST, got %s", r.Method)
@@ -246,9 +246,9 @@ func TestPRClose(t *testing.T) {
 	}))
 	defer server.Close()
 
-	err := runPRShortcut(t, server, "close", map[string]string{"id": "42"})
+	err := runPRShortcut(t, server, "refuse", map[string]string{"id": "42"})
 	if err != nil {
-		t.Fatalf("close failed: %v", err)
+		t.Fatalf("refuse failed: %v", err)
 	}
 }
 
@@ -387,14 +387,14 @@ func TestPRMergeHTTPError(t *testing.T) {
 	}
 }
 
-func TestPRCloseHTTPError(t *testing.T) {
+func TestPRRefuseHTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("server error"))
 	}))
 	defer server.Close()
 
-	err := runPRShortcut(t, server, "close", map[string]string{"id": "42"})
+	err := runPRShortcut(t, server, "refuse", map[string]string{"id": "42"})
 	if err == nil {
 		t.Fatal("expected error for HTTP 500")
 	}

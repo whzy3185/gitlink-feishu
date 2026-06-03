@@ -1,6 +1,6 @@
 # pr +reopen
 
-Reopen a closed Pull Request.
+Reopen a closed or refused Pull Request.
 
 ## Usage
 
