@@ -107,7 +107,7 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		}
 	}
 
-	// Detect HTML response (avoid returning login page as normal data)
+	// Detect HTML responses (GitLink returns login pages when auth is missing)
 	if detectHTMLResponse(respData) {
 		msg := "服务器返回了 HTML 页面而非 JSON 数据"
 		suggestion := suggestHTMLFix()
@@ -122,7 +122,6 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 	// Parse JSON
 	var raw map[string]interface{}
 	if err := json.Unmarshal(respData, &raw); err != nil {
-		// Not JSON, return as-is
 		return output.SuccessEnvelope(string(respData), nil), nil
 	}
 
@@ -262,3 +261,4 @@ func suggestFix(code int) string {
 		return ""
 	}
 }
+

@@ -149,6 +149,116 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "languages",
+			Description: "Show language breakdown of a repository",
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/languages", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "contributors",
+			Description: "List contributors of a repository",
+			Flags: []common.Flag{
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/contributors", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "files",
+			Description: "List files in a repository directory",
+			Flags: []common.Flag{
+				{Name: "ref", Short: "r", Usage: "Branch, tag, or commit SHA"},
+				{Name: "path", Short: "p", Usage: "Directory path (default: repository root)"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				q := url.Values{}
+				if ref := ctx.Arg("ref"); ref != "" {
+					q.Set("ref", ref)
+				}
+				if p := ctx.Arg("path"); p != "" {
+					q.Set("filepath", p)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/files", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "tags",
+			Description: "List tags of a repository",
+			Flags: []common.Flag{
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/tags", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "commits",
+			Description: "List commits of a repository",
+			Flags: []common.Flag{
+				{Name: "sha", Short: "s", Usage: "Branch name, tag, or commit SHA"},
+				{Name: "path", Short: "p", Usage: "Filter commits by file path"},
+				{Name: "page", Short: "P", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				if sha := ctx.Arg("sha"); sha != "" {
+					q.Set("sha", sha)
+				}
+				if p := ctx.Arg("path"); p != "" {
+					q.Set("path", p)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/commits", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
 	}
 }
 

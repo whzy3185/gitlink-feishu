@@ -380,6 +380,72 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "commits",
+			Description: "List commits in a pull request",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", prV1Path(ctx, id)+"/commits", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "branches",
+			Description: "List branches for pull request creation",
+			Flags:       []common.Flag{},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/pulls/get_branches", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "check-merge",
+			Description: "Check if two branches can be merged",
+			Flags: []common.Flag{
+				{Name: "head", Usage: "Source branch", Required: true},
+				{Name: "base", Usage: "Target branch", Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				head, err := ctx.RequireArg("head")
+				if err != nil {
+					return err
+				}
+				base, err := ctx.RequireArg("base")
+				if err != nil {
+					return err
+				}
+				payload := map[string]interface{}{
+					"head": head,
+					"base": base,
+				}
+				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/pulls/check_can_merge", payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
 	}
 }
 
