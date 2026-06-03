@@ -119,7 +119,7 @@ func TestWikiUpdate(t *testing.T) {
 				"id":         float64(1547460),
 				"project_id": float64(1547460),
 			})
-		case r.Method == "PUT" && r.URL.Path == "/wiki/open/updateWiki":
+		case r.Method == "POST" && r.URL.Path == "/wiki/open/updateWiki":
 			updatePayload = decodeJSON(t, r)
 			writeJSON(t, w, map[string]interface{}{
 				"code": 200,

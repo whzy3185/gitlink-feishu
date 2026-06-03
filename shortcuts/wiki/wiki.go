@@ -130,7 +130,7 @@ func Shortcuts() []*common.Shortcut {
 				if msg := ctx.Arg("message"); msg != "" {
 					body["message"] = msg
 				}
-				return callWikiAPI(ctx, "PUT", "/wiki/open/updateWiki", body, nil)
+				return callWikiAPI(ctx, "POST", "/wiki/open/updateWiki", body, nil)
 			},
 		},
 		{
