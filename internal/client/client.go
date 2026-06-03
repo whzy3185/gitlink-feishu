@@ -212,26 +212,23 @@ func (c *Client) Delete(path string, query url.Values) (*output.Envelope, error)
 	return c.Do("DELETE", path, nil, query)
 }
 
-func suggestFix(code int) string {
-	switch code {
-	case 401:
-		return "请先运行 gitlink-cli auth login 登录"
-	case 403:
-		return "权限不足，请确认账户权限或联系项目管理员"
-	case 404:
-		return "资源不存在，请检查 owner/repo/id 是否正确"
-	case 422:
-		return "参数校验失败，请检查请求参数"
-	default:
-		return ""
-	}
-}
-
+// detectHTMLResponse detects whether the response body is an HTML page instead of JSON.
+// It first strips any XML declaration (<?xml ...?>) before checking for HTML prefixes.
 func detectHTMLResponse(data []byte) bool {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) == 0 {
 		return false
 	}
+	// Skip leading XML declaration (e.g., <?xml version="1.0"?>)
+	if bytes.HasPrefix(trimmed, []byte("<?")) {
+		if idx := bytes.Index(trimmed, []byte("?>")); idx != -1 {
+			trimmed = bytes.TrimSpace(trimmed[idx+2:])
+		}
+	}
+	if len(trimmed) == 0 {
+		return false
+	}
+	// Check for HTML document prefixes
 	prefixes := []string{"<!DOCTYPE", "<html", "<HTML", "<!doctype"}
 	for _, p := range prefixes {
 		if bytes.HasPrefix(trimmed, []byte(p)) {
@@ -249,3 +246,19 @@ func suggestHTMLFix() string {
 		"  3. API 端点不存在 → 检查路径是否正确\n" +
 		"  4. 使用 Shortcut 命令替代 Raw API → 运行 gitlink-cli --help 查看可用命令"
 }
+
+func suggestFix(code int) string {
+	switch code {
+	case 401:
+		return "请先运行 gitlink-cli auth login 登录"
+	case 403:
+		return "权限不足，请确认账户权限或联系项目管理员"
+	case 404:
+		return "资源不存在，请检查 owner/repo/id 是否正确"
+	case 422:
+		return "参数校验失败，请检查请求参数"
+	default:
+		return ""
+	}
+}
+

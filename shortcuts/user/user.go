@@ -4,14 +4,16 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "me",
-			Description: "Show current authenticated user",
+			Description: tr.T("cmd.user.me.short"),
 			Run: func(ctx *common.RuntimeContext) error {
 				env, err := ctx.CallAPI("GET", "/users/me", nil)
 				if err != nil {
@@ -22,9 +24,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "info",
-			Description: "Show user profile",
+			Description: tr.T("cmd.user.info.short"),
 			Flags: []common.Flag{
-				{Name: "login", Short: "l", Usage: "User login name", Required: true},
+				{Name: "login", Short: "l", Usage: tr.T("flag.user.login"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				login, err := ctx.RequireArg("login")
@@ -121,4 +123,11 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

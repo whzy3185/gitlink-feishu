@@ -1,17 +1,22 @@
 package common
 
 import (
-	"fmt"
 	"strconv"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/spf13/cobra"
 )
 
 // MountShortcut converts a Shortcut into a cobra.Command and adds it as a subcommand.
-func MountShortcut(parent *cobra.Command, s *Shortcut) {
+func MountShortcut(parent *cobra.Command, s *Shortcut, translators ...*i18n.Translator) {
+	tr := i18n.Default()
+	if len(translators) > 0 && translators[0] != nil {
+		tr = translators[0]
+	}
 	cmd := &cobra.Command{
 		Use:   "+" + s.Name,
 		Short: s.Description,
+		Long:  s.Long,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Collect flag values
 			flagValues := make(map[string]string)
@@ -27,9 +32,15 @@ func MountShortcut(parent *cobra.Command, s *Shortcut) {
 				}
 			}
 
-			ctx, err := NewRuntimeContext(flagValues)
+			ctx, err := NewRuntimeContext(flagValues, tr)
 			if err != nil {
 				return err
+			}
+			for _, f := range s.Flags {
+				if f.Required && flagValues[f.Name] == "" {
+					_, err := ctx.RequireArg(f.Name)
+					return err
+				}
 			}
 
 			return s.Run(ctx)
@@ -49,19 +60,18 @@ func MountShortcut(parent *cobra.Command, s *Shortcut) {
 		} else {
 			cmd.Flags().String(f.Name, f.Default, f.Usage)
 		}
-		if f.Required {
-			if err := cmd.MarkFlagRequired(f.Name); err != nil {
-				panic(fmt.Sprintf("failed to mark flag %s as required: %v", f.Name, err))
-			}
-		}
 	}
 
 	parent.AddCommand(cmd)
 }
 
 // MountShortcuts mounts multiple shortcuts under a parent command.
-func MountShortcuts(parent *cobra.Command, shortcuts []*Shortcut) {
+func MountShortcuts(parent *cobra.Command, shortcuts []*Shortcut, translators ...*i18n.Translator) {
+	var tr *i18n.Translator
+	if len(translators) > 0 {
+		tr = translators[0]
+	}
 	for _, s := range shortcuts {
-		MountShortcut(parent, s)
+		MountShortcut(parent, s, tr)
 	}
 }
