@@ -1,6 +1,6 @@
 ---
 name: gitlink-ci-health
-version: 1.0.0
+version: 1.1.0
 description: "CI 健康巡检：检查仓库 CI/CD 授权状态、构建历史和成功率，生成 CI 健康度报告。当用户需要检查 CI 状态、分析构建成功率、排查 CI 故障时触发。"
 metadata:
   requires:
@@ -11,7 +11,7 @@ metadata:
 # gitlink-ci-health（CI 健康巡检）
 
 **CRITICAL — 开始前必须先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)，其中包含认证、权限处理和 API 注意事项。**
-**CRITICAL — 本 Skill 为只读操作（`ci +activate`/`+deactivate` 除外），非只读操作需确认用户意图。**
+**CRITICAL — 本 Skill 为只读操作。CI 激活/关闭需通过 GitLink Web 界面操作，CLI 不提供对应命令。**
 **CRITICAL — GitLink 操作只能用 `gitlink-cli`。禁止用 `gh`（GitHub CLI）操作 GitLink 资源。**
 
 > **前置条件：** 先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md) 了解认证和全局参数。
@@ -34,11 +34,24 @@ metadata:
 
 ### Step 1：检查 CI 授权状态
 
+**方法 1（推荐）**：通过 `repo +info` 查看 `open_devops` 字段：
+
 ```bash
-gitlink-cli ci +authorize --owner <owner> --repo <repo> --format json
+gitlink-cli repo +info --owner <owner> --repo <repo> --format json
 ```
 
-判断 CI 是否已激活。若未激活，报告中说明"CI 未启用"，建议执行 `ci +activate`。
+- `"open_devops": true` → CI 已激活
+- `"open_devops": false` → CI 未激活
+
+**方法 2**：直接调用 `ci +builds`，CI 未激活时返回：
+
+```json
+{"status": -1, "message": "接口数据异常"}
+```
+
+> ⚠️ `ci +authorize` 命令在当前 CLI 版本（v0.1.18）中**不存在**。可用 CI 命令仅：`+builds`、`+logs`、`+restart`、`+stop`。
+
+若 CI 未激活，报告中说明"CI 未启用"，建议通过 GitLink Web 界面（仓库设置 → DevOps）开启，随后不再继续后续步骤。
 
 ### Step 2：获取构建历史
 
@@ -146,7 +159,7 @@ gitlink-cli ci +logs --owner <owner> --repo <repo> --build <build_id> --format j
 
 <!-- 根据分析结果，从以下列表中选择匹配的建议输出 -->
 
-- **立即激活 CI**（当 CI 未激活时）：执行 `gitlink-cli ci +activate --owner <owner> --repo <repo>`
+- **立即激活 CI**（当 CI 未激活时）：前往 GitLink Web 界面 → 仓库设置 → DevOps 开启 CI/CD 服务（CLI 暂不支持 `ci +activate`）
 - **提升成功率**（当 success_rate < 80% 时）：优先修复高频失败原因
 - **增加构建频率**（当构建频率评分 < 2 时）：建议每次 push 触发 CI
 - **缩短修复时间**（当修复速度评分 < 2 时）：建立 CI 失败告警
@@ -158,7 +171,7 @@ gitlink-cli ci +logs --owner <owner> --repo <repo> --build <build_id> --format j
 
 | 场景 | 处理方式 |
 |------|----------|
-| CI 未激活 | 报告 CI 状态为"未激活"，给出激活命令建议，不再继续后续步骤 |
+| CI 未激活 | 报告 CI 状态为"未激活"，建议通过 Web 界面开启，不再继续后续步骤 |
 | 无构建记录 | 标注"仓库暂无 CI 构建记录" |
 | `ci +logs` 返回空 | 标注"日志不可用" |
 | 构建总数 < 5 | 样本量不足，标注"数据有限，统计不具代表性" |
@@ -168,8 +181,9 @@ gitlink-cli ci +logs --owner <owner> --repo <repo> --build <build_id> --format j
 ## 注意事项
 
 - ✅ **所有命令使用 `--format json`**，确保可解析
-- ✅ **`ci +activate` 和 `+deactivate` 为写操作**，执行前需确认用户意图
+- ✅ **CI 激活/关闭需通过 GitLink Web 界面**，CLI 不提供 `+activate`/`+deactivate` 命令
 - ✅ **Owner/repo 优先从 `git remote` 自动解析**
 - ⚠️ **`ci +logs` 输出可能很大**，仅提取关键错误行
 - ⚠️ **构建历史无分页参数**，实际返回条数取决于 API
 - ⚠️ **CI 数据仅反映 GitLink 平台活动**，不包括第三方 CI 服务
+- ⚠️ **`repo +info` 的 `open_devops` 字段**是判断 CI 是否激活的最可靠方式
