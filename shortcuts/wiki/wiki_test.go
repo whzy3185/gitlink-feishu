@@ -142,6 +142,38 @@ func TestWikiUpdate(t *testing.T) {
 	assertEqual(t, updatePayload["message"], "Update wiki page")
 }
 
+func TestWikiUpdateWithoutMessage(t *testing.T) {
+	var updatePayload map[string]interface{}
+	server := newWikiTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{
+				"id":         float64(1547460),
+				"project_id": float64(1547460),
+			})
+		case r.Method == "POST" && r.URL.Path == "/wiki/open/updateWiki":
+			updatePayload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{
+				"code": 200,
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	if err := runWikiShortcut(t, server, "update", map[string]string{
+		"name":    "Home",
+		"content": "Updated content",
+	}); err != nil {
+		t.Fatalf("update without message failed: %v", err)
+	}
+
+	assertEqual(t, updatePayload["pageName"], "Home")
+	// message field should be present as empty string, not omitted
+	assertEqual(t, updatePayload["message"], "")
+}
+
 // --- Delete ---
 
 func TestWikiDelete(t *testing.T) {

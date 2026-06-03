@@ -125,10 +125,8 @@ func Shortcuts() []*common.Shortcut {
 					"projectId":      projectID,
 					"pageName":       name,
 					"title":          name,
+					"message":        ctx.Arg("message"),
 					"content_base64": base64.StdEncoding.EncodeToString([]byte(content)),
-				}
-				if msg := ctx.Arg("message"); msg != "" {
-					body["message"] = msg
 				}
 				return callWikiAPI(ctx, "POST", "/wiki/open/updateWiki", body, nil)
 			},
@@ -180,10 +178,6 @@ func callWikiAPI(ctx *common.RuntimeContext, method, path string, body interface
 		return ctx.Output(env)
 	}
 	env, err := ctx.CallAPIRaw(method, path, body)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
 	if err != nil {
 		return err
 	}
