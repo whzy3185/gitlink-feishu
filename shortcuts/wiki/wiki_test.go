@@ -15,19 +15,28 @@ import (
 
 func TestWikiList(t *testing.T) {
 	server := newWikiTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/owner/repo/wiki/pages.json")
-		writeJSON(t, w, map[string]interface{}{
-			"total_count": 2,
-			"wiki_pages": []interface{}{
-				map[string]interface{}{"title": "Home", "slug": "home"},
-				map[string]interface{}{"title": "Getting Started", "slug": "getting-started"},
-			},
-		})
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{
+				"id":         float64(1547460),
+				"project_id": float64(1547460),
+				"name":       "gitlink-cli",
+			})
+		case r.Method == "GET" && r.URL.Path == "/wiki/open/wikiPages":
+			writeJSON(t, w, map[string]interface{}{
+				"data": []interface{}{
+					map[string]interface{}{"title": "Home", "sub_url": "Home"},
+					map[string]interface{}{"title": "Guide", "sub_url": "Guide"},
+				},
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	})
 	defer server.Close()
 
 	if err := runWikiShortcut(t, server, "list", nil); err != nil {
-		t.Fatalf("list shortcut failed: %v", err)
+		t.Fatalf("list failed: %v", err)
 	}
 }
 
@@ -35,93 +44,134 @@ func TestWikiList(t *testing.T) {
 
 func TestWikiView(t *testing.T) {
 	server := newWikiTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/owner/repo/wiki/pages/home.json")
-		writeJSON(t, w, map[string]interface{}{
-			"title":          "Home",
-			"slug":           "home",
-			"content_base64": base64.StdEncoding.EncodeToString([]byte("Welcome to the wiki")),
-		})
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{
+				"id":         float64(1547460),
+				"project_id": float64(1547460),
+			})
+		case r.Method == "GET" && r.URL.Path == "/wiki/open/getWiki":
+			if r.URL.Query().Get("pageName") != "Home" {
+				t.Fatalf("expected pageName=Home, got %s", r.URL.Query().Get("pageName"))
+			}
+			writeJSON(t, w, map[string]interface{}{
+				"data": map[string]interface{}{
+					"title":          "Home",
+					"content_base64": base64.StdEncoding.EncodeToString([]byte("Welcome to the wiki")),
+				},
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	})
 	defer server.Close()
 
-	if err := runWikiShortcut(t, server, "view", map[string]string{"slug": "home"}); err != nil {
-		t.Fatalf("view shortcut failed: %v", err)
+	if err := runWikiShortcut(t, server, "view", map[string]string{"name": "Home"}); err != nil {
+		t.Fatalf("view failed: %v", err)
 	}
 }
 
 // --- Create ---
 
 func TestWikiCreate(t *testing.T) {
+	var createPayload map[string]interface{}
 	server := newWikiTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "POST", "/owner/repo/wiki/pages.json")
-		body := decodeJSON(t, r)
-		assertEqual(t, body["title"], "TestPage")
-		decoded, err := base64.StdEncoding.DecodeString(body["content_base64"].(string))
-		if err != nil {
-			t.Fatalf("failed to decode content_base64: %v", err)
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{
+				"id":         float64(1547460),
+				"project_id": float64(1547460),
+			})
+		case r.Method == "POST" && r.URL.Path == "/wiki/open/createWiki":
+			createPayload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{
+				"code": 201,
+				"data": map[string]interface{}{"title": "NewPage"},
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		assertEqual(t, string(decoded), "Hello World")
-
-		writeJSON(t, w, map[string]interface{}{
-			"title": "TestPage",
-			"slug":  "TestPage",
-		})
 	})
 	defer server.Close()
 
 	if err := runWikiShortcut(t, server, "create", map[string]string{
-		"title": "TestPage",
-		"body":  "Hello World",
+		"name":    "NewPage",
+		"content": "Hello Wiki",
 	}); err != nil {
-		t.Fatalf("create shortcut failed: %v", err)
+		t.Fatalf("create failed: %v", err)
 	}
+
+	assertEqual(t, createPayload["pageName"], "NewPage")
+	assertEqual(t, createPayload["owner"], "owner")
+	assertEqual(t, createPayload["repo"], "repo")
+	expectedContent := base64.StdEncoding.EncodeToString([]byte("Hello Wiki"))
+	assertEqual(t, createPayload["content_base64"], expectedContent)
 }
 
 // --- Update ---
 
 func TestWikiUpdate(t *testing.T) {
+	var updatePayload map[string]interface{}
 	server := newWikiTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "PATCH", "/owner/repo/wiki/pages/home.json")
-		body := decodeJSON(t, r)
-		assertEqual(t, body["title"], "Updated Title")
-		decoded, err := base64.StdEncoding.DecodeString(body["content_base64"].(string))
-		if err != nil {
-			t.Fatalf("failed to decode content_base64: %v", err)
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{
+				"id":         float64(1547460),
+				"project_id": float64(1547460),
+			})
+		case r.Method == "PUT" && r.URL.Path == "/wiki/open/updateWiki":
+			updatePayload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{
+				"code": 200,
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		assertEqual(t, string(decoded), "Updated content")
-
-		writeJSON(t, w, map[string]interface{}{
-			"title": "Updated Title",
-			"slug":  "home",
-		})
 	})
 	defer server.Close()
 
 	if err := runWikiShortcut(t, server, "update", map[string]string{
-		"slug":  "home",
-		"title": "Updated Title",
-		"body":  "Updated content",
+		"name":    "Home",
+		"content": "Updated content",
+		"message": "Update wiki page",
 	}); err != nil {
-		t.Fatalf("update shortcut failed: %v", err)
+		t.Fatalf("update failed: %v", err)
 	}
+
+	assertEqual(t, updatePayload["pageName"], "Home")
+	assertEqual(t, updatePayload["message"], "Update wiki page")
 }
 
 // --- Delete ---
 
 func TestWikiDelete(t *testing.T) {
+	var deletePayload map[string]interface{}
 	server := newWikiTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "DELETE", "/owner/repo/wiki/pages/old-page.json")
-		writeJSON(t, w, map[string]interface{}{
-			"message": "deleted",
-		})
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{
+				"id":         float64(1547460),
+				"project_id": float64(1547460),
+			})
+		case r.Method == "DELETE" && r.URL.Path == "/wiki/open/deleteWiki":
+			deletePayload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{
+				"code": 204,
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	})
 	defer server.Close()
 
 	if err := runWikiShortcut(t, server, "delete", map[string]string{
-		"slug": "old-page",
+		"name": "OldPage",
 	}); err != nil {
-		t.Fatalf("delete shortcut failed: %v", err)
+		t.Fatalf("delete failed: %v", err)
 	}
+
+	assertEqual(t, deletePayload["pageName"], "OldPage")
+	assertEqual(t, deletePayload["projectId"], float64(1547460))
 }
 
 // --- test helpers ---

@@ -81,6 +81,16 @@ func (ctx *RuntimeContext) CallAPIWithQuery(method, path string, query url.Value
 	return ctx.Client.Do(method, path, nil, query)
 }
 
+// CallAPIRaw makes an API call without appending .json suffix.
+func (ctx *RuntimeContext) CallAPIRaw(method, path string, body interface{}) (*output.Envelope, error) {
+	return ctx.Client.DoRaw(method, path, body, nil)
+}
+
+// CallAPIRawWithQuery makes an API call with query parameters without appending .json suffix.
+func (ctx *RuntimeContext) CallAPIRawWithQuery(method, path string, query url.Values) (*output.Envelope, error) {
+	return ctx.Client.DoRaw(method, path, nil, query)
+}
+
 // PaginateAll fetches all pages.
 func (ctx *RuntimeContext) PaginateAll(path string, params url.Values) ([]json.RawMessage, error) {
 	return ctx.Client.PaginateAll(path, params)

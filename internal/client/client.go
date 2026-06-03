@@ -172,6 +172,106 @@ func normalizeAPIPath(baseURL, path string) string {
 	return path
 }
 
+// DoRaw makes an API call without appending .json to the path.
+func (c *Client) DoRaw(method, path string, body interface{}, query url.Values) (*output.Envelope, error) {
+	fullURL := c.BaseURL + path
+	if query != nil && len(query) > 0 {
+		sep := "?"
+		if strings.Contains(fullURL, "?") {
+			sep = "&"
+		}
+		fullURL += sep + query.Encode()
+	}
+
+	var bodyReader io.Reader
+	if body != nil {
+		data, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		bodyReader = bytes.NewReader(data)
+	}
+
+	req, err := http.NewRequest(method, fullURL, bodyReader)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.Debug {
+		fmt.Printf("→ %s %s\n", method, fullURL)
+	}
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if c.Debug {
+		fmt.Printf("← %d %s\n", resp.StatusCode, string(respData[:min(len(respData), 200)]))
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			Code:       resp.StatusCode,
+			Message:    fmt.Sprintf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respData))),
+		}
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(respData, &raw); err != nil {
+		return output.SuccessEnvelope(string(respData), nil), nil
+	}
+
+	if status, ok := raw["status"]; ok {
+		var statusCode float64
+		switch v := status.(type) {
+		case float64:
+			statusCode = v
+		case int:
+			statusCode = float64(v)
+		}
+		if statusCode != 0 && statusCode != 200 && statusCode != 1 {
+			msg, _ := raw["message"].(string)
+			suggestion := suggestFix(int(statusCode))
+			return output.ErrorEnvelope(int(statusCode), msg, suggestion), &APIError{
+				StatusCode: int(statusCode),
+				Code:       int(statusCode),
+				Message:    msg,
+			}
+		}
+	}
+
+	if dataStr, ok := raw["data"].(string); ok {
+		var parsedData interface{}
+		if err := json.Unmarshal([]byte(dataStr), &parsedData); err == nil {
+			raw["data"] = json.RawMessage(dataStr)
+		}
+	}
+
+	var meta *output.Meta
+	if tc, ok := raw["total_count"]; ok {
+		meta = &output.Meta{}
+		if v, ok := tc.(float64); ok {
+			meta.TotalCount = int(v)
+		}
+		if v, ok := raw["page"].(float64); ok {
+			meta.Page = int(v)
+		}
+		if v, ok := raw["limit"].(float64); ok {
+			meta.Limit = int(v)
+		}
+	}
+
+	return output.SuccessEnvelope(raw, meta), nil
+}
+
 func (c *Client) Get(path string, query url.Values) (*output.Envelope, error) {
 	return c.Do("GET", path, nil, query)
 }
