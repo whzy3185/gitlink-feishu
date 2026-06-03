@@ -8,6 +8,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/ci"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/compare"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/export"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/issue"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/label"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/member"
@@ -21,7 +22,6 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/repo"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/search"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/user"
-	"github.com/gitlink-org/gitlink-cli/shortcuts/webhook"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/webhook"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/wiki"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
@@ -50,6 +50,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"search":    search.Shortcuts(tr),
 		"ci":        ci.Shortcuts(tr),
 		"compare":   compare.Shortcuts(),
+		"export":    export.Shortcuts(),
 		"webhook":   webhook.Shortcuts(tr),
 		"wiki":      wiki.Shortcuts(),
 		"workflow":  workflow.Shortcuts(),
@@ -72,6 +73,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"search":    tr.T("cmd.search.short"),
 		"ci":        tr.T("cmd.ci.short"),
 		"compare":   "Compare branches, tags, or commits",
+		"export":    "Data export to CSV/JSON",
 		"webhook":   tr.T("cmd.webhook.short"),
 		"wiki":      "Wiki page operations",
 		"workflow":  "AI agent workflow analysis",
