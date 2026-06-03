@@ -28,7 +28,7 @@ gitlink-cli issue +list --state open --format json
 gitlink-cli issue +view --id <issue_id> --format json
 
 # 3. 根据内容分析，通过 Raw API 添加标签
-gitlink-cli api POST /:owner/:repo/issues/:id --body '{"issue_tag_ids":[<tag_id>]}'
+gitlink-cli issue +update --number '{"issue_tag_ids":[<tag_id>]}'
 ```
 
 **分类规则建议**：
@@ -51,7 +51,7 @@ gitlink-cli pr +files --id <pr_id> --format json
 gitlink-cli pr +diff --id <pr_id> --format json
 
 # 4. 添加 Review 评论
-gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{"body":"代码审查意见...","event":"COMMENT"}'
+gitlink-cli pr +review --body '{"body":"代码审查意见...","event":"COMMENT"}'
 ```
 
 ## 工作流 3：Release Notes 生成
@@ -60,7 +60,7 @@ gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{"body":"代码审�
 
 ```bash
 # 1. 获取两个版本之间的提交
-gitlink-cli api GET /:owner/:repo/compare/:base...:head --format json
+gitlink-cli repo +compare --format json
 
 # 2. 获取已关闭的 Issue
 gitlink-cli issue +list --state closed --format json
@@ -98,7 +98,7 @@ gitlink-cli pr +list --state open --format json
 gitlink-cli pr +list --state merged --format json
 
 # 3. 获取项目动态
-gitlink-cli api GET /:owner/:repo/activity --format json
+gitlink-cli repo +activity --format json
 ```
 
 ## Workflow: PR Summary (Read-only)

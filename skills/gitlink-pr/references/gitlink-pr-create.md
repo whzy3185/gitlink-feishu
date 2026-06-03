@@ -53,7 +53,7 @@ gitlink-cli branch +create --name feature-branch --from master
 CONTENT=$(echo -n "文件内容" | base64)
 
 # 通过 Raw API 创建文件
-gitlink-cli api POST /:owner/:repo/create_file --body '{
+gitlink-cli repo +create-file --body '{
   "filepath": "path/to/new-file.md",
   "content": "'$CONTENT'",
   "branch": "feature-branch",
@@ -73,12 +73,12 @@ gitlink-cli pr +create --title "feat: 新功能" --head feature-branch --base ma
 
 ```bash
 # Step 2a: 获取文件 SHA
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=path/to/file.md&ref=feature-branch'
+gitlink-cli repo +files --query 'filepath=path/to/file.md&ref=feature-branch'
 # 从返回的 entries.sha 获取 SHA 值
 
 # Step 2b: 更新文件（content 必须 base64 编码）
 CONTENT=$(echo -n "更新后的内容" | base64)
-gitlink-cli api PUT /:owner/:repo/update_file --body '{
+gitlink-cli repo +update-file --body '{
   "filepath": "path/to/file.md",
   "content": "'$CONTENT'",
   "sha": "<从 sub_entries 获取的 sha>",

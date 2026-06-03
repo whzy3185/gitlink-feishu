@@ -87,7 +87,7 @@ gitlink-cli release +list --format json
 ### 仓库文件列表
 
 ```bash
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=&ref=<branch>' --format json
+gitlink-cli repo +files --query 'filepath=&ref=<branch>' --format json
 ```
 
 | 字段 | 类型 | 说明 |
@@ -100,7 +100,7 @@ gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=&ref=<branch>' -
 ### 仓库语言统计
 
 ```bash
-gitlink-cli api GET /:owner/:repo/languages --format json
+gitlink-cli repo +languages --format json
 ```
 
 **返回示例：** `{ "Ruby": "90.2%", "JavaScript": "6.1%", "CSS": "3.7%" }`
@@ -108,7 +108,7 @@ gitlink-cli api GET /:owner/:repo/languages --format json
 ### 贡献者列表
 
 ```bash
-gitlink-cli api GET /:owner/:repo/contributors --format json
+gitlink-cli repo +contributors --format json
 ```
 
 | 字段 | 类型 | 说明 |
@@ -121,13 +121,13 @@ gitlink-cli api GET /:owner/:repo/contributors --format json
 ### 仓库动态
 
 ```bash
-gitlink-cli api GET /:owner/:repo/activity --format json
+gitlink-cli repo +activity --format json
 ```
 
 ### 获取用户详情
 
 ```bash
-gitlink-cli api GET /users/:user_id --format json
+gitlink-cli user +info --login --format json
 ```
 
 | 字段 | 类型 | 说明 |

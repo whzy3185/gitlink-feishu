@@ -55,22 +55,22 @@ Shortcuts 未覆盖的仓库操作可用 Raw API：
 
 ```bash
 # 获取 README
-gitlink-cli api GET /:owner/:repo/readme
+gitlink-cli repo +readme
 
 # 获取贡献者列表
-gitlink-cli api GET /:owner/:repo/contributors
+gitlink-cli repo +contributors
 
 # 获取语言统计
-gitlink-cli api GET /:owner/:repo/languages
+gitlink-cli repo +languages
 
 # 获取提交列表
-gitlink-cli api GET /:owner/:repo/commits --query 'page=1&limit=20'
+gitlink-cli repo +commits --query 'page=1&limit=20'
 
 # 获取标签列表
-gitlink-cli api GET /:owner/:repo/tags
+gitlink-cli repo +tags
 
 # 获取文件内容
-gitlink-cli api GET /:owner/:repo/raw/main/README.md
+gitlink-cli repo +raw --ref=main/README.md
 ```
 
 ## 注意事项
