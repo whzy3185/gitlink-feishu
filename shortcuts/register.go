@@ -8,6 +8,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/ci"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/compare"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/health"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/issue"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/label"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/member"
@@ -45,6 +46,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"ci":        ci.Shortcuts(tr),
 		"compare":   compare.Shortcuts(),
 		"webhook":   webhook.Shortcuts(tr),
+		"health":    health.Shortcuts(tr),
 		"workflow":  workflow.Shortcuts(),
 	}
 
@@ -64,6 +66,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"ci":        tr.T("cmd.ci.short"),
 		"compare":   "Compare branches, tags, or commits",
 		"webhook":   tr.T("cmd.webhook.short"),
+		"health":    "Project health data collection",
 		"workflow":  "AI agent workflow analysis",
 	}
 

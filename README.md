@@ -596,6 +596,7 @@ See [skills/README.md](skills/README.md) for details.
 | `gitlink-user` | User management (profile info, etc.) |
 | `gitlink-pm` | Project management (sprints, kanban, weekly reports, etc.) |
 | `gitlink-workflow` | AI-powered workflows (issue triage, PR review, release notes, etc.) |
+| `gitlink-health` | Project health analysis (PR/Issue metrics aggregation, health reports) |
 
 ## Project Structure
 
