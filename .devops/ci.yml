@@ -17,7 +17,7 @@ workflow:
     task: git_clone@1.2.9
     input:
       remote_url: '"https://gitlink.org.cn/jiangtx/gitlink-cli.git"'
-      ref: '"refs/heads/jtx_branch"'
+      ref: '"refs/heads/wyx_branch"'
       commit_id: '""'
       depth: 1
     needs:
@@ -31,7 +31,7 @@ workflow:
       ssh_port: '"22"'
       ssh_user: '"root"'
       ssh_cmd: >-
-        "cd /root && rm -rf gitlink-cli && git clone --depth=1 -b jtx_branch https://gitlink.org.cn/jiangtx/gitlink-cli.git && cd gitlink-cli && export PATH=$PATH:/usr/local/go/bin && export GOPROXY=https://goproxy.cn,direct && go version && go build ./... && go vet ./... && go test -race ./... && output=$(gofmt -s -l .) && if [ -n \"$output\" ]; then echo '格式化检查失败:' && echo \"$output\" && exit 1; fi && echo '所有 CI 检查通过'"
+        "cd /root && rm -rf gitlink-cli && git clone --depth=1 -b wyx_branch https://gitlink.org.cn/jiangtx/gitlink-cli.git && cd gitlink-cli && export PATH=$PATH:/usr/local/go/bin && export GOPROXY=https://goproxy.cn,direct && go version && go build ./... && go vet ./... && go test -race ./... && output=$(gofmt -s -l .) && if [ -n \"$output\" ]; then echo '格式化检查失败:' && echo \"$output\" && exit 1; fi && echo '所有 CI 检查通过'"
     needs:
       - git_clone_0
   - ref: end
