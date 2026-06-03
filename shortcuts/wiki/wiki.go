@@ -128,7 +128,7 @@ func Shortcuts() []*common.Shortcut {
 					"message":        ctx.Arg("message"),
 					"content_base64": base64.StdEncoding.EncodeToString([]byte(content)),
 				}
-				return callWikiAPI(ctx, "POST", "/wiki/open/updateWiki", body, nil)
+				return callWikiAPI(ctx, "PUT", "/wiki/open/updateWiki", body, nil)
 			},
 		},
 		{
