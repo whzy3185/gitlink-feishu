@@ -12,6 +12,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/label"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/member"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/milestone"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/notification"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/org"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/pipeline"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/pr"
@@ -35,6 +36,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"label":     label.Shortcuts(),
 		"member":    member.Shortcuts(),
 		"milestone": milestone.Shortcuts(),
+		"notification": notification.Shortcuts(),
 		"pipeline":  pipeline.Shortcuts(),
 		"pr":        pr.Shortcuts(tr),
 		"release":   release.Shortcuts(tr),
@@ -53,7 +55,8 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"issue":     tr.T("cmd.issue.short"),
 		"label":     "Issue label operations",
 		"member":    "Repository member operations",
-		"milestone": "Milestone operations",
+		"milestone": "Milestone operations"
+		"notification": "Notification operations",
 		"pipeline":  "Pipeline operations",
 		"pr":        tr.T("cmd.pr.short"),
 		"release":   tr.T("cmd.release.short"),
