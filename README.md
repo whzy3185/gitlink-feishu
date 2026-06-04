@@ -106,6 +106,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔧 CI | View builds, logs, CI/CD operations |
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
+| 📚 Catalog | List GitLink license and .gitignore templates for repository bootstrap |
 | 🔍 Search | Search repositories, users |
 | 👤 User | View user profiles and info |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
@@ -244,6 +245,19 @@ gitlink-cli repo +create -n my-project -d "Project description"
 
 # Fork a repository
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+```
+
+### Platform Catalogs
+
+```bash
+# List license templates
+gitlink-cli catalog +licenses
+
+# Filter license templates by name
+gitlink-cli catalog +licenses --name MIT
+
+# List .gitignore templates
+gitlink-cli catalog +ignores --name Go
 ```
 
 ### Webhook Management
@@ -638,6 +652,7 @@ See [skills/README.md](skills/README.md) for details.
 |-------|-------------|
 | `gitlink-shared` | Authentication, global parameters, safety rules, API notes |
 | `gitlink-repo` | Repository operations (create, view, delete, fork, insights, etc.) |
+| `gitlink-catalog` | License and .gitignore template lookup |
 | `gitlink-issue` | Issue operations (create, update, close, comment, etc.) |
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
 | `gitlink-member` | Repository member and invite link management |
