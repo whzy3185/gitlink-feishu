@@ -19,7 +19,7 @@ func Shortcuts() []*common.Shortcut {
 			Name:        "list",
 			Description: "List wiki pages",
 			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil { //这是传递参数的代码
+				if err := ctx.ResolveOwnerRepo(); err != nil { 
 					return err
 				}
 				projectID, err := fetchProjectID(ctx)
