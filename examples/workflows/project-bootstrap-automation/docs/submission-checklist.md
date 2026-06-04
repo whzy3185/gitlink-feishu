@@ -8,7 +8,7 @@
 | 提供可复现执行脚本或 Agent 对话记录 | `scripts/run_demo.ps1` |
 | 在至少一个真实 GitLink 项目上运行并展示效果 | 已在 `puygob236/gitlink-bootstrap-demo` 完成仓库读取、分支读取、Issue 创建和 Issue 摘要回写验证 |
 | 提供工作流说明文档 | `README.md`、`docs/workflow-spec.md`、`docs/quickstart.md`、`docs/runbook.md` |
-| 提供架构图 | `docs/architecture.md`、`docs/assets/bootstrap-architecture.svg` |
+| 提供架构图 | `docs/architecture.md`、`docs/assets/bootstrap-architecture.png` |
 | 提供演示材料 | `docs/demo-video-script.md` |
 | 代码开源并托管到 GitLink | 放置于 `examples/workflows/project-bootstrap-automation/` |
 | 提供完整中文 README | `README.md` |

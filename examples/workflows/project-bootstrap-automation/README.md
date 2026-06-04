@@ -13,7 +13,7 @@
 - `examples/demo_outputs/`：固定示例输出
 - `docs/workflow-spec.md`：工作流说明文档
 - `docs/architecture.md`：架构与流程说明
-- `docs/assets/bootstrap-architecture.svg`：架构图
+- `docs/assets/bootstrap-architecture.png`：架构图
 - `docs/quickstart.md`：最短复现路径
 - `docs/runbook.md`：运行手册
 - `docs/verification.md`：验证记录
