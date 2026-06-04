@@ -1,4 +1,4 @@
-﻿# 架构说明
+# 架构说明
 
 本工作流采用“配置输入 -> 资产生成 -> CLI 编排 -> GitLink 落地 -> 结果归档”的五段式架构。正式架构图见 `docs/assets/bootstrap-architecture.svg`。
 
