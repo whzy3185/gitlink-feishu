@@ -36,7 +36,7 @@ func TestNotificationView(t *testing.T) {
 
 func TestNotificationRead(t *testing.T) {
 	server := newNotificationTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "PATCH", "/users/testuser/messages/42.json")
+		assertRequest(t, r, "POST", "/users/testuser/messages/read.json")
 		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
 	})
 	defer server.Close()

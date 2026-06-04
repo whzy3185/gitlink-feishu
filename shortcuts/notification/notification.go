@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/url"
 
+	"strconv"
+
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -69,7 +71,14 @@ func Shortcuts() []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("PATCH", fmt.Sprintf("/users/%s/messages/%s", login, id), nil)
+				idInt, err := strconv.Atoi(id)
+				if err != nil {
+					return fmt.Errorf("invalid id: %s", id)
+				}
+				body := map[string]interface{}{
+					"ids": []int{idInt},
+				}
+				env, err := ctx.CallAPI("POST", fmt.Sprintf("/users/%s/messages/read", login), body)
 				if err != nil {
 					return err
 				}
