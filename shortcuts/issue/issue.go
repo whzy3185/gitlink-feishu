@@ -82,12 +82,18 @@ func Shortcuts() []*common.Shortcut {
 				if m := ctx.Arg("milestone"); m != "" {
 					body["fixed_version_id"] = m
 				}
-				if l := ctx.Arg("label"); l != "" {
-					body["issue_tag_ids"] = []int{func() int {
-						id, _ := strconv.Atoi(l)
-						return id
-					}()}
-				}
+					if l := ctx.Arg("label"); l != "" {
+						var tagIDs []int
+						for _, s := range strings.Split(l, ",") {
+							s = strings.TrimSpace(s)
+							if id, err := strconv.Atoi(s); err == nil {
+								tagIDs = append(tagIDs, id)
+							}
+						}
+						if len(tagIDs) > 0 {
+							body["issue_tag_ids"] = tagIDs
+						}
+					}
 				env, err := ctx.CallAPI("POST", v1RepoPath(ctx)+"/issues", body)
 				if err != nil {
 					return err
