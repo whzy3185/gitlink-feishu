@@ -101,7 +101,15 @@ func Shortcuts() []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("DELETE", fmt.Sprintf("/users/%s/messages/%s", login, id), nil)
+				idInt, err := strconv.Atoi(id)
+				if err != nil {
+					return fmt.Errorf("invalid id: %s", id)
+				}
+				body := map[string]interface{}{
+					"type": "notification",
+					"ids":  []int{idInt},
+				}
+				env, err := ctx.CallAPI("DELETE", fmt.Sprintf("/users/%s/messages", login), body)
 				if err != nil {
 					return err
 				}
