@@ -38,22 +38,22 @@
   <text x="720" y="112" text-anchor="middle" class="title">GitLink Project Bootstrap Automation</text>
   <text x="720" y="146" text-anchor="middle" class="subtitle">Configuration-driven project initialization, CLI orchestration, GitLink execution, and reproducible evidence</text>
 
-  <g transform="translate(82 210)">
-    <rect width="220" height="330" rx="18" fill="#ffffff" stroke="#cfdce7" filter="url(#shadow)"/>
-    <rect width="220" height="68" rx="18" fill="url(#blue)"/>
-    <text x="110" y="43" text-anchor="middle" class="stage-title">Input</text>
+  <g transform="translate(72 210)">
+    <rect width="210" height="330" rx="18" fill="#ffffff" stroke="#cfdce7" filter="url(#shadow)"/>
+    <rect width="210" height="68" rx="18" fill="url(#blue)"/>
+    <text x="105" y="43" text-anchor="middle" class="stage-title">Input</text>
     <text x="28" y="114" class="body">Project metadata</text>
     <text x="28" y="154" class="body">Repository target</text>
     <text x="28" y="194" class="body">Branches</text>
     <text x="28" y="234" class="body">Initial issues</text>
-    <line x1="28" y1="268" x2="192" y2="268" stroke="#c7d6e1"/>
+    <line x1="28" y1="268" x2="182" y2="268" stroke="#c7d6e1"/>
     <text x="28" y="302" class="mono">sample_project.json</text>
   </g>
 
-  <g transform="translate(350 210)">
-    <rect width="220" height="330" rx="18" fill="#ffffff" stroke="#cfdce7" filter="url(#shadow)"/>
-    <rect width="220" height="68" rx="18" fill="#274766"/>
-    <text x="110" y="43" text-anchor="middle" class="stage-title">Assets</text>
+  <g transform="translate(320 210)">
+    <rect width="210" height="330" rx="18" fill="#ffffff" stroke="#cfdce7" filter="url(#shadow)"/>
+    <rect width="210" height="68" rx="18" fill="#274766"/>
+    <text x="105" y="43" text-anchor="middle" class="stage-title">Assets</text>
     <text x="28" y="114" class="body">README</text>
     <text x="28" y="154" class="body">LICENSE</text>
     <text x="28" y="194" class="body">Go CI</text>
@@ -61,7 +61,7 @@
     <text x="28" y="274" class="body">ROADMAP</text>
   </g>
 
-  <g transform="translate(618 210)">
+  <g transform="translate(570 210)">
     <rect width="250" height="330" rx="18" fill="#ffffff" stroke="#cfdce7" filter="url(#shadow)"/>
     <rect width="250" height="68" rx="18" fill="url(#green)"/>
     <text x="125" y="43" text-anchor="middle" class="stage-title">CLI Orchestration</text>
@@ -75,19 +75,20 @@
     <text x="125" y="312" text-anchor="middle" class="mono">issue +create</text>
   </g>
 
-  <g transform="translate(916 210)">
-    <rect width="220" height="330" rx="18" fill="#ffffff" stroke="#cfdce7" filter="url(#shadow)"/>
-    <rect width="220" height="68" rx="18" fill="#40556e"/>
-    <text x="110" y="43" text-anchor="middle" class="stage-title">GitLink</text>
+  <g transform="translate(858 210)">
+    <rect width="230" height="330" rx="18" fill="#ffffff" stroke="#cfdce7" filter="url(#shadow)"/>
+    <rect width="230" height="68" rx="18" fill="#40556e"/>
+    <text x="115" y="43" text-anchor="middle" class="stage-title">GitLink</text>
     <text x="28" y="116" class="body">Repository state</text>
-    <text x="28" y="158" class="body">Collaboration branches</text>
-    <text x="28" y="200" class="body">Bootstrap issues</text>
-    <text x="28" y="242" class="body">Issue comment</text>
-    <line x1="28" y1="278" x2="192" y2="278" stroke="#c7d6e1"/>
-    <text x="28" y="310" class="small">Apply mode only writes remotely</text>
+    <text x="28" y="158" class="body">Collaboration</text>
+    <text x="28" y="184" class="body">branches</text>
+    <text x="28" y="226" class="body">Bootstrap issues</text>
+    <text x="28" y="268" class="body">Issue comment</text>
+    <line x1="28" y1="294" x2="202" y2="294" stroke="#c7d6e1"/>
+    <text x="28" y="318" class="small">Apply mode writes remotely</text>
   </g>
 
-  <g transform="translate(1184 210)">
+  <g transform="translate(1136 210)">
     <rect width="220" height="330" rx="18" fill="#ffffff" stroke="#cfdce7" filter="url(#shadow)"/>
     <rect width="220" height="68" rx="18" fill="#6b7789"/>
     <text x="110" y="43" text-anchor="middle" class="stage-title">Evidence</text>
@@ -98,13 +99,13 @@
     <text x="28" y="274" class="body">command log</text>
   </g>
 
-  <line x1="314" y1="375" x2="338" y2="375" stroke="#26384d" stroke-width="3" marker-end="url(#arrow)"/>
-  <line x1="582" y1="375" x2="606" y2="375" stroke="#26384d" stroke-width="3" marker-end="url(#arrow)"/>
-  <line x1="880" y1="375" x2="904" y2="375" stroke="#26384d" stroke-width="3" marker-end="url(#arrow)"/>
-  <line x1="1148" y1="375" x2="1172" y2="375" stroke="#26384d" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="294" y1="375" x2="308" y2="375" stroke="#26384d" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="542" y1="375" x2="558" y2="375" stroke="#26384d" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="832" y1="375" x2="846" y2="375" stroke="#26384d" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1100" y1="375" x2="1124" y2="375" stroke="#26384d" stroke-width="3" marker-end="url(#arrow)"/>
 
-  <path d="M743 555 C743 620, 1260 620, 1260 555" fill="none" stroke="#2f7d6b" stroke-width="3" stroke-dasharray="8 8" marker-end="url(#arrow)"/>
-  <text x="1000" y="650" text-anchor="middle" class="caption">Dry-run records planned commands; apply mode executes and records results</text>
+  <path d="M695 555 C695 620, 1246 620, 1246 555" fill="none" stroke="#2f7d6b" stroke-width="3" stroke-dasharray="8 8" marker-end="url(#arrow)"/>
+  <text x="970" y="650" text-anchor="middle" class="caption">Dry-run records planned commands; apply mode executes and records results</text>
 
   <g transform="translate(160 690)">
     <rect width="1120" height="46" rx="23" fill="#f5f9fb" stroke="#d4e1ea"/>
@@ -114,7 +115,7 @@
     <text x="298" y="29" class="small">7 default CLI calls</text>
     <circle cx="535" cy="23" r="10" fill="#24a368"/>
     <text x="555" y="29" class="small">Reproducible dry-run</text>
-    <circle cx="820" cy="23" r="10" fill="#24a368"/>
-    <text x="840" y="29" class="small">Validated on real GitLink repository</text>
+    <circle cx="808" cy="23" r="10" fill="#24a368"/>
+    <text x="828" y="29" class="small">Validated on real GitLink repo</text>
   </g>
 </svg>
