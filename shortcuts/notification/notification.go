@@ -76,6 +76,7 @@ func Shortcuts() []*common.Shortcut {
 					return fmt.Errorf("invalid id: %s", id)
 				}
 				body := map[string]interface{}{
+					"type": "notification",
 					"ids": []int{idInt},
 				}
 				env, err := ctx.CallAPI("POST", fmt.Sprintf("/users/%s/messages/read", login), body)
