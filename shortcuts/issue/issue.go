@@ -161,6 +161,7 @@ func Shortcuts() []*common.Shortcut {
 				{Name: "title", Short: "t", Usage: "New title"},
 				{Name: "body", Short: "b", Usage: "New description"},
 				{Name: "state", Short: "s", Usage: "New state: open, closed, or numeric status_id"},
+				{Name: "label", Short: "l", Usage: "Label IDs (comma-separated, empty to clear)"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -173,8 +174,9 @@ func Shortcuts() []*common.Shortcut {
 				title := ctx.Arg("title")
 				description := ctx.Arg("body")
 				state := ctx.Arg("state")
-				if title == "" && description == "" && state == "" {
-					return fmt.Errorf("at least one of --title, --body, or --state is required")
+				_, labelProvided := ctx.Args["label"]
+				if title == "" && description == "" && state == "" && !labelProvided {
+					return fmt.Errorf("at least one of --title, --body, --state, or --label is required")
 				}
 
 				current, err := fetchExistingIssue(ctx, number)
@@ -198,6 +200,22 @@ func Shortcuts() []*common.Shortcut {
 						return err
 					}
 					body["status_id"] = statusID
+				}
+				if labelProvided {
+					if l := ctx.Arg("label"); l != "" {
+						var tagIDs []int
+						for _, s := range strings.Split(l, ",") {
+							s = strings.TrimSpace(s)
+							if id, err := strconv.Atoi(s); err == nil {
+								tagIDs = append(tagIDs, id)
+							}
+						}
+						if len(tagIDs) > 0 {
+							body["issue_tag_ids"] = tagIDs
+						}
+					} else {
+						body["issue_tag_ids"] = []int{}
+					}
 				}
 				env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), body)
 				if err != nil {
