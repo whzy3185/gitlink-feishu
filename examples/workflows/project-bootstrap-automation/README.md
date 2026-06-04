@@ -11,10 +11,13 @@
 - `examples/sample_project.json`：示例项目配置
 - `examples/verification_comment_config.json`：真实回写验证配置
 - `examples/demo_outputs/`：固定示例输出
+- `docs/workflow-spec.md`：工作流说明文档
 - `docs/architecture.md`：架构与流程说明
+- `docs/assets/bootstrap-architecture.svg`：架构图
 - `docs/quickstart.md`：最短复现路径
 - `docs/runbook.md`：运行手册
 - `docs/verification.md`：验证记录
+- `docs/demo-video-script.md`：演示视频录制脚本
 - `docs/submission-checklist.md`：赛题要求映射
 - `scripts/bootstrap_project_test.go`：Go 单元测试
 
@@ -66,6 +69,16 @@
 
 当指定 `-PublishIssueNumber` 时，会额外追加 `issue +comment`，用于把初始化摘要回写到 GitLink Issue。
 当指定 `-CreateRepo` 时，会在检查仓库前追加 `repo +create`。
+
+## 文档索引
+
+- 工作流说明：`docs/workflow-spec.md`
+- 架构说明与架构图：`docs/architecture.md`
+- 复现指南：`docs/quickstart.md`
+- 运行手册：`docs/runbook.md`
+- 验证记录：`docs/verification.md`
+- 演示视频脚本：`docs/demo-video-script.md`
+- 提交核对清单：`docs/submission-checklist.md`
 
 ## 场景价值
 
