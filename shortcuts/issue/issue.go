@@ -83,7 +83,10 @@ func Shortcuts() []*common.Shortcut {
 					body["fixed_version_id"] = m
 				}
 				if l := ctx.Arg("label"); l != "" {
-					body["label_id"] = l
+					body["issue_tag_ids"] = []int{func() int {
+						id, _ := strconv.Atoi(l)
+						return id
+					}()}
 				}
 				env, err := ctx.CallAPI("POST", v1RepoPath(ctx)+"/issues", body)
 				if err != nil {
