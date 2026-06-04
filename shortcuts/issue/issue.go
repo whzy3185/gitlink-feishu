@@ -174,8 +174,8 @@ func Shortcuts() []*common.Shortcut {
 				title := ctx.Arg("title")
 				description := ctx.Arg("body")
 				state := ctx.Arg("state")
-				_, labelProvided := ctx.Args["label"]
-				if title == "" && description == "" && state == "" && !labelProvided {
+				label := ctx.Arg("label")
+				if title == "" && description == "" && state == "" && label == "" {
 					return fmt.Errorf("at least one of --title, --body, --state, or --label is required")
 				}
 
@@ -201,10 +201,12 @@ func Shortcuts() []*common.Shortcut {
 					}
 					body["status_id"] = statusID
 				}
-				if labelProvided {
-					if l := ctx.Arg("label"); l != "" {
+				if label != "" {
+					if label == "clear" {
+						body["issue_tag_ids"] = []int{}
+					} else {
 						var tagIDs []int
-						for _, s := range strings.Split(l, ",") {
+						for _, s := range strings.Split(label, ",") {
 							s = strings.TrimSpace(s)
 							if id, err := strconv.Atoi(s); err == nil {
 								tagIDs = append(tagIDs, id)
@@ -213,8 +215,6 @@ func Shortcuts() []*common.Shortcut {
 						if len(tagIDs) > 0 {
 							body["issue_tag_ids"] = tagIDs
 						}
-					} else {
-						body["issue_tag_ids"] = []int{}
 					}
 				}
 				env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), body)
