@@ -228,5 +228,8 @@
   "success.config.set": "✓ {key} = {value}",
   "warning.auth.not_logged_in": "✗ Not logged in",
   "warning.auth.token_unverified": "✓ Token stored (but cannot verify: {message})",
-  "warning.auth.user_unavailable": "✓ Token stored (user info unavailable)"
+  "warning.auth.user_unavailable": "✓ Token stored (user info unavailable)",
+  "cmd.repo.readme.short": "Read repository README file",
+  "flag.repo.readme_ref": "Branch, tag, or commit SHA",
+  "flag.repo.readme_path": "Directory path containing the README, for example docs"
 }

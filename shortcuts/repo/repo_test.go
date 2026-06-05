@@ -144,8 +144,8 @@ func TestRepoReadmeUsesRepositoryReadmeEndpoint(t *testing.T) {
 	defer server.Close()
 
 	err := runShortcut(t, server, "readme", map[string]string{
-		"ref":  "main",
-		"path": "docs",
+		"ref":  " main ",
+		"path": " /docs/ ",
 	})
 	if err != nil {
 		t.Fatalf("readme shortcut failed: %v", err)

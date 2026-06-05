@@ -211,6 +211,7 @@ gitlink-cli repo +info --owner Gitlink --repo forgeplus
 
 # Read repository README
 gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
+gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master --path docs
 
 # List repository files at root or a directory
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
