@@ -255,6 +255,15 @@ gitlink-cli repo +create -n my-project -d "Project description"
 
 # Fork a repository
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+
+# List organizations that can receive a repository transfer
+gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
+
+# Preview a repository transfer without changing data
+gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org --dry-run
+
+# Cancel a pending repository transfer
+gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --dry-run
 ```
 
 ### Webhook Management

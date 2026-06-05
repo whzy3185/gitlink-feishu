@@ -37,6 +37,9 @@ metadata:
 | `repo +create` | 创建仓库 | 是 |
 | `repo +fork` | Fork 仓库 | 是 |
 | `repo +delete` | 删除仓库 | 是 |
+| `repo +transfer-orgs` | 列出可接收仓库转移的组织 | 是 |
+| `repo +transfer` | 发起仓库转移 | 是 |
+| `repo +transfer-cancel` | 取消待处理的仓库转移 | 是 |
 
 ## 使用示例
 
@@ -78,6 +81,18 @@ gitlink-cli repo +create --name my-project --description "项目描述"
 # Fork 仓库
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
 
+# 查看仓库可转移到哪些组织
+gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
+
+# 预览仓库转移请求，不修改线上数据
+gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org --dry-run
+
+# 确认后发起仓库转移
+gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org
+
+# 取消待处理的仓库转移
+gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --dry-run
+
 # 删除仓库（⚠️ 危险操作）
 gitlink-cli repo +delete --owner myuser --repo old-project
 ```
@@ -100,4 +115,6 @@ gitlink-cli api GET /:owner/:repo/raw/main/README.md
 ## 注意事项
 
 - `repo +delete` 是不可逆操作，执行前必须确认用户意图
+- `repo +transfer` 会改变仓库所有者，执行前先使用 `repo +transfer-orgs` 确认可转移目标，并用 `--dry-run` 预览请求
+- `repo +transfer-cancel` 只用于取消已发起且未处理的转移申请，建议先用 `--dry-run` 预览
 - 创建仓库默认为公开，使用 `--private true` 创建私有仓库

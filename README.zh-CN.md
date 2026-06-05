@@ -266,6 +266,15 @@ gitlink-cli repo +create -n my-project -d "项目描述"
 
 # Fork 仓库
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+
+# 列出可接收仓库转移的组织
+gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
+
+# 预览仓库转移请求，不修改线上数据
+gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org --dry-run
+
+# 取消待处理的仓库转移
+gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --dry-run
 ```
 
 ### Webhook 管理

@@ -267,5 +267,11 @@
   "success.config.set": "✓ {key} = {value}",
   "warning.auth.not_logged_in": "✗ Not logged in",
   "warning.auth.token_unverified": "✓ Token stored (but cannot verify: {message})",
-  "warning.auth.user_unavailable": "✓ Token stored (user info unavailable)"
+  "warning.auth.user_unavailable": "✓ Token stored (user info unavailable)",
+  "cmd.repo.transfer_orgs.short": "List organizations that can receive this repository",
+  "cmd.repo.transfer.short": "Transfer a repository to another owner",
+  "cmd.repo.transfer_cancel.short": "Cancel a pending repository transfer",
+  "flag.repo.target_owner": "Target user or organization login",
+  "flag.repo.transfer_dry_run": "Preview the transfer request without changing repository ownership",
+  "flag.repo.transfer_cancel_dry_run": "Preview the cancel request without changing repository transfer state"
 }

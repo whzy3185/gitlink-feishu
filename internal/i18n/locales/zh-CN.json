@@ -267,5 +267,11 @@
   "success.config.set": "✓ 已设置 {key} = {value}",
   "warning.auth.not_logged_in": "✗ 未登录",
   "warning.auth.token_unverified": "✓ Token 已保存（但无法验证：{message}）",
-  "warning.auth.user_unavailable": "✓ Token 已保存（用户信息不可用）"
+  "warning.auth.user_unavailable": "✓ Token 已保存（用户信息不可用）",
+  "cmd.repo.transfer_orgs.short": "列出可接收该仓库的组织",
+  "cmd.repo.transfer.short": "将仓库转移给其他所有者",
+  "cmd.repo.transfer_cancel.short": "取消待处理的仓库转移",
+  "flag.repo.target_owner": "目标用户或组织登录名",
+  "flag.repo.transfer_dry_run": "预览转移请求，不修改仓库所有者",
+  "flag.repo.transfer_cancel_dry_run": "预览取消请求，不修改仓库转移状态"
 }
