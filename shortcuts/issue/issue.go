@@ -16,6 +16,19 @@ func v1RepoPath(ctx *common.RuntimeContext) string {
 	return fmt.Sprintf("/v1/%s/%s", ctx.Owner, ctx.Repo)
 }
 
+func normalizeIssueListState(state string) string {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "open", "opened":
+		return "opened"
+	case "closed":
+		return "closed"
+	case "all", "":
+		return "all"
+	default:
+		return state
+	}
+}
+
 type existingIssue struct {
 	Subject     string
 	Description string
@@ -37,6 +50,15 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.issue.list.short"),
 			Flags: []common.Flag{
 				{Name: "state", Short: "s", Usage: tr.T("flag.issue.state"), Default: "open"},
+				{Name: "keyword", Short: "k", Usage: tr.T("flag.search.keyword")},
+				{Name: "participant", Usage: tr.T("flag.issue.participant")},
+				{Name: "author-id", Usage: tr.T("flag.issue.author_id")},
+				{Name: "assignee-id", Usage: tr.T("flag.issue.assignee_id")},
+				{Name: "milestone-id", Usage: tr.T("flag.issue.milestone")},
+				{Name: "status-id", Usage: tr.T("flag.issue.status_id")},
+				{Name: "tag-ids", Usage: tr.T("flag.issue.tag_ids")},
+				{Name: "sort-by", Usage: tr.T("flag.sort_by")},
+				{Name: "sort-direction", Usage: tr.T("flag.sort_direction")},
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
@@ -48,7 +70,34 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
 				if s := ctx.Arg("state"); s != "" {
-					q.Set("state", s)
+					q.Set("category", normalizeIssueListState(s))
+				}
+				if keyword := ctx.Arg("keyword"); keyword != "" {
+					q.Set("keyword", keyword)
+				}
+				if participant := ctx.Arg("participant"); participant != "" {
+					q.Set("participant_category", participant)
+				}
+				if authorID := ctx.Arg("author-id"); authorID != "" {
+					q.Set("author_id", authorID)
+				}
+				if assigneeID := ctx.Arg("assignee-id"); assigneeID != "" {
+					q.Set("assigner_id", assigneeID)
+				}
+				if milestoneID := ctx.Arg("milestone-id"); milestoneID != "" {
+					q.Set("milestone_id", milestoneID)
+				}
+				if statusID := ctx.Arg("status-id"); statusID != "" {
+					q.Set("status_id", statusID)
+				}
+				if tagIDs := ctx.Arg("tag-ids"); tagIDs != "" {
+					q.Set("issue_tag_ids", tagIDs)
+				}
+				if sortBy := ctx.Arg("sort-by"); sortBy != "" {
+					q.Set("sort_by", sortBy)
+				}
+				if sortDirection := ctx.Arg("sort-direction"); sortDirection != "" {
+					q.Set("sort_direction", sortDirection)
 				}
 				env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx)+"/issues", q)
 				if err != nil {
@@ -599,4 +648,3 @@ func parseIssueID(value, flagName string) (int, error) {
 	}
 	return id, nil
 }
-

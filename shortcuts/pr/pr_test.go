@@ -99,11 +99,11 @@ func TestPRList(t *testing.T) {
 		if r.Method != "GET" {
 			t.Fatalf("expected GET, got %s", r.Method)
 		}
-		if r.URL.Path != "/owner/repo/pulls.json" {
+		if r.URL.Path != "/v1/owner/repo/pulls.json" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		if r.URL.Query().Get("state") != "open" {
-			t.Fatalf("expected state=open, got %s", r.URL.Query().Get("state"))
+		if r.URL.Query().Get("status") != "0" {
+			t.Fatalf("expected status=0, got %s", r.URL.Query().Get("status"))
 		}
 		if r.URL.Query().Get("page") != "1" {
 			t.Fatalf("expected page=1, got %s", r.URL.Query().Get("page"))
@@ -117,6 +117,61 @@ func TestPRList(t *testing.T) {
 	err := runPRShortcut(t, server, "list", map[string]string{"state": "open", "page": "1", "limit": "20"})
 	if err != nil {
 		t.Fatalf("list failed: %v", err)
+	}
+}
+
+func TestPRListWithFilters(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/owner/repo/pulls.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		query := r.URL.Query()
+		assertEqual(t, query.Get("status"), "1")
+		assertEqual(t, query.Get("keyword"), "release")
+		assertEqual(t, query.Get("priority_id"), "2")
+		assertEqual(t, query.Get("issue_tag_id"), "3")
+		assertEqual(t, query.Get("version_id"), "4")
+		assertEqual(t, query.Get("reviewer_id"), "5")
+		assertEqual(t, query.Get("assign_user_id"), "6")
+		assertEqual(t, query.Get("sort_by"), "updated_at")
+		assertEqual(t, query.Get("sort_direction"), "desc")
+		writeJSON(t, w, map[string]interface{}{"pulls": []interface{}{}})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "list", map[string]string{
+		"state":          "merged",
+		"keyword":        "release",
+		"priority-id":    "2",
+		"tag-id":         "3",
+		"milestone-id":   "4",
+		"reviewer-id":    "5",
+		"assignee-id":    "6",
+		"sort-by":        "updated_at",
+		"sort-direction": "desc",
+		"page":           "2",
+		"limit":          "50",
+	})
+	if err != nil {
+		t.Fatalf("list with filters failed: %v", err)
+	}
+}
+
+func TestPRListStateAllOmitsStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/owner/repo/pulls.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("status"); got != "" {
+			t.Fatalf("status should be omitted for all, got %q", got)
+		}
+		writeJSON(t, w, map[string]interface{}{"pulls": []interface{}{}})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "list", map[string]string{"state": "all", "page": "1", "limit": "20"})
+	if err != nil {
+		t.Fatalf("list all failed: %v", err)
 	}
 }
 

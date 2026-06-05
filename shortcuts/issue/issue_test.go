@@ -104,8 +104,8 @@ func TestIssueList(t *testing.T) {
 		if r.URL.Path != "/v1/owner/repo/issues.json" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		if r.URL.Query().Get("state") != "open" {
-			t.Fatalf("expected state=open, got %s", r.URL.Query().Get("state"))
+		if r.URL.Query().Get("category") != "opened" {
+			t.Fatalf("expected category=opened, got %s", r.URL.Query().Get("category"))
 		}
 		writeJSON(t, w, []interface{}{
 			map[string]interface{}{"id": float64(1), "subject": "bug"},
@@ -116,6 +116,58 @@ func TestIssueList(t *testing.T) {
 	err := runShortcut(t, server, "list", map[string]string{"state": "open", "page": "1", "limit": "20"})
 	if err != nil {
 		t.Fatalf("list failed: %v", err)
+	}
+}
+
+func TestIssueListWithFilters(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/owner/repo/issues.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		query := r.URL.Query()
+		assertEqual(t, query.Get("category"), "closed")
+		assertEqual(t, query.Get("keyword"), "release")
+		assertEqual(t, query.Get("participant_category"), "assignedme")
+		assertEqual(t, query.Get("author_id"), "10")
+		assertEqual(t, query.Get("assigner_id"), "11")
+		assertEqual(t, query.Get("milestone_id"), "12")
+		assertEqual(t, query.Get("status_id"), "5")
+		assertEqual(t, query.Get("issue_tag_ids"), "1,2")
+		assertEqual(t, query.Get("sort_by"), "issues.updated_on")
+		assertEqual(t, query.Get("sort_direction"), "desc")
+		writeJSON(t, w, map[string]interface{}{"issues": []interface{}{}})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "list", map[string]string{
+		"state":          "closed",
+		"keyword":        "release",
+		"participant":    "assignedme",
+		"author-id":      "10",
+		"assignee-id":    "11",
+		"milestone-id":   "12",
+		"status-id":      "5",
+		"tag-ids":        "1,2",
+		"sort-by":        "issues.updated_on",
+		"sort-direction": "desc",
+		"page":           "2",
+		"limit":          "50",
+	})
+	if err != nil {
+		t.Fatalf("list with filters failed: %v", err)
+	}
+}
+
+func TestIssueListStateAll(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertEqual(t, r.URL.Query().Get("category"), "all")
+		writeJSON(t, w, map[string]interface{}{"issues": []interface{}{}})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "list", map[string]string{"state": "all", "page": "1", "limit": "20"})
+	if err != nil {
+		t.Fatalf("list all failed: %v", err)
 	}
 }
 

@@ -10,6 +10,25 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
+func v1RepoPath(ctx *common.RuntimeContext) string {
+	return fmt.Sprintf("/v1/%s/%s", ctx.Owner, ctx.Repo)
+}
+
+func normalizePullRequestListState(state string) string {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "open", "opened":
+		return "0"
+	case "merged":
+		return "1"
+	case "closed":
+		return "2"
+	case "all", "":
+		return ""
+	default:
+		return state
+	}
+}
+
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
@@ -18,6 +37,14 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.pr.list.short"),
 			Flags: []common.Flag{
 				{Name: "state", Short: "s", Usage: tr.T("flag.pr.state"), Default: "open"},
+				{Name: "keyword", Short: "k", Usage: tr.T("flag.search.keyword")},
+				{Name: "priority-id", Usage: tr.T("flag.pr.priority_id")},
+				{Name: "tag-id", Usage: tr.T("flag.pr.tag_id")},
+				{Name: "milestone-id", Usage: tr.T("flag.pr.milestone_id")},
+				{Name: "reviewer-id", Usage: tr.T("flag.pr.reviewer_id")},
+				{Name: "assignee-id", Usage: tr.T("flag.pr.assignee_id")},
+				{Name: "sort-by", Usage: tr.T("flag.sort_by")},
+				{Name: "sort-direction", Usage: tr.T("flag.sort_direction")},
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
@@ -28,10 +55,34 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
-				if s := ctx.Arg("state"); s != "" {
-					q.Set("state", s)
+				if s := normalizePullRequestListState(ctx.Arg("state")); s != "" {
+					q.Set("status", s)
 				}
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/pulls", q)
+				if keyword := ctx.Arg("keyword"); keyword != "" {
+					q.Set("keyword", keyword)
+				}
+				if priorityID := ctx.Arg("priority-id"); priorityID != "" {
+					q.Set("priority_id", priorityID)
+				}
+				if tagID := ctx.Arg("tag-id"); tagID != "" {
+					q.Set("issue_tag_id", tagID)
+				}
+				if milestoneID := ctx.Arg("milestone-id"); milestoneID != "" {
+					q.Set("version_id", milestoneID)
+				}
+				if reviewerID := ctx.Arg("reviewer-id"); reviewerID != "" {
+					q.Set("reviewer_id", reviewerID)
+				}
+				if assigneeID := ctx.Arg("assignee-id"); assigneeID != "" {
+					q.Set("assign_user_id", assigneeID)
+				}
+				if sortBy := ctx.Arg("sort-by"); sortBy != "" {
+					q.Set("sort_by", sortBy)
+				}
+				if sortDirection := ctx.Arg("sort-direction"); sortDirection != "" {
+					q.Set("sort_direction", sortDirection)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx)+"/pulls", q)
 				if err != nil {
 					return err
 				}
@@ -120,8 +171,8 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-				Name:        "refuse",
-				Description: "Refuse and close a pull request",
+			Name:        "refuse",
+			Description: "Refuse and close a pull request",
 			Flags: []common.Flag{
 				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},

@@ -39,6 +39,9 @@ metadata:
 # 列出 Issue
 gitlink-cli issue +list --owner Gitlink --repo forgeplus --state open
 
+# 搜索并排序 Issue
+gitlink-cli issue +list --owner Gitlink --repo forgeplus --state open --keyword 登录 --sort-by issues.updated_on --sort-direction desc
+
 # 创建 Issue
 gitlink-cli issue +create --owner myuser --repo myrepo --title "Bug: 登录失败" --body "复现步骤：..."
 
