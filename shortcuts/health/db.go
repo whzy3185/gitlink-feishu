@@ -139,6 +139,97 @@ func extractTagNames(data map[string]interface{}, key string) []string {
 	return names
 }
 
+func nestedMap(data map[string]interface{}, key string) map[string]interface{} {
+	obj, _ := data[key].(map[string]interface{})
+	return obj
+}
+
+func extractPullNumber(pr map[string]interface{}) int {
+	for _, key := range []string{"pull_request_number", "index"} {
+		if v, ok := pr[key].(float64); ok && v > 0 {
+			return int(v)
+		}
+		if v, ok := pr[key].(int); ok && v > 0 {
+			return v
+		}
+	}
+	return 0
+}
+
+func extractPullAuthorLogin(pr map[string]interface{}) string {
+	if login, _ := pr["author_login"].(string); login != "" {
+		return login
+	}
+	if login := extractLogin(pr, "author", ""); login != "" {
+		return login
+	}
+	if issue := nestedMap(pr, "issue"); issue != nil {
+		return extractLogin(issue, "author", "")
+	}
+	return ""
+}
+
+func extractPullAssigneeLogin(pr map[string]interface{}) string {
+	if login, _ := pr["assign_user_login"].(string); login != "" {
+		return login
+	}
+	if issue := nestedMap(pr, "issue"); issue != nil {
+		if login := extractLogin(issue, "assign_user", "assign_user_login"); login != "" {
+			return login
+		}
+	}
+	return ""
+}
+
+func extractPullStatus(pr map[string]interface{}) string {
+	statusMap := map[int]string{0: "open", 1: "merged", 2: "closed"}
+	if v, ok := pr["pull_request_status"].(float64); ok {
+		return statusMap[int(v)]
+	}
+	if v, ok := pr["pull_request_status"].(int); ok {
+		return statusMap[v]
+	}
+	for _, key := range []string{"pull_request_staus", "status", "state"} {
+		if status, _ := pr[key].(string); status != "" {
+			switch status {
+			case "open", "opened":
+				return "open"
+			case "merged":
+				return "merged"
+			case "closed", "close":
+				return "closed"
+			}
+		}
+	}
+	return "open"
+}
+
+func extractPullCreateTime(pr map[string]interface{}) string {
+	for _, key := range []string{"pr_full_time", "created_at", "create_time"} {
+		if v, _ := pr[key].(string); v != "" {
+			return v
+		}
+	}
+	if issue := nestedMap(pr, "issue"); issue != nil {
+		for _, key := range []string{"created_at", "create_time"} {
+			if v, _ := issue[key].(string); v != "" {
+				return v
+			}
+		}
+	}
+	return ""
+}
+
+func extractPullTagNames(pr map[string]interface{}) []string {
+	if names := extractTagNames(pr, "issue_tags"); len(names) > 0 {
+		return names
+	}
+	if issue := nestedMap(pr, "issue"); issue != nil {
+		return extractTagNames(issue, "issue_tags")
+	}
+	return nil
+}
+
 // mergeTimeFromList tries to extract merged_at directly from the list API response
 // (preferred, avoids an extra API call per PR).
 func mergeTimeFromList(pr map[string]interface{}) string {
@@ -165,28 +256,22 @@ func savePull(db *sql.DB, repoID int, pr map[string]interface{}, mergedAt string
 		return
 	}
 
-	prNumber, _ := pr["pull_request_number"].(float64)
+	prNumber := extractPullNumber(pr)
 	if prNumber == 0 {
 		return
 	}
 
-	author, _ := pr["author_login"].(string)
-	createrID, _ := getOrCreateUser(db, author)
+	createrID, _ := getOrCreateUser(db, extractPullAuthorLogin(pr))
 
-	statusCode := 0
-	if v, ok := pr["pull_request_status"].(float64); ok {
-		statusCode = int(v)
-	}
-	statusMap := map[int]string{0: "open", 1: "merged", 2: "closed"}
-	status := statusMap[statusCode]
+	status := extractPullStatus(pr)
 	if status == "" {
 		status = "open"
 	}
 
-	createTime, _ := pr["pr_full_time"].(string)
+	createTime := extractPullCreateTime(pr)
 
 	var processorID *int
-	if assignee, _ := pr["assign_user_login"].(string); assignee != "" {
+	if assignee := extractPullAssigneeLogin(pr); assignee != "" {
 		pid, _ := getOrCreateUser(db, assignee)
 		processorID = &pid
 	}
@@ -201,12 +286,12 @@ func savePull(db *sql.DB, repoID int, pr map[string]interface{}, mergedAt string
 
 	if _, err := db.Exec(`INSERT OR REPLACE INTO pulls (id, repo_id, number, creater_id, status, processor_id, create_time, merged_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		int(prID), repoID, int(prNumber), createrID, status, processorID, createTime, mergedAtVal); err != nil {
+		int(prID), repoID, prNumber, createrID, status, processorID, createTime, mergedAtVal); err != nil {
 		fmt.Fprintf(os.Stderr, "  DB error: save pull %d: %v\n", int(prID), err)
 	}
 
 	// Save tags
-	tagNames := extractTagNames(pr, "issue_tags")
+	tagNames := extractPullTagNames(pr)
 	var tagIDs []int
 	for _, name := range tagNames {
 		if tid, err := getOrCreateTag(db, repoID, name); err == nil {
