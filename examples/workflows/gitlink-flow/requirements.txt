@@ -1,0 +1,4 @@
+﻿# gitlink-flow 端到端工作流依赖
+# 采集与编排仅用 Python 标准库；可选绘图用 matplotlib
+matplotlib>=3.8
+pytest>=7.0

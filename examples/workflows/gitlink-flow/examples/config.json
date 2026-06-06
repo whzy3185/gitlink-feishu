@@ -1,0 +1,7 @@
+{
+  "description": "gitlink-flow 社区运营自动化工作流配置。可列多个仓库批量运行。",
+  "output_dir": "outputs",
+  "repos": [
+    { "owner": "Gitlink", "repo": "gitlink-cli" }
+  ]
+}
