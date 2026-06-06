@@ -95,6 +95,11 @@ func (ctx *RuntimeContext) PaginateAll(path string, params url.Values) ([]json.R
 	return ctx.Client.PaginateAll(path, params)
 }
 
+// Download fetches raw bytes from an API, attachment, or archive URL.
+func (ctx *RuntimeContext) Download(path string) (*client.DownloadResult, error) {
+	return ctx.Client.Download(path)
+}
+
 // Output prints the envelope in the configured format.
 func (ctx *RuntimeContext) Output(env *output.Envelope) error {
 	return output.Print(env, ctx.Format)
