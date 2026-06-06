@@ -65,5 +65,7 @@ gitlink-cli release +delete --id <version_id>
 - [release +create](references/gitlink-release-create.md)
 - [release +edit](references/gitlink-release-edit.md)
 - [release +update](references/gitlink-release-update.md)
+- [release +assets](references/gitlink-release-assets.md)
+- [release +download](references/gitlink-release-download.md)
 - [release +view](references/gitlink-release-view.md)
 - [release +delete](references/gitlink-release-delete.md)
