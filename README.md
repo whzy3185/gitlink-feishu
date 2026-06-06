@@ -545,6 +545,10 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 
 # With query parameters
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
+
+# Batch plan with template variables and dry-run preview
+gitlink-cli api --batch-file plan.json --var owner=Gitlink --var repo=forgeplus --dry-run
+gitlink-cli api --batch-file plan.json --continue-on-error
 ```
 
 ## Global Parameters

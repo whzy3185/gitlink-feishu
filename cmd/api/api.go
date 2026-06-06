@@ -23,14 +23,16 @@ func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
 		tr = translators[0]
 	}
 	apiCmd := &cobra.Command{
-		Use:   "api <METHOD> <PATH>",
+		Use:   "api (<METHOD> <PATH> | --batch-file <FILE>)",
 		Short: tr.T("cmd.api.short"),
 		Long:  tr.T("cmd.api.long"),
 		Example: `  gitlink-cli api GET /users/me
   gitlink-cli api GET /projects --query 'page=1&limit=10'
   gitlink-cli api POST /:owner/:repo/issues --body '{"subject":"Bug","description":"..."}'
-  gitlink-cli api POST /:owner/:repo/issues --body-file issue.json`,
-		Args: cobra.ExactArgs(2),
+  gitlink-cli api POST /:owner/:repo/issues --body-file issue.json
+  gitlink-cli api --batch-file plan.json --dry-run
+  gitlink-cli api --batch-file plan.json --var owner=Gitlink --var repo=gitlink-cli`,
+		Args: validateAPIArgs,
 		RunE: runAPI,
 	}
 
@@ -39,11 +41,31 @@ func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
 	apiCmd.Flags().Bool("body-stdin", false, tr.T("flag.api.body_stdin"))
 	apiCmd.Flags().String("query", "", tr.T("flag.api.query"))
 	apiCmd.Flags().StringSlice("header", nil, tr.T("flag.api.header"))
+	apiCmd.Flags().String("batch-file", "", tr.T("flag.api.batch_file"))
+	apiCmd.Flags().Bool("dry-run", false, tr.T("flag.api.batch_dry_run"))
+	apiCmd.Flags().Bool("continue-on-error", false, tr.T("flag.api.batch_continue_on_error"))
+	apiCmd.Flags().StringArray("var", nil, tr.T("flag.api.batch_var"))
 
 	return apiCmd
 }
 
+func validateAPIArgs(c *cobra.Command, args []string) error {
+	batchFile, _ := c.Flags().GetString("batch-file")
+	if batchFile != "" {
+		if len(args) != 0 {
+			return fmt.Errorf("api batch mode does not accept METHOD or PATH arguments")
+		}
+		return nil
+	}
+	return cobra.ExactArgs(2)(c, args)
+}
+
 func runAPI(c *cobra.Command, args []string) error {
+	batchFile, _ := c.Flags().GetString("batch-file")
+	if batchFile != "" {
+		return runAPIBatch(c, batchFile)
+	}
+
 	method := strings.ToUpper(args[0])
 	path := args[1]
 

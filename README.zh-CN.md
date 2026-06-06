@@ -424,6 +424,10 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 
 # 带查询参数
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
+
+# 使用模板变量预览批处理计划
+gitlink-cli api --batch-file plan.json --var owner=Gitlink --var repo=forgeplus --dry-run
+gitlink-cli api --batch-file plan.json --continue-on-error
 ```
 
 ## 全局参数
