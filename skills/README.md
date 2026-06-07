@@ -134,7 +134,7 @@ skills/
 | Skill | 说明 | 常用命令 |
 |-------|------|----------|
 | **gitlink-shared** | 认证、全局参数、API 参考、安全规则、分支约定 | `auth login`, `auth status` |
-| **gitlink-repo** | 仓库管理 | `repo +list`, `repo +create`, `repo +info`, `repo +fork` |
+| **gitlink-repo** | 仓库管理 | `repo +list`, `repo +create`, `repo +settings`, `repo +topics`, `repo +transfer` |
 | **gitlink-issue** | Issue 管理 | `issue +create`, `issue +list`, `issue +view`, `issue +close`, `issue +batch-close` |
 | **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +versions`, `pr +version-diff`, `pr +reviews`, `pr +review` |
 | **gitlink-member** | 仓库成员管理 | `member +list`, `member +add`, `member +batch-add`, `member +role`, `member +invite-link` |

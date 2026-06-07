@@ -79,7 +79,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 
 | Category | Capabilities |
 |----------|-------------|
-| 📦 Repo | List, create, fork, delete repositories, view repo info |
+| 📦 Repo | List, create, fork, delete repositories, manage settings, topics, transfer |
 | 🐛 Issue | Create, update, close, batch close, comment on issues |
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
@@ -200,6 +200,10 @@ gitlink-cli repo +list
 # View repository info
 gitlink-cli repo +info --owner Gitlink --repo forgeplus
 
+# View repository metadata and settings
+gitlink-cli repo +detail --owner Gitlink --repo forgeplus
+gitlink-cli repo +settings --owner Gitlink --repo forgeplus
+
 # Read repository README
 gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 
@@ -208,6 +212,15 @@ gitlink-cli repo +create -n my-project -d "Project description"
 
 # Fork a repository
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+
+# Update navigation units and manage topics, previewing writes first
+gitlink-cli repo +units-update --owner Gitlink --repo forgeplus --units code,issues,pulls,wiki --dry-run
+gitlink-cli repo +topics --keyword go
+gitlink-cli repo +topic-add --project-id 17 --name go --dry-run
+
+# Transfer workflow helpers
+gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
+gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --owner-name target-org --dry-run
 ```
 
 ### Webhook Management
@@ -610,7 +623,7 @@ See [skills/README.md](skills/README.md) for details.
 | Skill | Description |
 |-------|-------------|
 | `gitlink-shared` | Authentication, global parameters, safety rules, API notes |
-| `gitlink-repo` | Repository operations (create, view, delete, fork, etc.) |
+| `gitlink-repo` | Repository operations (create, settings, topics, transfer, fork, etc.) |
 | `gitlink-issue` | Issue operations (create, update, close, comment, etc.) |
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
 | `gitlink-member` | Repository member and invite link management |

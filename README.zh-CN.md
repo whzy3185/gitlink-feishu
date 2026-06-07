@@ -79,7 +79,7 @@
 
 | 分类 | 能力 |
 |------|------|
-| 📦 仓库 | 列出、创建、Fork、删除仓库，查看仓库信息 |
+| 📦 仓库 | 列出、创建、Fork、删除仓库，管理设置、Topics、迁移 |
 | 🐛 Issue | 创建、更新、关闭、批量关闭、评论 Issue |
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
@@ -211,6 +211,10 @@ gitlink-cli repo +list
 # 查看仓库信息
 gitlink-cli repo +info --owner Gitlink --repo forgeplus
 
+# 查看仓库详情和设置
+gitlink-cli repo +detail --owner Gitlink --repo forgeplus
+gitlink-cli repo +settings --owner Gitlink --repo forgeplus
+
 # 读取仓库 README
 gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 
@@ -219,6 +223,15 @@ gitlink-cli repo +create -n my-project -d "项目描述"
 
 # Fork 仓库
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+
+# 更新导航和管理 Topics，写入前先 dry-run
+gitlink-cli repo +units-update --owner Gitlink --repo forgeplus --units code,issues,pulls,wiki --dry-run
+gitlink-cli repo +topics --keyword go
+gitlink-cli repo +topic-add --project-id 17 --name go --dry-run
+
+# 仓库迁移辅助
+gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
+gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --owner-name target-org --dry-run
 ```
 
 ### Webhook 管理
@@ -489,7 +502,7 @@ git push gitlink
 | Skill | 说明 |
 |-------|------|
 | `gitlink-shared` | 认证、全局参数、安全规则、API 注意事项 |
-| `gitlink-repo` | 仓库操作（创建、查看、删除、Fork 等） |
+| `gitlink-repo` | 仓库操作（创建、设置、Topics、迁移、Fork 等） |
 | `gitlink-issue` | Issue 操作（创建、更新、关闭、评论等） |
 | `gitlink-pr` | Pull Request 操作（创建、合并、Review 等） |
 | `gitlink-member` | 仓库成员与邀请链接管理 |
