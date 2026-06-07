@@ -9,36 +9,57 @@ import (
 )
 
 // v1RepoPath constructs the v1 API path for a repository.
-// Issue operations use the v1 API (/v1/{owner}/{repo}) to match shortcuts/issue conventions,
-// while PR operations use the v2 API via ctx.RepoPath() (/{owner}/{repo}/pulls) to match shortcuts/pr conventions.
-
 func v1RepoPath(owner, repo string) string {
 	return fmt.Sprintf("/v1/%s/%s", owner, repo)
+}
+
+func normalizePRListStatus(state string) string {
+	switch state {
+	case "open", "opened":
+		return "0"
+	case "merged":
+		return "1"
+	case "closed":
+		return "2"
+	default:
+		return ""
+	}
+}
+
+func normalizeIssueListCategory(state string) string {
+	switch state {
+	case "open", "opened":
+		return "opened"
+	case "closed":
+		return "closed"
+	default:
+		return "all"
+	}
 }
 
 func fetchPRListPage(ctx *common.RuntimeContext, state string, page, limit int) ([]interface{}, error) {
 	q := url.Values{}
 	q.Set("page", fmt.Sprintf("%d", page))
 	q.Set("limit", fmt.Sprintf("%d", limit))
-	if state != "" {
-		q.Set("state", state)
+	if status := normalizePRListStatus(state); status != "" {
+		q.Set("status", status)
 	}
-	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/pulls", q)
+	env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx.Owner, ctx.Repo)+"/pulls", q)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "  CLI error: pr +list state=%s page=%d: %v\n", state, page, err)
+		fmt.Fprintf(os.Stderr, "  CLI error: pr list state=%s page=%d: %v\n", state, page, err)
 		return nil, err
 	}
 	if !env.OK {
-		err := fmt.Errorf("API error: pr +list state=%s page=%d", state, page)
+		err := fmt.Errorf("API error: pr list state=%s page=%d", state, page)
 		fmt.Fprintf(os.Stderr, "  %v\n", err)
 		return nil, err
 	}
 	data, ok := env.Data.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("unexpected response type for pr +list")
+		return nil, fmt.Errorf("unexpected response type for pr list")
 	}
-	issues, _ := data["issues"].([]interface{})
-	return issues, nil
+	pulls, _ := data["pulls"].([]interface{})
+	return pulls, nil
 }
 
 // fetchPRDetail retrieves full PR detail to extract merged_at timestamp.
@@ -86,22 +107,20 @@ func fetchIssueListPage(ctx *common.RuntimeContext, owner, repo, state string, p
 	q := url.Values{}
 	q.Set("page", fmt.Sprintf("%d", page))
 	q.Set("limit", fmt.Sprintf("%d", limit))
-	if state != "" {
-		q.Set("state", state)
-	}
+	q.Set("category", normalizeIssueListCategory(state))
 	env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(owner, repo)+"/issues", q)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "  CLI error: issue +list state=%s page=%d: %v\n", state, page, err)
+		fmt.Fprintf(os.Stderr, "  CLI error: issue list state=%s page=%d: %v\n", state, page, err)
 		return nil, err
 	}
 	if !env.OK {
-		err := fmt.Errorf("API error: issue +list state=%s page=%d", state, page)
+		err := fmt.Errorf("API error: issue list state=%s page=%d", state, page)
 		fmt.Fprintf(os.Stderr, "  %v\n", err)
 		return nil, err
 	}
 	data, ok := env.Data.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("unexpected response type for issue +list")
+		return nil, fmt.Errorf("unexpected response type for issue list")
 	}
 	issues, _ := data["issues"].([]interface{})
 	return issues, nil
