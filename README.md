@@ -726,7 +726,7 @@ You can also download the binary manually from the release page or build from so
 
 ### Q: Where are credentials stored on Windows?
 
-gitlink-cli uses Windows Credential Manager for secure token storage. If Credential Manager is unavailable, it automatically falls back to file storage (`~/.config/gitlink-cli/credentials`).
+gitlink-cli uses Windows Credential Manager for secure token storage. If Credential Manager is unavailable, it automatically falls back to file storage under the gitlink-cli config directory (`$GITLINK_CONFIG_DIR/credentials` when set, otherwise `~/.config/gitlink-cli/credentials`).
 
 ### Q: Where can I find the full API reference?
 

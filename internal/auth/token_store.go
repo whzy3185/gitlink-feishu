@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/gitlink-org/gitlink-cli/internal/config"
 	"github.com/zalando/go-keyring"
 )
 
@@ -41,8 +42,7 @@ func DeleteToken() error {
 // File-based fallback
 
 func credentialPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "gitlink-cli", "credentials")
+	return filepath.Join(config.ConfigDir(), "credentials")
 }
 
 func storeTokenFile(token string) error {
@@ -62,5 +62,9 @@ func loadTokenFile() (string, error) {
 }
 
 func deleteTokenFile() error {
-	return os.Remove(credentialPath())
+	err := os.Remove(credentialPath())
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }

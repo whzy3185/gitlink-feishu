@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -10,6 +11,13 @@ import (
 
 	internalAuth "github.com/gitlink-org/gitlink-cli/internal/auth"
 )
+
+func tempConfigDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("GITLINK_CONFIG_DIR", dir)
+	return dir
+}
 
 func TestEnvTokenVar(t *testing.T) {
 	if envTokenVar != "GITLINK_TOKEN" {
@@ -61,7 +69,7 @@ func TestLoginTokenFlag(t *testing.T) {
 
 func TestStatusCmdNotLoggedIn(t *testing.T) {
 	keyring.MockInitWithError(errors.New("keychain unavailable"))
-	t.Setenv("HOME", t.TempDir())
+	tempConfigDir(t)
 	t.Setenv("GITLINK_TOKEN", "")
 	_ = internalAuth.DeleteToken()
 
@@ -76,7 +84,7 @@ func TestStatusCmdNotLoggedIn(t *testing.T) {
 
 func TestStatusCmdEnvToken(t *testing.T) {
 	keyring.MockInitWithError(errors.New("keychain unavailable"))
-	t.Setenv("HOME", t.TempDir())
+	tempConfigDir(t)
 	t.Setenv("GITLINK_TOKEN", "env-token-123")
 	_ = internalAuth.DeleteToken()
 
@@ -86,12 +94,11 @@ func TestStatusCmdEnvToken(t *testing.T) {
 
 func TestStatusCmdStoredToken(t *testing.T) {
 	keyring.MockInitWithError(errors.New("keychain unavailable"))
-	dir := t.TempDir()
-	t.Setenv("HOME", dir)
+	dir := tempConfigDir(t)
 	t.Setenv("GITLINK_TOKEN", "")
 
-	os.MkdirAll(dir+"/.config/gitlink-cli", 0700)
-	os.WriteFile(dir+"/.config/gitlink-cli/credentials", []byte("cookie:test=abc"), 0600)
+	os.MkdirAll(dir, 0700)
+	os.WriteFile(filepath.Join(dir, "credentials"), []byte("cookie:test=abc"), 0600)
 
 	cmd := findSub(NewAuthCmd(), "status")
 	cmd.RunE(cmd, nil)
@@ -99,12 +106,11 @@ func TestStatusCmdStoredToken(t *testing.T) {
 
 func TestStatusCmdEnvAndStoredToken(t *testing.T) {
 	keyring.MockInitWithError(errors.New("keychain unavailable"))
-	dir := t.TempDir()
-	t.Setenv("HOME", dir)
+	dir := tempConfigDir(t)
 	t.Setenv("GITLINK_TOKEN", "env-token")
 
-	os.MkdirAll(dir+"/.config/gitlink-cli", 0700)
-	os.WriteFile(dir+"/.config/gitlink-cli/credentials", []byte("stored-token"), 0600)
+	os.MkdirAll(dir, 0700)
+	os.WriteFile(filepath.Join(dir, "credentials"), []byte("stored-token"), 0600)
 
 	cmd := findSub(NewAuthCmd(), "status")
 	if err := cmd.RunE(cmd, nil); err != nil {
@@ -114,9 +120,9 @@ func TestStatusCmdEnvAndStoredToken(t *testing.T) {
 
 func TestStatusCmdStoredTokenButLoadFails(t *testing.T) {
 	keyring.MockInitWithError(errors.New("keychain unavailable"))
-	t.Setenv("HOME", t.TempDir())
+	tempConfigDir(t)
 	t.Setenv("GITLINK_TOKEN", "")
-	// Don't create credentials file — LoadToken returns empty
+	// Do not create credentials; LoadToken should return empty.
 
 	cmd := findSub(NewAuthCmd(), "status")
 	if err := cmd.RunE(cmd, nil); err != nil {
@@ -124,29 +130,26 @@ func TestStatusCmdStoredTokenButLoadFails(t *testing.T) {
 	}
 }
 
-func TestLogoutCmdError(t *testing.T) {
+func TestLogoutCmdNoStoredToken(t *testing.T) {
 	keyring.MockInitWithError(errors.New("keychain unavailable"))
-	t.Setenv("HOME", t.TempDir())
+	tempConfigDir(t)
 	t.Setenv("GITLINK_TOKEN", "")
-	// Don't create credentials dir — DeleteToken will fail
+	// Do not create credentials; logout should be idempotent.
 
 	cmd := findSub(NewAuthCmd(), "logout")
-	err := cmd.RunE(cmd, nil)
-	if err == nil {
-		t.Fatal("expected error when DeleteToken fails")
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("logout should succeed without stored token: %v", err)
 	}
 }
 
 func TestLogoutCmd(t *testing.T) {
 	keyring.MockInitWithError(errors.New("keychain unavailable"))
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	dir := tempConfigDir(t)
 	t.Setenv("GITLINK_TOKEN", "")
 
 	// Store a token first so DeleteToken has something to delete
-	credDir := home + "/.config/gitlink-cli"
-	os.MkdirAll(credDir, 0700)
-	os.WriteFile(credDir+"/credentials", []byte("some-token"), 0600)
+	os.MkdirAll(dir, 0700)
+	os.WriteFile(filepath.Join(dir, "credentials"), []byte("some-token"), 0600)
 
 	cmd := findSub(NewAuthCmd(), "logout")
 	if cmd == nil {
@@ -159,8 +162,7 @@ func TestLogoutCmd(t *testing.T) {
 
 func TestLoginWithToken(t *testing.T) {
 	keyring.MockInitWithError(errors.New("keychain unavailable"))
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	dir := tempConfigDir(t)
 	t.Setenv("GITLINK_TOKEN", "")
 
 	// Mock stdin
@@ -185,7 +187,7 @@ func TestLoginWithToken(t *testing.T) {
 	}
 
 	// Verify token was saved to file
-	data, err := os.ReadFile(home + "/.config/gitlink-cli/credentials")
+	data, err := os.ReadFile(filepath.Join(dir, "credentials"))
 	if err != nil {
 		t.Fatalf("read credentials: %v", err)
 	}
@@ -196,7 +198,7 @@ func TestLoginWithToken(t *testing.T) {
 
 func TestLoginWithTokenEmpty(t *testing.T) {
 	keyring.MockInitWithError(errors.New("keychain unavailable"))
-	t.Setenv("HOME", t.TempDir())
+	tempConfigDir(t)
 	t.Setenv("GITLINK_TOKEN", "")
 
 	oldStdin := os.Stdin
@@ -219,7 +221,7 @@ func TestLoginWithTokenEmpty(t *testing.T) {
 
 func TestLoginWithPasswordNoTerminal(t *testing.T) {
 	keyring.MockInitWithError(errors.New("keychain unavailable"))
-	t.Setenv("HOME", t.TempDir())
+	tempConfigDir(t)
 	t.Setenv("GITLINK_TOKEN", "")
 
 	// term.ReadPassword will fail because test has no terminal

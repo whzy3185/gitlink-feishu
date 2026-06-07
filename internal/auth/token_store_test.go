@@ -13,11 +13,19 @@ func tempHome(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+	return dir
+}
+
+func tempConfigDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("GITLINK_CONFIG_DIR", dir)
 	return dir
 }
 
 func TestStoreLoadDeleteTokenFile(t *testing.T) {
-	tempHome(t)
+	tempConfigDir(t)
 
 	// First, delete any existing token
 	_ = deleteTokenFile()
@@ -55,20 +63,31 @@ func TestStoreLoadDeleteTokenFile(t *testing.T) {
 }
 
 func TestCredentialPath(t *testing.T) {
-	tempHome(t)
+	dir := tempConfigDir(t)
 	got := credentialPath()
-	expected := filepath.Join(os.Getenv("HOME"), ".config", "gitlink-cli", "credentials")
+	expected := filepath.Join(dir, "credentials")
+	if got != expected {
+		t.Fatalf("credentialPath = %q, want %q", got, expected)
+	}
+}
+
+func TestCredentialPathDefaultsToConfigDir(t *testing.T) {
+	home := tempHome(t)
+	t.Setenv("GITLINK_CONFIG_DIR", "")
+
+	got := credentialPath()
+	expected := filepath.Join(home, ".config", "gitlink-cli", "credentials")
 	if got != expected {
 		t.Fatalf("credentialPath = %q, want %q", got, expected)
 	}
 }
 
 func TestStoreTokenFileCreatesDir(t *testing.T) {
-	home := tempHome(t)
+	dir := tempConfigDir(t)
 	_ = deleteTokenFile()
 
 	// Config dir shouldn't exist yet
-	credDir := filepath.Join(home, ".config", "gitlink-cli")
+	credDir := dir
 	os.RemoveAll(credDir)
 
 	if err := storeTokenFile("new-token"); err != nil {
@@ -86,17 +105,16 @@ func TestStoreTokenFileCreatesDir(t *testing.T) {
 }
 
 func TestDeleteTokenFileNonExistent(t *testing.T) {
-	tempHome(t)
+	tempConfigDir(t)
 	_ = deleteTokenFile()
-	// Deleting non-existent file should return an error from os.Remove
-	err := deleteTokenFile()
-	if err == nil {
-		t.Fatal("expected error deleting non-existent file")
+	// Logout-style cleanup should be idempotent when fallback credentials do not exist.
+	if err := deleteTokenFile(); err != nil {
+		t.Fatalf("deleteTokenFile error: %v", err)
 	}
 }
 
 func TestStoreLoadTokenFileEmpty(t *testing.T) {
-	tempHome(t)
+	tempConfigDir(t)
 	_ = deleteTokenFile()
 
 	if err := storeTokenFile(""); err != nil {
@@ -114,14 +132,14 @@ func TestStoreLoadTokenFileEmpty(t *testing.T) {
 
 func TestStoreTokenFallback(t *testing.T) {
 	keyring.MockInitWithError(errors.New("keychain unavailable"))
-	home := tempHome(t)
+	dir := tempConfigDir(t)
 	_ = deleteTokenFile()
 
 	if err := StoreToken("keychain-fallback-token"); err != nil {
 		t.Fatalf("StoreToken error: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(home, ".config", "gitlink-cli", "credentials"))
+	data, err := os.ReadFile(filepath.Join(dir, "credentials"))
 	if err != nil {
 		t.Fatalf("read error: %v", err)
 	}
@@ -132,10 +150,10 @@ func TestStoreTokenFallback(t *testing.T) {
 
 func TestDeleteTokenFallback(t *testing.T) {
 	keyring.MockInitWithError(errors.New("keychain unavailable"))
-	home := tempHome(t)
+	dir := tempConfigDir(t)
 	_ = deleteTokenFile()
 
-	p := filepath.Join(home, ".config", "gitlink-cli", "credentials")
+	p := filepath.Join(dir, "credentials")
 	os.MkdirAll(filepath.Dir(p), 0700)
 	os.WriteFile(p, []byte("delete-me"), 0600)
 

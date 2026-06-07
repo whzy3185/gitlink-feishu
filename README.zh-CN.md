@@ -601,7 +601,7 @@ npm install -g @gitlink-ai/cli
 
 ### Q: Windows 上凭证存储在哪里？
 
-gitlink-cli 使用 Windows Credential Manager 安全存储 Token。如果 Credential Manager 不可用，会自动降级到文件存储（`~/.config/gitlink-cli/credentials`）。
+gitlink-cli 使用 Windows Credential Manager 安全存储 Token。如果 Credential Manager 不可用，会自动降级到配置目录下的文件存储；设置了 `GITLINK_CONFIG_DIR` 时路径为 `$GITLINK_CONFIG_DIR/credentials`，否则为 `~/.config/gitlink-cli/credentials`。
 
 ### Q: 如何查看完整的 API 参考？
 
