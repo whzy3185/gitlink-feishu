@@ -1,7 +1,7 @@
 ---
 name: gitlink-search
 version: 1.0.0
-description: "搜索：搜索仓库和用户。当用户需要在 GitLink 上搜索资源时触发。"
+description: "搜索：按关键词搜索仓库和用户。当用户需要在 GitLink 上查找特定仓库、搜索某个具体项目或用户名时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
