@@ -193,6 +193,13 @@ export GITLINK_TOKEN="your-private-token"
 gitlink-cli user +me
 ```
 
+如果 CLI 无法正确识别认证、配置或仓库上下文，可以运行：
+
+```bash
+gitlink-cli doctor
+gitlink-cli doctor --skip-network --format json
+```
+
 ## 使用示例
 
 ### 仓库操作
@@ -425,6 +432,12 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 # 带查询参数
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
 ```
+
+### 环境诊断
+
+`doctor` 会检查本地配置文件、配置项、已保存 Token 或 `GITLINK_TOKEN`、
+仓库上下文识别和认证 API 连通性。在 CI 或离线环境中可以使用 `--skip-network`
+跳过远端访问。
 
 ## 全局参数
 

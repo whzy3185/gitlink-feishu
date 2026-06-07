@@ -182,6 +182,13 @@ export GITLINK_TOKEN="your-private-token"
 gitlink-cli user +me
 ```
 
+If the CLI cannot detect authentication, config, or repository context correctly, run:
+
+```bash
+gitlink-cli doctor
+gitlink-cli doctor --skip-network --format json
+```
+
 ## Usage Examples
 
 ### Repository Operations
@@ -546,6 +553,12 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 # With query parameters
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
 ```
+
+### Environment Diagnostics
+
+`doctor` checks the local config file, config values, stored token or `GITLINK_TOKEN`,
+repository context detection, and authenticated API connectivity. Use `--skip-network`
+when running in CI or an offline environment.
 
 ## Global Parameters
 
