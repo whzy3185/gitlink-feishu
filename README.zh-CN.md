@@ -266,6 +266,9 @@ gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role develope
 # 列出 Issue
 gitlink-cli issue +list --owner Gitlink --repo forgeplus
 
+# 搜索并按更新时间倒序列出开启中的 Issue
+gitlink-cli issue +list --owner Gitlink --repo forgeplus --state open --keyword 登录 --sort-by issues.updated_on --sort-direction desc
+
 # 创建 Issue
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: 登录失败" -b "复现步骤..."
 
@@ -334,6 +337,9 @@ gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
 ```bash
 # 列出 PR
 gitlink-cli pr +list --owner Gitlink --repo forgeplus
+
+# 按关键字搜索已合并 PR
+gitlink-cli pr +list --owner Gitlink --repo forgeplus --state merged --keyword release --sort-by updated_at --sort-direction desc
 
 # 创建 PR（同仓库分支）
 gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: 搜索功能" --head feature/search --base master

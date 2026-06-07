@@ -255,6 +255,9 @@ gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role develope
 # List issues
 gitlink-cli issue +list --owner Gitlink --repo forgeplus
 
+# Search and sort open issues
+gitlink-cli issue +list --owner Gitlink --repo forgeplus --state open --keyword login --sort-by issues.updated_on --sort-direction desc
+
 # Create an issue
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: Login failed" -b "Steps to reproduce..."
 
@@ -324,6 +327,9 @@ gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
 ```bash
 # List PRs
 gitlink-cli pr +list --owner Gitlink --repo forgeplus
+
+# Search merged PRs by keyword
+gitlink-cli pr +list --owner Gitlink --repo forgeplus --state merged --keyword release --sort-by updated_at --sort-direction desc
 
 # Create a PR (same-repo branch)
 gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: Search feature" --head feature/search --base master

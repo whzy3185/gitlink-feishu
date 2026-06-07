@@ -39,6 +39,9 @@ metadata:
 # 列出 PR
 gitlink-cli pr +list --owner Gitlink --repo forgeplus --state open
 
+# 搜索并排序 PR
+gitlink-cli pr +list --owner Gitlink --repo forgeplus --state merged --keyword release --sort-by updated_at --sort-direction desc
+
 # 创建 PR（源分支必须有实际代码变更）
 gitlink-cli pr +create --title "feat: 新增搜索功能" --head feature/search --base master --body "实现了全文搜索"
 
@@ -166,6 +169,6 @@ gitlink-cli api GET /v1/:owner/:repo/pulls/:id/versions/:version_id/diff
 - `pr +diff` 实际调用 `/pulls/:id/files` 端点，返回变更文件列表和 diff 内容
 - `pr +versions` / `pr +version-diff` 使用 v1 API，`--id` 为网页 URL `/pulls/N` 中的 PR 序号，`--version-id` 为 patchset/version id
 - 同一个 PR 分支继续 push 新 commit 会生成新的 patchset/version；正常根据 review 修改代码时，应优先在原 PR 分支继续 push，不要关闭 PR 重开
-- `pr +list` 的 `--state` 参数（open/merged/closed）仅影响统计计数，API 返回的列表可能包含所有状态的 PR
+- `pr +list` 的 `--state` 参数会映射为 GitLink API 的 `status` 筛选；需要查看所有 PR 时传 `--state all`
 - PR 状态值：`pull_request_status` 0=open, 1=merged, 2=closed
 - 关联已有 Issue 时，把 Issue 编号或 URL 写入 PR `--body`，或使用 `issue +comment` 留痕；不要用 Raw API 对 Issue 做不完整更新，否则可能清空 Issue 描述
