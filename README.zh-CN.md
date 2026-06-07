@@ -79,7 +79,7 @@
 
 | 分类 | 能力 |
 |------|------|
-| 📦 仓库 | 列出、创建、Fork、删除仓库，管理设置、Topics、迁移 |
+| 📦 仓库 | 列出、创建、Fork、删除仓库，查看仓库信息、洞察数据和互动状态 |
 | 🐛 Issue | 创建、更新、关闭、批量关闭、评论 Issue |
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
@@ -193,13 +193,6 @@ export GITLINK_TOKEN="your-private-token"
 gitlink-cli user +me
 ```
 
-如果 CLI 无法正确识别认证、配置或仓库上下文，可以运行：
-
-```bash
-gitlink-cli doctor
-gitlink-cli doctor --skip-network --format json
-```
-
 ## 使用示例
 
 ### 仓库操作
@@ -211,27 +204,37 @@ gitlink-cli repo +list
 # 查看仓库信息
 gitlink-cli repo +info --owner Gitlink --repo forgeplus
 
-# 查看仓库详情和设置
-gitlink-cli repo +detail --owner Gitlink --repo forgeplus
-gitlink-cli repo +settings --owner Gitlink --repo forgeplus
-
 # 读取仓库 README
 gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
+
+# 查看语言占比
+gitlink-cli repo +languages --owner Gitlink --repo forgeplus
+
+# 列出贡献者
+gitlink-cli repo +contributors --owner Gitlink --repo forgeplus
+
+# 查看分支、标签或提交的贡献者代码行统计
+gitlink-cli repo +contributor-stats --owner Gitlink --repo forgeplus --ref master --pass-year 1
+
+# 查看仓库代码统计
+gitlink-cli repo +code-stats --owner Gitlink --repo forgeplus --ref master
+
+# 按时间范围查看关注者和点赞者
+gitlink-cli repo +watchers --owner Gitlink --repo forgeplus --start-at 1714521600 --end-at 1717200000
+gitlink-cli repo +stargazers --owner Gitlink --repo forgeplus --start-at 1714521600 --end-at 1717200000
+
+# 预览并执行仓库互动操作
+gitlink-cli repo +follow --owner Gitlink --repo forgeplus --dry-run
+gitlink-cli repo +follow --owner Gitlink --repo forgeplus
+gitlink-cli repo +unfollow --owner Gitlink --repo forgeplus --project-id 123
+gitlink-cli repo +like --owner Gitlink --repo forgeplus
+gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 
 # 创建仓库
 gitlink-cli repo +create -n my-project -d "项目描述"
 
 # Fork 仓库
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
-
-# 更新导航和管理 Topics，写入前先 dry-run
-gitlink-cli repo +units-update --owner Gitlink --repo forgeplus --units code,issues,pulls,wiki --dry-run
-gitlink-cli repo +topics --keyword go
-gitlink-cli repo +topic-add --project-id 17 --name go --dry-run
-
-# 仓库迁移辅助
-gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
-gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --owner-name target-org --dry-run
 ```
 
 ### Webhook 管理
@@ -278,9 +281,6 @@ gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role develope
 ```bash
 # 列出 Issue
 gitlink-cli issue +list --owner Gitlink --repo forgeplus
-
-# 搜索并按更新时间倒序列出开启中的 Issue
-gitlink-cli issue +list --owner Gitlink --repo forgeplus --state open --keyword 登录 --sort-by issues.updated_on --sort-direction desc
 
 # 创建 Issue
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: 登录失败" -b "复现步骤..."
@@ -350,9 +350,6 @@ gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
 ```bash
 # 列出 PR
 gitlink-cli pr +list --owner Gitlink --repo forgeplus
-
-# 按关键字搜索已合并 PR
-gitlink-cli pr +list --owner Gitlink --repo forgeplus --state merged --keyword release --sort-by updated_at --sort-direction desc
 
 # 创建 PR（同仓库分支）
 gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: 搜索功能" --head feature/search --base master
@@ -450,17 +447,7 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 
 # 带查询参数
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
-
-# 使用模板变量预览批处理计划
-gitlink-cli api --batch-file plan.json --var owner=Gitlink --var repo=forgeplus --dry-run
-gitlink-cli api --batch-file plan.json --continue-on-error
 ```
-
-### 环境诊断
-
-`doctor` 会检查本地配置文件、配置项、已保存 Token 或 `GITLINK_TOKEN`、
-仓库上下文识别和认证 API 连通性。在 CI 或离线环境中可以使用 `--skip-network`
-跳过远端访问。
 
 ## 全局参数
 
@@ -502,7 +489,7 @@ git push gitlink
 | Skill | 说明 |
 |-------|------|
 | `gitlink-shared` | 认证、全局参数、安全规则、API 注意事项 |
-| `gitlink-repo` | 仓库操作（创建、设置、Topics、迁移、Fork 等） |
+| `gitlink-repo` | 仓库操作（创建、查看、删除、Fork、洞察数据等） |
 | `gitlink-issue` | Issue 操作（创建、更新、关闭、评论等） |
 | `gitlink-pr` | Pull Request 操作（创建、合并、Review 等） |
 | `gitlink-member` | 仓库成员与邀请链接管理 |
@@ -624,7 +611,7 @@ npm install -g @gitlink-ai/cli
 
 ### Q: Windows 上凭证存储在哪里？
 
-gitlink-cli 使用 Windows Credential Manager 安全存储 Token。如果 Credential Manager 不可用，会自动降级到配置目录下的文件存储；设置了 `GITLINK_CONFIG_DIR` 时路径为 `$GITLINK_CONFIG_DIR/credentials`，否则为 `~/.config/gitlink-cli/credentials`。
+gitlink-cli 使用 Windows Credential Manager 安全存储 Token。如果 Credential Manager 不可用，会自动降级到文件存储（`~/.config/gitlink-cli/credentials`）。
 
 ### Q: 如何查看完整的 API 参考？
 

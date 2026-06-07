@@ -79,7 +79,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 
 | Category | Capabilities |
 |----------|-------------|
-| 📦 Repo | List, create, fork, delete repositories, manage settings, topics, transfer |
+| 📦 Repo | List, create, fork, delete repositories, view repo info, insights, and interactions |
 | 🐛 Issue | Create, update, close, batch close, comment on issues |
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
@@ -182,13 +182,6 @@ export GITLINK_TOKEN="your-private-token"
 gitlink-cli user +me
 ```
 
-If the CLI cannot detect authentication, config, or repository context correctly, run:
-
-```bash
-gitlink-cli doctor
-gitlink-cli doctor --skip-network --format json
-```
-
 ## Usage Examples
 
 ### Repository Operations
@@ -200,27 +193,37 @@ gitlink-cli repo +list
 # View repository info
 gitlink-cli repo +info --owner Gitlink --repo forgeplus
 
-# View repository metadata and settings
-gitlink-cli repo +detail --owner Gitlink --repo forgeplus
-gitlink-cli repo +settings --owner Gitlink --repo forgeplus
-
 # Read repository README
 gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
+
+# Show language breakdown
+gitlink-cli repo +languages --owner Gitlink --repo forgeplus
+
+# List contributors
+gitlink-cli repo +contributors --owner Gitlink --repo forgeplus
+
+# Show contributor code-line stats for a branch, tag, or commit
+gitlink-cli repo +contributor-stats --owner Gitlink --repo forgeplus --ref master --pass-year 1
+
+# Show repository code stats
+gitlink-cli repo +code-stats --owner Gitlink --repo forgeplus --ref master
+
+# List watchers and stargazers in a time range
+gitlink-cli repo +watchers --owner Gitlink --repo forgeplus --start-at 1714521600 --end-at 1717200000
+gitlink-cli repo +stargazers --owner Gitlink --repo forgeplus --start-at 1714521600 --end-at 1717200000
+
+# Preview and apply repository interaction actions
+gitlink-cli repo +follow --owner Gitlink --repo forgeplus --dry-run
+gitlink-cli repo +follow --owner Gitlink --repo forgeplus
+gitlink-cli repo +unfollow --owner Gitlink --repo forgeplus --project-id 123
+gitlink-cli repo +like --owner Gitlink --repo forgeplus
+gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 
 # Create a repository
 gitlink-cli repo +create -n my-project -d "Project description"
 
 # Fork a repository
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
-
-# Update navigation units and manage topics, previewing writes first
-gitlink-cli repo +units-update --owner Gitlink --repo forgeplus --units code,issues,pulls,wiki --dry-run
-gitlink-cli repo +topics --keyword go
-gitlink-cli repo +topic-add --project-id 17 --name go --dry-run
-
-# Transfer workflow helpers
-gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
-gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --owner-name target-org --dry-run
 ```
 
 ### Webhook Management
@@ -267,9 +270,6 @@ gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role develope
 ```bash
 # List issues
 gitlink-cli issue +list --owner Gitlink --repo forgeplus
-
-# Search and sort open issues
-gitlink-cli issue +list --owner Gitlink --repo forgeplus --state open --keyword login --sort-by issues.updated_on --sort-direction desc
 
 # Create an issue
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: Login failed" -b "Steps to reproduce..."
@@ -340,9 +340,6 @@ gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
 ```bash
 # List PRs
 gitlink-cli pr +list --owner Gitlink --repo forgeplus
-
-# Search merged PRs by keyword
-gitlink-cli pr +list --owner Gitlink --repo forgeplus --state merged --keyword release --sort-by updated_at --sort-direction desc
 
 # Create a PR (same-repo branch)
 gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: Search feature" --head feature/search --base master
@@ -571,17 +568,7 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 
 # With query parameters
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
-
-# Batch plan with template variables and dry-run preview
-gitlink-cli api --batch-file plan.json --var owner=Gitlink --var repo=forgeplus --dry-run
-gitlink-cli api --batch-file plan.json --continue-on-error
 ```
-
-### Environment Diagnostics
-
-`doctor` checks the local config file, config values, stored token or `GITLINK_TOKEN`,
-repository context detection, and authenticated API connectivity. Use `--skip-network`
-when running in CI or an offline environment.
 
 ## Global Parameters
 
@@ -623,7 +610,7 @@ See [skills/README.md](skills/README.md) for details.
 | Skill | Description |
 |-------|-------------|
 | `gitlink-shared` | Authentication, global parameters, safety rules, API notes |
-| `gitlink-repo` | Repository operations (create, settings, topics, transfer, fork, etc.) |
+| `gitlink-repo` | Repository operations (create, view, delete, fork, insights, etc.) |
 | `gitlink-issue` | Issue operations (create, update, close, comment, etc.) |
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
 | `gitlink-member` | Repository member and invite link management |
@@ -749,7 +736,7 @@ You can also download the binary manually from the release page or build from so
 
 ### Q: Where are credentials stored on Windows?
 
-gitlink-cli uses Windows Credential Manager for secure token storage. If Credential Manager is unavailable, it automatically falls back to file storage under the gitlink-cli config directory (`$GITLINK_CONFIG_DIR/credentials` when set, otherwise `~/.config/gitlink-cli/credentials`).
+gitlink-cli uses Windows Credential Manager for secure token storage. If Credential Manager is unavailable, it automatically falls back to file storage (`~/.config/gitlink-cli/credentials`).
 
 ### Q: Where can I find the full API reference?
 

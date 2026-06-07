@@ -2,9 +2,9 @@ package repo
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -110,7 +110,7 @@ func TestRepoListWithCategory(t *testing.T) {
 	}
 }
 
-// --- info/read metadata ---
+// --- info/readme/insights ---
 
 func TestRepoInfo(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -130,123 +130,199 @@ func TestRepoInfo(t *testing.T) {
 	}
 }
 
-func TestRepoMetadataShortcuts(t *testing.T) {
-	tests := []struct {
-		name string
-		path string
-	}{
-		{name: "detail", path: "/owner/repo/detail.json"},
-		{name: "simple", path: "/owner/repo/simple.json"},
-		{name: "settings", path: "/owner/repo/edit.json"},
-		{name: "units", path: "/owner/repo/project_units.json"},
-		{name: "transfer-orgs", path: "/owner/repo/applied_transfer_projects/organizations.json"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				assertRepoRequest(t, r, "GET", tc.path)
-				writeJSON(t, w, map[string]interface{}{"status": 0})
-			}))
-			defer server.Close()
-
-			if err := runShortcut(t, server, tc.name, nil); err != nil {
-				t.Fatalf("%s shortcut failed: %v", tc.name, err)
-			}
+func TestRepoReadmeUsesRepositoryReadmeEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/readme.json")
+		assertEqual(t, r.URL.Query().Get("ref"), "main")
+		assertEqual(t, r.URL.Query().Get("filepath"), "docs")
+		writeJSON(t, w, map[string]interface{}{
+			"type":    "file",
+			"name":    "README.md",
+			"content": "# docs\n",
 		})
-	}
-}
-
-func TestRepoUnitsUpdatePayload(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRepoRequest(t, r, "POST", "/owner/repo/project_units.json")
-		payload = decodeRepoJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0})
 	}))
 	defer server.Close()
 
-	err := runShortcut(t, server, "units-update", map[string]string{"units": "code,issues,code,wiki"})
-	if err != nil {
-		t.Fatalf("units-update shortcut failed: %v", err)
-	}
-	assertRepoStringSlice(t, payload["unit_types"], []string{"code", "issues", "wiki"})
-}
-
-func TestRepoTopics(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRepoRequest(t, r, "GET", "/v1/project_topics.json")
-		assertRepoQuery(t, r, "keyword", "go")
-		writeJSON(t, w, map[string]interface{}{"total_count": 0, "project_topics": []interface{}{}})
-	}))
-	defer server.Close()
-
-	if err := runShortcut(t, server, "topics", map[string]string{"keyword": "go"}); err != nil {
-		t.Fatalf("topics shortcut failed: %v", err)
-	}
-}
-
-func TestRepoTopicAddPayload(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRepoRequest(t, r, "POST", "/v1/project_topics.json")
-		payload = decodeRepoJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "topic-add", map[string]string{
-		"project-id": "17",
-		"name":       "go",
+	err := runShortcut(t, server, "readme", map[string]string{
+		"ref":  "main",
+		"path": "docs",
 	})
 	if err != nil {
-		t.Fatalf("topic-add shortcut failed: %v", err)
+		t.Fatalf("readme shortcut failed: %v", err)
 	}
-	assertRepoEqual(t, payload["project_id"], float64(17))
-	assertRepoEqual(t, payload["name"], "go")
 }
 
-func TestRepoTopicDelete(t *testing.T) {
+func TestRepoLanguagesUsesLanguagesEndpoint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRepoRequest(t, r, "DELETE", "/v1/project_topics/8.json")
-		assertRepoQuery(t, r, "project_id", "17")
-		writeJSON(t, w, map[string]interface{}{"status": 0})
+		assertRequest(t, r, "GET", "/owner/repo/languages.json")
+		writeJSON(t, w, map[string]interface{}{"Go": "92.4%", "Shell": "7.6%"})
 	}))
 	defer server.Close()
 
-	err := runShortcut(t, server, "topic-delete", map[string]string{
-		"id":         "8",
-		"project-id": "17",
+	if err := runShortcut(t, server, "languages", nil); err != nil {
+		t.Fatalf("languages shortcut failed: %v", err)
+	}
+}
+
+func TestRepoContributorsUsesContributorsEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/contributors.json")
+		writeJSON(t, w, map[string]interface{}{"total_count": 1, "list": []interface{}{}})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "contributors", nil); err != nil {
+		t.Fatalf("contributors shortcut failed: %v", err)
+	}
+}
+
+func TestRepoContributorStatsBuildsQuery(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/v1/owner/repo/contributors/stat.json")
+		assertEqual(t, r.URL.Query().Get("ref"), "main")
+		assertEqual(t, r.URL.Query().Get("pass_year"), "2")
+		writeJSON(t, w, map[string]interface{}{"total_count": 1, "contributors": []interface{}{}})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "contributor-stats", map[string]string{
+		"ref":       " main ",
+		"pass-year": "2",
 	})
 	if err != nil {
-		t.Fatalf("topic-delete shortcut failed: %v", err)
+		t.Fatalf("contributor-stats shortcut failed: %v", err)
 	}
 }
 
-func TestRepoTransferPayload(t *testing.T) {
-	var payload map[string]interface{}
+func TestRepoCodeStatsUsesRefQuery(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRepoRequest(t, r, "POST", "/owner/repo/applied_transfer_projects.json")
-		payload = decodeRepoJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"id": 1})
+		assertRequest(t, r, "GET", "/v1/owner/repo/code_stats.json")
+		assertEqual(t, r.URL.Query().Get("ref"), "release/v1")
+		writeJSON(t, w, map[string]interface{}{"author_count": 1, "commit_count": 3})
 	}))
 	defer server.Close()
 
-	if err := runShortcut(t, server, "transfer", map[string]string{"owner-name": "target-org"}); err != nil {
-		t.Fatalf("transfer shortcut failed: %v", err)
+	if err := runShortcut(t, server, "code-stats", map[string]string{"ref": "release/v1"}); err != nil {
+		t.Fatalf("code-stats shortcut failed: %v", err)
 	}
-	assertRepoEqual(t, payload["owner_name"], "target-org")
 }
 
-func TestRepoTransferCancel(t *testing.T) {
+func TestRepoWatchersBuildsTimeRangeQuery(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRepoRequest(t, r, "POST", "/owner/repo/applied_transfer_projects/cancel.json")
-		writeJSON(t, w, map[string]interface{}{"status": 0})
+		assertRequest(t, r, "GET", "/owner/repo/watchers.json")
+		assertEqual(t, r.URL.Query().Get("start_at"), "1714521600")
+		assertEqual(t, r.URL.Query().Get("end_at"), "1717200000")
+		writeJSON(t, w, map[string]interface{}{"count": 1, "users": []interface{}{}})
 	}))
 	defer server.Close()
 
-	if err := runShortcut(t, server, "transfer-cancel", nil); err != nil {
-		t.Fatalf("transfer-cancel shortcut failed: %v", err)
+	err := runShortcut(t, server, "watchers", map[string]string{
+		"start-at": "1714521600",
+		"end-at":   "1717200000",
+	})
+	if err != nil {
+		t.Fatalf("watchers shortcut failed: %v", err)
+	}
+}
+
+func TestRepoStargazersUsesStargazersEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/stargazers.json")
+		writeJSON(t, w, map[string]interface{}{"count": 0, "users": []interface{}{}})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "stargazers", nil); err != nil {
+		t.Fatalf("stargazers shortcut failed: %v", err)
+	}
+}
+
+func TestRepoFollowResolvesProjectID(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		switch requests {
+		case 1:
+			assertRequest(t, r, "GET", "/owner/repo.json")
+			writeJSON(t, w, map[string]interface{}{"id": float64(123)})
+		case 2:
+			assertRequest(t, r, "POST", "/watchers/follow.json")
+			assertEqual(t, r.URL.Query().Get("target_type"), "project")
+			assertEqual(t, r.URL.Query().Get("id"), "123")
+			writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success", "watched": true})
+		default:
+			t.Fatalf("unexpected extra request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "follow", nil); err != nil {
+		t.Fatalf("follow shortcut failed: %v", err)
+	}
+	assertEqual(t, requests, 2)
+}
+
+func TestRepoUnfollowUsesExplicitProjectID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "DELETE", "/watchers/unfollow.json")
+		assertEqual(t, r.URL.Query().Get("target_type"), "project")
+		assertEqual(t, r.URL.Query().Get("id"), "456")
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success", "watched": false})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "unfollow", map[string]string{"project-id": "456"}); err != nil {
+		t.Fatalf("unfollow shortcut failed: %v", err)
+	}
+}
+
+func TestRepoLikeUsesExplicitProjectID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/projects/456/praise_tread/like.json")
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "like", map[string]string{"project-id": "456"}); err != nil {
+		t.Fatalf("like shortcut failed: %v", err)
+	}
+}
+
+func TestRepoUnlikeResolvesStringProjectID(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		switch requests {
+		case 1:
+			assertRequest(t, r, "GET", "/owner/repo.json")
+			writeJSON(t, w, map[string]interface{}{"project_id": "789"})
+		case 2:
+			assertRequest(t, r, "DELETE", "/projects/789/praise_tread/unlike.json")
+			writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+		default:
+			t.Fatalf("unexpected extra request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "unlike", nil); err != nil {
+		t.Fatalf("unlike shortcut failed: %v", err)
+	}
+	assertEqual(t, requests, 2)
+}
+
+func TestRepoInteractionDryRunDoesNotCallAPIWithExplicitProjectID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run with explicit project-id should not call API, got: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "like", map[string]string{
+		"project-id": "456",
+		"dry-run":    "true",
+	})
+	if err != nil {
+		t.Fatalf("dry-run shortcut failed: %v", err)
 	}
 }
 
@@ -346,46 +422,52 @@ func TestRepoCreateWithOptions(t *testing.T) {
 	}
 }
 
-// --- validation/dry-run/error paths ---
+// --- validation/error paths ---
 
-func TestRepoDryRunDoesNotCallAPI(t *testing.T) {
-	dryRunCases := []struct {
-		name string
-		args map[string]string
-	}{
-		{name: "units-update", args: map[string]string{"units": "code,issues", "dry-run": "true"}},
-		{name: "topic-add", args: map[string]string{"project-id": "17", "name": "go", "dry-run": "true"}},
-		{name: "topic-delete", args: map[string]string{"id": "8", "project-id": "17", "dry-run": "true"}},
-		{name: "transfer", args: map[string]string{"owner-name": "target-org", "dry-run": "true"}},
-		{name: "transfer-cancel", args: map[string]string{"dry-run": "true"}},
-	}
-
-	for _, tc := range dryRunCases {
-		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
-			}))
-			defer server.Close()
-
-			if err := runShortcut(t, server, tc.name, tc.args); err != nil {
-				t.Fatalf("%s dry-run failed: %v", tc.name, err)
-			}
-		})
-	}
-}
-
-func TestRepoTopicAddRejectsInvalidProjectID(t *testing.T) {
+func TestRepoInsightValidation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("invalid project id should not call API, got %s %s", r.Method, r.URL.Path)
+		t.Fatalf("invalid input should not call API, got: %s %s", r.Method, r.URL.Path)
 	}))
 	defer server.Close()
 
-	err := runShortcut(t, server, "topic-add", map[string]string{
-		"project-id": "abc",
-		"name":       "go",
-	})
-	if err == nil {
-		t.Fatal("expected invalid project id to return an error")
+	cases := []struct {
+		name     string
+		shortcut string
+		args     map[string]string
+	}{
+		{
+			name:     "invalid pass year",
+			shortcut: "contributor-stats",
+			args:     map[string]string{"pass-year": "0"},
+		},
+		{
+			name:     "invalid start timestamp",
+			shortcut: "watchers",
+			args:     map[string]string{"start-at": "abc"},
+		},
+		{
+			name:     "start after end",
+			shortcut: "stargazers",
+			args:     map[string]string{"start-at": "20", "end-at": "10"},
+		},
+		{
+			name:     "invalid project id",
+			shortcut: "follow",
+			args:     map[string]string{"project-id": "repo"},
+		},
+		{
+			name:     "negative project id",
+			shortcut: "unlike",
+			args:     map[string]string{"project-id": "-1"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := runShortcut(t, server, tc.shortcut, tc.args); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
 	}
 }
 
@@ -473,51 +555,16 @@ func TestRepoCreateUserNoLogin(t *testing.T) {
 	}
 }
 
-func assertRepoRequest(t *testing.T, r *http.Request, method, path string) {
+func assertRequest(t *testing.T, r *http.Request, method, path string) {
 	t.Helper()
 	if r.Method != method || r.URL.Path != path {
-		t.Fatalf("got request %s %s, want %s %s", r.Method, r.URL.Path, method, path)
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 	}
 }
 
-func assertRepoQuery(t *testing.T, r *http.Request, key, want string) {
+func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	t.Helper()
-	if got := r.URL.Query().Get(key); got != want {
-		t.Fatalf("query %s = %q, want %q", key, got, want)
-	}
-}
-
-func decodeRepoJSON(t *testing.T, r *http.Request) map[string]interface{} {
-	t.Helper()
-	var payload map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		t.Fatalf("failed to decode request body: %v", err)
-	}
-	return payload
-}
-
-func assertRepoEqual(t *testing.T, got interface{}, want interface{}) {
-	t.Helper()
-	if !reflect.DeepEqual(got, want) {
+	if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", want) {
 		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
-	}
-}
-
-func assertRepoStringSlice(t *testing.T, got interface{}, want []string) {
-	t.Helper()
-	values, ok := got.([]interface{})
-	if !ok {
-		t.Fatalf("got %T, want []interface{}", got)
-	}
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		text, ok := value.(string)
-		if !ok {
-			t.Fatalf("got value %v (%T), want string", value, value)
-		}
-		result = append(result, text)
-	}
-	if !reflect.DeepEqual(result, want) {
-		t.Fatalf("got %v, want %v", result, want)
 	}
 }

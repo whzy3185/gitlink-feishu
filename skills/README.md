@@ -1,6 +1,6 @@
 # GitLink CLI Skills 指南
 
-[![GitLink](https://img.shields.io/badge/GitLink-Gitlink%2Fgitlink--cli-green)](https://www.gitlink.org.cn/Gitlink/gitlink-cli)
+[![GitLink](https://img.shields.io/badge/GitLink-wbtiger%2Fgitlink--cli-green)](https://www.gitlink.org.cn/wbtiger/gitlink-cli)
 
 欢迎使用 GitLink CLI Skills！本指南帮助你快速上手和充分利用 gitlink-cli 的所有功能。
 
@@ -134,7 +134,7 @@ skills/
 | Skill | 说明 | 常用命令 |
 |-------|------|----------|
 | **gitlink-shared** | 认证、全局参数、API 参考、安全规则、分支约定 | `auth login`, `auth status` |
-| **gitlink-repo** | 仓库管理 | `repo +list`, `repo +create`, `repo +settings`, `repo +topics`, `repo +transfer` |
+| **gitlink-repo** | 仓库管理与洞察 | `repo +list`, `repo +info`, `repo +languages`, `repo +contributors`, `repo +code-stats`, `repo +follow`, `repo +like` |
 | **gitlink-issue** | Issue 管理 | `issue +create`, `issue +list`, `issue +view`, `issue +close`, `issue +batch-close` |
 | **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +versions`, `pr +version-diff`, `pr +reviews`, `pr +review` |
 | **gitlink-member** | 仓库成员管理 | `member +list`, `member +add`, `member +batch-add`, `member +role`, `member +invite-link` |
@@ -153,7 +153,6 @@ skills/
 | **gitlink-pm** | 项目管理 | 通过 Raw API 访问 |
 | **gitlink-workflow** | AI 工作流 | Issue 分类、PR Review、Release Notes |
 | **gitlink-health** | 开源项目健康度 | 详情见SKILL.md |
-| **gitlink-gatekeeper** | Policy-as-Code PR 合并门禁：按 `gatekeeper.yaml` 策略算 0-100 评分卡 + 三态裁决（PASS/REQUEST_CHANGES/COMMENT），默认 dry-run、绝不自动合并 | `pr +view/+files/+diff`, `pr +comment`, `label +create` |
 
 ---
 
