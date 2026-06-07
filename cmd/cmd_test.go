@@ -55,9 +55,9 @@ func TestRootCmdHasSubcommands(t *testing.T) {
 	}
 	names := map[string]bool{}
 	for _, sub := range root.Commands() {
-		names[sub.Use] = true
+		names[sub.Name()] = true
 	}
-	for _, want := range []string{"auth", "config", "doctor", "version"} {
+	for _, want := range []string{"auth", "completion", "config", "doctor", "version"} {
 		if !names[want] {
 			t.Fatalf("missing subcommand: %s", want)
 		}

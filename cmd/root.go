@@ -58,6 +58,7 @@ func NewRootCmd(opts RootOptions, tr *i18n.Translator) (*cobra.Command, error) {
 	rootCmd.AddCommand(apiCmd.NewAPICmd(tr))
 	rootCmd.AddCommand(configCmd.NewConfigCmd(tr))
 	rootCmd.AddCommand(doctorCmd.NewDoctorCmd(tr))
+	rootCmd.AddCommand(newCompletionCmd(tr))
 	rootCmd.AddCommand(newVersionCmd(version, tr))
 
 	shortcuts.RegisterAll(rootCmd, tr)
@@ -77,6 +78,43 @@ func newVersionCmd(version string, tr *i18n.Translator) *cobra.Command {
 			return err
 		},
 	}
+}
+
+func newCompletionCmd(tr *i18n.Translator) *cobra.Command {
+	var noDescriptions bool
+	cmd := &cobra.Command{
+		Use:       "completion [bash|zsh|fish|powershell]",
+		Short:     tr.T("cmd.completion.short"),
+		Long:      tr.T("cmd.completion.long"),
+		ValidArgs: []string{"bash", "zsh", "fish", "powershell"},
+		Args:      cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root := cmd.Root()
+			out := cmd.OutOrStdout()
+			includeDescriptions := !noDescriptions
+
+			switch args[0] {
+			case "bash":
+				return root.GenBashCompletionV2(out, includeDescriptions)
+			case "zsh":
+				if noDescriptions {
+					return root.GenZshCompletionNoDesc(out)
+				}
+				return root.GenZshCompletion(out)
+			case "fish":
+				return root.GenFishCompletion(out, includeDescriptions)
+			case "powershell":
+				if noDescriptions {
+					return root.GenPowerShellCompletion(out)
+				}
+				return root.GenPowerShellCompletionWithDesc(out)
+			default:
+				return fmt.Errorf("unsupported shell: %s", args[0])
+			}
+		},
+	}
+	cmd.Flags().BoolVar(&noDescriptions, "no-descriptions", false, tr.T("flag.completion.no_descriptions"))
+	return cmd
 }
 
 func Execute() error {
