@@ -97,7 +97,9 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if ref == "" {
 					ref = "master"
 				}
-				q.Set("filepath", ctx.Arg("path"))
+				if path := ctx.Arg("path"); path != "" {
+					q.Set("filepath", path)
+				}
 				q.Set("ref", ref)
 				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
 				if err != nil {
