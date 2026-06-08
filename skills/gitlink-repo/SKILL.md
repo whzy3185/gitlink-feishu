@@ -51,7 +51,7 @@ gitlink-cli repo +info
 # 列出用户的仓库
 gitlink-cli repo +list --user zhangsan
 
-# 查看语言占比和贡献者
+# 查看文件树、语言占比和贡献者
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus

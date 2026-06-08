@@ -83,10 +83,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "tree",
-			Description: "List repository files and directories",
+			Description: tr.T("cmd.repo.tree.short"),
 			Flags: []common.Flag{
-				{Name: "path", Short: "p", Usage: "Directory path to list (default: repository root)"},
-				{Name: "ref", Short: "r", Usage: "Branch, tag, or commit ref", Default: "master"},
+				{Name: "path", Short: "p", Usage: tr.T("flag.repo.tree.path")},
+				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.tree.ref"), Default: "master"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {

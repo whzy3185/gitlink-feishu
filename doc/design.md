@@ -40,7 +40,7 @@ gitlink-cli/
 │   ├── common/
 │   │   ├── types.go          # Shortcut / Flag / RuntimeContext 定义
 │   │   └── runner.go         # CallAPI / PaginateAll / ResolveOwnerRepo
-│   ├── repo/                 # repo +create / +clone / +fork / +list / +info / +tree
+│   ├── repo/                 # repo +list / +info / +readme / +tree / +languages / +create ...
 │   ├── issue/                # issue +list / +create / +view / +close / +comment
 │   ├── pr/                   # pr +list / +create / +view / +merge / +review
 │   ├── release/              # release +list / +create / +download
@@ -78,7 +78,7 @@ gitlink-cli/
 
 | 领域 | Shortcuts | 数量 |
 |------|-----------|------|
-| repo | `+create` `+clone` `+fork` `+list` `+info` `+tree` `+delete` `+settings` | 8 |
+| repo | `+list` `+info` `+readme` `+tree` `+languages` `+contributors` `+contributor-stats` `+code-stats` `+watchers` `+stargazers` `+follow` `+unfollow` `+like` `+unlike` `+create` `+fork` `+delete` | 17 |
 | issue | `+list` `+create` `+view` `+update` `+close` `+comment` `+assign` `+label` | 8 |
 | pr | `+list` `+create` `+view` `+merge` `+close` `+review` `+files` `+diff` | 8 |
 | release | `+list` `+create` `+view` `+delete` `+download` | 5 |
