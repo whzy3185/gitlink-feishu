@@ -23,6 +23,7 @@ metadata:
 | `repo +list` | 仓库列表 | 否（公开项目） |
 | `repo +info` | 仓库详情 | 否（公开项目） |
 | `repo +readme` | README 内容 | 否（公开项目） |
+| `repo +tree` | 仓库文件树 | 否（公开项目） |
 | `repo +languages` | 仓库语言统计 | 否（公开项目） |
 | `repo +contributors` | 仓库贡献者列表 | 否（公开项目） |
 | `repo +contributor-stats` | 贡献者代码行统计 | 否（公开项目） |
@@ -51,6 +52,8 @@ gitlink-cli repo +info
 gitlink-cli repo +list --user zhangsan
 
 # 查看语言占比和贡献者
+gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
+gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 gitlink-cli repo +contributors --owner Gitlink --repo forgeplus
 

@@ -152,6 +152,42 @@ func TestRepoReadmeUsesRepositoryReadmeEndpoint(t *testing.T) {
 	}
 }
 
+func TestRepoTreeListsRootOnDefaultRef(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+		assertEqual(t, r.URL.Query().Get("filepath"), "")
+		assertEqual(t, r.URL.Query().Get("ref"), "master")
+		writeJSON(t, w, map[string]interface{}{
+			"entries": []map[string]interface{}{
+				{"name": "README.md", "type": "file"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "tree", nil); err != nil {
+		t.Fatalf("tree shortcut failed: %v", err)
+	}
+}
+
+func TestRepoTreeUsesPathAndRef(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+		assertEqual(t, r.URL.Query().Get("filepath"), "cmd")
+		assertEqual(t, r.URL.Query().Get("ref"), "main")
+		writeJSON(t, w, map[string]interface{}{
+			"entries": []map[string]interface{}{
+				{"name": "main.go", "type": "file"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "tree", map[string]string{"path": "cmd", "ref": "main"}); err != nil {
+		t.Fatalf("tree shortcut failed: %v", err)
+	}
+}
+
 func TestRepoLanguagesUsesLanguagesEndpoint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assertRequest(t, r, "GET", "/owner/repo/languages.json")
