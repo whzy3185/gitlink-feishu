@@ -70,6 +70,14 @@
   <a href="https://www.gitlink.org.cn/lindiwen23" title="lindiwen23"><img src="https://www.gitlink.org.cn/images/avatars/User/141609?t=1748270628" width="40" height="40" alt="lindiwen23" style="border-radius: 50%;"></a>
   <br><sub><a href="https://www.gitlink.org.cn/lindiwen23">lindiwen23</a></sub>
 </div>
+<div align="center">
+  <a href="https://www.gitlink.org.cn/ohanabi" title="ohanabi"><img src="https://www.gitlink.org.cn/images/avatars/User/148166?t=1778230283" width="40" height="40" alt="ohanabi" style="border-radius: 50%;"></a>
+  <br><sub><a href="https://www.gitlink.org.cn/ohanabi">ohanabi</a></sub>
+</div>
+<div align="center">
+  <a href="https://www.gitlink.org.cn/jiangtx" title="jiangtx"><img src="https://www.gitlink.org.cn/system/lets/letter_avatars/2/J/67_157_94/120.png" width="40" height="40" alt="jiangtx" style="border-radius: 50%;"></a>
+  <br><sub><a href="https://www.gitlink.org.cn/jiangtx">jiangtx</a></sub>
+</div>
 </div>
 
 ## 为什么选择 gitlink-cli？
