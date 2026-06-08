@@ -93,7 +93,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔀 PR | Create, merge, review pull requests, view changed files |
 | 👥 Member | List, add, remove repository members, change roles, create and accept invite links |
 | 🌿 Branch | Create, delete, list, protect, unprotect branches |
-| 🏷️ Release | Create, view, delete releases |
+| 🏷️ Release | Create, edit, update, view, delete releases |
 | 🏢 Org | Manage organizations, members, teams |
 | 🔧 CI | View builds, logs, CI/CD operations |
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
@@ -406,11 +406,18 @@ gitlink-cli branch +unprotect --name main
 # List releases
 gitlink-cli release +list --owner Gitlink --repo forgeplus
 
-# Create a release
-gitlink-cli release +create --owner Gitlink --repo forgeplus -t v1.0.0 -n "v1.0.0 Stable" -b "Changelog..."
+# Create a release with release notes and optional assets
+gitlink-cli release +create --owner Gitlink --repo forgeplus -t v1.0.0 -n "v1.0.0 Stable" -b "Changelog..." --attachment-ids 12,34
 
 # View a release
 gitlink-cli release +view --owner Gitlink --repo forgeplus -i <version_id>
+
+# Get edit data and update while preserving unspecified fields
+gitlink-cli release +edit --owner Gitlink --repo forgeplus -i <version_id>
+gitlink-cli release +update --owner Gitlink --repo forgeplus -i <version_id> -b "Updated changelog" --dry-run
+
+# Preview release deletion before executing it
+gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --dry-run
 ```
 
 ### CI/CD Operations
@@ -623,7 +630,7 @@ See [skills/README.md](skills/README.md) for details.
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
 | `gitlink-member` | Repository member and invite link management |
 | `gitlink-branch` | Branch management (create, delete, list, protect, unprotect) |
-| `gitlink-release` | Release management (create, view, delete, etc.) |
+| `gitlink-release` | Release management (create, edit, update, view, delete, etc.) |
 | `gitlink-ci` | CI/CD operations (builds, logs, etc.) |
 | `gitlink-pipeline` | Pipeline workflow operations (runs, logs, enable, disable, delete, etc.) |
 | `gitlink-search` | Search (repositories, users, etc.) |

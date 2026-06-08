@@ -93,7 +93,7 @@
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
 | 👥 成员 | 列出、添加、移除仓库成员，调整角色，生成和接受邀请链接 |
 | 🌿 分支 | 创建、删除、保护分支 |
-| 🏷️ 发布 | 创建、查看、删除 Release |
+| 🏷️ 发布 | 创建、编辑、更新、查看、删除 Release |
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
@@ -397,11 +397,18 @@ gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved 
 # 列出 Release
 gitlink-cli release +list --owner Gitlink --repo forgeplus
 
-# 创建 Release
-gitlink-cli release +create --owner Gitlink --repo forgeplus -t v1.0.0 -n "v1.0.0 正式版" -b "更新内容..."
+# 创建 Release，可附带附件 ID
+gitlink-cli release +create --owner Gitlink --repo forgeplus -t v1.0.0 -n "v1.0.0 正式版" -b "更新内容..." --attachment-ids 12,34
 
 # 查看 Release
 gitlink-cli release +view --owner Gitlink --repo forgeplus -i <version_id>
+
+# 获取编辑数据并保留未传字段更新
+gitlink-cli release +edit --owner Gitlink --repo forgeplus -i <version_id>
+gitlink-cli release +update --owner Gitlink --repo forgeplus -i <version_id> -b "更新后的内容" --dry-run
+
+# 删除前先预览请求
+gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --dry-run
 ```
 
 ### 流水线管理
@@ -501,7 +508,7 @@ git push gitlink
 | `gitlink-issue` | Issue 操作（创建、更新、关闭、评论等） |
 | `gitlink-pr` | Pull Request 操作（创建、合并、Review 等） |
 | `gitlink-member` | 仓库成员与邀请链接管理 |
-| `gitlink-release` | 发布管理（创建、查看、删除等） |
+| `gitlink-release` | 发布管理（创建、编辑、更新、查看、删除等） |
 | `gitlink-org` | 组织管理（成员、团队等） |
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |
 | `gitlink-pipeline` | 流水线工作流操作（运行、日志、启停、删除等） |

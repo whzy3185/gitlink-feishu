@@ -8,10 +8,11 @@
 
 ```bash
 # 删除指定发行版（使用 version_id）
+gitlink-cli release +delete --id 12345 --dry-run
 gitlink-cli release +delete --id 12345
 
 # 指定仓库
-gitlink-cli release +delete --id 12345 --owner someone --repo myrepo
+gitlink-cli release +delete --id 12345 --owner someone --repo myrepo --dry-run
 ```
 
 ## 参数
@@ -19,6 +20,7 @@ gitlink-cli release +delete --id 12345 --owner someone --repo myrepo
 | 参数 | 必填 | 说明 |
 |------|------|------|
 | `--id, -i` | 是 | 发行版 ID（version_id，数字 ID） |
+| `--dry-run` | 否 | 仅预览删除请求，不改变发布状态 |
 | `--owner` | 是* | 仓库所有者（可从 git remote 自动推断） |
 | `--repo` | 是* | 仓库名称（可从 git remote 自动推断） |
 | `--format` | 否 | 输出格式：`json`/`table`/`yaml` |
@@ -33,8 +35,9 @@ gitlink-cli release +delete --id 12345 --owner someone --repo myrepo
 
 1. 确认用户确实希望删除该发行版（此操作不可逆）。
 2. 如果用户只知道 tag name，先执行 `release +list` 获取 version_id。
-3. 执行 `release +delete --id <version_id>`。
-4. 输出删除结果。
+3. 先执行 `release +delete --id <version_id> --dry-run` 预览请求。
+4. 用户确认后执行 `release +delete --id <version_id>`。
+5. 输出删除结果。
 
 ## References
 - [gitlink-release](../SKILL.md)

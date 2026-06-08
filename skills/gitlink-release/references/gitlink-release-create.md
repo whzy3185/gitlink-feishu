@@ -15,6 +15,9 @@ gitlink-cli release +create --tag v1.0.0 --name "v1.0.0" --body "Bug fixes and i
 
 # 创建预发布版本，指定目标分支
 gitlink-cli release +create --tag v2.0.0-beta.1 --name "v2.0.0 Beta" --target develop --prerelease true
+
+# 创建草稿版本并关联已上传附件
+gitlink-cli release +create --tag v1.1.0 --name "v1.1.0 Draft" --draft true --attachment-ids 12,34
 ```
 
 ## 参数
@@ -24,8 +27,10 @@ gitlink-cli release +create --tag v2.0.0-beta.1 --name "v2.0.0 Beta" --target de
 | `--tag, -t` | 是 | Tag 名称 |
 | `--name, -n` | 是 | 发行版名称 |
 | `--body, -b` | 否 | 发布说明 |
-| `--target` | 否 | 目标分支（默认 `main`） |
+| `--target` | 否 | 目标分支（默认 `master`） |
 | `--prerelease` | 否 | 标记为预发布（`true`/`false`，默认 `false`） |
+| `--draft` | 否 | 标记为草稿（`true`/`false`，默认 `false`） |
+| `--attachment-ids` | 否 | 逗号分隔的附件 ID |
 | `--owner` | 是* | 仓库所有者（可从 git remote 自动推断） |
 | `--repo` | 是* | 仓库名称（可从 git remote 自动推断） |
 | `--format` | 否 | 输出格式：`json`/`table`/`yaml` |
