@@ -364,6 +364,9 @@ gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --ids 101,102 -
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --dry-run
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --yes
 
+# 将筛选后的 Issue 导出为 CSV，便于离线分析或生成周报
+gitlink-cli issue +export --owner Gitlink --repo forgeplus --state open --keyword bug --export-format csv --output issues.csv
+
 # 添加评论
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "已修复"
 

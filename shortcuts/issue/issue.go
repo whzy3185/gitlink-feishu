@@ -47,6 +47,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		newBatchCloseShortcut(),
 		newBatchUpdateShortcut(),
 		newBatchDeleteShortcut(),
+		newExportShortcut(tr),
 		{
 			Name:        "list",
 			Description: tr.T("cmd.issue.list.short"),
