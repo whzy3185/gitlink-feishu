@@ -9,12 +9,18 @@
       text { font-family: Arial, "Microsoft YaHei", sans-serif; fill: #0b1736; }
       .title { font-size: 72px; font-weight: 800; letter-spacing: 0; }
       .subtitle { font-size: 27px; fill: #46556b; }
-      .card-title { font-size: 32px; font-weight: 800; }
-      .cli-title { font-size: 28px; font-weight: 800; }
+      .card-title { font-size: 34px; font-weight: 800; }
+      .cli-title { font-size: 30px; font-weight: 800; }
+      .title-navy { fill: #071449; }
+      .title-teal { fill: #075e70; }
+      .title-blue { fill: #14579f; }
+      .title-slate { fill: #334155; }
       .item { font-size: 23px; fill: #101a2f; }
-      .small { font-size: 20px; fill: #314158; }
+      .item-condensed { font-size: 22px; fill: #101a2f; }
+      .small { font-size: 20px; fill: #123e21; }
       .mono { font-family: Consolas, "Courier New", monospace; font-size: 19px; fill: #101a2f; }
       .hairline { stroke: #a8b5c4; stroke-width: 1.6; }
+      .icon-line { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
       .bullet-navy { fill: #071449; }
       .bullet-teal { fill: #075e70; }
       .bullet-blue { fill: #14579f; }
@@ -30,14 +36,14 @@
   <!-- Input -->
   <g transform="translate(48 208)">
     <rect width="255" height="505" rx="18" fill="#ffffff" stroke="#071449" stroke-width="2.2" filter="url(#cardShadow)"/>
-    <g transform="translate(86 35)" fill="none" stroke="#071449" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M18 0h46l30 30v72H18z"/>
-      <path d="M64 0v30h30"/>
-      <path d="M42 45c-12 0-12 28 0 28"/>
-      <path d="M70 45c12 0 12 28 0 28"/>
-      <path d="M42 94h28"/>
+    <g transform="translate(72 36)" class="icon-line" stroke="#071449">
+      <path d="M10 0h55l28 28v102H10z"/>
+      <path d="M65 0v28h28"/>
+      <text x="50" y="78" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="34" font-weight="700" fill="#071449" stroke="none">{ }</text>
+      <path d="M32 92h38"/>
+      <path d="M32 111h29"/>
     </g>
-    <text x="128" y="194" text-anchor="middle" class="card-title">Input</text>
+    <text x="128" y="196" text-anchor="middle" class="card-title title-navy">Input</text>
     <line x1="23" y1="221" x2="232" y2="221" class="hairline"/>
     <circle cx="24" cy="259" r="4.5" class="bullet-navy"/><text x="43" y="267" class="item">Project metadata</text>
     <circle cx="24" cy="305" r="4.5" class="bullet-navy"/><text x="43" y="313" class="item">Repository target</text>
@@ -49,14 +55,17 @@
   <!-- Assets -->
   <g transform="translate(377 208)">
     <rect width="255" height="505" rx="18" fill="#ffffff" stroke="#075e70" stroke-width="2.2" filter="url(#cardShadow)"/>
-    <g transform="translate(87 35)" fill="none" stroke="#075e70" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M0 26h72l24 24v84H0z"/>
-      <path d="M72 26v24h24"/>
-      <path d="M-18 45h18v70h-18z"/>
-      <path d="M-36 63h18v70h-18z"/>
-      <path d="M25 72h42M25 94h50M25 116h36"/>
+    <g transform="translate(64 35)" class="icon-line" stroke="#075e70">
+      <path d="M2 45h17v84H2z"/>
+      <path d="M22 25h58l23 23v84H22z"/>
+      <path d="M80 25v23h23"/>
+      <path d="M43 6h59l23 23v84h-22"/>
+      <path d="M102 6v23h23"/>
+      <path d="M43 58h44"/>
+      <path d="M43 80h48"/>
+      <path d="M43 102h40"/>
     </g>
-    <text x="128" y="194" text-anchor="middle" class="card-title" fill="#075e70">Assets</text>
+    <text x="128" y="196" text-anchor="middle" class="card-title title-teal">Assets</text>
     <line x1="23" y1="221" x2="232" y2="221" class="hairline"/>
     <circle cx="24" cy="259" r="4.5" class="bullet-teal"/><text x="43" y="267" class="item">README</text>
     <circle cx="24" cy="305" r="4.5" class="bullet-teal"/><text x="43" y="313" class="item">LICENSE</text>
@@ -68,13 +77,16 @@
   <!-- CLI -->
   <g transform="translate(705 208)">
     <rect width="255" height="505" rx="18" fill="#ffffff" stroke="#14579f" stroke-width="2.2" filter="url(#cardShadow)"/>
-    <g transform="translate(81 42)" fill="none" stroke="#14579f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="0" y="0" width="94" height="94" rx="7"/>
-      <path d="M0 28h94"/>
-      <circle cx="18" cy="14" r="3"/><circle cx="35" cy="14" r="3"/><circle cx="52" cy="14" r="3"/>
-      <path d="M31 55l18 18-18 18M61 91h26"/>
+    <g transform="translate(79 41)" class="icon-line" stroke="#14579f">
+      <rect x="0" y="0" width="98" height="94" rx="6"/>
+      <path d="M0 29h98"/>
+      <circle cx="17" cy="14" r="3" fill="#14579f" stroke="none"/>
+      <circle cx="33" cy="14" r="3" fill="#14579f" stroke="none"/>
+      <circle cx="49" cy="14" r="3" fill="#14579f" stroke="none"/>
+      <path d="M31 56l18 17-18 18"/>
+      <path d="M61 86h22"/>
     </g>
-    <text x="128" y="194" text-anchor="middle" class="cli-title" fill="#14579f">CLI Orchestration</text>
+    <text x="128" y="196" text-anchor="middle" class="cli-title title-blue" textLength="218" lengthAdjust="spacingAndGlyphs">CLI Orchestration</text>
     <line x1="23" y1="221" x2="232" y2="221" class="hairline"/>
     <circle cx="24" cy="259" r="4.5" class="bullet-blue"/><text x="52" y="267" class="mono">repo +info</text>
     <circle cx="24" cy="305" r="4.5" class="bullet-blue"/><text x="52" y="313" class="mono">branch +list</text>
@@ -85,31 +97,35 @@
   <!-- GitLink -->
   <g transform="translate(1032 208)">
     <rect width="255" height="505" rx="18" fill="#ffffff" stroke="#334155" stroke-width="2.2" filter="url(#cardShadow)"/>
-    <g transform="translate(73 44)" fill="none" stroke="#334155" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M42 91h-7C13 91 0 76 0 59c0-16 11-29 28-33C36 10 51 0 70 0c25 0 45 17 49 41 18 3 31 17 31 35 0 20-15 35-38 35H42"/>
-      <circle cx="74" cy="34" r="8"/>
-      <circle cx="48" cy="68" r="8"/>
-      <circle cx="100" cy="68" r="8"/>
-      <path d="M69 41L53 61M80 41l15 20"/>
+    <g transform="translate(51 40)" class="icon-line" stroke="#334155">
+      <path d="M44 106h68c25 0 42-17 42-41 0-23-16-40-40-42C109 9 93 0 75 0 54 0 37 12 29 31 11 36 0 50 0 68c0 22 18 38 43 38"/>
+      <circle cx="76" cy="36" r="8"/>
+      <circle cx="51" cy="70" r="8"/>
+      <circle cx="102" cy="70" r="8"/>
+      <path d="M72 44L56 63"/>
+      <path d="M80 44l17 20"/>
+      <path d="M76 44v21"/>
     </g>
-    <text x="128" y="194" text-anchor="middle" class="card-title" fill="#334155">GitLink</text>
+    <text x="128" y="196" text-anchor="middle" class="card-title title-slate">GitLink</text>
     <line x1="23" y1="221" x2="232" y2="221" class="hairline"/>
     <circle cx="24" cy="259" r="4.5" class="bullet-slate"/><text x="43" y="267" class="item">Repository state</text>
-    <circle cx="24" cy="305" r="4.5" class="bullet-slate"/><text x="43" y="302" class="item">Collaboration</text><text x="43" y="330" class="item">branches</text>
-    <circle cx="24" cy="367" r="4.5" class="bullet-slate"/><text x="43" y="375" class="item">Bootstrap issues</text>
-    <circle cx="24" cy="413" r="4.5" class="bullet-slate"/><text x="43" y="421" class="item">Issue comment</text>
-    <circle cx="24" cy="459" r="4.5" class="bullet-slate"/><text x="43" y="453" class="item">Apply mode writes</text><text x="43" y="481" class="item">remotely</text>
+    <circle cx="24" cy="305" r="4.5" class="bullet-slate"/><text x="43" y="313" class="item-condensed" textLength="188" lengthAdjust="spacingAndGlyphs">Collaboration branches</text>
+    <circle cx="24" cy="351" r="4.5" class="bullet-slate"/><text x="43" y="359" class="item">Bootstrap issues</text>
+    <circle cx="24" cy="397" r="4.5" class="bullet-slate"/><text x="43" y="405" class="item">Issue comment</text>
+    <circle cx="24" cy="443" r="4.5" class="bullet-slate"/><text x="43" y="445" class="item">Apply mode writes</text><text x="43" y="475" class="item">remotely</text>
   </g>
 
   <!-- Evidence -->
   <g transform="translate(1364 208)">
     <rect width="255" height="505" rx="18" fill="#ffffff" stroke="#14579f" stroke-width="2.2" filter="url(#cardShadow)"/>
-    <g transform="translate(88 35)" fill="none" stroke="#14579f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M18 0h52l27 27v101H18z"/>
-      <path d="M70 0v27h27"/>
-      <path d="M39 55h43M39 79h43M39 103h31"/>
+    <g transform="translate(72 36)" class="icon-line" stroke="#14579f">
+      <path d="M10 0h55l28 28v102H10z"/>
+      <path d="M65 0v28h28"/>
+      <path d="M31 56h43"/>
+      <path d="M31 79h43"/>
+      <path d="M31 102h34"/>
     </g>
-    <text x="128" y="194" text-anchor="middle" class="card-title" fill="#14579f">Evidence</text>
+    <text x="128" y="196" text-anchor="middle" class="card-title title-blue">Evidence</text>
     <line x1="23" y1="221" x2="232" y2="221" class="hairline"/>
     <circle cx="24" cy="259" r="4.5" class="bullet-blue"/><text x="43" y="267" class="item">Markdown report</text>
     <circle cx="24" cy="305" r="4.5" class="bullet-blue"/><text x="43" y="313" class="item">Issue summary</text>
@@ -118,10 +134,10 @@
     <circle cx="24" cy="443" r="4.5" class="bullet-blue"/><text x="43" y="451" class="item">command log</text>
   </g>
 
-  <polygon points="316,394 343,394 343,376 371,411 343,446 343,428 316,428" fill="#06133a"/>
-  <polygon points="644,394 671,394 671,376 699,411 671,446 671,428 644,428" fill="#06133a"/>
-  <polygon points="972,394 999,394 999,376 1027,411 999,446 999,428 972,428" fill="#06133a"/>
-  <polygon points="1302,394 1329,394 1329,376 1357,411 1329,446 1329,428 1302,428" fill="#06133a"/>
+  <polygon points="316,404 343,404 343,386 371,411 343,436 343,418 316,418" fill="#06133a"/>
+  <polygon points="644,404 671,404 671,386 699,411 671,436 671,418 644,418" fill="#06133a"/>
+  <polygon points="972,404 999,404 999,386 1027,411 999,436 999,418 972,418" fill="#06133a"/>
+  <polygon points="1302,404 1329,404 1329,386 1357,411 1329,436 1329,418 1302,418" fill="#06133a"/>
 
   <g transform="translate(55 777)">
     <rect width="1562" height="122" rx="14" fill="#f8fbf8" stroke="#a8b8aa" stroke-width="1.8"/>
