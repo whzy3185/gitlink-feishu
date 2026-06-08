@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1672" height="941" viewBox="0 0 1672 941" role="img" aria-labelledby="title desc">
+  <title id="title">GitLink Project Bootstrap Automation</title>
+  <desc id="desc">A vector architecture diagram for a configuration-driven GitLink project bootstrap workflow.</desc>
+  <defs>
+    <filter id="cardShadow" x="-16%" y="-16%" width="132%" height="132%">
+      <feDropShadow dx="0" dy="12" stdDeviation="11" flood-color="#0a1b35" flood-opacity="0.11"/>
+    </filter>
+    <style>
+      text { font-family: Arial, "Microsoft YaHei", sans-serif; fill: #0b1736; }
+      .title { font-size: 72px; font-weight: 800; letter-spacing: 0; }
+      .subtitle { font-size: 27px; fill: #46556b; }
+      .card-title { font-size: 32px; font-weight: 800; }
+      .cli-title { font-size: 28px; font-weight: 800; }
+      .item { font-size: 23px; fill: #101a2f; }
+      .small { font-size: 20px; fill: #314158; }
+      .mono { font-family: Consolas, "Courier New", monospace; font-size: 19px; fill: #101a2f; }
+      .hairline { stroke: #a8b5c4; stroke-width: 1.6; }
+      .bullet-navy { fill: #071449; }
+      .bullet-teal { fill: #075e70; }
+      .bullet-blue { fill: #14579f; }
+      .bullet-slate { fill: #334155; }
+      .valid { fill: #32833f; }
+    </style>
+  </defs>
+
+  <rect width="1672" height="941" fill="#fbfcfe"/>
+  <text x="836" y="93" text-anchor="middle" class="title">GitLink Project Bootstrap Automation</text>
+  <text x="836" y="151" text-anchor="middle" class="subtitle">Configuration-driven project initialization, CLI orchestration, GitLink execution, and reproducible evidence</text>
+
+  <!-- Input -->
+  <g transform="translate(48 208)">
+    <rect width="255" height="505" rx="18" fill="#ffffff" stroke="#071449" stroke-width="2.2" filter="url(#cardShadow)"/>
+    <g transform="translate(86 35)" fill="none" stroke="#071449" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 0h46l30 30v72H18z"/>
+      <path d="M64 0v30h30"/>
+      <path d="M42 45c-12 0-12 28 0 28"/>
+      <path d="M70 45c12 0 12 28 0 28"/>
+      <path d="M42 94h28"/>
+    </g>
+    <text x="128" y="194" text-anchor="middle" class="card-title">Input</text>
+    <line x1="23" y1="221" x2="232" y2="221" class="hairline"/>
+    <circle cx="24" cy="259" r="4.5" class="bullet-navy"/><text x="43" y="267" class="item">Project metadata</text>
+    <circle cx="24" cy="305" r="4.5" class="bullet-navy"/><text x="43" y="313" class="item">Repository target</text>
+    <circle cx="24" cy="351" r="4.5" class="bullet-navy"/><text x="43" y="359" class="item">Branches</text>
+    <circle cx="24" cy="397" r="4.5" class="bullet-navy"/><text x="43" y="405" class="item">Initial issues</text>
+    <circle cx="24" cy="443" r="4.5" class="bullet-navy"/><text x="43" y="451" class="mono">sample_project.json</text>
+  </g>
+
+  <!-- Assets -->
+  <g transform="translate(377 208)">
+    <rect width="255" height="505" rx="18" fill="#ffffff" stroke="#075e70" stroke-width="2.2" filter="url(#cardShadow)"/>
+    <g transform="translate(87 35)" fill="none" stroke="#075e70" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 26h72l24 24v84H0z"/>
+      <path d="M72 26v24h24"/>
+      <path d="M-18 45h18v70h-18z"/>
+      <path d="M-36 63h18v70h-18z"/>
+      <path d="M25 72h42M25 94h50M25 116h36"/>
+    </g>
+    <text x="128" y="194" text-anchor="middle" class="card-title" fill="#075e70">Assets</text>
+    <line x1="23" y1="221" x2="232" y2="221" class="hairline"/>
+    <circle cx="24" cy="259" r="4.5" class="bullet-teal"/><text x="43" y="267" class="item">README</text>
+    <circle cx="24" cy="305" r="4.5" class="bullet-teal"/><text x="43" y="313" class="item">LICENSE</text>
+    <circle cx="24" cy="351" r="4.5" class="bullet-teal"/><text x="43" y="359" class="item">Go CI</text>
+    <circle cx="24" cy="397" r="4.5" class="bullet-teal"/><text x="43" y="405" class="item">CONTRIBUTING</text>
+    <circle cx="24" cy="443" r="4.5" class="bullet-teal"/><text x="43" y="451" class="item">ROADMAP</text>
+  </g>
+
+  <!-- CLI -->
+  <g transform="translate(705 208)">
+    <rect width="255" height="505" rx="18" fill="#ffffff" stroke="#14579f" stroke-width="2.2" filter="url(#cardShadow)"/>
+    <g transform="translate(81 42)" fill="none" stroke="#14579f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="0" y="0" width="94" height="94" rx="7"/>
+      <path d="M0 28h94"/>
+      <circle cx="18" cy="14" r="3"/><circle cx="35" cy="14" r="3"/><circle cx="52" cy="14" r="3"/>
+      <path d="M31 55l18 18-18 18M61 91h26"/>
+    </g>
+    <text x="128" y="194" text-anchor="middle" class="cli-title" fill="#14579f">CLI Orchestration</text>
+    <line x1="23" y1="221" x2="232" y2="221" class="hairline"/>
+    <circle cx="24" cy="259" r="4.5" class="bullet-blue"/><text x="52" y="267" class="mono">repo +info</text>
+    <circle cx="24" cy="305" r="4.5" class="bullet-blue"/><text x="52" y="313" class="mono">branch +list</text>
+    <circle cx="24" cy="351" r="4.5" class="bullet-blue"/><text x="52" y="359" class="mono">branch +create</text>
+    <circle cx="24" cy="397" r="4.5" class="bullet-blue"/><text x="52" y="405" class="mono">issue +create</text>
+  </g>
+
+  <!-- GitLink -->
+  <g transform="translate(1032 208)">
+    <rect width="255" height="505" rx="18" fill="#ffffff" stroke="#334155" stroke-width="2.2" filter="url(#cardShadow)"/>
+    <g transform="translate(73 44)" fill="none" stroke="#334155" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M42 91h-7C13 91 0 76 0 59c0-16 11-29 28-33C36 10 51 0 70 0c25 0 45 17 49 41 18 3 31 17 31 35 0 20-15 35-38 35H42"/>
+      <circle cx="74" cy="34" r="8"/>
+      <circle cx="48" cy="68" r="8"/>
+      <circle cx="100" cy="68" r="8"/>
+      <path d="M69 41L53 61M80 41l15 20"/>
+    </g>
+    <text x="128" y="194" text-anchor="middle" class="card-title" fill="#334155">GitLink</text>
+    <line x1="23" y1="221" x2="232" y2="221" class="hairline"/>
+    <circle cx="24" cy="259" r="4.5" class="bullet-slate"/><text x="43" y="267" class="item">Repository state</text>
+    <circle cx="24" cy="305" r="4.5" class="bullet-slate"/><text x="43" y="302" class="item">Collaboration</text><text x="43" y="330" class="item">branches</text>
+    <circle cx="24" cy="367" r="4.5" class="bullet-slate"/><text x="43" y="375" class="item">Bootstrap issues</text>
+    <circle cx="24" cy="413" r="4.5" class="bullet-slate"/><text x="43" y="421" class="item">Issue comment</text>
+    <circle cx="24" cy="459" r="4.5" class="bullet-slate"/><text x="43" y="453" class="item">Apply mode writes</text><text x="43" y="481" class="item">remotely</text>
+  </g>
+
+  <!-- Evidence -->
+  <g transform="translate(1364 208)">
+    <rect width="255" height="505" rx="18" fill="#ffffff" stroke="#14579f" stroke-width="2.2" filter="url(#cardShadow)"/>
+    <g transform="translate(88 35)" fill="none" stroke="#14579f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 0h52l27 27v101H18z"/>
+      <path d="M70 0v27h27"/>
+      <path d="M39 55h43M39 79h43M39 103h31"/>
+    </g>
+    <text x="128" y="194" text-anchor="middle" class="card-title" fill="#14579f">Evidence</text>
+    <line x1="23" y1="221" x2="232" y2="221" class="hairline"/>
+    <circle cx="24" cy="259" r="4.5" class="bullet-blue"/><text x="43" y="267" class="item">Markdown report</text>
+    <circle cx="24" cy="305" r="4.5" class="bullet-blue"/><text x="43" y="313" class="item">Issue summary</text>
+    <circle cx="24" cy="351" r="4.5" class="bullet-blue"/><text x="43" y="359" class="mono">manifest.json</text>
+    <circle cx="24" cy="397" r="4.5" class="bullet-blue"/><text x="43" y="405" class="mono">files.json</text>
+    <circle cx="24" cy="443" r="4.5" class="bullet-blue"/><text x="43" y="451" class="item">command log</text>
+  </g>
+
+  <polygon points="316,394 343,394 343,376 371,411 343,446 343,428 316,428" fill="#06133a"/>
+  <polygon points="644,394 671,394 671,376 699,411 671,446 671,428 644,428" fill="#06133a"/>
+  <polygon points="972,394 999,394 999,376 1027,411 999,446 999,428 972,428" fill="#06133a"/>
+  <polygon points="1302,394 1329,394 1329,376 1357,411 1329,446 1329,428 1302,428" fill="#06133a"/>
+
+  <g transform="translate(55 777)">
+    <rect width="1562" height="122" rx="14" fill="#f8fbf8" stroke="#a8b8aa" stroke-width="1.8"/>
+    <g transform="translate(32 22)">
+      <rect width="330" height="78" rx="12" fill="#ffffff" stroke="#4f9a57" stroke-width="2"/>
+      <circle cx="49" cy="39" r="23" class="valid"/>
+      <path d="M38 38l8 9 18-20" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="96" y="48" class="small" fill="#0f4d22">Go implementation</text>
+    </g>
+    <g transform="translate(400 22)">
+      <rect width="330" height="78" rx="12" fill="#ffffff" stroke="#4f9a57" stroke-width="2"/>
+      <circle cx="49" cy="39" r="23" class="valid"/>
+      <path d="M38 38l8 9 18-20" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="96" y="48" class="small" fill="#0f4d22">7 default CLI calls</text>
+    </g>
+    <g transform="translate(768 22)">
+      <rect width="330" height="78" rx="12" fill="#ffffff" stroke="#4f9a57" stroke-width="2"/>
+      <circle cx="49" cy="39" r="23" class="valid"/>
+      <path d="M38 38l8 9 18-20" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="96" y="48" class="small" fill="#0f4d22">Reproducible dry-run</text>
+    </g>
+    <g transform="translate(1136 22)">
+      <rect width="370" height="78" rx="12" fill="#ffffff" stroke="#4f9a57" stroke-width="2"/>
+      <circle cx="49" cy="39" r="23" class="valid"/>
+      <path d="M38 38l8 9 18-20" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="96" y="48" class="small" fill="#0f4d22">Validated on real GitLink repo</text>
+    </g>
+  </g>
+</svg>

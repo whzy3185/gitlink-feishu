@@ -8,8 +8,8 @@
 | 提供可复现执行脚本或 Agent 对话记录 | `scripts/run_demo.ps1` |
 | 在至少一个真实 GitLink 项目上运行并展示效果 | 已在 `puygob236/gitlink-bootstrap-demo` 完成仓库读取、分支读取、Issue 创建和 Issue 摘要回写验证 |
 | 提供工作流说明文档 | `README.md`、`docs/workflow-spec.md`、`docs/quickstart.md`、`docs/runbook.md` |
-| 提供架构图 | `docs/architecture.md`、`docs/assets/bootstrap-architecture.png` |
-| 提供演示材料 | `docs/demo-video-script.md` |
+| 提供架构图 | `docs/architecture.md`、`docs/assets/bootstrap-architecture.svg` |
+| 提供演示材料 | 演示视频作为比赛平台附件提交；仓库内保留 `scripts/run_demo.ps1`、`docs/verification.md` 和 `examples/demo_outputs/` 作为可复现证据 |
 | 代码开源并托管到 GitLink | 放置于 `examples/workflows/project-bootstrap-automation/` |
 | 提供完整中文 README | `README.md` |
 
@@ -23,6 +23,5 @@
 ## 交付内容
 
 - `README.md`、`docs/`、`scripts/`、`examples/` 均位于本目录。
-- `docs/demo-video-script.md` 可用于录制演示视频。
 - `outputs/` 为运行时生成目录，评审可通过复现脚本重新生成。
 - `examples/demo_outputs/` 用于保存固定示例产物。
