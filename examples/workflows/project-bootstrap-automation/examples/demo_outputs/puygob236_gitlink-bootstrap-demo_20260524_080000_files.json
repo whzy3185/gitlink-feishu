@@ -1,0 +1,7 @@
+{
+  ".github/workflows/ci.yml": "name: Go CI\n\non:\n  push:\n  pull_request:\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-go@v5\n        with:\n          go-version: \"1.23\"\n      - run: go test ./...\n",
+  "LICENSE": "# License\n\nThis project is initialized with the `MulanPSL-2.0` license.\n\nThe final repository should keep the complete license text that matches the selected open-source license.\n",
+  "README.md": "# Open Research Toolkit\n\nA reproducible GitLink project initialized by an end-to-end automation workflow.\n\n## 项目信息\n\n- GitLink 仓库: `puygob236/gitlink-bootstrap-demo`\n- 技术方向: Go\n- 初始化来源: GitLink 项目一键初始化工作流\n\n## 快速开始\n\n```bash\ngit clone https://gitlink.org.cn/puygob236/gitlink-bootstrap-demo.git\ncd gitlink-bootstrap-demo\n```\n\n## 协作约定\n\n- 使用 Issue 跟踪需求、缺陷和文档任务。\n- 使用 Pull Request 合并代码变更。\n- 重要里程碑通过 Release Notes 记录。\n",
+  "docs/CONTRIBUTING.md": "# 贡献指南\n\n请通过 Issue 讨论需求，通过 Pull Request 提交变更。\n",
+  "docs/ROADMAP.md": "# Roadmap\n\n- [ ] 完成项目初始化\n- [ ] 建立基础测试\n- [ ] 发布第一个版本\n"
+}
