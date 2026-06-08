@@ -100,8 +100,9 @@ func closeIssue(ctx *common.RuntimeContext, number string) error {
 	body := map[string]interface{}{
 		"subject":     current.Subject,
 		"description": current.Description,
-		"status_id":   closedIssueStatusID,
 	}
+	preserveIssueMetadata(body, current)
+	body["status_id"] = closedIssueStatusID
 	if _, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), body); err != nil {
 		return fmt.Errorf("close issue: %w", err)
 	}
