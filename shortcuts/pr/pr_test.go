@@ -249,6 +249,143 @@ func TestPRView(t *testing.T) {
 	}
 }
 
+// --- checkout ---
+
+func TestPRCheckoutDryRunUsesForkSource(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/owner/repo/pulls/42.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"head": "feature/gitlink-pr",
+			"fork_project": map[string]interface{}{
+				"login":      "contributor",
+				"identifier": "repo-fork",
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "checkout", map[string]string{
+		"id":      "42",
+		"branch":  "review/pr-42",
+		"dry-run": "true",
+	})
+	if err != nil {
+		t.Fatalf("checkout dry-run failed: %v", err)
+	}
+}
+
+func TestPRCheckoutRunsFetchAndCheckout(t *testing.T) {
+	var calls [][]string
+	oldRunner := runGitCommand
+	runGitCommand = func(args ...string) (string, error) {
+		calls = append(calls, append([]string(nil), args...))
+		return "", nil
+	}
+	defer func() { runGitCommand = oldRunner }()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/owner/repo/pulls/43.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"head": "contributor/repo:feature/pr-checkout",
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "checkout", map[string]string{
+		"id":     "43",
+		"branch": "review/pr-43",
+	})
+	if err != nil {
+		t.Fatalf("checkout failed: %v", err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 git calls, got %d: %#v", len(calls), calls)
+	}
+	assertStringSlice(t, calls[0], []string{"fetch", "--no-tags", server.URL + "/contributor/repo.git", "feature/pr-checkout"})
+	assertStringSlice(t, calls[1], []string{"checkout", "-b", "review/pr-43", "FETCH_HEAD"})
+}
+
+func TestPRCheckoutForceUsesResetBranch(t *testing.T) {
+	plan, err := buildPRCheckoutPlan(prCheckoutDetail{
+		ID:           "44",
+		SourceOwner:  "owner",
+		SourceRepo:   "repo",
+		SourceBranch: "feature/x",
+		SourceURL:    "https://www.gitlink.org.cn/owner/repo.git",
+	}, "review/pr-44", true, false)
+	if err != nil {
+		t.Fatalf("build plan failed: %v", err)
+	}
+	assertStringSlice(t, plan.Commands[1], []string{"checkout", "-B", "review/pr-44", "FETCH_HEAD"})
+}
+
+func TestPRCheckoutDefaultBranch(t *testing.T) {
+	plan, err := buildPRCheckoutPlan(prCheckoutDetail{
+		ID:           "45",
+		SourceOwner:  "owner",
+		SourceRepo:   "repo",
+		SourceBranch: "feature/default",
+		SourceURL:    "https://www.gitlink.org.cn/owner/repo.git",
+	}, "pr-45", false, false)
+	if err != nil {
+		t.Fatalf("build plan failed: %v", err)
+	}
+	if plan.LocalBranch != "pr-45" {
+		t.Fatalf("local branch = %q, want pr-45", plan.LocalBranch)
+	}
+}
+
+func TestPRCheckoutRejectsUnsafeBranch(t *testing.T) {
+	_, err := buildPRCheckoutPlan(prCheckoutDetail{
+		ID:           "46",
+		SourceOwner:  "owner",
+		SourceRepo:   "repo",
+		SourceBranch: "feature/x",
+		SourceURL:    "https://www.gitlink.org.cn/owner/repo.git",
+	}, "-bad", false, false)
+	if err == nil {
+		t.Fatal("expected unsafe local branch error")
+	}
+}
+
+func TestParsePRHeadForCheckout(t *testing.T) {
+	cases := []struct {
+		head       string
+		wantOwner  string
+		wantRepo   string
+		wantBranch string
+	}{
+		{head: "feature/x", wantBranch: "feature/x"},
+		{head: "alice:feature/x", wantOwner: "alice", wantBranch: "feature/x"},
+		{head: "alice/repo:feature/x", wantOwner: "alice", wantRepo: "repo", wantBranch: "feature/x"},
+	}
+	for _, tc := range cases {
+		owner, repo, branch := parsePRHeadForCheckout(tc.head)
+		if owner != tc.wantOwner || repo != tc.wantRepo || branch != tc.wantBranch {
+			t.Fatalf("parse %q = (%q, %q, %q), want (%q, %q, %q)",
+				tc.head, owner, repo, branch, tc.wantOwner, tc.wantRepo, tc.wantBranch)
+		}
+	}
+}
+
+func TestGitlinkRepoURLUsesConfiguredAPIBase(t *testing.T) {
+	got := gitlinkRepoURL("https://gitlink.example.com/api", "owner", "repo")
+	if got != "https://gitlink.example.com/owner/repo.git" {
+		t.Fatalf("url = %q", got)
+	}
+	got = gitlinkRepoURL("https://gitlink.example.com/api/v1", "owner", "repo")
+	if got != "https://gitlink.example.com/owner/repo.git" {
+		t.Fatalf("url with api/v1 = %q", got)
+	}
+}
+
 // --- merge ---
 
 func TestPRMerge(t *testing.T) {
@@ -529,5 +666,17 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	t.Helper()
 	if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", want) {
 		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
+	}
+}
+
+func assertStringSlice(t *testing.T, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
 	}
 }
