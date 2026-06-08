@@ -1,6 +1,6 @@
 {
   "name": "@gitlink-ai/cli",
-  "version": "0.1.13",
+  "version": "0.2.0",
   "description": "GitLink 平台官方命令行工具 — 代码托管、协作开发和自动化",
   "bin": {
     "gitlink-cli": "bin/cli.js",
