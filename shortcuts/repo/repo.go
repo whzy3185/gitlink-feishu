@@ -82,6 +82,33 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "tree",
+			Description: tr.T("cmd.repo.tree.short"),
+			Flags: []common.Flag{
+				{Name: "path", Short: "p", Usage: tr.T("flag.repo.tree.path")},
+				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.tree.ref"), Default: "master"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				q := url.Values{}
+				ref := ctx.Arg("ref")
+				if ref == "" {
+					ref = "master"
+				}
+				if path := ctx.Arg("path"); path != "" {
+					q.Set("filepath", path)
+				}
+				q.Set("ref", ref)
+				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "languages",
 			Description: "Show repository language statistics",
 			Run:         runLanguages,

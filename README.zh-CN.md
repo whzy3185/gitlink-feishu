@@ -215,6 +215,10 @@ gitlink-cli repo +info --owner Gitlink --repo forgeplus
 # 读取仓库 README
 gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 
+# 列出仓库根目录或指定目录文件
+gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
+gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
+
 # 查看语言占比
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 

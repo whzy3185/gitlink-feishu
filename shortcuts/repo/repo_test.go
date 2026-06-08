@@ -152,6 +152,72 @@ func TestRepoReadmeUsesRepositoryReadmeEndpoint(t *testing.T) {
 	}
 }
 
+func TestRepoTreeListsRootOnDefaultRef(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+		if _, ok := r.URL.Query()["filepath"]; ok {
+			t.Fatalf("did not expect filepath query for repository root, got %q", r.URL.Query().Get("filepath"))
+		}
+		assertEqual(t, r.URL.Query().Get("ref"), "master")
+		writeJSON(t, w, map[string]interface{}{
+			"entries": []map[string]interface{}{
+				{"name": "README.md", "type": "file"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "tree", nil); err != nil {
+		t.Fatalf("tree shortcut failed: %v", err)
+	}
+}
+
+func TestRepoTreeUsesPathAndRef(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+		assertEqual(t, r.URL.Query().Get("filepath"), "cmd")
+		assertEqual(t, r.URL.Query().Get("ref"), "main")
+		writeJSON(t, w, map[string]interface{}{
+			"entries": []map[string]interface{}{
+				{"name": "main.go", "type": "file"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "tree", map[string]string{"path": "cmd", "ref": "main"}); err != nil {
+		t.Fatalf("tree shortcut failed: %v", err)
+	}
+}
+
+func TestRepoTreeShortcutRegistersHelpFlags(t *testing.T) {
+	tree := findShortcut(t, "tree")
+	if tree.Description == "" {
+		t.Fatal("tree shortcut description is empty")
+	}
+
+	flags := map[string]common.Flag{}
+	for _, flag := range tree.Flags {
+		flags[flag.Name] = flag
+	}
+
+	pathFlag, ok := flags["path"]
+	if !ok {
+		t.Fatal("tree shortcut missing path flag")
+	}
+	if pathFlag.Short != "p" || pathFlag.Usage == "" {
+		t.Fatalf("unexpected path flag: %+v", pathFlag)
+	}
+
+	refFlag, ok := flags["ref"]
+	if !ok {
+		t.Fatal("tree shortcut missing ref flag")
+	}
+	if refFlag.Short != "r" || refFlag.Default != "master" || refFlag.Usage == "" {
+		t.Fatalf("unexpected ref flag: %+v", refFlag)
+	}
+}
+
 func TestRepoLanguagesUsesLanguagesEndpoint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assertRequest(t, r, "GET", "/owner/repo/languages.json")
