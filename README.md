@@ -477,6 +477,19 @@ gitlink-cli search +repos -k "machine learning"
 gitlink-cli search +users -k "zhangsan"
 ```
 
+### Feedback
+
+```bash
+# Preview a feedback submission without calling the API
+gitlink-cli feedback +create --content "The CLI install guide needs a Windows note." --category docs --dry-run
+
+# Submit longer feedback from a file and attach contact/repository context
+gitlink-cli feedback +create --from feedback.md --category cli --contact mengz@example.com --repo-ref Gitlink/gitlink-cli
+
+# Pipe feedback from another command
+Get-Content feedback.md | gitlink-cli feedback +create --stdin --category feature
+```
+
 ### Workflow Agent Commands
 
 `workflow` provides rule-based repository analysis for maintainers and AI Agents. It currently supports:

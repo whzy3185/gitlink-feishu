@@ -455,6 +455,19 @@ gitlink-cli search +repos -k "machine learning"
 gitlink-cli search +users -k "zhangsan"
 ```
 
+### 反馈建议
+
+```bash
+# 预览反馈提交，不调用 API
+gitlink-cli feedback +create --content "CLI 安装文档需要补充 Windows 说明。" --category docs --dry-run
+
+# 从文件提交较长反馈，并附带联系方式和相关仓库
+gitlink-cli feedback +create --from feedback.md --category cli --contact mengz@example.com --repo-ref Gitlink/gitlink-cli
+
+# 从管道读取反馈内容
+Get-Content feedback.md | gitlink-cli feedback +create --stdin --category feature
+```
+
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：
