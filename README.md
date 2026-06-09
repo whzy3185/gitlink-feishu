@@ -103,7 +103,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 
 | Category | Capabilities |
 |----------|-------------|
-| 📦 Repo | List, create, fork, delete repositories, view repo info, insights, and interactions |
+| 📦 Repo | List, create, fork, delete repositories, search files, batch commit file changes, view repo info, insights, and interactions |
 | 🐛 Issue | Create, update, close, batch close/update/delete, comment on issues |
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
@@ -226,6 +226,19 @@ gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 # List repository files at root or a directory
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
+
+# Search repository files by name
+gitlink-cli repo +files --owner Gitlink --repo forgeplus --search README --ref main
+
+# Commit one file change
+gitlink-cli repo +commit-files --owner Gitlink --repo forgeplus \
+  --branch main --message "docs: update README" \
+  --path README.md --content "# Project"
+
+# Commit several file changes from a JSON operations file
+gitlink-cli repo +commit-files --owner Gitlink --repo forgeplus \
+  --branch main --new-branch docs/batch-update \
+  --message "docs: batch update" --ops changes.json --dry-run
 
 # Show language breakdown
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
