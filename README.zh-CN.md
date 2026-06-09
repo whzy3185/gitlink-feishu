@@ -114,6 +114,7 @@
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
 | 📖 Wiki | 列出、查看、创建、更新、删除 Wiki 页面 |
+| 🧭 代码溯源 | 初始化代码溯源分析、发起扫描、查看结果并获取报告 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 📊 数据集 | 按项目查询科研数据集 |
 | 👤 用户 | 查看用户资料和信息 |
@@ -305,6 +306,24 @@ gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n 
 
 # 删除 Wiki 页面
 gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 12345 -n old-page
+```
+
+### 代码溯源分析
+
+```bash
+# 初始化当前账号的代码溯源分析能力
+gitlink-cli trace +init
+
+# 对仓库分支发起代码溯源扫描
+gitlink-cli trace +start --owner Gitlink --repo forgeplus --branch master --dry-run
+gitlink-cli trace +start --owner Gitlink --repo forgeplus --branch master
+
+# 查看扫描结果并获取报告
+gitlink-cli trace +results --owner Gitlink --repo forgeplus --page 1 --limit 20
+gitlink-cli trace +report --owner Gitlink --repo forgeplus --task-id 12345
+
+# 对已有项目结果重新扫描
+gitlink-cli trace +rescan --owner Gitlink --repo forgeplus --project-id 67890 --dry-run
 ```
 
 ### 成员管理
@@ -619,6 +638,7 @@ git push gitlink
 | `gitlink-org` | 组织管理（成员、团队等） |
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |
 | `gitlink-pipeline` | 流水线工作流操作（运行、日志、启停、删除等） |
+| `gitlink-trace` | 代码溯源分析（初始化、发起扫描、查看结果、获取报告） |
 | `gitlink-search` | 搜索功能（仓库、用户等） |
 | `gitlink-user` | 用户管理（个人信息等） |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |
@@ -651,6 +671,7 @@ gitlink-cli/
 │   ├── org/                  # 组织 shortcuts
 │   ├── ci/                   # CI shortcuts
 │   ├── pipeline/             # Pipeline shortcuts
+│   ├── trace/                # 代码溯源 shortcuts
 │   ├── search/               # 搜索 shortcuts
 │   ├── user/                 # 用户 shortcuts
 │   └── register.go           # 注册入口

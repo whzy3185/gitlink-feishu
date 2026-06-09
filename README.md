@@ -115,6 +115,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
 | 📖 Wiki | List, view, create, update, and delete wiki pages |
+| 🧭 Trace | Initialize code trace analysis, start scans, list results, fetch reports |
 | 🔍 Search | Search repositories, users |
 | 📊 Dataset | Query research datasets by project |
 | 👤 User | View user profiles and info |
@@ -294,6 +295,24 @@ gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n 
 
 # Delete a wiki page
 gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 12345 -n old-page
+```
+
+### Code Trace Analysis
+
+```bash
+# Initialize code trace analysis for the current account
+gitlink-cli trace +init
+
+# Start a trace scan for a repository branch
+gitlink-cli trace +start --owner Gitlink --repo forgeplus --branch master --dry-run
+gitlink-cli trace +start --owner Gitlink --repo forgeplus --branch master
+
+# List scan results and fetch a generated report
+gitlink-cli trace +results --owner Gitlink --repo forgeplus --page 1 --limit 20
+gitlink-cli trace +report --owner Gitlink --repo forgeplus --task-id 12345
+
+# Re-run analysis for an existing project result
+gitlink-cli trace +rescan --owner Gitlink --repo forgeplus --project-id 67890 --dry-run
 ```
 
 ### Member Management
@@ -745,6 +764,7 @@ See [skills/README.md](./skills/README.md) for details.
 | `gitlink-release` | Release management (create, edit, update, view, delete, etc.) |
 | `gitlink-ci` | CI/CD operations (builds, logs, etc.) |
 | `gitlink-pipeline` | Pipeline workflow operations (runs, logs, enable, disable, delete, etc.) |
+| `gitlink-trace` | Code trace analysis (initialize account, start scans, results, reports) |
 | `gitlink-search` | Search (repositories, users, etc.) |
 | `gitlink-org` | Organization management (members, teams, etc.) |
 | `gitlink-user` | User management (profile info, etc.) |
@@ -779,6 +799,7 @@ gitlink-cli/
 │   ├── org/                  # Organization shortcuts
 │   ├── ci/                   # CI shortcuts
 │   ├── pipeline/             # Pipeline shortcuts
+│   ├── trace/                # Code trace analysis shortcuts
 │   ├── search/               # Search shortcuts
 │   ├── user/                 # User shortcuts
 │   └── register.go           # Registration entry point
