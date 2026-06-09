@@ -445,6 +445,16 @@ gitlink-cli pipeline +disable --owner Gitlink --repo forgeplus --id 7 --workflow
 gitlink-cli pipeline +delete --owner Gitlink --repo forgeplus --id 7 --dry-run
 ```
 
+### 忽略文件模板
+
+```bash
+# 列出所有可用的 .gitignore 模板
+gitlink-cli ignore +list
+
+# 按名称筛选模板
+gitlink-cli ignore +list --name Go
+```
+
 ### 搜索
 
 ```bash

@@ -467,6 +467,16 @@ gitlink-cli pipeline +disable --owner Gitlink --repo forgeplus --id 7 --workflow
 gitlink-cli pipeline +delete --owner Gitlink --repo forgeplus --id 7 --dry-run
 ```
 
+### Ignore File Templates
+
+```bash
+# List all available .gitignore templates
+gitlink-cli ignore +list
+
+# Filter templates by name
+gitlink-cli ignore +list --name Go
+```
+
 ### Search
 
 ```bash
