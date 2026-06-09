@@ -1,6 +1,7 @@
 package issue
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -212,4 +213,137 @@ func writeTempCSV(t *testing.T, content string) string {
 		t.Fatalf("write temp csv: %v", err)
 	}
 	return path
+}
+
+func TestBatchUpdateDryRun(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "batch-update", map[string]string{
+		"ids":          "101,102",
+		"status-id":    "3",
+		"priority-id":  "2",
+		"tag-ids":      "7,8",
+		"assigner-ids": "11",
+		"dry-run":      "true",
+	})
+	if err != nil {
+		t.Fatalf("batch-update dry-run failed: %v", err)
+	}
+}
+
+func TestBatchUpdateCallsAPI(t *testing.T) {
+	var payload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/issues/batch_update.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "batch-update", map[string]string{
+		"ids":          "101,102,101",
+		"status-id":    "3",
+		"priority-id":  "2",
+		"milestone-id": "9",
+		"tag-ids":      "7,8",
+		"assigner-ids": "11,12",
+	})
+	if err != nil {
+		t.Fatalf("batch-update failed: %v", err)
+	}
+	assertFloatSlice(t, payload["ids"], []float64{101, 102})
+	assertEqual(t, payload["status_id"], float64(3))
+	assertEqual(t, payload["priority_id"], float64(2))
+	assertEqual(t, payload["milestone_id"], float64(9))
+	assertFloatSlice(t, payload["issue_tag_ids"], []float64{7, 8})
+	assertFloatSlice(t, payload["assigner_ids"], []float64{11, 12})
+}
+
+func TestBatchUpdateRequiresUpdateField(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	if err := runShortcut(t, server, "batch-update", map[string]string{"ids": "101"}); err == nil {
+		t.Fatal("expected error when no update fields are provided")
+	}
+}
+
+func TestBatchUpdateRejectsInvalidIDs(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	cases := []map[string]string{
+		{"ids": "abc", "status-id": "3"},
+		{"ids": "101", "status-id": "bad"},
+		{"ids": "101", "tag-ids": "7,,8"},
+	}
+	for _, args := range cases {
+		if err := runShortcut(t, server, "batch-update", args); err == nil {
+			t.Fatalf("expected validation error for args %#v", args)
+		}
+	}
+}
+
+func TestBatchDeleteDryRun(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	if err := runShortcut(t, server, "batch-delete", map[string]string{"ids": "101,102", "dry-run": "true"}); err != nil {
+		t.Fatalf("batch-delete dry-run failed: %v", err)
+	}
+}
+
+func TestBatchDeleteRequiresYes(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected API call without --yes: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	if err := runShortcut(t, server, "batch-delete", map[string]string{"ids": "101"}); err == nil {
+		t.Fatal("expected --yes confirmation error")
+	}
+}
+
+func TestBatchDeleteCallsAPIWithYes(t *testing.T) {
+	var payload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/issues/batch_destroy.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	})
+	defer server.Close()
+
+	if err := runShortcut(t, server, "batch-delete", map[string]string{"ids": "101,102,101", "yes": "true"}); err != nil {
+		t.Fatalf("batch-delete failed: %v", err)
+	}
+	assertFloatSlice(t, payload["ids"], []float64{101, 102})
+}
+
+func assertFloatSlice(t *testing.T, got interface{}, want []float64) {
+	t.Helper()
+	items, ok := got.([]interface{})
+	if !ok {
+		t.Fatalf("got %#v, want []interface{}", got)
+	}
+	if len(items) != len(want) {
+		t.Fatalf("got len %d, want %d: %#v", len(items), len(want), got)
+	}
+	for i := range want {
+		if items[i] != want[i] {
+			t.Fatalf("item %d = %#v, want %#v", i, items[i], want[i])
+		}
+	}
 }

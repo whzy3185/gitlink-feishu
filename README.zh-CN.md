@@ -104,7 +104,7 @@
 | 分类 | 能力 |
 |------|------|
 | 📦 仓库 | 列出、创建、Fork、删除仓库，查看仓库信息、洞察数据和互动状态 |
-| 🐛 Issue | 创建、更新、关闭、批量关闭、评论 Issue |
+| 🐛 Issue | 创建、更新、关闭、批量关闭/更新/删除、评论 Issue |
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
 | 👥 成员 | 列出、添加、移除仓库成员，调整角色，生成和接受邀请链接 |
@@ -332,6 +332,14 @@ gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,12
 
 # 从 CSV 文件批量关闭 Issue
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --from issues.csv
+
+# 按 API issue id 预览批量更新元数据
+# 注意：--ids 是 API issue id，不是网页 URL 中的 Issue 编号。
+gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --ids 101,102 --status-id 3 --priority-id 2 --dry-run
+
+# 危险批量删除必须先 dry-run，真实执行还要显式 --yes
+gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --dry-run
+gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --yes
 
 # 添加评论
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "已修复"
@@ -581,7 +589,7 @@ git push gitlink
 |-------|------|
 | `gitlink-shared` | 认证、全局参数、安全规则、API 注意事项 |
 | `gitlink-repo` | 仓库操作（创建、查看、删除、Fork、洞察数据等） |
-| `gitlink-issue` | Issue 操作（创建、更新、关闭、评论等） |
+| `gitlink-issue` | Issue 操作（创建、更新、关闭、批量更新/删除、评论等） |
 | `gitlink-pr` | Pull Request 操作（创建、合并、Review 等） |
 | `gitlink-member` | 仓库成员与邀请链接管理 |
 | `gitlink-release` | 发布管理（创建、编辑、更新、查看、删除等） |
