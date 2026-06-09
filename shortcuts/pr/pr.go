@@ -575,7 +575,6 @@ func buildCreatePRPayload(ctx *common.RuntimeContext, title, head, base, body st
 		"title":            title,
 		"head":             spec.Branch,
 		"base":             base,
-		"body":             body,
 		"assigned_to_id":   "",
 		"fixed_version_id": "",
 		"issue_tag_ids":    []string{},
@@ -583,6 +582,9 @@ func buildCreatePRPayload(ctx *common.RuntimeContext, title, head, base, body st
 		"receivers_login":  []string{},
 		"priority_id":      "2",
 		"is_original":      spec.IsFork,
+	}
+	if body != "" {
+		payload["body"] = body
 	}
 
 	if spec.IsFork {

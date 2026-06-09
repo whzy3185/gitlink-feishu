@@ -309,15 +309,18 @@ func TestPRListStateAllOmitsStatus(t *testing.T) {
 
 func TestPRCreate(t *testing.T) {
 	var payload map[string]interface{}
+	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("feature/x"))
+	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Fatalf("expected POST, got %s", r.Method)
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+encodedHead+"..."+encodedBase+".json":
+			writeJSON(t, w, map[string]interface{}{"commits_count": float64(1), "files_count": float64(2)})
+		case r.Method == "POST" && r.URL.Path == "/owner/repo/pulls.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"id": float64(42), "title": "feat: new"})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		if r.URL.Path != "/owner/repo/pulls.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"id": float64(42), "title": "feat: new"})
 	}))
 	defer server.Close()
 
@@ -338,9 +341,18 @@ func TestPRCreate(t *testing.T) {
 
 func TestPRCreateNoBody(t *testing.T) {
 	var payload map[string]interface{}
+	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("feature/y"))
+	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"id": float64(43), "title": "feat: nob"})
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+encodedHead+"..."+encodedBase+".json":
+			writeJSON(t, w, map[string]interface{}{"commits_count": float64(0), "files_count": float64(0)})
+		case r.Method == "POST" && r.URL.Path == "/owner/repo/pulls.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"id": float64(43), "title": "feat: nob"})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
