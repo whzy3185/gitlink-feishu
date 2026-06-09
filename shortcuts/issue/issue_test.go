@@ -94,6 +94,58 @@ func assertNumberSlice(t *testing.T, got interface{}, want []float64) {
 	}
 }
 
+func assertStringSliceEqual(t *testing.T, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+}
+
+func assertNumberSliceEqual(t *testing.T, got, want []int) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+}
+
+func interfaceSliceToStrings(value interface{}) []string {
+	items, ok := value.([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func interfaceSliceToInts(value interface{}) []int {
+	items, ok := value.([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]int, 0, len(items))
+	for _, item := range items {
+		if n, ok := item.(float64); ok {
+			out = append(out, int(n))
+		}
+	}
+	return out
+}
+
 // --- list ---
 
 func TestIssueList(t *testing.T) {
@@ -717,6 +769,136 @@ func TestIssueCommentAcceptsIDAlias(t *testing.T) {
 	assertEqual(t, commentPayload["notes"], "Fixed")
 }
 
+func TestIssueCommentSupportsThreadingAttachmentsAndReceivers(t *testing.T) {
+	var commentPayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		commentPayload = decodeJSON(t, r)
+		writeJSON(t, w, commentPayload)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment", map[string]string{
+		"number":         "42",
+		"body":           "Reply with context",
+		"parent-id":      "10",
+		"reply-id":       "11",
+		"attachment-ids": "5, 6",
+		"receivers":      "alice, bob, alice",
+	})
+	if err != nil {
+		t.Fatalf("comment shortcut failed: %v", err)
+	}
+	assertEqual(t, commentPayload["notes"], "Reply with context")
+	assertEqual(t, commentPayload["parent_id"], float64(10))
+	assertEqual(t, commentPayload["reply_id"], float64(11))
+	assertStringSliceEqual(t, interfaceSliceToStrings(commentPayload["receivers_login"]), []string{"alice", "bob"})
+	assertNumberSliceEqual(t, interfaceSliceToInts(commentPayload["attachment_ids"]), []int{5, 6})
+}
+
+func TestIssueCommentsListSendsFilters(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		q := r.URL.Query()
+		assertEqual(t, q.Get("category"), "all")
+		assertEqual(t, q.Get("keyword"), "panic")
+		assertEqual(t, q.Get("sort_by"), "updated_on")
+		assertEqual(t, q.Get("sort_direction"), "desc")
+		assertEqual(t, q.Get("page"), "2")
+		assertEqual(t, q.Get("limit"), "50")
+		writeJSON(t, w, map[string]interface{}{
+			"total_count": float64(1),
+			"journals": []interface{}{
+				map[string]interface{}{"id": float64(7), "notes": "panic fixed"},
+			},
+		})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comments", map[string]string{
+		"number":         "42",
+		"category":       "all",
+		"keyword":        "panic",
+		"sort-by":        "updated_on",
+		"sort-direction": "desc",
+		"page":           "2",
+		"limit":          "50",
+	})
+	if err != nil {
+		t.Fatalf("comments shortcut failed: %v", err)
+	}
+}
+
+func TestIssueCommentUpdate(t *testing.T) {
+	var commentPayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/issues/42/journals/9.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		commentPayload = decodeJSON(t, r)
+		writeJSON(t, w, commentPayload)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-update", map[string]string{
+		"number":         "42",
+		"comment-id":     "9",
+		"body":           "Updated",
+		"attachment-ids": "8",
+		"receivers":      "alice",
+	})
+	if err != nil {
+		t.Fatalf("comment-update failed: %v", err)
+	}
+	assertEqual(t, commentPayload["notes"], "Updated")
+	assertNumberSliceEqual(t, interfaceSliceToInts(commentPayload["attachment_ids"]), []int{8})
+	assertStringSliceEqual(t, interfaceSliceToStrings(commentPayload["receivers_login"]), []string{"alice"})
+}
+
+func TestIssueCommentDelete(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/issues/42/journals/9.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"status": float64(0), "message": "success"})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-delete", map[string]string{"number": "42", "comment-id": "9"})
+	if err != nil {
+		t.Fatalf("comment-delete failed: %v", err)
+	}
+}
+
+func TestIssueCommentReplies(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42/journals/9/children_journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		q := r.URL.Query()
+		assertEqual(t, q.Get("keyword"), "thanks")
+		assertEqual(t, q.Get("page"), "3")
+		assertEqual(t, q.Get("limit"), "10")
+		writeJSON(t, w, map[string]interface{}{"total_count": float64(0), "journals": []interface{}{}})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-replies", map[string]string{
+		"number":     "42",
+		"comment-id": "9",
+		"keyword":    "thanks",
+		"page":       "3",
+		"limit":      "10",
+	})
+	if err != nil {
+		t.Fatalf("comment-replies failed: %v", err)
+	}
+}
+
 func TestIssueCommentMissingBody(t *testing.T) {
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("no API call expected")
@@ -743,6 +925,10 @@ func TestIssueNumberOrIDIsRequired(t *testing.T) {
 		{name: "close", args: map[string]string{}},
 		{name: "update", args: map[string]string{"title": "New title"}},
 		{name: "comment", args: map[string]string{"body": "Fixed"}},
+		{name: "comments", args: map[string]string{}},
+		{name: "comment-update", args: map[string]string{"comment-id": "9", "body": "Updated"}},
+		{name: "comment-delete", args: map[string]string{"comment-id": "9"}},
+		{name: "comment-replies", args: map[string]string{"comment-id": "9"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -752,6 +938,32 @@ func TestIssueNumberOrIDIsRequired(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), "--number") || !strings.Contains(err.Error(), "--id") {
 				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestIssueCommentRejectsInvalidIDs(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("invalid IDs should not call API, got %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	cases := []struct {
+		name string
+		cmd  string
+		args map[string]string
+	}{
+		{name: "bad parent", cmd: "comment", args: map[string]string{"number": "42", "body": "x", "parent-id": "abc"}},
+		{name: "bad attachment", cmd: "comment", args: map[string]string{"number": "42", "body": "x", "attachment-ids": "1,,"}},
+		{name: "bad update comment", cmd: "comment-update", args: map[string]string{"number": "42", "comment-id": "0", "body": "x"}},
+		{name: "bad delete comment", cmd: "comment-delete", args: map[string]string{"number": "42", "comment-id": "-1"}},
+		{name: "bad replies comment", cmd: "comment-replies", args: map[string]string{"number": "42", "comment-id": "abc"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := runShortcut(t, server, tc.cmd, tc.args); err == nil {
+				t.Fatal("expected validation error")
 			}
 		})
 	}
