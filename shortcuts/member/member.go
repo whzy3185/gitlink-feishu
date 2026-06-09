@@ -193,7 +193,123 @@ func Shortcuts() []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "applications",
+			Description: "List project membership applications for a user",
+			Flags: []common.Flag{
+				{Name: "user", Short: "u", Usage: "User login that owns the application inbox. Defaults to --owner or current user"},
+				{Name: "page", Usage: "Page number", Default: "1"},
+				{Name: "per-page", Usage: "Items per page", Default: "20"},
+			},
+			Run: runApplications,
+		},
+		{
+			Name:        "accept-application",
+			Description: "Accept a project membership application",
+			Flags: []common.Flag{
+				{Name: "user", Short: "u", Usage: "User login that owns the application inbox. Defaults to --owner or current user"},
+				{Name: "id", Usage: "Membership application ID from applied_projects[].id", Required: true},
+				{Name: "dry-run", Usage: "Preview the accept request without changing data", Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				return runApplicationDecision(ctx, "accept")
+			},
+		},
+		{
+			Name:        "refuse-application",
+			Description: "Refuse a project membership application",
+			Flags: []common.Flag{
+				{Name: "user", Short: "u", Usage: "User login that owns the application inbox. Defaults to --owner or current user"},
+				{Name: "id", Usage: "Membership application ID from applied_projects[].id", Required: true},
+				{Name: "dry-run", Usage: "Preview the refuse request without changing data", Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				return runApplicationDecision(ctx, "refuse")
+			},
+		},
+		{
+			Name:        "apply",
+			Description: "Apply to join a project by application code",
+			Flags: []common.Flag{
+				{Name: "code", Short: "c", Usage: "Project application code", Required: true},
+				{Name: "role", Short: "r", Usage: "Requested role: manager, developer, or reporter", Default: "developer"},
+				{Name: "dry-run", Usage: "Preview the application request without changing data", Bool: true, Default: "false"},
+			},
+			Run: runApply,
+		},
 	}
+}
+
+func runApplications(ctx *common.RuntimeContext) error {
+	user, err := resolveApplicationUser(ctx)
+	if err != nil {
+		return err
+	}
+	query := url.Values{}
+	setIfPresent(query, "page", ctx.Arg("page"))
+	setIfPresent(query, "per_page", ctx.Arg("per-page"))
+	env, err := ctx.CallAPIWithQuery("GET", appliedProjectsPath(user), query)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runApplicationDecision(ctx *common.RuntimeContext, action string) error {
+	user, err := resolveApplicationUser(ctx)
+	if err != nil {
+		return err
+	}
+	id, err := parsePositiveID("id", ctx.Arg("id"))
+	if err != nil {
+		return err
+	}
+	path := fmt.Sprintf("%s/%d/%s", appliedProjectsPath(user), id, action)
+	if parseDryRun(ctx.Arg("dry-run")) {
+		return ctx.OutputData(map[string]interface{}{
+			"dry_run": true,
+			"method":  "POST",
+			"path":    path,
+			"user":    user,
+			"id":      id,
+			"action":  action,
+		})
+	}
+	env, err := ctx.CallAPI("POST", path, nil)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runApply(ctx *common.RuntimeContext) error {
+	code, err := requiredTrimmed("code", ctx.Arg("code"))
+	if err != nil {
+		return err
+	}
+	role, err := normalizeApplicationRole(ctx.Arg("role"))
+	if err != nil {
+		return err
+	}
+	payload := map[string]interface{}{
+		"applied_project": map[string]interface{}{
+			"code": code,
+			"role": role,
+		},
+	}
+	if parseDryRun(ctx.Arg("dry-run")) {
+		return ctx.OutputData(map[string]interface{}{
+			"dry_run": true,
+			"method":  "POST",
+			"path":    "/applied_projects",
+			"body":    payload,
+		})
+	}
+	env, err := ctx.CallAPI("POST", "/applied_projects", payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
 }
 
 func runBatchAdd(ctx *common.RuntimeContext) error {
@@ -266,6 +382,33 @@ func inviteLinkPath(ctx *common.RuntimeContext, action string) string {
 	return fmt.Sprintf("/%s/%s/project_invite_links/%s", ctx.Owner, ctx.Repo, action)
 }
 
+func appliedProjectsPath(user string) string {
+	return fmt.Sprintf("/users/%s/applied_projects", user)
+}
+
+func resolveApplicationUser(ctx *common.RuntimeContext) (string, error) {
+	if user := strings.TrimSpace(ctx.Arg("user")); user != "" {
+		return user, nil
+	}
+	if user := strings.TrimSpace(ctx.Owner); user != "" {
+		return user, nil
+	}
+	env, err := ctx.CallAPI("GET", "/users/me", nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get current user: %w", err)
+	}
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("cannot determine current user login")
+	}
+	login, _ := data["login"].(string)
+	login = strings.TrimSpace(login)
+	if login == "" {
+		return "", fmt.Errorf("cannot determine current user login")
+	}
+	return login, nil
+}
+
 func parseUserID(value string) (int, error) {
 	value = strings.TrimSpace(value)
 	userID, err := strconv.Atoi(value)
@@ -289,6 +432,37 @@ func normalizeInviteRole(value string) (string, error) {
 		return "", fmt.Errorf("invalid --role value %q: use manager, developer, or reporter", value)
 	}
 	return strings.ToLower(role), nil
+}
+
+func normalizeApplicationRole(value string) (string, error) {
+	role, err := normalizeRole(value)
+	if err != nil {
+		return "", fmt.Errorf("invalid --role value %q: use manager, developer, or reporter", value)
+	}
+	return strings.ToLower(role), nil
+}
+
+func parsePositiveID(name, value string) (int, error) {
+	value = strings.TrimSpace(value)
+	id, err := strconv.Atoi(value)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("invalid --%s value %q: use a positive integer", name, value)
+	}
+	return id, nil
+}
+
+func requiredTrimmed(name, value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", fmt.Errorf("missing required flag: %s", name)
+	}
+	return value, nil
+}
+
+func setIfPresent(values url.Values, key, value string) {
+	if value := strings.TrimSpace(value); value != "" {
+		values.Set(key, value)
+	}
 }
 
 func parseBoolArg(name, value string) (bool, error) {

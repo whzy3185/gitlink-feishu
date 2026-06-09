@@ -80,7 +80,7 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 	}
 
 	if c.Debug {
-		fmt.Printf("→ %s %s\n", method, fullURL)
+		fmt.Printf("-> %s %s\n", method, fullURL)
 	}
 
 	resp, err := c.HTTP.Do(req)
@@ -95,7 +95,7 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 	}
 
 	if c.Debug {
-		fmt.Printf("← %d %s\n", resp.StatusCode, string(respData[:min(len(respData), 200)]))
+		fmt.Printf("<- %d %s\n", resp.StatusCode, string(respData[:min(len(respData), 200)]))
 	}
 
 	// Check HTTP-level errors
