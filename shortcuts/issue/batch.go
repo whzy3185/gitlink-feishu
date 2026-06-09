@@ -120,7 +120,7 @@ func collectIssueNumbers(numbersValue, csvPath string) ([]string, error) {
 	csvNumbers, err := readIssueNumbersFromCSV(csvPath)
 	if err != nil {
 		return nil, err
-	}
+	} 
 	return mergeIssueNumbers(numbers, csvNumbers), nil
 }
 
