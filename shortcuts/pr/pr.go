@@ -1,8 +1,10 @@
 package pr
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
@@ -431,6 +433,62 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "review-comments",
+			Description: "List pull request review comments and discussion threads",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "keyword", Short: "k", Usage: "Search review comment content"},
+				{Name: "review-id", Usage: "Filter by review ID"},
+				{Name: "need-respond", Usage: "Filter comments that need response: true or false"},
+				{Name: "state", Short: "s", Usage: "Filter by opened, resolved, or disabled"},
+				{Name: "parent-id", Usage: "Filter replies under a parent comment ID"},
+				{Name: "path", Usage: "Filter by file path"},
+				{Name: "full", Usage: "Include replies in the response", Bool: true, Default: "false"},
+				{Name: "sort-by", Usage: "Sort field: created_on or updated_on"},
+				{Name: "sort-direction", Usage: "Sort direction: asc or desc"},
+			},
+			Run: runPRReviewComments,
+		},
+		{
+			Name:        "review-comment",
+			Description: "Create a pull request review comment or reply",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
+				{Name: "type", Usage: "Comment type: comment or problem", Default: "comment"},
+				{Name: "review-id", Usage: "Review ID"},
+				{Name: "line-code", Usage: "GitLink diff line code"},
+				{Name: "commit", Usage: "Commit SHA for the commented diff"},
+				{Name: "path", Usage: "Commented file path"},
+				{Name: "parent-id", Usage: "Parent review comment ID for a reply"},
+				{Name: "diff-json", Usage: "Raw diff JSON object for line comments"},
+				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
+			},
+			Run: runPRReviewCommentCreate,
+		},
+		{
+			Name:        "review-comment-update",
+			Description: "Update a pull request review comment note, commit, or state",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "comment-id", Usage: "Review comment ID", Required: true},
+				{Name: "body", Short: "b", Usage: tr.T("flag.comment.body")},
+				{Name: "commit", Usage: "Commit SHA"},
+				{Name: "state", Short: "s", Usage: "New state: opened, resolved, or disabled"},
+				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
+			},
+			Run: runPRReviewCommentUpdate,
+		},
+		{
+			Name:        "review-comment-delete",
+			Description: "Delete a pull request review comment",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "comment-id", Usage: "Review comment ID", Required: true},
+			},
+			Run: runPRReviewCommentDelete,
+		},
 	}
 }
 
@@ -443,6 +501,265 @@ func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
 
 func prV1Path(ctx *common.RuntimeContext, id string) string {
 	return fmt.Sprintf("/v1/%s/%s/pulls/%s", ctx.Owner, ctx.Repo, id)
+}
+
+func prReviewCommentPath(ctx *common.RuntimeContext, prID string) string {
+	return fmt.Sprintf("%s/journals", prV1Path(ctx, url.PathEscape(prID)))
+}
+
+func prReviewCommentItemPath(ctx *common.RuntimeContext, prID, commentID string) string {
+	return fmt.Sprintf("%s/%s", prReviewCommentPath(ctx, prID), url.PathEscape(commentID))
+}
+
+func runPRReviewComments(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	id, err := ctx.RequireArg("id")
+	if err != nil {
+		return err
+	}
+	q := url.Values{}
+	setPRQueryIfPresent(q, "keyword", ctx.Arg("keyword"))
+	if reviewID := ctx.Arg("review-id"); reviewID != "" {
+		if _, err := parsePRPositiveID(reviewID, "review-id"); err != nil {
+			return err
+		}
+		q.Set("review_id", strings.TrimSpace(reviewID))
+	}
+	if needRespond := ctx.Arg("need-respond"); needRespond != "" {
+		if err := validatePRBoolString("need-respond", needRespond); err != nil {
+			return err
+		}
+		q.Set("need_respond", strings.ToLower(strings.TrimSpace(needRespond)))
+	}
+	if state := ctx.Arg("state"); state != "" {
+		if err := validatePRReviewCommentState(state); err != nil {
+			return err
+		}
+		q.Set("state", strings.TrimSpace(state))
+	}
+	if parentID := ctx.Arg("parent-id"); parentID != "" {
+		if _, err := parsePRPositiveID(parentID, "parent-id"); err != nil {
+			return err
+		}
+		q.Set("parent_id", strings.TrimSpace(parentID))
+	}
+	setPRQueryIfPresent(q, "path", ctx.Arg("path"))
+	if ctx.Arg("full") == "true" {
+		q.Set("is_full", "true")
+	}
+	setPRQueryIfPresent(q, "sort_by", ctx.Arg("sort-by"))
+	setPRQueryIfPresent(q, "sort_direction", ctx.Arg("sort-direction"))
+	env, err := ctx.CallAPIWithQuery("GET", prReviewCommentPath(ctx, id), q)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runPRReviewCommentCreate(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	id, err := ctx.RequireArg("id")
+	if err != nil {
+		return err
+	}
+	body, err := ctx.RequireArg("body")
+	if err != nil {
+		return err
+	}
+	payload, err := prReviewCommentCreatePayload(ctx, body)
+	if err != nil {
+		return err
+	}
+	if ctx.Arg("dry-run") == "true" {
+		return ctx.OutputData(map[string]interface{}{
+			"repository":   fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+			"pull_request": id,
+			"dry_run":      true,
+			"action":       "create_review_comment",
+			"payload":      payload,
+		})
+	}
+	env, err := ctx.CallAPI("POST", prReviewCommentPath(ctx, id), payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runPRReviewCommentUpdate(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	prID, commentID, err := prReviewCommentTarget(ctx)
+	if err != nil {
+		return err
+	}
+	payload, err := prReviewCommentUpdatePayload(ctx)
+	if err != nil {
+		return err
+	}
+	if ctx.Arg("dry-run") == "true" {
+		return ctx.OutputData(map[string]interface{}{
+			"repository":     fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+			"pull_request":   prID,
+			"review_comment": commentID,
+			"dry_run":        true,
+			"action":         "update_review_comment",
+			"payload":        payload,
+		})
+	}
+	env, err := ctx.CallAPI("PUT", prReviewCommentItemPath(ctx, prID, commentID), payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runPRReviewCommentDelete(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	prID, commentID, err := prReviewCommentTarget(ctx)
+	if err != nil {
+		return err
+	}
+	env, err := ctx.CallAPI("DELETE", prReviewCommentItemPath(ctx, prID, commentID), nil)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func prReviewCommentCreatePayload(ctx *common.RuntimeContext, body string) (map[string]interface{}, error) {
+	commentType := firstPRNonEmpty(ctx.Arg("type"), "comment")
+	if err := validatePRReviewCommentType(commentType); err != nil {
+		return nil, err
+	}
+	payload := map[string]interface{}{
+		"type": commentType,
+		"note": body,
+	}
+	for _, field := range []struct {
+		flag string
+		key  string
+	}{
+		{"review-id", "review_id"},
+		{"parent-id", "parent_id"},
+	} {
+		if value := ctx.Arg(field.flag); value != "" {
+			id, err := parsePRPositiveID(value, field.flag)
+			if err != nil {
+				return nil, err
+			}
+			payload[field.key] = id
+		}
+	}
+	setPayloadStringIfPresent(payload, "line_code", ctx.Arg("line-code"))
+	setPayloadStringIfPresent(payload, "commit_id", ctx.Arg("commit"))
+	setPayloadStringIfPresent(payload, "path", ctx.Arg("path"))
+	if rawDiff := strings.TrimSpace(ctx.Arg("diff-json")); rawDiff != "" {
+		var diff map[string]interface{}
+		if err := json.Unmarshal([]byte(rawDiff), &diff); err != nil {
+			return nil, fmt.Errorf("invalid --diff-json: %w", err)
+		}
+		payload["diff"] = diff
+	}
+	return payload, nil
+}
+
+func prReviewCommentUpdatePayload(ctx *common.RuntimeContext) (map[string]interface{}, error) {
+	payload := map[string]interface{}{}
+	setPayloadStringIfPresent(payload, "note", ctx.Arg("body"))
+	setPayloadStringIfPresent(payload, "commit_id", ctx.Arg("commit"))
+	if state := ctx.Arg("state"); state != "" {
+		if err := validatePRReviewCommentState(state); err != nil {
+			return nil, err
+		}
+		payload["state"] = strings.TrimSpace(state)
+	}
+	if len(payload) == 0 {
+		return nil, fmt.Errorf("at least one of --body, --commit, or --state is required")
+	}
+	return payload, nil
+}
+
+func prReviewCommentTarget(ctx *common.RuntimeContext) (string, string, error) {
+	prID, err := ctx.RequireArg("id")
+	if err != nil {
+		return "", "", err
+	}
+	commentID, err := ctx.RequireArg("comment-id")
+	if err != nil {
+		return "", "", err
+	}
+	if _, err := parsePRPositiveID(commentID, "comment-id"); err != nil {
+		return "", "", err
+	}
+	return strings.TrimSpace(prID), strings.TrimSpace(commentID), nil
+}
+
+func validatePRReviewCommentType(value string) error {
+	switch strings.TrimSpace(value) {
+	case "comment", "problem":
+		return nil
+	default:
+		return fmt.Errorf("invalid --type value %q: use comment or problem", value)
+	}
+}
+
+func validatePRReviewCommentState(value string) error {
+	switch strings.TrimSpace(value) {
+	case "opened", "resolved", "disabled":
+		return nil
+	default:
+		return fmt.Errorf("invalid --state value %q: use opened, resolved, or disabled", value)
+	}
+}
+
+func validatePRBoolString(flagName, value string) error {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true", "false":
+		return nil
+	default:
+		return fmt.Errorf("invalid --%s value %q: use true or false", flagName, value)
+	}
+}
+
+func parsePRPositiveID(value, flagName string) (int, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0, fmt.Errorf("--%s contains an empty ID", flagName)
+	}
+	id, err := strconv.Atoi(trimmed)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("--%s must be a positive numeric ID", flagName)
+	}
+	return id, nil
+}
+
+func setPRQueryIfPresent(q url.Values, key, value string) {
+	if strings.TrimSpace(value) != "" {
+		q.Set(key, strings.TrimSpace(value))
+	}
+}
+
+func setPayloadStringIfPresent(payload map[string]interface{}, key, value string) {
+	if strings.TrimSpace(value) != "" {
+		payload[key] = strings.TrimSpace(value)
+	}
+}
+
+func firstPRNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func validatePRReviewStatus(status string) error {

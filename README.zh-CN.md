@@ -442,6 +442,16 @@ gitlink-cli pr +reviews --owner Gitlink --repo forgeplus -i 42
 # 创建 PR 审查（支持 dry-run 预览）
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM" --dry-run
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
+
+# 查看行级审查评论和未解决讨论
+gitlink-cli pr +review-comments --owner Gitlink --repo forgeplus -i 42 --state opened --need-respond true --full
+
+# 创建行级审查评论或回复
+gitlink-cli pr +review-comment --owner Gitlink --repo forgeplus -i 42 -b "请处理这个边界情况" --type problem --review-id 7 --line-code abc_1_2 --commit deadbeef --path main.go --dry-run
+
+# 解决、编辑或删除审查评论
+gitlink-cli pr +review-comment-update --owner Gitlink --repo forgeplus -i 42 --comment-id 99 --state resolved
+gitlink-cli pr +review-comment-delete --owner Gitlink --repo forgeplus -i 42 --comment-id 99
 ```
 
 ### 发布管理
