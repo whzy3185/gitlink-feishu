@@ -485,9 +485,11 @@ gitlink-cli search +users -k "zhangsan"
 - `workflow +health`
 - `workflow +pr-summary`
 - `workflow +repo-report`
+- `workflow +issue-dedupe`
 
 `workflow +pr-summary` defaults to `table` when `--format` is omitted.
 `workflow +repo-report` defaults to `markdown` when `--format` is omitted.
+`workflow +issue-dedupe` defaults to `table` when `--format` is omitted.
 
 Examples:
 
@@ -560,6 +562,12 @@ gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format ma
 
 # Repository workflow report from a local JSON file
 gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format json
+
+# Find likely duplicate issues by read-only GitLink fetch
+gitlink-cli workflow +issue-dedupe --owner Gitlink --repo gitlink-cli --limit 50 --threshold 55 --format table
+
+# Find duplicate candidates from a local issue JSON file
+gitlink-cli workflow +issue-dedupe --from issues.json --threshold 60 --format markdown
 ```
 
 Output formats:
@@ -575,6 +583,7 @@ Safety:
 - They do not depend on LLM APIs.
 - `workflow +pr-summary` does not comment, approve, reject, or merge pull requests.
 - `workflow +repo-report` aggregates health, issue triage, and PR review summary signals without remote writes.
+- `workflow +issue-dedupe` only reports duplicate candidates; it does not close, comment on, or edit issues.
 
 ### Raw API
 
