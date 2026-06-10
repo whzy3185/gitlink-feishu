@@ -111,6 +111,8 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 📋 PM | Sprint management, kanban boards, weekly reports |
 | 🤖 Workflow | AI-powered issue triage, PR review, release notes |
 
+The `message` shortcut group adds inbox automation for listing messages, checking unread counters, marking messages as read, and deleting older notifications.
+
 ## Installation & Quick Start
 
 ### Requirements
@@ -283,6 +285,22 @@ gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role D
 
 # Create an invite link
 gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
+```
+
+### Message Center Management
+
+```bash
+# List the latest notifications with unread filtering
+gitlink-cli message +list --login Mengz --type notification --status unread --limit 10
+
+# Show unread counters for notifications and @mentions
+gitlink-cli message +stats --login Mengz
+
+# Preview marking all notifications as read
+gitlink-cli message +read --login Mengz --type notification --all --dry-run
+
+# Delete selected @mention messages
+gitlink-cli message +delete --login Mengz --type atme --ids 101,102
 ```
 
 ### Issue Management
