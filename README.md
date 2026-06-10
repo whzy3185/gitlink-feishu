@@ -485,9 +485,11 @@ gitlink-cli search +users -k "zhangsan"
 - `workflow +health`
 - `workflow +pr-summary`
 - `workflow +repo-report`
+- `workflow +release-readiness`
 
 `workflow +pr-summary` defaults to `table` when `--format` is omitted.
 `workflow +repo-report` defaults to `markdown` when `--format` is omitted.
+`workflow +release-readiness` defaults to `table` when `--format` is omitted.
 
 Examples:
 
@@ -560,6 +562,18 @@ gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format ma
 
 # Repository workflow report from a local JSON file
 gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format json
+
+# Evaluate whether a release is ready to publish
+gitlink-cli workflow +release-readiness \
+  --version v1.2.0 \
+  --changes "Add workflow gate,Fix release upload" \
+  --tests "go test ./...=passed,go build ./...=passed" \
+  --artifacts "windows zip=passed,linux tar=passed" \
+  --rollback-plan "Revert tag and restore previous release assets" \
+  --format table
+
+# Evaluate release readiness from a JSON gate file
+gitlink-cli workflow +release-readiness --from release_readiness.json --format markdown
 ```
 
 Output formats:
@@ -575,6 +589,7 @@ Safety:
 - They do not depend on LLM APIs.
 - `workflow +pr-summary` does not comment, approve, reject, or merge pull requests.
 - `workflow +repo-report` aggregates health, issue triage, and PR review summary signals without remote writes.
+- `workflow +release-readiness` evaluates local gate signals only; it does not create tags, releases, or assets.
 
 ### Raw API
 
