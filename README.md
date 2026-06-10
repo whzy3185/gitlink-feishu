@@ -257,6 +257,29 @@ gitlink-cli repo +create -n my-project -d "Project description"
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
 ```
 
+### Message Settings
+
+```bash
+# List the available message setting groups and keys
+gitlink-cli message-settings +catalog
+
+# View the current user's effective message settings
+gitlink-cli message-settings +view
+
+# View another user's managed-repository notification settings
+gitlink-cli message-settings +view --login Mengz --group ManageProject
+
+# Preview disabling notification messages for selected keys
+gitlink-cli message-settings +update \
+  --channel notification \
+  --state off \
+  --keys Normal::Permission,ManageProject::Issue \
+  --dry-run
+
+# Apply a preset to every known setting
+gitlink-cli message-settings +preset --name notification-only --all
+```
+
 ### Webhook Management
 
 ```bash
