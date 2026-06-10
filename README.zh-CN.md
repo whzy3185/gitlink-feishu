@@ -107,6 +107,7 @@
 | 🐛 Issue | 创建、更新、关闭、批量关闭/更新/删除、评论 Issue |
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
+| 🧭 Compare | 对比分支、标签或提交，查看变更文件，筛选提交并汇总差异热点 |
 | 👥 成员 | 列出、添加、移除仓库成员，调整角色，生成和接受邀请链接 |
 | 🌿 分支 | 创建、删除、保护分支 |
 | 🏷️ 发布 | 创建、编辑、更新、查看、删除 Release |
@@ -404,6 +405,22 @@ gitlink-cli label +update --owner Gitlink --repo forgeplus -i 42 -c "#00FF00"
 
 # 删除标签
 gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
+```
+
+### Compare
+
+```bash
+# 对比两个分支、标签或提交
+gitlink-cli compare +view --owner Gitlink --repo forgeplus --head feature/search --base master
+
+# 列出两个版本之间的变更文件
+gitlink-cli compare +files --owner Gitlink --repo forgeplus --head feature/search --base master
+
+# 按作者或关键字筛选提交
+gitlink-cli compare +commits --owner Gitlink --repo forgeplus --head feature/search --base master --author alice -k fix -l 10
+
+# 汇总提交、热点文件、目录分布和扩展名分布
+gitlink-cli compare +summary --owner Gitlink --repo forgeplus --head feature/search --base master --top-files 5
 ```
 
 ### Pull Request

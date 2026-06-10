@@ -107,6 +107,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🐛 Issue | Create, update, close, batch close/update/delete, comment on issues |
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
+| 🧭 Compare | Compare refs, inspect changed files, filter commits, and summarize diff hotspots |
 | 👥 Member | List, add, remove repository members, change roles, create and accept invite links |
 | 🌿 Branch | Create, delete, list, protect, unprotect branches |
 | 🏷️ Release | Create, edit, update, view, delete releases |
@@ -394,6 +395,22 @@ gitlink-cli label +update --owner Gitlink --repo forgeplus -i 42 -c "#00FF00"
 
 # Delete a label
 gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
+```
+
+### Compare
+
+```bash
+# Compare two refs
+gitlink-cli compare +view --owner Gitlink --repo forgeplus --head feature/search --base master
+
+# List changed files between two refs
+gitlink-cli compare +files --owner Gitlink --repo forgeplus --head feature/search --base master
+
+# List commits with author / keyword filters
+gitlink-cli compare +commits --owner Gitlink --repo forgeplus --head feature/search --base master --author alice -k fix -l 10
+
+# Summarize commits, top files, directories, and extensions
+gitlink-cli compare +summary --owner Gitlink --repo forgeplus --head feature/search --base master --top-files 5
 ```
 
 ### Pull Requests
