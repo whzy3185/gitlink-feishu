@@ -13,7 +13,7 @@ import (
 
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
-	return []*common.Shortcut{
+	shortcuts := []*common.Shortcut{
 		{
 			Name:        "list",
 			Description: tr.T("cmd.release.list.short"),
@@ -196,6 +196,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 	}
+	return append(shortcuts, releaseAssetShortcuts(tr)...)
 }
 
 func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
@@ -342,12 +343,16 @@ func releaseBoolFromArgsOrMap(ctx *common.RuntimeContext, name string, current m
 	if ctx.Arg(name) != "" {
 		return releaseBoolArg(ctx, name, defaultValue)
 	}
+	return releaseBoolValue(current, name, defaultValue), nil
+}
+
+func releaseBoolValue(current map[string]interface{}, name string, defaultValue bool) bool {
 	if current != nil {
 		if value, ok := current[name].(bool); ok {
-			return value, nil
+			return value
 		}
 	}
-	return defaultValue, nil
+	return defaultValue
 }
 
 func parseReleaseAttachmentIDs(value string) ([]string, error) {
@@ -372,20 +377,10 @@ func parseReleaseAttachmentIDs(value string) ([]string, error) {
 }
 
 func releaseAttachmentIDs(current map[string]interface{}) []string {
-	if current == nil {
-		return nil
-	}
-	attachments, ok := current["attachments"].([]interface{})
-	if !ok {
-		return nil
-	}
+	attachments := releaseAttachments(current)
 	ids := make([]string, 0, len(attachments))
 	for _, attachment := range attachments {
-		item, ok := attachment.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if id := releaseIDString(item["id"]); id != "" {
+		if id := releaseIDString(attachment["id"]); id != "" {
 			ids = append(ids, id)
 		}
 	}

@@ -329,7 +329,7 @@ func TestReleaseShortcutNames(t *testing.T) {
 	for _, shortcut := range Shortcuts() {
 		got[shortcut.Name] = true
 	}
-	want := []string{"list", "create", "edit", "view", "update", "delete"}
+	want := []string{"list", "create", "edit", "view", "update", "delete", "assets", "attach", "detach", "upload"}
 	for _, name := range want {
 		if !got[name] {
 			t.Fatalf("missing shortcut %q in %v", name, got)
@@ -452,4 +452,8 @@ func ExampleShortcuts() {
 	// view
 	// update
 	// delete
+	// assets
+	// attach
+	// detach
+	// upload
 }

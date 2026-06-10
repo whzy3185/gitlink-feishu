@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/auth"
@@ -26,6 +29,13 @@ type APIError struct {
 	Message    string
 }
 
+type MultipartFile struct {
+	FieldName   string
+	FileName    string
+	ContentType string
+	Reader      io.Reader
+}
+
 func (e *APIError) Error() string {
 	return fmt.Sprintf("[%v] %s", e.Code, e.Message)
 }
@@ -42,45 +52,57 @@ func New() (*Client, error) {
 }
 
 func (c *Client) Do(method, path string, body interface{}, query url.Values) (*output.Envelope, error) {
-	path = normalizeAPIPath(c.BaseURL, path)
-
-	// Append .json suffix if not already present (GitLink API convention)
-	// Handle paths that may already contain query strings (e.g., /path?key=val)
-	if idx := strings.Index(path, "?"); idx != -1 {
-		basePath := path[:idx]
-		queryStr := path[idx:]
-		if shouldAppendJSONSuffix(basePath) {
-			path = basePath + ".json" + queryStr
-		}
-	} else if shouldAppendJSONSuffix(path) {
-		path += ".json"
-	}
-	fullURL := c.BaseURL + path
-	if len(query) > 0 {
-		sep := "?"
-		if strings.Contains(fullURL, "?") {
-			sep = "&"
-		}
-		fullURL += sep + query.Encode()
-	}
-
-	// Replace path params
 	var bodyReader io.Reader
+	contentType := ""
 	if body != nil {
 		data, err := json.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
 		bodyReader = bytes.NewReader(data)
+		contentType = "application/json"
 	}
 
-	req, err := http.NewRequest(method, fullURL, bodyReader)
+	return c.doRequest(method, path, bodyReader, contentType, query)
+}
+
+func (c *Client) PostMultipart(path string, fields map[string]string, files []MultipartFile) (*output.Envelope, error) {
+	if len(files) == 0 {
+		return nil, fmt.Errorf("at least one multipart file is required")
+	}
+
+	reader, writer := io.Pipe()
+	form := multipart.NewWriter(writer)
+
+	go func() {
+		writeErr := writeMultipartBody(form, fields, files)
+		closeErr := form.Close()
+		if writeErr == nil {
+			writeErr = closeErr
+		}
+		if writeErr != nil {
+			_ = writer.CloseWithError(writeErr)
+			return
+		}
+		_ = writer.Close()
+	}()
+
+	return c.doRequest(http.MethodPost, path, reader, form.FormDataContentType(), nil)
+}
+
+func (c *Client) doRequest(method, path string, body io.Reader, contentType string, query url.Values) (*output.Envelope, error) {
+	fullURL := c.apiURL(path, query)
+
+	req, err := http.NewRequest(method, fullURL, body)
 	if err != nil {
 		return nil, err
 	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
 
 	if c.Debug {
-		fmt.Printf("→ %s %s\n", method, fullURL)
+		fmt.Printf("-> %s %s\n", method, fullURL)
 	}
 
 	resp, err := c.HTTP.Do(req)
@@ -95,15 +117,97 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 	}
 
 	if c.Debug {
-		fmt.Printf("← %d %s\n", resp.StatusCode, string(respData[:min(len(respData), 200)]))
+		previewLen := len(respData)
+		if previewLen > 200 {
+			previewLen = 200
+		}
+		fmt.Printf("<- %d %s\n", resp.StatusCode, string(respData[:previewLen]))
 	}
 
+	return parseResponseEnvelope(resp.StatusCode, respData)
+}
+
+func writeMultipartBody(form *multipart.Writer, fields map[string]string, files []MultipartFile) error {
+	fieldNames := make([]string, 0, len(fields))
+	for name := range fields {
+		fieldNames = append(fieldNames, name)
+	}
+	sort.Strings(fieldNames)
+
+	for _, name := range fieldNames {
+		if err := form.WriteField(name, fields[name]); err != nil {
+			return err
+		}
+	}
+
+	for _, file := range files {
+		if file.Reader == nil {
+			return fmt.Errorf("multipart file reader is required")
+		}
+		part, err := createMultipartPart(form, file)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(part, file.Reader); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func createMultipartPart(form *multipart.Writer, file MultipartFile) (io.Writer, error) {
+	fieldName := strings.TrimSpace(file.FieldName)
+	if fieldName == "" {
+		fieldName = "file"
+	}
+	fileName := strings.TrimSpace(file.FileName)
+	if fileName == "" {
+		fileName = fieldName
+	}
+	if strings.TrimSpace(file.ContentType) == "" {
+		return form.CreateFormFile(fieldName, fileName)
+	}
+
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name=%q; filename=%q`, fieldName, fileName))
+	header.Set("Content-Type", file.ContentType)
+	return form.CreatePart(header)
+}
+
+func (c *Client) apiURL(path string, query url.Values) string {
+	path = normalizeAPIPath(c.BaseURL, path)
+
+	// Append .json suffix if not already present (GitLink API convention)
+	// Handle paths that may already contain query strings (e.g., /path?key=val)
+	if idx := strings.Index(path, "?"); idx != -1 {
+		basePath := path[:idx]
+		queryStr := path[idx:]
+		if shouldAppendJSONSuffix(basePath) {
+			path = basePath + ".json" + queryStr
+		}
+	} else if shouldAppendJSONSuffix(path) {
+		path += ".json"
+	}
+
+	fullURL := c.BaseURL + path
+	if len(query) > 0 {
+		sep := "?"
+		if strings.Contains(fullURL, "?") {
+			sep = "&"
+		}
+		fullURL += sep + query.Encode()
+	}
+	return fullURL
+}
+
+func parseResponseEnvelope(statusCode int, respData []byte) (*output.Envelope, error) {
 	// Check HTTP-level errors
-	if resp.StatusCode >= 400 {
+	if statusCode >= 400 {
 		return nil, &APIError{
-			StatusCode: resp.StatusCode,
-			Code:       resp.StatusCode,
-			Message:    fmt.Sprintf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respData))),
+			StatusCode: statusCode,
+			Code:       statusCode,
+			Message:    fmt.Sprintf("HTTP %d: %s", statusCode, strings.TrimSpace(string(respData))),
 		}
 	}
 

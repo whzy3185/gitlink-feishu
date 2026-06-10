@@ -101,7 +101,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔀 PR | Create, merge, review pull requests, view changed files |
 | 👥 Member | List, add, remove repository members, change roles, create and accept invite links |
 | 🌿 Branch | Create, delete, list, protect, unprotect branches |
-| 🏷️ Release | Create, edit, update, view, delete releases |
+| 🏷️ Release | Create, edit, update, view, delete releases, and manage release assets |
 | 🏢 Org | Manage organizations, members, teams |
 | 🔧 CI | View builds, logs, CI/CD operations |
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
@@ -423,6 +423,16 @@ gitlink-cli release +create --owner Gitlink --repo forgeplus -t v1.0.0 -n "v1.0.
 
 # View a release
 gitlink-cli release +view --owner Gitlink --repo forgeplus -i <version_id>
+
+# List assets attached to a release
+gitlink-cli release +assets --owner Gitlink --repo forgeplus -i <version_id>
+
+# Attach or detach existing asset IDs while preserving release metadata
+gitlink-cli release +attach --owner Gitlink --repo forgeplus -i <version_id> --attachment-ids 12,34 --dry-run
+gitlink-cli release +detach --owner Gitlink --repo forgeplus -i <version_id> --attachment-ids 34 --dry-run
+
+# Upload a local file and attach it to the release in one step
+gitlink-cli release +upload --owner Gitlink --repo forgeplus -i <version_id> --file dist/gitlink-cli_linux_amd64.tar.gz --asset-name gitlink-cli-linux-amd64.tar.gz --description "Linux binary" --dry-run
 
 # Get edit data and update while preserving unspecified fields
 gitlink-cli release +edit --owner Gitlink --repo forgeplus -i <version_id>
