@@ -6,6 +6,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/branch"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/ci"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/commit"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/compare"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/dataset"
@@ -37,6 +38,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 	}
 	groups := map[string][]*common.Shortcut{
 		"repo":      repo.Shortcuts(tr),
+		"commit":    commit.Shortcuts(),
 		"issue":     issue.Shortcuts(tr),
 		"label":     label.Shortcuts(),
 		"license":   license.Shortcuts(),
@@ -62,6 +64,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 
 	descriptions := map[string]string{
 		"repo":      tr.T("cmd.repo.short"),
+		"commit":    "Commit inspection operations",
 		"issue":     tr.T("cmd.issue.short"),
 		"label":     "Issue label operations",
 		"license":   "License operations",
