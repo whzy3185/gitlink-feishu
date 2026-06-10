@@ -336,6 +336,14 @@ gitlink-cli issue +statuses --owner Gitlink --repo forgeplus
 is accepted as a compatibility alias for the same web issue number, not the
 global database ID.
 
+`issue +view` now returns both `number` and `database_id`, and it enriches the
+response with tracker, priority, status, and issue tag metadata when the legacy
+issue detail endpoints provide those fields.
+
+`issue +update`, `issue +close`, and `issue +batch-close` preserve existing
+tracker, version, assignee, tag, and schedule metadata before sending updates,
+which avoids clearing required fields on the server by accident.
+
 ### Label Management
 
 ```bash
