@@ -249,6 +249,201 @@ func TestPRView(t *testing.T) {
 	}
 }
 
+func TestEnrichPullRequestTimestampsPromotesMergedAndClosedAt(t *testing.T) {
+	var journalCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/owner/repo/issues/142349/journals.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		journalCalls++
+		writeJSON(t, w, map[string]interface{}{"journals": []interface{}{}})
+	}))
+	defer server.Close()
+
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{
+			HTTP:    server.Client(),
+			BaseURL: server.URL,
+		},
+		Owner: "owner",
+		Repo:  "repo",
+	}
+	env := &output.Envelope{Data: map[string]interface{}{
+		"pull_request": map[string]interface{}{
+			"pull_request_status": float64(1),
+			"merged_at":           "2026-05-14T14:26:27+08:00",
+			"created_at":          "2026-05-10T09:00:00+08:00",
+		},
+		"issue": map[string]interface{}{
+			"id":         float64(142349),
+			"created_at": "2026-05-10T09:00:00+08:00",
+		},
+	}}
+
+	if err := enrichPullRequestTimestamps(ctx, env); err != nil {
+		t.Fatalf("enrichPullRequestTimestamps returned error: %v", err)
+	}
+
+	data := env.Data.(map[string]interface{})
+	pr := data["pull_request"].(map[string]interface{})
+	issue := data["issue"].(map[string]interface{})
+	assertEqual(t, data["created_at"], "2026-05-10T09:00:00+08:00")
+	assertEqual(t, data["merged_at"], "2026-05-14T14:26:27+08:00")
+	assertEqual(t, data["closed_at"], "2026-05-14T14:26:27+08:00")
+	assertEqual(t, data["closed_on"], "2026-05-14T14:26:27+08:00")
+	assertEqual(t, pr["merged_at"], "2026-05-14T14:26:27+08:00")
+	assertEqual(t, pr["closed_at"], "2026-05-14T14:26:27+08:00")
+	assertEqual(t, issue["closed_on"], "2026-05-14T14:26:27+08:00")
+	if journalCalls != 1 {
+		t.Fatalf("journalCalls = %d, want 1", journalCalls)
+	}
+}
+
+func TestEnrichPullRequestTimestampsReadsMergeTimeFromJournals(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/owner/repo/issues/142349/journals.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"journals": []interface{}{
+				map[string]interface{}{
+					"operate_category": "status",
+					"operate_content":  "<b>合并了</b> 合并请求",
+					"updated_at":       "2026-05-14T14:26:27+08:00",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{
+			HTTP:    server.Client(),
+			BaseURL: server.URL,
+		},
+		Owner: "owner",
+		Repo:  "repo",
+	}
+	env := &output.Envelope{Data: map[string]interface{}{
+		"pull_request": map[string]interface{}{
+			"pull_request_staus": "merged",
+		},
+		"issue": map[string]interface{}{
+			"id": float64(142349),
+		},
+	}}
+
+	if err := enrichPullRequestTimestamps(ctx, env); err != nil {
+		t.Fatalf("enrichPullRequestTimestamps returned error: %v", err)
+	}
+
+	data := env.Data.(map[string]interface{})
+	pr := data["pull_request"].(map[string]interface{})
+	issue := data["issue"].(map[string]interface{})
+	assertEqual(t, data["merged_at"], "2026-05-14T14:26:27+08:00")
+	assertEqual(t, data["closed_at"], "2026-05-14T14:26:27+08:00")
+	assertEqual(t, data["closed_on"], "2026-05-14T14:26:27+08:00")
+	assertEqual(t, pr["merged_at"], "2026-05-14T14:26:27+08:00")
+	assertEqual(t, pr["closed_at"], "2026-05-14T14:26:27+08:00")
+	assertEqual(t, issue["closed_on"], "2026-05-14T14:26:27+08:00")
+}
+
+func TestEnrichPullRequestTimestampsReadsClosedTimeFromJournals(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/owner/repo/issues/142350/journals.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"journals": []interface{}{
+				map[string]interface{}{
+					"operate_category": "status",
+					"operate_content":  "<b>关闭了</b>合并请求",
+					"created_at":       "2026-05-15T10:30:00+08:00",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{
+			HTTP:    server.Client(),
+			BaseURL: server.URL,
+		},
+		Owner: "owner",
+		Repo:  "repo",
+	}
+	env := &output.Envelope{Data: map[string]interface{}{
+		"pull_request": map[string]interface{}{
+			"pull_request_status": float64(2),
+		},
+		"issue": map[string]interface{}{
+			"id": float64(142350),
+		},
+	}}
+
+	if err := enrichPullRequestTimestamps(ctx, env); err != nil {
+		t.Fatalf("enrichPullRequestTimestamps returned error: %v", err)
+	}
+
+	data := env.Data.(map[string]interface{})
+	pr := data["pull_request"].(map[string]interface{})
+	issue := data["issue"].(map[string]interface{})
+	assertEqual(t, data["closed_at"], "2026-05-15T10:30:00+08:00")
+	assertEqual(t, data["closed_on"], "2026-05-15T10:30:00+08:00")
+	assertEqual(t, pr["closed_at"], "2026-05-15T10:30:00+08:00")
+	assertEqual(t, issue["closed_on"], "2026-05-15T10:30:00+08:00")
+	if _, ok := data["merged_at"]; ok {
+		t.Fatalf("merged_at should stay empty for closed pull requests, got %v", data["merged_at"])
+	}
+}
+
+func TestEnrichPullRequestTimestampsSkipsJournalsForOpenPR(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		return
+	}))
+	defer server.Close()
+
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{
+			HTTP:    server.Client(),
+			BaseURL: server.URL,
+		},
+		Owner: "owner",
+		Repo:  "repo",
+	}
+	env := &output.Envelope{Data: map[string]interface{}{
+		"pull_request": map[string]interface{}{
+			"pull_request_status": float64(0),
+		},
+		"issue": map[string]interface{}{
+			"id": float64(142351),
+		},
+	}}
+
+	if err := enrichPullRequestTimestamps(ctx, env); err != nil {
+		t.Fatalf("enrichPullRequestTimestamps returned error: %v", err)
+	}
+
+	data := env.Data.(map[string]interface{})
+	if _, ok := data["closed_at"]; ok {
+		t.Fatalf("closed_at should not be set for open pull requests, got %v", data["closed_at"])
+	}
+	if _, ok := data["merged_at"]; ok {
+		t.Fatalf("merged_at should not be set for open pull requests, got %v", data["merged_at"])
+	}
+}
+
 // --- merge ---
 
 func TestPRMerge(t *testing.T) {

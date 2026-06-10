@@ -2,13 +2,17 @@ package pr
 
 import (
 	"fmt"
+	"html"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
+
+var pullRequestJournalHTMLTagPattern = regexp.MustCompile(`<[^>]+>`)
 
 func v1RepoPath(ctx *common.RuntimeContext) string {
 	return fmt.Sprintf("/v1/%s/%s", ctx.Owner, ctx.Repo)
@@ -138,7 +142,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				if err := enrichPullRequestClosedAt(ctx, env); err != nil {
+				if err := enrichPullRequestTimestamps(ctx, env); err != nil {
 					return err
 				}
 				return ctx.Output(env)
@@ -470,79 +474,187 @@ func extractIssueID(env *output.Envelope) (int64, error) {
 	return int64(idFloat), nil
 }
 
-func enrichPullRequestClosedAt(ctx *common.RuntimeContext, env *output.Envelope) error {
+func enrichPullRequestTimestamps(ctx *common.RuntimeContext, env *output.Envelope) error {
 	data, ok := env.Data.(map[string]interface{})
 	if !ok {
 		return nil
 	}
 	pr, ok := data["pull_request"].(map[string]interface{})
-	if !ok || !isClosedPullRequest(pr) || stringField(pr, "closed_at") != "" {
+	if !ok {
 		return nil
 	}
 	issue, ok := data["issue"].(map[string]interface{})
-	if !ok {
-		return nil
+	if createdAt := firstNonEmptyString(
+		stringField(data, "created_at"),
+		stringField(pr, "created_at"),
+		stringField(issue, "created_at"),
+	); createdAt != "" {
+		data["created_at"] = createdAt
 	}
-	issueID, ok := numberField(issue, "id")
-	if !ok {
-		return nil
+
+	mergedAt := firstNonEmptyString(
+		stringField(data, "merged_at"),
+		stringField(pr, "merged_at"),
+		stringField(issue, "merged_at"),
+	)
+	closedAt := firstNonEmptyString(
+		stringField(data, "closed_at"),
+		stringField(data, "closed_on"),
+		stringField(pr, "closed_at"),
+		stringField(issue, "closed_on"),
+	)
+
+	if shouldFetchPullRequestTimestamps(pr, mergedAt, closedAt) {
+		issueID, ok := numberField(issue, "id")
+		if ok {
+			journalsEnv, err := ctx.CallAPI("GET", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, int64(issueID)), nil)
+			if err != nil {
+				return err
+			}
+			journalMergedAt, journalClosedAt := extractPullRequestJournalTimes(journalsEnv)
+			mergedAt = firstNonEmptyString(mergedAt, journalMergedAt)
+			closedAt = firstNonEmptyString(closedAt, journalClosedAt)
+		}
 	}
-	journalsEnv, err := ctx.CallAPI("GET", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, int64(issueID)), nil)
-	if err != nil {
-		return err
+
+	if closedAt == "" && isMergedPullRequest(pr) {
+		closedAt = mergedAt
 	}
-	closedAt := extractPullRequestClosedAt(journalsEnv)
-	if closedAt == "" {
-		return nil
+
+	if mergedAt != "" {
+		pr["merged_at"] = mergedAt
+		data["merged_at"] = mergedAt
 	}
-	pr["closed_at"] = closedAt
-	data["closed_at"] = closedAt
+	if closedAt != "" {
+		pr["closed_at"] = closedAt
+		data["closed_at"] = closedAt
+		data["closed_on"] = closedAt
+		if issue != nil {
+			issue["closed_on"] = closedAt
+		}
+	}
 	return nil
 }
 
 func isClosedPullRequest(pr map[string]interface{}) bool {
+	if isMergedPullRequest(pr) {
+		return true
+	}
 	if stringField(pr, "pull_request_staus") == "closed" || stringField(pr, "state") == "closed" {
 		return true
 	}
-	status, ok := numberField(pr, "status")
+	status, ok := numberField(pr, "pull_request_status")
+	if ok {
+		return int(status) == 2
+	}
+	status, ok = numberField(pr, "status")
 	return ok && int(status) == 2
 }
 
-func extractPullRequestClosedAt(env *output.Envelope) string {
+func isMergedPullRequest(pr map[string]interface{}) bool {
+	if merged, ok := pr["merged"].(bool); ok && merged {
+		return true
+	}
+	if stringField(pr, "pull_request_staus") == "merged" || stringField(pr, "state") == "merged" {
+		return true
+	}
+	status, ok := numberField(pr, "pull_request_status")
+	if ok {
+		return int(status) == 1
+	}
+	status, ok = numberField(pr, "status")
+	return ok && int(status) == 1
+}
+
+func shouldFetchPullRequestTimestamps(pr map[string]interface{}, mergedAt, closedAt string) bool {
+	if !isClosedPullRequest(pr) {
+		return false
+	}
+	if isMergedPullRequest(pr) {
+		return mergedAt == "" || closedAt == ""
+	}
+	return closedAt == ""
+}
+
+func extractPullRequestJournalTimes(env *output.Envelope) (string, string) {
 	data, ok := env.Data.(map[string]interface{})
 	if !ok {
-		return ""
+		return "", ""
 	}
 	rawJournals, ok := data["journals"].([]interface{})
 	if !ok {
-		return ""
+		return "", ""
 	}
+	var mergedAt string
+	var closedAt string
 	for i := len(rawJournals) - 1; i >= 0; i-- {
 		journal, ok := rawJournals[i].(map[string]interface{})
 		if !ok || stringField(journal, "operate_category") != "status" {
 			continue
 		}
 		content := stringField(journal, "operate_content")
-		if !isPullRequestCloseOperation(content) {
+		timestamp := firstNonEmptyString(
+			stringField(journal, "updated_at"),
+			stringField(journal, "created_at"),
+		)
+		if timestamp == "" {
 			continue
 		}
-		if updatedAt := stringField(journal, "updated_at"); updatedAt != "" {
-			return updatedAt
+		if mergedAt == "" && isPullRequestMergeOperation(content) {
+			mergedAt = timestamp
 		}
-		if createdAt := stringField(journal, "created_at"); createdAt != "" {
-			return createdAt
+		if closedAt == "" && isPullRequestCloseOperation(content) {
+			closedAt = timestamp
+		}
+		if mergedAt != "" && closedAt != "" {
+			break
+		}
+	}
+	return mergedAt, closedAt
+}
+
+func isPullRequestMergeOperation(content string) bool {
+	content = normalizePullRequestJournalContent(content)
+	return containsPullRequestMarker(content) &&
+		(strings.Contains(content, "\u5408\u5e76\u4e86") ||
+			strings.Contains(content, "\u5df2\u5408\u5e76") ||
+			strings.Contains(content, "merged"))
+}
+
+func isPullRequestCloseOperation(content string) bool {
+	content = normalizePullRequestJournalContent(content)
+	return containsPullRequestMarker(content) &&
+		(strings.Contains(content, "\u62d2\u7edd") ||
+			strings.Contains(content, "rejected") ||
+			strings.Contains(content, "refused") ||
+			strings.Contains(content, "\u5173\u95ed") ||
+			strings.Contains(content, "closed"))
+}
+
+func normalizePullRequestJournalContent(content string) string {
+	content = html.UnescapeString(content)
+	content = pullRequestJournalHTMLTagPattern.ReplaceAllString(content, "")
+	content = strings.ToLower(strings.TrimSpace(content))
+	return strings.Join(strings.Fields(content), "")
+}
+
+func containsPullRequestMarker(content string) bool {
+	return strings.Contains(content, "\u5408\u5e76\u8bf7\u6c42") || strings.Contains(content, "pullrequest")
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
 		}
 	}
 	return ""
 }
 
-func isPullRequestCloseOperation(content string) bool {
-	content = strings.ToLower(content)
-	return strings.Contains(content, "合并请求") &&
-		(strings.Contains(content, "拒绝") || strings.Contains(content, "关闭") || strings.Contains(content, "closed"))
-}
-
 func stringField(m map[string]interface{}, key string) string {
+	if m == nil {
+		return ""
+	}
 	v, _ := m[key].(string)
 	return v
 }

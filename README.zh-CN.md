@@ -379,6 +379,7 @@ gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: 新功能" --h
 
 # 查看 PR
 gitlink-cli pr +view --owner Gitlink --repo forgeplus -i 42
+# 对于已合并或已关闭的 PR，JSON 输出会尽量补齐 `created_at`、`merged_at`、`closed_at` 和 `closed_on`。
 
 # 合并 PR
 gitlink-cli pr +merge --owner Gitlink --repo forgeplus -i 42
