@@ -477,6 +477,29 @@ gitlink-cli search +repos -k "machine learning"
 gitlink-cli search +users -k "zhangsan"
 ```
 
+### User Analytics
+
+```bash
+# Show contribution heatmap for a specific year
+gitlink-cli user +headmap --login Mengz --year 2026
+
+# Show recent activity timeline
+gitlink-cli user +activity --login Mengz
+
+# Show development capability scores and language distribution
+gitlink-cli user +develop --login Mengz --start-time 1735689600 --end-time 1767225599
+
+# Show role distribution across projects
+gitlink-cli user +roles --login Mengz
+
+# Show major domain categories
+gitlink-cli user +majors --login Mengz
+
+# Show project trends with cross-page filtering
+gitlink-cli user +trends --login Mengz --trend-type PullRequest
+gitlink-cli user +trends --login Mengz --keyword release --project gitlink-cli
+```
+
 ### Workflow Agent Commands
 
 `workflow` provides rule-based repository analysis for maintainers and AI Agents. It currently supports:
