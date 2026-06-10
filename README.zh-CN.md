@@ -455,6 +455,26 @@ gitlink-cli search +repos -k "machine learning"
 gitlink-cli search +users -k "zhangsan"
 ```
 
+### 工作流命令
+
+`workflow` 提供面向维护者和 AI Agent 的只读分析能力，可用于 Issue 分流、仓库健康度评估、PR 审查摘要、仓库工作流报告和 PR 审查队列排序。
+
+```bash
+# 生成单个 PR 的审查摘要
+gitlink-cli workflow +pr-summary --owner Gitlink --repo gitlink-cli --number 1 --format markdown
+
+# 生成仓库工作流报告
+gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
+
+# 根据风险、变更类型、diff 规模和测试信号生成 PR 审查队列
+gitlink-cli workflow +review-queue --owner Gitlink --repo gitlink-cli --limit 20 --format table
+
+# 从本地 JSON 输入生成 PR 审查队列
+gitlink-cli workflow +review-queue --from review_queue.json --format markdown
+```
+
+`workflow +review-queue` 默认使用 `table` 输出，适合维护者快速决定先审哪个 PR；它只读取 PR 元数据并进行本地规则分析，不会评论、审批、拒绝或合并 PR。
+
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：
