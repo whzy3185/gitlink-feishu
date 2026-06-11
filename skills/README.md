@@ -153,6 +153,8 @@ skills/
 | **gitlink-pm** | 项目管理 | 通过 Raw API 访问 |
 | **gitlink-workflow** | AI 工作流 | Issue 分类、PR Review、Release Notes |
 | **gitlink-health** | 开源项目健康度 | 详情见SKILL.md |
+| **gitlink-maintainer-handoff** | 维护者交接摘要 | `workflow +repo-report`, `pr +list`, `issue +list`, `release +list` |
+| **gitlink-branch-hygiene** | 分支治理与清理建议 | `branch +list`, `compare +view`, `pr +list`, `branch +delete` |
 
 ---
 
@@ -257,6 +259,10 @@ gitlink-cli org +info -i Gitlink
 **组织和用户**:
 - [gitlink-org/SKILL.md](gitlink-org/SKILL.md) - 组织命令
 - [gitlink-user/SKILL.md](gitlink-user/SKILL.md) - 用户命令
+
+**维护者治理**:
+- [gitlink-maintainer-handoff/SKILL.md](gitlink-maintainer-handoff/SKILL.md) - 维护者交接摘要
+- [gitlink-branch-hygiene/SKILL.md](gitlink-branch-hygiene/SKILL.md) - 分支治理与清理建议
 
 ---
 
