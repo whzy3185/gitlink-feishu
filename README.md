@@ -97,6 +97,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 |----------|-------------|
 | 📦 Repo | List, create, fork, delete repositories, view repo info, insights, and interactions |
 | 🐛 Issue | Create, update, close, batch close, comment on issues |
+| 🎯 Milestone | List, create, inspect, summarize, update, close, and reopen milestones |
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
 | 👥 Member | List, add, remove repository members, change roles, create and accept invite links |
@@ -343,6 +344,29 @@ issue detail endpoints provide those fields.
 `issue +update`, `issue +close`, and `issue +batch-close` preserve existing
 tracker, version, assignee, tag, and schedule metadata before sending updates,
 which avoids clearing required fields on the server by accident.
+
+### Milestone Management
+
+```bash
+# List milestones
+gitlink-cli milestone +list --owner Gitlink --repo forgeplus
+
+# View a milestone and linked issues
+gitlink-cli milestone +view --owner Gitlink --repo forgeplus --id 2438 --limit 20
+
+# Build a milestone progress report by ID
+gitlink-cli milestone +report --owner Gitlink --repo forgeplus --id 2438 --sample-limit 3
+
+# Build a milestone progress report by name
+gitlink-cli milestone +report --owner Gitlink --repo forgeplus --name "v1.0"
+
+# Create a milestone
+gitlink-cli milestone +create --owner Gitlink --repo forgeplus --name "v1.0" --description "Scope for v1.0" --due-date 2026-07-01
+```
+
+`milestone +report` resolves a milestone by `--id` or `--name`, fetches all
+linked issues across pages, and summarizes close readiness, assignee/tag gaps,
+status distribution, and sample open issues.
 
 ### Label Management
 
