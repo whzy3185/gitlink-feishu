@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
 func TestParseIssueNumbers(t *testing.T) {
@@ -205,11 +207,65 @@ func TestCollectIssueNumbersCSVReadError(t *testing.T) {
 	}
 }
 
+func TestReadIssueTextArgInline(t *testing.T) {
+	ctx := &common.RuntimeContext{Args: map[string]string{"body": "hello"}}
+	got, err := readIssueTextArg(ctx, "body", "body-file", true)
+	if err != nil {
+		t.Fatalf("readIssueTextArg returned error: %v", err)
+	}
+	if got != "hello" {
+		t.Fatalf("readIssueTextArg() = %q, want %q", got, "hello")
+	}
+}
+
+func TestReadIssueTextArgFromFile(t *testing.T) {
+	path := writeTempText(t, "hello from file")
+	ctx := &common.RuntimeContext{Args: map[string]string{"body-file": path}}
+	got, err := readIssueTextArg(ctx, "body", "body-file", true)
+	if err != nil {
+		t.Fatalf("readIssueTextArg returned error: %v", err)
+	}
+	if got != "hello from file" {
+		t.Fatalf("readIssueTextArg() = %q, want %q", got, "hello from file")
+	}
+}
+
+func TestReadIssueTextArgRejectsMixedSources(t *testing.T) {
+	path := writeTempText(t, "hello from file")
+	ctx := &common.RuntimeContext{Args: map[string]string{"body": "inline", "body-file": path}}
+	if _, err := readIssueTextArg(ctx, "body", "body-file", true); err == nil {
+		t.Fatal("expected readIssueTextArg to reject mixed inline and file sources")
+	}
+}
+
+func TestPreviewTextTruncatesLongValue(t *testing.T) {
+	input := ""
+	for i := 0; i < 150; i++ {
+		input += "a"
+	}
+	got := previewText(input)
+	if len([]rune(got)) != 123 {
+		t.Fatalf("previewText() length = %d, want %d", len([]rune(got)), 123)
+	}
+	if got[len(got)-3:] != "..." {
+		t.Fatalf("previewText() = %q, want trailing ellipsis", got)
+	}
+}
+
 func writeTempCSV(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "issues.csv")
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write temp csv: %v", err)
+	}
+	return path
+}
+
+func writeTempText(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "body.md")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write temp text: %v", err)
 	}
 	return path
 }

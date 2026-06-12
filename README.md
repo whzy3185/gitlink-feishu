@@ -294,6 +294,9 @@ gitlink-cli issue +list --owner Gitlink --repo forgeplus
 # Create an issue
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: Login failed" -b "Steps to reproduce..."
 
+# Create an issue from a Markdown file
+gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: Login failed" --body-file issue.md
+
 # Create an issue with metadata
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: Login failed" --priority-id 3 --tag-ids 4,5 --assigner-ids 7
 
@@ -303,17 +306,32 @@ gitlink-cli issue +view --owner Gitlink --repo forgeplus -i 123
 # Update issue metadata
 gitlink-cli issue +update --owner Gitlink --repo forgeplus --number 123 --priority-id 4 --branch bugfix/login --due-date 2026-06-15
 
+# Update issue description from a file
+gitlink-cli issue +update --owner Gitlink --repo forgeplus --number 123 --body-file update.md
+
 # Close an issue
 gitlink-cli issue +close --owner Gitlink --repo forgeplus -i 123
 
 # Preview batch close without changing data
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,124 --dry-run
 
+# Preview a shared batch update
+gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --numbers 123,124 --state closed --priority-id 4 --dry-run
+
+# Batch update issues from a CSV file
+gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --from issues.csv --assigner-ids 7 --due-date 2026-06-15
+
 # Batch close issues from a CSV file
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --from issues.csv
 
 # Add a comment
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "Fixed"
+
+# Add a comment from a file
+gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 --body-file comment.md
+
+# Batch comment on issues
+gitlink-cli issue +batch-comment --owner Gitlink --repo forgeplus --numbers 123,124 --body-file comment.md --dry-run
 
 # List issue assigners
 gitlink-cli issue +assigners --owner Gitlink --repo forgeplus
