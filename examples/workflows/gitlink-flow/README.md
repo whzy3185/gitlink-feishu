@@ -10,39 +10,20 @@
 
 子赛题三要求「组合 gitlink-cli 已有命令和 Skills，完成一个可复现的端到端自动化场景，串联 ≥3 个调用」。本作品串联 **6 个步骤**，复用了我在子赛题二完成的 **5 个自研 Skill** 的能力，远超 3 个的要求：
 
-```
-                      gitlink-flow 端到端工作流
-┌──────────────────────────────────────────────────────────────┐
-│                                                                │
-│   采集（GitLink 公开 API，只读）                                  │
-│   仓库信息 / Issue / PR / 提交 / 贡献者 / 版本 / 文件树            │
-│                          │                                     │
-│                          ▼                                     │
-│   ① Issue 自动分拣 ──────────  bug/feature/question/新手友好分类  │
-│                          │      （对标官方 triage 参考工作流）     │
-│                          ▼                                     │
-│   ② PR Review 汇总 ─────────  开放/合并/关闭统计 + 待 Review 清单 │
-│                          │      （对标官方 PR Review 参考工作流）  │
-│                          ▼                                     │
-│   ③ Release Notes 生成 ─────  按 conventional commits 归类       │
-│                          │      （对标官方 Release Notes 参考）   │
-│                          ▼                                     │
-│   ④ 社区健康体检 ───────────  复用 gitlink-scaffold 能力          │
-│                          │                                     │
-│                          ▼                                     │
-│   ⑤ 贡献者致谢 ─────────────  复用 gitlink-contributor 能力      │
-│                          │                                     │
-│                          ▼                                     │
-│   ⑥ 社区运营周报 ───────────  汇总以上全部为一份 Markdown 周报     │
-│                                                                │
-└──────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-            outputs/<owner>_<repo>_flow.md（周报）
-                  或 --format json（供 Agent 消费）
+```mermaid
+flowchart TD
+    A["采集（主调用链：gitlink-cli 命令<br/>repo +info / issue +list / pr +list / release +list<br/>未装 CLI 时回退 glapi 直连）"] --> B["① Issue 自动分拣<br/>bug / feature / question / 新手友好分类"]
+    B --> C["② PR Review 汇总<br/>开放 / 合并 / 关闭统计 + 待 Review 清单"]
+    C --> D["③ Release Notes 生成<br/>按 conventional commits 归类"]
+    D --> E["④ 社区健康体检<br/>复用 gitlink-scaffold 能力"]
+    E --> F["⑤ 贡献者致谢<br/>复用 gitlink-contributor 能力"]
+    F --> G["⑥ 社区运营周报<br/>汇总以上全部为一份 Markdown 周报"]
+    G --> H["outputs/&lt;owner&gt;_&lt;repo&gt;_flow.md（周报）<br/>或 --format json（供 Agent 消费）"]
 ```
 
 其中 ①②③ 三个子工作流**精准对标官方 `examples/workflows/` 列出的三个参考场景**（Issue 自动分拣、PR Review、Release Notes 生成），④⑤ 复用自研 Skill，⑥ 汇总输出。
+
+采集阶段优先调用 `gitlink-cli` 已有命令（`repo +info`、`issue +list`、`pr +list`、`release +list`），符合赛题「组合 gitlink-cli 命令」的要求；`src/cli.py` 负责命令封装，`src/glapi.py` 仅在本机未安装 gitlink-cli 时作为直连 fallback，保证工作流不因依赖缺失而中断。
 
 ## 与子赛题二的区别
 
@@ -72,7 +53,8 @@ python src/flow.py --config examples/config.json   # 批量多仓库
 ```
 gitlink-flow/
 ├── src/
-│   ├── glapi.py        GitLink 公开 API 客户端（采集层）
+│   ├── glapi.py        GitLink 公开 API 客户端（直连 fallback）
+│   ├── cli.py          gitlink-cli 命令封装（主调用链）
 │   ├── steps.py        工作流步骤库（三个子工作流 + 复用 Skill 能力）
 │   ├── flow.py         编排器主入口（串联 6 步）
 │   └── report.py       社区运营周报生成
