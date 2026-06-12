@@ -85,6 +85,15 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "file",
+			Description: "Show repository file content and metadata",
+			Flags: []common.Flag{
+				{Name: "path", Short: "p", Usage: "Repository file path", Required: true},
+				{Name: "ref", Short: "r", Usage: "Branch, tag, or commit SHA", Default: "master"},
+			},
+			Run: runFile,
+		},
+		{
 			Name:        "tree",
 			Description: tr.T("cmd.repo.tree.short"),
 			Flags: []common.Flag{
@@ -95,15 +104,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				q := url.Values{}
-				ref := ctx.Arg("ref")
-				if ref == "" {
-					ref = "master"
-				}
-				if path := ctx.Arg("path"); path != "" {
-					q.Set("filepath", path)
-				}
-				q.Set("ref", ref)
+				q := repoSubEntriesQuery(ctx.Arg("path"), ctx.Arg("ref"))
 				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
 				if err != nil {
 					return err
@@ -312,6 +313,22 @@ type repoFileOperation struct {
 	Content    *string `json:"content,omitempty"`
 	Encoding   string  `json:"encoding,omitempty"`
 	FilePath   string  `json:"file_path"`
+}
+
+func runFile(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	filePath, err := requiredRepoString(ctx, "path")
+	if err != nil {
+		return err
+	}
+	q := repoSubEntriesQuery(filePath, ctx.Arg("ref"))
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
 }
 
 func runFiles(ctx *common.RuntimeContext) error {
@@ -530,6 +547,19 @@ func requiredRepoString(ctx *common.RuntimeContext, name string) (string, error)
 		return "", fmt.Errorf("missing required flag: --%s", name)
 	}
 	return value, nil
+}
+
+func repoSubEntriesQuery(path, ref string) url.Values {
+	q := url.Values{}
+	if path = strings.TrimSpace(path); path != "" {
+		q.Set("filepath", path)
+	}
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		ref = "master"
+	}
+	q.Set("ref", ref)
+	return q
 }
 
 func runLanguages(ctx *common.RuntimeContext) error {

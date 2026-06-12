@@ -103,7 +103,7 @@
 
 | 分类 | 能力 |
 |------|------|
-| 📦 仓库 | 列出、创建、Fork、删除仓库，搜索文件、批量提交文件变更，查看仓库信息、洞察数据和互动状态 |
+| 📦 仓库 | 列出、创建、Fork、删除仓库，读取和搜索文件、批量提交文件变更，查看仓库信息、洞察数据和互动状态 |
 | 🐛 Issue | 创建、更新、关闭、批量关闭/更新/删除、评论 Issue |
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
@@ -233,6 +233,9 @@ gitlink-cli repo +info --owner Gitlink --repo forgeplus
 
 # 读取仓库 README
 gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
+
+# 读取指定仓库文件及元数据
+gitlink-cli repo +file --owner Gitlink --repo forgeplus --path README.md --ref main
 
 # 列出仓库根目录或指定目录文件
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master

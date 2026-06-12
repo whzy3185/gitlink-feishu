@@ -154,6 +154,42 @@ func TestRepoReadmeUsesRepositoryReadmeEndpoint(t *testing.T) {
 	}
 }
 
+func TestRepoFileUsesSubEntriesFileEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+		assertEqual(t, r.URL.Query().Get("filepath"), "README.md")
+		assertEqual(t, r.URL.Query().Get("ref"), "main")
+		writeJSON(t, w, map[string]interface{}{
+			"entries": map[string]interface{}{
+				"name":    "README.md",
+				"path":    "README.md",
+				"type":    "file",
+				"content": "# docs\n",
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "file", map[string]string{
+		"path": "README.md",
+		"ref":  "main",
+	})
+	if err != nil {
+		t.Fatalf("file shortcut failed: %v", err)
+	}
+}
+
+func TestRepoFileRequiresPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("missing path should not call API, got: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "file", map[string]string{"ref": "main"}); err == nil {
+		t.Fatal("expected missing path error")
+	}
+}
+
 func TestRepoTreeListsRootOnDefaultRef(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")

@@ -1,13 +1,14 @@
-# Repository File Search and Batch Commit Shortcuts
+# Repository File Read, Search, and Batch Commit Shortcuts
 
 ## Summary
 
-This change adds repository file workflow shortcuts for users and automation agents that need to find files and commit multiple file changes without manually assembling Raw API calls.
+This change adds repository file workflow shortcuts for users and automation agents that need to read file content, find files, and commit multiple file changes without manually assembling Raw API calls.
 
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
+| `gitlink-cli repo +file` | Read one repository file with content, commit info, and download metadata |
 | `gitlink-cli repo +files` | Search repository files by name with optional branch, tag, or commit filtering |
 | `gitlink-cli repo +commit-files` | Commit one file operation or a batch JSON operation list through the `contents/batch` API |
 
@@ -17,6 +18,12 @@ Search files on a branch:
 
 ```bash
 gitlink-cli repo +files --owner Gitlink --repo forgeplus --search README --ref main
+```
+
+Read one file from a branch:
+
+```bash
+gitlink-cli repo +file --owner Gitlink --repo forgeplus --path README.md --ref main
 ```
 
 Update one text file:
@@ -74,8 +81,8 @@ or an object with a `files` array. The CLI supplies `branch`, `message`, optiona
 
 ## Tests
 
-Unit tests cover file search query mapping, single-file request bodies, base64 local file reading, JSON batch operation files, dry-run behavior, and validation failures that must not perform an API request.
+Unit tests cover direct file reads through `sub_entries`, file search query mapping, single-file request bodies, base64 local file reading, JSON batch operation files, dry-run behavior, and validation failures that must not perform an API request.
 
 ## 中文说明
 
-本次变更补齐了仓库文件工作流中常用的两个能力：先用 `repo +files` 按文件名和分支搜索仓库文件，再用 `repo +commit-files` 把单个或多个文件变更提交到目标分支。批量提交支持创建新分支、设置提交信息、指定作者和提交者、从本地文件读取内容、对二进制内容做 base64 编码，并提供 `--dry-run` 预览请求体，适合脚本、CI 和 AI Agent 在真正写入仓库前检查即将提交的内容。验证覆盖了端点路径、查询参数、请求体字段、JSON 批量文件、base64 编码和无效参数不触网等关键路径。
+本次变更把仓库文件工作流补成了一个更完整的闭环：先用 `repo +file` 直接读取指定文件内容和元数据，用 `repo +files` 按文件名和分支搜索仓库文件，再用 `repo +commit-files` 把单个或多个文件变更提交到目标分支。批量提交支持创建新分支、设置提交信息、指定作者和提交者、从本地文件读取内容、对二进制内容做 base64 编码，并提供 `--dry-run` 预览请求体，适合脚本、CI 和 AI Agent 在真正写入仓库前检查即将提交的内容。验证覆盖了文件读取、端点路径、查询参数、请求体字段、JSON 批量文件、base64 编码和无效参数不触网等关键路径。
