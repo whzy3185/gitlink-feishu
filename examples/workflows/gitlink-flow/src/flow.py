@@ -30,27 +30,73 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from glapi import GitLinkClient, GitLinkError, split_owner_repo
+import cli
 import steps
 import report as report_mod
 
 
-def run_flow(owner: str, repo: str, client: GitLinkClient | None = None,
-             commit_pages: int = 4) -> dict[str, Any]:
-    """对单个仓库执行完整工作流，返回各步骤结果。"""
-    client = client or GitLinkClient()
+def collect(owner: str, repo: str, client: GitLinkClient,
+            commit_pages: int = 4, use_cli: bool | None = None) -> dict[str, Any]:
+    """采集阶段：优先走 gitlink-cli 命令（主调用链），失败回退直连 API。
 
-    # ===== 采集阶段 =====
-    info = client.repo_info(owner, repo)
-    issues = client.issues(owner, repo, limit=50)
-    pulls = client.pulls(owner, repo, limit=50)
+    赛题要求工作流组合 gitlink-cli 已有命令。因此 repo/issue/pr/release
+    四类数据优先调用 `gitlink-cli +list/+info`；当本机未装 gitlink-cli 或
+    某命令调用失败时，回退到 glapi 直连，保证工作流不因依赖缺失而中断。
+
+    commits 与目录树（list_dir）gitlink-cli 暂无对应只读命令，沿用 glapi。
+
+    use_cli 为 None 时自动探测本机是否安装 gitlink-cli；显式传 False 可强制
+    走 glapi 直连（供离线单元测试使用）。
+    """
+    if use_cli is None:
+        use_cli = cli.cli_available()
+    source = "gitlink-cli 命令" if use_cli else "直连 API（未检测到 gitlink-cli，已回退）"
+
+    def via_cli(cli_fn, fallback_fn):
+        """单项数据：优先 cli，任何失败回退 glapi。"""
+        if use_cli:
+            try:
+                return cli_fn()
+            except cli.CliError:
+                pass
+        return fallback_fn()
+
+    info = via_cli(lambda: cli.repo_info(owner, repo),
+                   lambda: client.repo_info(owner, repo))
+    issues = via_cli(lambda: cli.issues(owner, repo, limit=50),
+                     lambda: client.issues(owner, repo, limit=50))
+    pulls = via_cli(lambda: cli.pulls(owner, repo, limit=50),
+                    lambda: client.pulls(owner, repo, limit=50))
+    releases = via_cli(lambda: cli.releases(owner, repo),
+                       lambda: client.releases(owner, repo))
+    # commits / 目录树：gitlink-cli 无对应只读命令，直接用 glapi
     commits = client.commits(owner, repo, max_pages=commit_pages)
     contributors = client.contributors(owner, repo)
-    releases = client.releases(owner, repo) if hasattr(client, "releases") else []
     try:
         root_entries = client.list_dir(owner, repo, "", "master")
         root_files = [str(e.get("name", "")) for e in root_entries]
     except GitLinkError:
         root_files = []
+
+    return {"source": source, "info": info, "issues": issues, "pulls": pulls,
+            "commits": commits, "contributors": contributors,
+            "releases": releases, "root_files": root_files}
+
+
+def run_flow(owner: str, repo: str, client: GitLinkClient | None = None,
+             commit_pages: int = 4, use_cli: bool | None = None) -> dict[str, Any]:
+    """对单个仓库执行完整工作流，返回各步骤结果。"""
+    client = client or GitLinkClient()
+
+    # ===== 采集阶段（gitlink-cli 主调用链 + glapi fallback）=====
+    bundle = collect(owner, repo, client, commit_pages=commit_pages, use_cli=use_cli)
+    info = bundle["info"]
+    issues = bundle["issues"]
+    pulls = bundle["pulls"]
+    commits = bundle["commits"]
+    contributors = bundle["contributors"]
+    releases = bundle["releases"]
+    root_files = bundle["root_files"]
 
     # ===== 分析阶段（6 步）=====
     latest_version = "Unreleased"
@@ -61,6 +107,7 @@ def run_flow(owner: str, repo: str, client: GitLinkClient | None = None,
         "owner": owner,
         "repo": repo,
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "data_source": bundle["source"],
         "repo_info": {
             "name": info.get("name"),
             "issues_count": info.get("issues_count"),

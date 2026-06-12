@@ -30,6 +30,7 @@ def render_weekly(result: dict[str, Any]) -> str:
         "",
         f"- Star {info.get('praises_count') or 0} / Fork {info.get('forked_count') or 0}"
         f" / Issue {info.get('issues_count') or 0} / PR {info.get('pull_requests_count') or 0}",
+        f"- 数据采集：{result.get('data_source', 'gitlink-cli 命令')}",
         "",
         "## 二、Issue 自动分拣",
         "",

@@ -17,6 +17,7 @@ import pytest
 
 import steps
 import report as report_mod
+import cli
 from flow import run_flow
 
 
@@ -157,7 +158,7 @@ class FakeClient:
 
 class TestOrchestrator:
     def test_run_flow_all_steps(self):
-        result = run_flow("o", "repo", client=FakeClient())
+        result = run_flow("o", "repo", client=FakeClient(), use_cli=False)
         assert "step1_triage" in result
         assert "step2_pr_review" in result
         assert "step3_release_notes" in result
@@ -166,7 +167,7 @@ class TestOrchestrator:
         assert "step6_weekly_report" in result
 
     def test_weekly_report_renders(self):
-        result = run_flow("o", "repo", client=FakeClient())
+        result = run_flow("o", "repo", client=FakeClient(), use_cli=False)
         md = result["step6_weekly_report"]
         assert "社区运营周报" in md
         assert "Issue 自动分拣" in md
@@ -174,9 +175,30 @@ class TestOrchestrator:
         assert "Release Notes" in md
 
     def test_triage_in_flow(self):
-        result = run_flow("o", "repo", client=FakeClient())
+        result = run_flow("o", "repo", client=FakeClient(), use_cli=False)
         # 一个 good-first（docs typo）+ 一个 bug
         assert result["step1_triage"]["good_first_count"] == 1
+
+    def test_fallback_data_source(self):
+        # 强制走 glapi 直连时，数据源应标注已回退
+        result = run_flow("o", "repo", client=FakeClient(), use_cli=False)
+        assert "回退" in result["data_source"]
+
+
+class TestCliLayer:
+    """gitlink-cli 封装层：解包信封与列表提取，不实际调用命令。"""
+
+    def test_extract_list_from_dict(self):
+        assert cli._extract_list({"issues": [1, 2]}, ("issues",)) == [1, 2]
+
+    def test_extract_list_passthrough(self):
+        assert cli._extract_list([1, 2], ("issues",)) == [1, 2]
+
+    def test_extract_list_empty(self):
+        assert cli._extract_list({"other": 1}, ("issues",)) == []
+
+    def test_cli_available_returns_bool(self):
+        assert isinstance(cli.cli_available(), bool)
 
 
 if __name__ == "__main__":
