@@ -262,8 +262,14 @@ gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
 # Preview a repository transfer without changing data
 gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org --dry-run
 
-# Cancel a pending repository transfer
+# Confirm and send a repository transfer request
+gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org --yes
+
+# Preview canceling a pending repository transfer
 gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --dry-run
+
+# Confirm canceling a pending repository transfer
+gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --yes
 ```
 
 ### Webhook Management

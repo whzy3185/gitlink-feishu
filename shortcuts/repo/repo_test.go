@@ -456,7 +456,10 @@ func TestRepoTransfer(t *testing.T) {
 	}))
 	defer server.Close()
 
-	err := runShortcut(t, server, "transfer", map[string]string{"target-owner": " target-org "})
+	err := runShortcut(t, server, "transfer", map[string]string{
+		"target-owner": " target-org ",
+		"yes":          "true",
+	})
 	if err != nil {
 		t.Fatalf("transfer failed: %v", err)
 	}
@@ -475,6 +478,18 @@ func TestRepoTransferDryRunDoesNotCallAPI(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("transfer dry-run failed: %v", err)
+	}
+}
+
+func TestRepoTransferRequiresExplicitYes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("transfer without --yes should not call API, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "transfer", map[string]string{"target-owner": "target-org"})
+	if err == nil {
+		t.Fatal("expected confirmation error for missing --yes")
 	}
 }
 
@@ -509,7 +524,7 @@ func TestRepoTransferCancel(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if err := runShortcut(t, server, "transfer-cancel", nil); err != nil {
+	if err := runShortcut(t, server, "transfer-cancel", map[string]string{"yes": "true"}); err != nil {
 		t.Fatalf("transfer-cancel failed: %v", err)
 	}
 }
@@ -523,6 +538,18 @@ func TestRepoTransferCancelDryRunDoesNotCallAPI(t *testing.T) {
 	err := runShortcut(t, server, "transfer-cancel", map[string]string{"dry-run": "true"})
 	if err != nil {
 		t.Fatalf("transfer-cancel dry-run failed: %v", err)
+	}
+}
+
+func TestRepoTransferCancelRequiresExplicitYes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("transfer-cancel without --yes should not call API, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "transfer-cancel", nil)
+	if err == nil {
+		t.Fatal("expected confirmation error for missing --yes")
 	}
 }
 

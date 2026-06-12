@@ -260,6 +260,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Flags: []common.Flag{
 				{Name: "target-owner", Usage: tr.T("flag.repo.target_owner"), Required: true},
 				{Name: "dry-run", Usage: tr.T("flag.repo.transfer_dry_run"), Bool: true, Default: "false"},
+				{Name: "yes", Usage: tr.T("flag.repo.transfer_yes"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -283,6 +284,9 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 						"payload": payload,
 					})
 				}
+				if err := requireRepoTransferConfirmation(ctx, "transfer"); err != nil {
+					return err
+				}
 				env, err := ctx.CallAPI("POST", path, payload)
 				if err != nil {
 					return err
@@ -295,6 +299,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.repo.transfer_cancel.short"),
 			Flags: []common.Flag{
 				{Name: "dry-run", Usage: tr.T("flag.repo.transfer_cancel_dry_run"), Bool: true, Default: "false"},
+				{Name: "yes", Usage: tr.T("flag.repo.transfer_yes"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -307,6 +312,9 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 						"method":  "POST",
 						"path":    path,
 					})
+				}
+				if err := requireRepoTransferConfirmation(ctx, "transfer-cancel"); err != nil {
+					return err
 				}
 				env, err := ctx.CallAPI("POST", path, nil)
 				if err != nil {
@@ -338,6 +346,13 @@ func repoTransferPath(ctx *common.RuntimeContext, action string) string {
 		return base
 	}
 	return fmt.Sprintf("%s/%s", base, action)
+}
+
+func requireRepoTransferConfirmation(ctx *common.RuntimeContext, shortcut string) error {
+	if ctx.Arg("yes") == "true" {
+		return nil
+	}
+	return fmt.Errorf("refusing to run repo +%s without --yes; use --dry-run to preview the request first", shortcut)
 }
 
 func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {

@@ -87,6 +87,9 @@
   "cmd.repo.info.short": "显示仓库详情",
   "cmd.repo.list.short": "列出用户或组织的仓库",
   "cmd.repo.short": "仓库操作",
+  "cmd.repo.transfer.short": "将仓库转移给其他所有者",
+  "cmd.repo.transfer_cancel.short": "取消待处理的仓库转移",
+  "cmd.repo.transfer_orgs.short": "列出可接收该仓库的组织",
   "cmd.repo.tree.short": "列出仓库文件和目录",
   "cmd.root.long": "用于管理 GitLink 上的仓库、议题、拉取请求、发布、CI 和工作流。",
   "cmd.root.short": "GitLink CLI - GitLink 命令行工具",
@@ -212,6 +215,10 @@
   "flag.repo.description": "仓库描述",
   "flag.repo.name": "仓库名称",
   "flag.repo.private": "设为私有仓库（true/false）",
+  "flag.repo.target_owner": "目标用户或组织登录名",
+  "flag.repo.transfer_cancel_dry_run": "预览取消请求，不修改仓库转移状态",
+  "flag.repo.transfer_dry_run": "预览转移请求，不修改仓库所有者",
+  "flag.repo.transfer_yes": "确认并执行仓库转移相关操作",
   "flag.repo.tree.path": "要列出的目录路径（默认：仓库根目录）",
   "flag.repo.tree.ref": "分支、标签或提交引用",
   "flag.search.keyword": "搜索关键词",
@@ -267,11 +274,5 @@
   "success.config.set": "✓ 已设置 {key} = {value}",
   "warning.auth.not_logged_in": "✗ 未登录",
   "warning.auth.token_unverified": "✓ Token 已保存（但无法验证：{message}）",
-  "warning.auth.user_unavailable": "✓ Token 已保存（用户信息不可用）",
-  "cmd.repo.transfer_orgs.short": "列出可接收该仓库的组织",
-  "cmd.repo.transfer.short": "将仓库转移给其他所有者",
-  "cmd.repo.transfer_cancel.short": "取消待处理的仓库转移",
-  "flag.repo.target_owner": "目标用户或组织登录名",
-  "flag.repo.transfer_dry_run": "预览转移请求，不修改仓库所有者",
-  "flag.repo.transfer_cancel_dry_run": "预览取消请求，不修改仓库转移状态"
+  "warning.auth.user_unavailable": "✓ Token 已保存（用户信息不可用）"
 }

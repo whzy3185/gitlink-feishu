@@ -273,8 +273,14 @@ gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
 # 预览仓库转移请求，不修改线上数据
 gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org --dry-run
 
-# 取消待处理的仓库转移
+# 确认后发起仓库转移
+gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org --yes
+
+# 预览取消待处理的仓库转移
 gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --dry-run
+
+# 确认后取消待处理的仓库转移
+gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --yes
 ```
 
 ### Webhook 管理
