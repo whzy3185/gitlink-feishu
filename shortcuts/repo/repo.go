@@ -240,6 +240,89 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "transfer-orgs",
+			Description: tr.T("cmd.repo.transfer_orgs.short"),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", repoTransferPath(ctx, "organizations"), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "transfer",
+			Description: tr.T("cmd.repo.transfer.short"),
+			Flags: []common.Flag{
+				{Name: "target-owner", Usage: tr.T("flag.repo.target_owner"), Required: true},
+				{Name: "dry-run", Usage: tr.T("flag.repo.transfer_dry_run"), Bool: true, Default: "false"},
+				{Name: "yes", Usage: tr.T("flag.repo.transfer_yes"), Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				targetOwner, err := ctx.RequireArg("target-owner")
+				if err != nil {
+					return err
+				}
+				targetOwner = strings.TrimSpace(targetOwner)
+				if targetOwner == "" {
+					return fmt.Errorf("required flag --target-owner is missing")
+				}
+				payload := map[string]interface{}{"owner_name": targetOwner}
+				path := repoTransferPath(ctx, "")
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"dry_run": true,
+						"method":  "POST",
+						"path":    path,
+						"payload": payload,
+					})
+				}
+				if err := requireRepoTransferConfirmation(ctx, "transfer"); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("POST", path, payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "transfer-cancel",
+			Description: tr.T("cmd.repo.transfer_cancel.short"),
+			Flags: []common.Flag{
+				{Name: "dry-run", Usage: tr.T("flag.repo.transfer_cancel_dry_run"), Bool: true, Default: "false"},
+				{Name: "yes", Usage: tr.T("flag.repo.transfer_yes"), Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				path := repoTransferPath(ctx, "cancel")
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"dry_run": true,
+						"method":  "POST",
+						"path":    path,
+					})
+				}
+				if err := requireRepoTransferConfirmation(ctx, "transfer-cancel"); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("POST", path, nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "delete",
 			Description: tr.T("cmd.repo.delete.short"),
 			Run: func(ctx *common.RuntimeContext) error {
@@ -254,6 +337,21 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func repoTransferPath(ctx *common.RuntimeContext, action string) string {
+	base := ctx.RepoPath() + "/applied_transfer_projects"
+	if action == "" {
+		return base
+	}
+	return fmt.Sprintf("%s/%s", base, action)
+}
+
+func requireRepoTransferConfirmation(ctx *common.RuntimeContext, shortcut string) error {
+	if ctx.Arg("yes") == "true" {
+		return nil
+	}
+	return fmt.Errorf("refusing to run repo +%s without --yes; use --dry-run to preview the request first", shortcut)
 }
 
 func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
