@@ -1,0 +1,75 @@
+# gitlink-gatekeeper —— Gitea Actions CI 示例（GitLink 平台用）
+#
+# ⚠️ 这是一个「门禁接 CI」的演示示例，不是开箱即用的生产配置。
+#   - GitLink 基于 Gitea，其 Actions 语法与 GitHub Actions 兼容，工作流放在
+#     仓库的 .gitea/workflows/ 目录下。把本文件复制过去并按需调整即可启用。
+#   - 需要在仓库 Settings → Actions → Secrets 配置一个 GITLINK_TOKEN secret
+#     （供 gitlink-cli 认证、采集目标 PR 的上下文）。Token 切勿写进仓库。
+#   - runner 需能访问 GitLink API；Python 3.9+ 与 gitlink-cli 的安装方式按实际
+#     runner 镜像调整（下面 install 步骤仅为占位示意）。
+#
+# 触发：对 PR 的 open / 同步事件运行门禁，脚本返回码 2（REQUEST_CHANGES）
+#       会让本 job 失败，从而在 CI 上挡住该 PR（PASS/COMMENT 返回 0 即通过）。
+
+name: gatekeeper
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  gatekeeper:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 Python（纯标准库，无需装依赖）
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      # 安装 gitlink-cli（示意：按 runner 实际情况替换为正确的安装/分发方式）
+      - name: 安装 gitlink-cli
+        run: |
+          # 例如从发布物下载或用包管理器安装，确保 PATH 里有 gitlink-cli
+          gitlink-cli --version
+
+      # 跑门禁：采集本次 PR 上下文 → 评分 → 裁决。
+      # REQUEST_CHANGES 时脚本退出码为 2；下面用 if/exit 把它转成 job 失败。
+      - name: 运行 PR 看门人门禁
+        env:
+          # gitlink-cli 通过该环境变量认证（对应仓库配置的 secret）
+          GITLINK_TOKEN: ${{ secrets.GITLINK_TOKEN }}
+          # Gitea 注入的 PR 编号；不同 runner 字段名可能不同，按实际调整
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -o pipefail
+          python3 examples/workflows/pr-quality-gatekeeper/scripts/gatekeeper_workflow.py \
+            --owner "${{ github.repository_owner }}" \
+            --repo "${{ github.event.repository.name }}" \
+            --pr "${PR_NUMBER}" \
+            --policy skills/gitlink-gatekeeper/examples/gatekeeper.yaml \
+            --owner-rules workflow/owner-rules.yaml \
+            --cli-bin gitlink-cli
+          code=$?
+          # 退出码：0 = PASS/COMMENT（放行）；2 = REQUEST_CHANGES（挡住，让 job 失败）；
+          #          1 = 可预期错误（缺参数 / 未装 gitlink-cli 等），同样视为失败。
+          if [ "$code" -eq 0 ]; then
+            echo "门禁通过（PASS/COMMENT）"
+            exit 0
+          elif [ "$code" -eq 2 ]; then
+            echo "::error::门禁裁决 REQUEST_CHANGES，阻止合并"
+            exit 1
+          else
+            echo "::error::门禁执行出错（退出码 $code）"
+            exit 1
+          fi
+
+      # 上传评分卡 / summary 产物，便于在 CI 页面查看裁决依据
+      - name: 上传门禁产物
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gatekeeper-scorecard
+          path: outputs/
