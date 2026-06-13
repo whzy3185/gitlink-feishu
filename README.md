@@ -695,6 +695,20 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 
 # With query parameters
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
+
+# Render owner/repo from git context or explicit variables
+gitlink-cli api POST /:owner/:repo/issues --body '{"subject":"Bug","description":"..."}'
+
+# Reuse template variables in a single request
+gitlink-cli api POST /v1/{{owner}}/{{repo}}/issues/{{number}}/journals \
+  --body '{"notes":"handled by {{actor}}"}' \
+  --var owner=Gitlink --var repo=gitlink-cli --var number=42 --var actor=bot
+
+# Preview a rendered single request without sending it
+gitlink-cli api POST /v1/{{owner}}/{{repo}}/issues \
+  --body-file issue.json \
+  --var owner=Gitlink --var repo=gitlink-cli \
+  --dry-run
 ```
 
 ## Global Parameters

@@ -7,12 +7,14 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/client"
+	repoContext "github.com/gitlink-org/gitlink-cli/internal/context"
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 )
@@ -73,13 +75,23 @@ func runAPI(c *cobra.Command, args []string) error {
 		path = "/" + path
 	}
 
+	vars, err := parseBatchVars(c)
+	if err != nil {
+		return err
+	}
+	addRepoContextVars(vars)
+	path, err = renderSinglePath(path, vars)
+	if err != nil {
+		return err
+	}
+
 	cli, err := client.New()
 	if err != nil {
 		return err
 	}
 	cli.Debug = cmdutil.Debug
 
-	body, err := readJSONBody(c)
+	body, err := readJSONBody(c, vars)
 	if err != nil {
 		return err
 	}
@@ -87,11 +99,22 @@ func runAPI(c *cobra.Command, args []string) error {
 	var query url.Values
 	queryStr, _ := c.Flags().GetString("query")
 	if queryStr != "" {
-		var err error
-		query, err = url.ParseQuery(queryStr)
+		query, err = renderSingleQuery(queryStr, vars)
 		if err != nil {
-			return fmt.Errorf("invalid query string: %w", err)
+			return err
 		}
+	}
+
+	dryRun, _ := c.Flags().GetBool("dry-run")
+	if dryRun {
+		return output.Print(output.SuccessEnvelope(map[string]interface{}{
+			"dry_run":   true,
+			"method":    method,
+			"path":      path,
+			"query":     query,
+			"body":      body,
+			"variables": sortedVars(vars),
+		}, nil), resolveFormat())
 	}
 
 	env, err := cli.Do(method, path, body, query)
@@ -107,7 +130,7 @@ func runAPI(c *cobra.Command, args []string) error {
 	return output.Print(env, resolveFormat())
 }
 
-func readJSONBody(c *cobra.Command) (interface{}, error) {
+func readJSONBody(c *cobra.Command, vars map[string]string) (interface{}, error) {
 	bodyStr, _ := c.Flags().GetString("body")
 	bodyFile, _ := c.Flags().GetString("body-file")
 	bodyStdin, _ := c.Flags().GetBool("body-stdin")
@@ -147,7 +170,64 @@ func readJSONBody(c *cobra.Command) (interface{}, error) {
 	if err := json.Unmarshal(data, &body); err != nil {
 		return nil, fmt.Errorf("invalid JSON body: %w", err)
 	}
-	return body, nil
+	rendered, err := renderBatchValue(body, vars)
+	if err != nil {
+		return nil, fmt.Errorf("render JSON body: %w", err)
+	}
+	return rendered, nil
+}
+
+func renderSinglePath(path string, vars map[string]string) (string, error) {
+	rendered, err := renderTemplate(rewriteColonPlaceholders(path), vars)
+	if err != nil {
+		return "", fmt.Errorf("render path: %w", err)
+	}
+	return rendered, nil
+}
+
+func renderSingleQuery(raw string, vars map[string]string) (url.Values, error) {
+	rendered, err := renderTemplate(raw, vars)
+	if err != nil {
+		return nil, fmt.Errorf("render query: %w", err)
+	}
+	query, err := url.ParseQuery(rendered)
+	if err != nil {
+		return nil, fmt.Errorf("invalid query string: %w", err)
+	}
+	return query, nil
+}
+
+func addRepoContextVars(vars map[string]string) {
+	if vars == nil {
+		return
+	}
+	if vars["owner"] != "" && vars["repo"] != "" {
+		return
+	}
+	owner, repo, err := repoContext.ResolveOwnerRepo(cmdutil.Owner, cmdutil.Repo)
+	if err != nil {
+		return
+	}
+	if vars["owner"] == "" {
+		vars["owner"] = owner
+	}
+	if vars["repo"] == "" {
+		vars["repo"] = repo
+	}
+}
+
+func rewriteColonPlaceholders(path string) string {
+	return colonPathVarPattern.ReplaceAllString(path, `$1{{$2}}`)
+}
+
+var colonPathVarPattern = templatePattern
+
+func init() {
+	colonPathVarPattern = mustCompileColonPattern()
+}
+
+func mustCompileColonPattern() *regexp.Regexp {
+	return regexp.MustCompile(`(^|/):([A-Za-z0-9_.-]+)`)
 }
 
 func resolveFormat() string {

@@ -202,6 +202,105 @@ func TestRunAPINoPrefix(t *testing.T) {
 	}
 }
 
+func TestRunAPIRendersOwnerRepoColonPlaceholders(t *testing.T) {
+	oldOwner, oldRepo := cmdutil.Owner, cmdutil.Repo
+	cmdutil.Owner, cmdutil.Repo = "Gitlink", "gitlink-cli"
+	defer func() {
+		cmdutil.Owner, cmdutil.Repo = oldOwner, oldRepo
+	}()
+
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/Gitlink/gitlink-cli/issues.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+	})
+	cmdutil.Format = "json"
+
+	cmd := NewAPICmd()
+	cmd.SetArgs([]string{"GET", "/:owner/:repo/issues"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("runAPI placeholder error: %v", err)
+	}
+}
+
+func TestRunAPIRendersVarsInQueryAndBody(t *testing.T) {
+	var gotBody map[string]interface{}
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/Gitlink/gitlink-cli/issues/42/journals.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("notify") != "true" {
+			t.Fatalf("notify query = %q", r.URL.Query().Get("notify"))
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"id": 99})
+	})
+	cmdutil.Format = "json"
+
+	bodyPath := filepath.Join(t.TempDir(), "body.json")
+	if err := os.WriteFile(bodyPath, []byte(`{"notes":"hello {{actor}}","meta":{"repo":"{{repo}}"}}`), 0600); err != nil {
+		t.Fatalf("write body: %v", err)
+	}
+
+	cmd := NewAPICmd()
+	cmd.SetArgs([]string{
+		"POST", "/v1/{{owner}}/{{repo}}/issues/{{number}}/journals",
+		"--query", "notify={{notify}}",
+		"--body-file", bodyPath,
+		"--var", "owner=Gitlink",
+		"--var", "repo=gitlink-cli",
+		"--var", "number=42",
+		"--var", "notify=true",
+		"--var", "actor=bot",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("runAPI rendered vars error: %v", err)
+	}
+	if gotBody["notes"] != "hello bot" {
+		t.Fatalf("notes = %#v", gotBody["notes"])
+	}
+	meta := gotBody["meta"].(map[string]interface{})
+	if meta["repo"] != "gitlink-cli" {
+		t.Fatalf("meta.repo = %#v", meta["repo"])
+	}
+}
+
+func TestRunAPIDryRunDoesNotReachServer(t *testing.T) {
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("dry-run should not reach server")
+	})
+	cmdutil.Format = "json"
+
+	cmd := NewAPICmd()
+	cmd.SetArgs([]string{
+		"POST", "/v1/{{owner}}/{{repo}}/issues",
+		"--body", `{"subject":"{{title}}"}`,
+		"--dry-run",
+		"--var", "owner=Gitlink",
+		"--var", "repo=gitlink-cli",
+		"--var", "title=Bug report",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("runAPI dry-run error: %v", err)
+	}
+}
+
+func TestRunAPIMissingSingleRequestVar(t *testing.T) {
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach server")
+	})
+	cmdutil.Format = "json"
+
+	cmd := NewAPICmd()
+	cmd.SetArgs([]string{"GET", "/v1/{{owner}}/{{repo}}/issues/{{number}}"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected missing variable error")
+	}
+}
+
 func TestRenderBatchRequestsTemplateVars(t *testing.T) {
 	requests, err := renderBatchRequests([]batchRequest{
 		{
