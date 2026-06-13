@@ -117,7 +117,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 📖 Wiki | List, view, create, update, and delete wiki pages |
 | 🔍 Search | Search repositories, users |
 | 📊 Dataset | Query research datasets by project |
-| 👤 User | View user profiles and info |
+| 👤 User | View user profiles, contribution heatmaps, activity and capability statistics |
 | 📊 Profile | User ability, role, major, activity, and contribution statistics |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
 | 🤖 Workflow | AI-powered issue triage, PR review, release notes |
@@ -516,6 +516,21 @@ gitlink-cli ignore +list
 
 # Filter templates by name
 gitlink-cli ignore +list --name Go
+```
+
+### User Statistics
+
+```bash
+# User profile and current account
+gitlink-cli user +me
+gitlink-cli user +info --login alice
+
+# Contribution and activity analytics
+gitlink-cli user +activity --login alice
+gitlink-cli user +headmap --login alice --year 2026
+gitlink-cli user +develop --login alice --start-time 1717200000 --end-time 1719800000
+gitlink-cli user +role --login alice
+gitlink-cli user +major --login alice
 ```
 
 ### Search

@@ -116,7 +116,7 @@
 | 📖 Wiki | 列出、查看、创建、更新、删除 Wiki 页面 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 📊 数据集 | 按项目查询科研数据集 |
-| 👤 用户 | 查看用户资料和信息 |
+| 👤 用户 | 查看用户资料、贡献热力图、活跃度与能力统计 |
 | 📊 画像 | 用户开发能力、角色定位、专业定位、近期活动、贡献热力图统计 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
 | 🤖 工作流 | AI 驱动的 Issue 分类、PR Review、Release Notes |
@@ -494,6 +494,21 @@ gitlink-cli ignore +list
 
 # 按名称筛选模板
 gitlink-cli ignore +list --name Go
+```
+
+### 用户统计
+
+```bash
+# 用户资料与当前账户
+gitlink-cli user +me
+gitlink-cli user +info --login alice
+
+# 贡献和活跃度分析
+gitlink-cli user +activity --login alice
+gitlink-cli user +headmap --login alice --year 2026
+gitlink-cli user +develop --login alice --start-time 1717200000 --end-time 1719800000
+gitlink-cli user +role --login alice
+gitlink-cli user +major --login alice
 ```
 
 ### 搜索
