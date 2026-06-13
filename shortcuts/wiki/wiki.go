@@ -52,7 +52,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					return err
 				}
 				q := baseQuery(ctx, projectID)
-				env, err := ctx.CallAPIWithQuery("GET", "/wiki/wikiPages", q)
+				env, err := ctx.CallAPIWithQuery("GET", "/wiki/open/wikiPages", q)
 				if err != nil {
 					return err
 				}
@@ -78,7 +78,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}
 				q := baseQuery(ctx, projectID)
 				q.Set("pageName", page)
-				env, err := ctx.CallAPIWithQuery("GET", "/wiki/getWiki", q)
+				env, err := ctx.CallAPIWithQuery("GET", "/wiki/open/getWiki", q)
 				if err != nil {
 					return err
 				}
@@ -90,14 +90,14 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.wiki.create.short"),
 			Long:        tr.T("cmd.wiki.create.long"),
 			Flags:       writeFlags(),
-			Run:         runWrite("POST", "/wiki/createWiki", true),
+			Run:         runWrite("POST", "/wiki/open/createWiki", true),
 		},
 		{
 			Name:        "update",
 			Description: tr.T("cmd.wiki.update.short"),
 			Long:        tr.T("cmd.wiki.update.long"),
 			Flags:       writeFlags(),
-			Run:         runWrite("PUT", "/wiki/updateWiki", false),
+			Run:         runWrite("PUT", "/wiki/open/updateWiki", false),
 		},
 		{
 			Name:        "delete",
@@ -124,9 +124,9 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					"pageName":  page,
 				}
 				if ctx.Arg("dry-run") == "true" {
-					return dryRun(ctx, "DELETE", "/wiki/deleteWiki", body)
+					return dryRun(ctx, "DELETE", "/wiki/open/deleteWiki", body)
 				}
-				env, err := ctx.CallAPI("DELETE", "/wiki/deleteWiki", body)
+				env, err := ctx.CallAPI("DELETE", "/wiki/open/deleteWiki", body)
 				if err != nil {
 					return err
 				}

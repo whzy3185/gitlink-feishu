@@ -5,7 +5,7 @@
 Adds a new `wiki` shortcut group so maintainers and agents can manage a
 repository's wiki without falling back to Raw API calls. Wiki was listed in the
 competition guide as a desired capability and previously had no shortcut
-coverage. The commands wrap GitLink's `/api/wiki/*` and `/api/wikiExport/*`
+coverage. The commands wrap GitLink's `/api/wiki/open/*` and `/api/wikiExport/*`
 endpoints, which require the numeric GitLink project ID in addition to
 owner/repo.
 
@@ -13,11 +13,11 @@ owner/repo.
 
 | Command | Purpose | Endpoint |
 |---------|---------|----------|
-| `gitlink-cli wiki +list` | List wiki pages | `GET /wiki/wikiPages` |
-| `gitlink-cli wiki +view` | View a wiki page | `GET /wiki/getWiki` |
-| `gitlink-cli wiki +create` | Create a wiki page | `POST /wiki/createWiki` |
-| `gitlink-cli wiki +update` | Update a wiki page | `PUT /wiki/updateWiki` |
-| `gitlink-cli wiki +delete` | Delete a wiki page | `DELETE /wiki/deleteWiki` |
+| `gitlink-cli wiki +list` | List wiki pages | `GET /wiki/open/wikiPages` |
+| `gitlink-cli wiki +view` | View a wiki page | `GET /wiki/open/getWiki` |
+| `gitlink-cli wiki +create` | Create a wiki page | `POST /wiki/open/createWiki` |
+| `gitlink-cli wiki +update` | Update a wiki page | `PUT /wiki/open/updateWiki` |
+| `gitlink-cli wiki +delete` | Delete a wiki page | `DELETE /wiki/open/deleteWiki` |
 | `gitlink-cli wiki +export` | Export the wiki | `GET /wikiExport/wikiExport-wrapper` |
 
 ## Behaviour
