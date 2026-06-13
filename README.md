@@ -432,6 +432,19 @@ gitlink-cli pr +reviews --owner Gitlink --repo forgeplus -i 42
 # Create a PR review (with dry-run preview)
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM" --dry-run
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
+
+# List inline review comments
+gitlink-cli pr +review-comments --owner Gitlink --repo forgeplus -i 42 --review-id 10 --state opened
+
+# Create an inline review comment and let the CLI fetch the file diff automatically
+gitlink-cli pr +review-comment --owner Gitlink --repo forgeplus -i 42 --review-id 10 \
+  --path shortcuts/pr/pr.go --line-code "abc123_0_120" --type problem --note "Please handle the error path"
+
+# Update an inline review comment
+gitlink-cli pr +update-review-comment --owner Gitlink --repo forgeplus -i 42 --comment-id 301 --state resolved --note "Fixed in latest commit"
+
+# Delete an inline review comment
+gitlink-cli pr +delete-review-comment --owner Gitlink --repo forgeplus -i 42 --comment-id 301
 ```
 
 ### Branch Management
