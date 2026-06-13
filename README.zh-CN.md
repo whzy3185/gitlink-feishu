@@ -107,6 +107,7 @@
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 👤 用户 | 查看用户资料和信息 |
+| 📊 画像 | 用户开发能力、角色定位、专业定位、近期活动、贡献热力图统计 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
 | 🤖 工作流 | AI 驱动的 Issue 分类、PR Review、Release Notes |
 
@@ -453,6 +454,29 @@ gitlink-cli search +repos -k "machine learning"
 
 # 搜索用户
 gitlink-cli search +users -k "zhangsan"
+```
+
+### 用户画像
+
+`profile` 暴露 GitLink 原生的用户画像统计（开发能力、角色定位、专业定位、近期活动、贡献热力图）。
+省略 `--user` 时默认使用当前认证用户。
+
+```bash
+# 开发能力评分 + 语言分布
+gitlink-cli profile +ability --user zhangsan
+
+# 角色定位 / 专业（学科）定位
+gitlink-cli profile +role --user zhangsan
+gitlink-cli profile +major --user zhangsan
+
+# 指定时间范围的开发能力（Unix 时间戳）
+gitlink-cli profile +ability --user zhangsan --start-time 1704067200 --end-time 1735689600
+
+# 当前用户的近期活动（每日 疑修 / 合并请求 / 提交）
+gitlink-cli profile +activity
+
+# 指定年份的贡献热力图
+gitlink-cli profile +contribution --user zhangsan --year 2025
 ```
 
 ### Raw API

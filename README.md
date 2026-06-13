@@ -108,6 +108,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
 | 🔍 Search | Search repositories, users |
 | 👤 User | View user profiles and info |
+| 📊 Profile | User ability, role, major, activity, and contribution statistics |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
 | 🤖 Workflow | AI-powered issue triage, PR review, release notes |
 
@@ -475,6 +476,29 @@ gitlink-cli search +repos -k "machine learning"
 
 # Search users
 gitlink-cli search +users -k "zhangsan"
+```
+
+### User Profile
+
+`profile` surfaces GitLink's native user statistics (ability, role, major, activity,
+contribution). When `--user` is omitted it defaults to the authenticated user.
+
+```bash
+# Development ability scores + language breakdown
+gitlink-cli profile +ability --user zhangsan
+
+# Role positioning / major (discipline) categories
+gitlink-cli profile +role --user zhangsan
+gitlink-cli profile +major --user zhangsan
+
+# Ability within a time window (Unix timestamps)
+gitlink-cli profile +ability --user zhangsan --start-time 1704067200 --end-time 1735689600
+
+# Recent activity (issues / PRs / commits per day) for the current user
+gitlink-cli profile +activity
+
+# Contribution heatmap for a given year
+gitlink-cli profile +contribution --user zhangsan --year 2025
 ```
 
 ### Workflow Agent Commands
