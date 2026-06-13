@@ -64,7 +64,7 @@ func TestWikiListResolvesProjectID(t *testing.T) {
 		case "/alice/demo.json":
 			sawRepo = true
 			writeJSON(w, map[string]interface{}{"id": float64(4242)})
-		case "/wiki/open/wikiPages.json":
+		case "/wiki/open/wikiPages":
 			sawList = true
 			if got := r.URL.Query().Get("projectId"); got != "4242" {
 				t.Fatalf("projectId = %q, want 4242", got)
@@ -89,7 +89,7 @@ func TestWikiListResolvesProjectID(t *testing.T) {
 
 func TestWikiViewExplicitProjectID(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/wiki/open/getWiki.json" {
+		if r.URL.Path != "/wiki/open/getWiki" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		if got := r.URL.Query().Get("pageName"); got != "Home" {
@@ -123,7 +123,7 @@ func TestWikiViewMissingPage(t *testing.T) {
 
 func TestWikiCreateEncodesContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/wiki/open/createWiki.json" {
+		if r.URL.Path != "/wiki/open/createWiki" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		body := decodeBody(t, r)
@@ -185,7 +185,7 @@ func TestWikiCreateContentFile(t *testing.T) {
 
 func TestWikiUpdateWithoutContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/wiki/open/updateWiki.json" {
+		if r.URL.Path != "/wiki/open/updateWiki" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		body := decodeBody(t, r)
@@ -221,7 +221,7 @@ func TestWikiDeleteDryRun(t *testing.T) {
 
 func TestWikiDelete(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/wiki/open/deleteWiki.json" {
+		if r.URL.Path != "/wiki/open/deleteWiki" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		if r.Method != http.MethodDelete {

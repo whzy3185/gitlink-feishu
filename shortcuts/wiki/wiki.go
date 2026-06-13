@@ -219,12 +219,26 @@ func runWrite(method, path string, contentRequired bool) func(ctx *common.Runtim
 	}
 }
 
-// prepare resolves owner/repo and the numeric project ID for wiki requests.
+// prepare resolves owner/repo and the numeric project ID for wiki requests,
+// and switches the API base URL to the gateway endpoint that hosts wiki APIs.
 func prepare(ctx *common.RuntimeContext) (int64, error) {
 	if err := ctx.ResolveOwnerRepo(); err != nil {
 		return 0, err
 	}
-	return resolveProjectID(ctx)
+	// Resolve project ID first (requires www base URL for /owner/repo endpoint).
+	projectID, err := resolveProjectID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	// Switch to gateway for wiki API calls (/wiki/open/* only available there).
+	switchToGateway(ctx)
+	return projectID, nil
+}
+
+// switchToGateway replaces the www subdomain with gateway in the API base URL.
+// Wiki endpoints (/wiki/open/*) are only available on gateway.gitlink.org.cn.
+func switchToGateway(ctx *common.RuntimeContext) {
+	ctx.Client.BaseURL = strings.Replace(ctx.Client.BaseURL, "www.gitlink.org.cn", "gateway.gitlink.org.cn", 1)
 }
 
 // baseQuery returns the owner/repo/projectId query shared by read endpoints.

@@ -164,6 +164,11 @@ func shouldAppendJSONSuffix(path string) bool {
 	if strings.HasSuffix(path, ".json") {
 		return false
 	}
+	// Wiki open endpoints are served by gateway.gitlink.org.cn which does not
+	// accept the .json suffix used by the www.gitlink.org.cn API convention.
+	if strings.Contains(path, "/wiki/open/") {
+		return false
+	}
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	for i, part := range parts {
 		if part == "raw" && i >= 2 && i+2 < len(parts) {
