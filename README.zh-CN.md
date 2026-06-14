@@ -5,7 +5,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue.svg)](https://golang.org)
 [![npm version](https://img.shields.io/npm/v/@gitlink-ai/cli.svg)](https://www.npmjs.com/package/@gitlink-ai/cli)
 
-[GitLink（确实开源）](https://www.gitlink.org.cn) 官方 CLI 工具 — 为人类和 AI Agent 双重设计。支持 **macOS、Linux、Windows**，覆盖仓库管理、Issue 追踪、Pull Request、Webhook、成员协作、CI/CD 和 AI 自动化工作流，包含 40+ 命令和 AI Agent [Skills](./skills/)。
+[GitLink（确实开源）](https://www.gitlink.org.cn) 官方 CLI 工具 — 为人类和 AI Agent 双重设计。支持 **macOS、Linux、Windows**，覆盖仓库管理、Issue 追踪、Pull Request、Webhook、成员协作、CI/CD 和 AI 自动化工作流，包含 40+ 命令和 AI Agent [Skills](./skills/README.md)。
 
 **[English](./README.md)**
 
@@ -82,7 +82,7 @@
 
 ## 为什么选择 gitlink-cli？
 
-- **Agent-Native 设计** — 开箱即用结构化 [Skills](./skills/)，兼容 Claude Code — Agent 零配置即可操作 GitLink
+- **Agent-Native 设计** — 开箱即用结构化 [Skills](./skills/README.md)，兼容 Claude Code — Agent 零配置即可操作 GitLink
 - **广泛覆盖** — 仓库、Issue、PR、Webhook、成员、分支、Release、CI、Pipeline、组织、搜索、用户等常用工作流均提供高层命令
 - **AI 友好 & 优化** — 每条命令都经过真实 Agent 测试，简洁参数、智能默认值、结构化输出
 - **跨平台** — macOS、Linux、Windows (x64/arm64) 全支持，`npm` 一条命令安装
@@ -108,6 +108,7 @@
 | 🔍 搜索 | 搜索仓库、用户 |
 | 📊 数据集 | 按项目查询科研数据集 |
 | 👤 用户 | 查看用户资料和信息 |
+| 📊 画像 | 用户开发能力、角色定位、专业定位、近期活动、贡献热力图统计 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
 | 🤖 工作流 | AI 驱动的 Issue 分类、PR Review、Release Notes |
 
@@ -446,6 +447,16 @@ gitlink-cli pipeline +disable --owner Gitlink --repo forgeplus --id 7 --workflow
 gitlink-cli pipeline +delete --owner Gitlink --repo forgeplus --id 7 --dry-run
 ```
 
+### 忽略文件模板
+
+```bash
+# 列出所有可用的 .gitignore 模板
+gitlink-cli ignore +list
+
+# 按名称筛选模板
+gitlink-cli ignore +list --name Go
+```
+
 ### 搜索
 
 ```bash
@@ -454,6 +465,29 @@ gitlink-cli search +repos -k "machine learning"
 
 # 搜索用户
 gitlink-cli search +users -k "zhangsan"
+```
+
+### 用户画像
+
+`profile` 暴露 GitLink 原生的用户画像统计（开发能力、角色定位、专业定位、近期活动、贡献热力图）。
+省略 `--user` 时默认使用当前认证用户。
+
+```bash
+# 开发能力评分 + 语言分布
+gitlink-cli profile +ability --user zhangsan
+
+# 角色定位 / 专业（学科）定位
+gitlink-cli profile +role --user zhangsan
+gitlink-cli profile +major --user zhangsan
+
+# 指定时间范围的开发能力（Unix 时间戳）
+gitlink-cli profile +ability --user zhangsan --start-time 1704067200 --end-time 1735689600
+
+# 当前用户的近期活动（每日 疑修 / 合并请求 / 提交）
+gitlink-cli profile +activity
+
+# 指定年份的贡献热力图
+gitlink-cli profile +contribution --user zhangsan --year 2025
 ```
 
 ### 数据集
@@ -477,7 +511,6 @@ gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --ye
 ```
 
 > 注意：`dataset +list`（平台数据集查询）已在生产 gitlink.org.cn 验证可用。按仓库的 `+view`/`+create`/`+update` 遵循已发布的 OpenAPI 契约，但生产环境尚未部署（当前返回 404），待平台上线后即可生效。
-
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：
@@ -534,7 +567,7 @@ git push gitlink
 
 `skills/` 目录包含 Claude Code Agent Skill 文件，支持 AI 自动化操作 GitLink 平台。
 
-详见 [skills/README.md](skills/README.md)
+详见 [skills/README.md](./skills/README.md)
 
 | Skill | 说明 |
 |-------|------|
@@ -602,7 +635,7 @@ gitlink-cli/
 
 ## 文档
 
-- [Skills 使用指南](skills/README.md) — AI Agent Skills 详细说明
+- [Skills 使用指南](./skills/README.md) — AI Agent Skills 详细说明
 - [设计文档](doc/design.md) — 架构设计和开发计划
 
 ## 常见问题
@@ -665,7 +698,7 @@ gitlink-cli 使用 Windows Credential Manager 安全存储 Token。如果 Creden
 
 ### Q: 如何查看完整的 API 参考？
 
-查看 [skills/gitlink-shared/REFERENCE.md](skills/gitlink-shared/REFERENCE.md)
+查看 [skills/gitlink-shared/references/api-reference.md](./skills/gitlink-shared/references/api-reference.md)
 
 ## 许可证
 
