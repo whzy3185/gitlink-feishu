@@ -106,6 +106,7 @@
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
 | 🔍 搜索 | 搜索仓库、用户 |
+| 📊 数据集 | 按项目查询科研数据集 |
 | 👤 用户 | 查看用户资料和信息 |
 | 📊 画像 | 用户开发能力、角色定位、专业定位、近期活动、贡献热力图统计 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
@@ -489,6 +490,27 @@ gitlink-cli profile +activity
 gitlink-cli profile +contribution --user zhangsan --year 2025
 ```
 
+### 数据集
+
+`dataset` 管理并查询 GitLink 科研数据集（标题、描述、论文内容、许可证、所属项目）。
+
+```bash
+# 按数字项目 ID 列出一个或多个项目的数据集
+gitlink-cli dataset +list --ids 5988
+
+# 查看仓库的数据集及其附件
+gitlink-cli dataset +view --owner Gitlink --repo forgeplus
+
+# 创建 / 更新仓库数据集（先用 --dry-run 预览）
+gitlink-cli dataset +create --owner me --repo proj -t "我的数据集" -d "..." --license-id 359 --dry-run
+gitlink-cli dataset +update --owner me --repo proj -t "我的数据集" -d "更新"
+
+# 删除数据集附件（破坏性：先预览，再用 --yes 确认）
+gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --dry-run
+gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --yes
+```
+
+> 注意：`dataset +list`（平台数据集查询）已在生产 gitlink.org.cn 验证可用。按仓库的 `+view`/`+create`/`+update` 遵循已发布的 OpenAPI 契约，但生产环境尚未部署（当前返回 404），待平台上线后即可生效。
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：
