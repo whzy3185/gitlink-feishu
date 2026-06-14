@@ -2,6 +2,7 @@ package dataset
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -39,6 +40,38 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+func decodeBody(t *testing.T, r *http.Request) map[string]interface{} {
+	t.Helper()
+	data, _ := io.ReadAll(r.Body)
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("decode body: %v (raw: %s)", err, string(data))
+	}
+	return m
+}
+
+// --- view ---
+
+func TestDatasetView(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/alice/demo/dataset.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("page"); got != "2" {
+			t.Fatalf("page = %q, want 2", got)
+		}
+		if got := r.URL.Query().Get("limit"); got != "5" {
+			t.Fatalf("limit = %q, want 5", got)
+		}
+		writeJSON(w, map[string]interface{}{"id": float64(1), "attachments": []interface{}{}})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "view", map[string]string{"page": "2", "limit": "5"}); err != nil {
+		t.Fatalf("view failed: %v", err)
+	}
+}
+
 // --- list ---
 
 func TestDatasetListNormalizesIDs(t *testing.T) {
@@ -58,17 +91,6 @@ func TestDatasetListNormalizesIDs(t *testing.T) {
 	}
 }
 
-func TestDatasetListMissingIDs(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("no API call expected when ids missing")
-	}))
-	defer server.Close()
-
-	if err := runShortcut(t, server, "list", map[string]string{}); err == nil {
-		t.Fatal("expected error for missing --ids")
-	}
-}
-
 func TestDatasetListInvalidIDs(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("no API call expected for invalid ids")
@@ -80,71 +102,127 @@ func TestDatasetListInvalidIDs(t *testing.T) {
 	}
 }
 
-// --- view ---
+// --- create ---
 
-func TestDatasetViewResolvesProjectID(t *testing.T) {
-	var sawRepo, sawQuery bool
+func TestDatasetCreate(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/alice/demo.json":
-			sawRepo = true
-			writeJSON(w, map[string]interface{}{"id": float64(5988)})
-		case "/v1/project_datasets.json":
-			sawQuery = true
-			if got := r.URL.Query().Get("ids"); got != "5988" {
-				t.Fatalf("ids = %q, want 5988", got)
-			}
-			writeJSON(w, map[string]interface{}{"total_count": float64(1), "project_datasets": []interface{}{}})
-		default:
+		if r.URL.Path != "/v1/alice/demo/dataset.json" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		body := decodeBody(t, r)
+		if body["title"] != "DS" || body["description"] != "desc" {
+			t.Fatalf("unexpected body: %v", body)
+		}
+		if body["license_id"] != float64(359) {
+			t.Fatalf("license_id = %v, want 359", body["license_id"])
+		}
+		writeJSON(w, map[string]interface{}{"status": float64(0), "message": "success"})
 	}))
 	defer server.Close()
 
-	if err := runShortcut(t, server, "view", map[string]string{}); err != nil {
-		t.Fatalf("view failed: %v", err)
-	}
-	if !sawRepo || !sawQuery {
-		t.Fatalf("expected repo+query calls, got repo=%v query=%v", sawRepo, sawQuery)
+	args := map[string]string{"title": "DS", "description": "desc", "license-id": "359", "paper-content": "x"}
+	if err := runShortcut(t, server, "create", args); err != nil {
+		t.Fatalf("create failed: %v", err)
 	}
 }
 
-func TestDatasetViewExplicitProjectID(t *testing.T) {
+func TestDatasetCreateMissingTitle(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/project_datasets.json" {
+		t.Fatal("no API call expected without required flags")
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "create", map[string]string{"description": "desc"}); err == nil {
+		t.Fatal("expected error for missing --title")
+	}
+}
+
+func TestDatasetCreateInvalidLicense(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no API call expected for invalid license id")
+	}))
+	defer server.Close()
+
+	args := map[string]string{"title": "DS", "description": "desc", "license-id": "abc"}
+	if err := runShortcut(t, server, "create", args); err == nil {
+		t.Fatal("expected error for invalid --license-id")
+	}
+}
+
+func TestDatasetCreateDryRun(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no API call expected in dry-run")
+	}))
+	defer server.Close()
+
+	args := map[string]string{"title": "DS", "description": "desc", "dry-run": "true"}
+	if err := runShortcut(t, server, "create", args); err != nil {
+		t.Fatalf("create dry-run failed: %v", err)
+	}
+}
+
+// --- update ---
+
+func TestDatasetUpdate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/alice/demo/dataset.json" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		if got := r.URL.Query().Get("ids"); got != "42" {
-			t.Fatalf("ids = %q, want 42", got)
+		if r.Method != http.MethodPut {
+			t.Fatalf("method = %s, want PUT", r.Method)
 		}
-		writeJSON(w, map[string]interface{}{"total_count": float64(0), "project_datasets": []interface{}{}})
+		writeJSON(w, map[string]interface{}{"status": float64(0), "message": "success"})
 	}))
 	defer server.Close()
 
-	if err := runShortcut(t, server, "view", map[string]string{"project-id": "42"}); err != nil {
-		t.Fatalf("view failed: %v", err)
+	args := map[string]string{"title": "DS2", "description": "desc2"}
+	if err := runShortcut(t, server, "update", args); err != nil {
+		t.Fatalf("update failed: %v", err)
 	}
 }
 
-func TestDatasetViewInvalidProjectID(t *testing.T) {
+// --- delete-attachment ---
+
+func TestDatasetDeleteAttachmentDryRun(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("no API call expected for invalid project id")
+		t.Fatal("no API call expected in dry-run")
 	}))
 	defer server.Close()
 
-	if err := runShortcut(t, server, "view", map[string]string{"project-id": "x"}); err == nil {
-		t.Fatal("expected error for invalid --project-id")
+	args := map[string]string{"uuid": "abc-123", "dry-run": "true"}
+	if err := runShortcut(t, server, "delete-attachment", args); err != nil {
+		t.Fatalf("delete dry-run failed: %v", err)
 	}
 }
 
-func TestDatasetViewHTTPError(t *testing.T) {
+func TestDatasetDeleteAttachmentRequiresConfirm(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte("server error"))
+		t.Fatal("no API call expected without --yes")
 	}))
 	defer server.Close()
 
-	if err := runShortcut(t, server, "view", map[string]string{"project-id": "42"}); err == nil {
-		t.Fatal("expected error for HTTP 500")
+	if err := runShortcut(t, server, "delete-attachment", map[string]string{"uuid": "abc-123"}); err == nil {
+		t.Fatal("expected error without --yes confirmation")
+	}
+}
+
+func TestDatasetDeleteAttachmentConfirmed(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/attachments/abc-123.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		writeJSON(w, map[string]interface{}{"status": float64(0), "message": "删除成功"})
+	}))
+	defer server.Close()
+
+	args := map[string]string{"uuid": "abc-123", "yes": "true"}
+	if err := runShortcut(t, server, "delete-attachment", args); err != nil {
+		t.Fatalf("delete failed: %v", err)
 	}
 }

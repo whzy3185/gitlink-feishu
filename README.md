@@ -579,19 +579,29 @@ Safety:
 
 ### Dataset
 
-`dataset` queries GitLink research datasets (title, description, paper content,
-license, owning project).
+`dataset` manages and queries GitLink research datasets (title, description,
+paper content, license, owning project).
 
 ```bash
 # List datasets for one or more projects (by numeric project ID)
 gitlink-cli dataset +list --ids 5988
 
-# View a repository's dataset (project ID resolved from --owner/--repo)
+# View a repository's dataset and attachments
 gitlink-cli dataset +view --owner Gitlink --repo forgeplus
+
+# Create / update a repository's dataset (preview first with --dry-run)
+gitlink-cli dataset +create --owner me --repo proj -t "My dataset" -d "..." --license-id 359 --dry-run
+gitlink-cli dataset +update --owner me --repo proj -t "My dataset" -d "updated"
+
+# Delete a dataset attachment (destructive: preview, then confirm with --yes)
+gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --dry-run
+gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --yes
 ```
 
-> Note: only the platform-wide dataset query endpoint is available on production
-> gitlink.org.cn; the per-repo dataset CRUD routes are not yet deployed there.
+> Note: `dataset +list` (platform dataset query) is verified on production
+> gitlink.org.cn. The per-repo `+view`/`+create`/`+update` routes follow the
+> published OpenAPI contract but are not yet deployed on production (they return
+> 404 there); they will work once the platform enables them.
 
 ### Raw API
 

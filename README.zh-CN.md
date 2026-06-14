@@ -458,17 +458,25 @@ gitlink-cli search +users -k "zhangsan"
 
 ### 数据集
 
-`dataset` 查询 GitLink 科研数据集（标题、描述、论文内容、许可证、所属项目）。
+`dataset` 管理并查询 GitLink 科研数据集（标题、描述、论文内容、许可证、所属项目）。
 
 ```bash
 # 按数字项目 ID 列出一个或多个项目的数据集
 gitlink-cli dataset +list --ids 5988
 
-# 查看仓库的数据集（project_id 从 --owner/--repo 解析）
+# 查看仓库的数据集及其附件
 gitlink-cli dataset +view --owner Gitlink --repo forgeplus
+
+# 创建 / 更新仓库数据集（先用 --dry-run 预览）
+gitlink-cli dataset +create --owner me --repo proj -t "我的数据集" -d "..." --license-id 359 --dry-run
+gitlink-cli dataset +update --owner me --repo proj -t "我的数据集" -d "更新"
+
+# 删除数据集附件（破坏性：先预览，再用 --yes 确认）
+gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --dry-run
+gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --yes
 ```
 
-> 注意：生产环境 gitlink.org.cn 仅提供平台级数据集查询端点；按仓库的数据集增删改查路由尚未在生产部署。
+> 注意：`dataset +list`（平台数据集查询）已在生产 gitlink.org.cn 验证可用。按仓库的 `+view`/`+create`/`+update` 遵循已发布的 OpenAPI 契约，但生产环境尚未部署（当前返回 404），待平台上线后即可生效。
 
 ### Raw API
 

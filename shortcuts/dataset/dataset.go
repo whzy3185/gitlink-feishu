@@ -1,11 +1,11 @@
-// Package dataset implements shortcuts for querying GitLink research datasets.
+// Package dataset implements shortcuts for managing and querying GitLink
+// research datasets: per-repository dataset detail/create/update, the
+// platform-wide dataset query, and dataset attachment deletion.
 //
-// GitLink exposes dataset metadata (title, description, paper_content, license,
-// owning project) through the platform-wide query endpoint
-// GET /api/v1/project_datasets. The per-repository dataset CRUD routes
-// documented under /api/v1/{owner}/{repo}/dataset are not deployed on the
-// production gitlink.org.cn host, so this package wraps the query endpoint and
-// resolves a repository's project ID to offer both a list and a per-repo view.
+// Datasets carry research-oriented metadata (title, description, paper_content,
+// license, owning project) that is valuable for research/scientometric
+// scenarios. Per-repository CRUD wraps /api/v1/{owner}/{repo}/dataset; the
+// platform query wraps /api/v1/project_datasets.
 package dataset
 
 import (
@@ -18,11 +18,41 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-// Shortcuts returns dataset query shortcuts.
+// Shortcuts returns dataset management and query shortcuts.
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
 
+	writeFlags := []common.Flag{
+		{Name: "title", Short: "t", Usage: tr.T("flag.dataset.title"), Required: true},
+		{Name: "description", Short: "d", Usage: tr.T("flag.dataset.description"), Required: true},
+		{Name: "license-id", Usage: tr.T("flag.dataset.license_id")},
+		{Name: "paper-content", Usage: tr.T("flag.dataset.paper_content")},
+		{Name: "dry-run", Usage: tr.T("flag.dataset.dry_run"), Bool: true, Default: "false"},
+	}
+
 	return []*common.Shortcut{
+		{
+			Name:        "view",
+			Description: tr.T("cmd.dataset.view.short"),
+			Long:        tr.T("cmd.dataset.view.long"),
+			Flags: []common.Flag{
+				{Name: "page", Short: "p", Usage: tr.T("flag.dataset.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.dataset.limit"), Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				q := url.Values{}
+				setIfPresent(q, "page", ctx.Arg("page"))
+				setIfPresent(q, "limit", ctx.Arg("limit"))
+				env, err := ctx.CallAPIWithQuery("GET", repoDatasetPath(ctx), q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
 		{
 			Name:        "list",
 			Description: tr.T("cmd.dataset.list.short"),
@@ -39,50 +69,121 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				return queryDatasets(ctx, normalized)
+				q := url.Values{}
+				q.Set("ids", normalized)
+				env, err := ctx.CallAPIWithQuery("GET", "/v1/project_datasets", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
 			},
 		},
 		{
-			Name:        "view",
-			Description: tr.T("cmd.dataset.view.short"),
-			Long:        tr.T("cmd.dataset.view.long"),
+			Name:        "create",
+			Description: tr.T("cmd.dataset.create.short"),
+			Long:        tr.T("cmd.dataset.create.long"),
+			Flags:       writeFlags,
+			Run:         runWrite("POST", "create_dataset"),
+		},
+		{
+			Name:        "update",
+			Description: tr.T("cmd.dataset.update.short"),
+			Long:        tr.T("cmd.dataset.update.long"),
+			Flags:       writeFlags,
+			Run:         runWrite("PUT", "update_dataset"),
+		},
+		{
+			Name:        "delete-attachment",
+			Description: tr.T("cmd.dataset.delete_attachment.short"),
+			Long:        tr.T("cmd.dataset.delete_attachment.long"),
 			Flags: []common.Flag{
-				{Name: "project-id", Usage: tr.T("flag.dataset.project_id")},
+				{Name: "uuid", Short: "u", Usage: tr.T("flag.dataset.uuid"), Required: true},
+				{Name: "dry-run", Usage: tr.T("flag.dataset.dry_run_delete"), Bool: true, Default: "false"},
+				{Name: "yes", Usage: tr.T("flag.dataset.yes"), Bool: true, Default: "false"},
 			},
-			Run: func(ctx *common.RuntimeContext) error {
-				projectID := strings.TrimSpace(ctx.Arg("project-id"))
-				if projectID == "" {
-					if err := ctx.ResolveOwnerRepo(); err != nil {
-						return err
-					}
-					resolved, err := resolveProjectID(ctx)
-					if err != nil {
-						return err
-					}
-					projectID = strconv.FormatInt(resolved, 10)
-				} else if _, err := strconv.ParseInt(projectID, 10, 64); err != nil {
-					return fmt.Errorf("invalid --project-id %q: use a numeric project ID", projectID)
-				}
-				return queryDatasets(ctx, projectID)
-			},
+			Run: runDeleteAttachment,
 		},
 	}
 }
 
-// queryDatasets calls the platform dataset query endpoint with a comma-separated
-// list of project IDs.
-func queryDatasets(ctx *common.RuntimeContext, ids string) error {
-	q := url.Values{}
-	q.Set("ids", ids)
-	env, err := ctx.CallAPIWithQuery("GET", "/v1/project_datasets", q)
+// runWrite builds the create/update handlers, which share the same request body.
+func runWrite(method, action string) func(ctx *common.RuntimeContext) error {
+	return func(ctx *common.RuntimeContext) error {
+		if err := ctx.ResolveOwnerRepo(); err != nil {
+			return err
+		}
+		body, err := datasetBody(ctx)
+		if err != nil {
+			return err
+		}
+		path := repoDatasetPath(ctx)
+		if ctx.Arg("dry-run") == "true" {
+			return ctx.OutputData(map[string]interface{}{
+				"dry_run": true, "action": action, "method": method, "path": path, "body": body,
+			})
+		}
+		env, err := ctx.CallAPI(method, path, body)
+		if err != nil {
+			return err
+		}
+		return ctx.Output(env)
+	}
+}
+
+func runDeleteAttachment(ctx *common.RuntimeContext) error {
+	uuid, err := ctx.RequireArg("uuid")
+	if err != nil {
+		return err
+	}
+	uuid = strings.TrimSpace(uuid)
+	path := fmt.Sprintf("/attachments/%s", uuid)
+	if ctx.Arg("dry-run") == "true" {
+		return ctx.OutputData(map[string]interface{}{
+			"dry_run": true, "action": "delete_dataset_attachment", "method": "DELETE", "path": path, "uuid": uuid,
+		})
+	}
+	if ctx.Arg("yes") != "true" {
+		return fmt.Errorf("%s", ctx.Tr.T("error.dataset.delete_confirm"))
+	}
+	env, err := ctx.CallAPI("DELETE", path, nil)
 	if err != nil {
 		return err
 	}
 	return ctx.Output(env)
 }
 
-// normalizeIDs validates a comma-separated list of positive integer project IDs
-// and returns it without surrounding whitespace.
+// datasetBody builds the create/update request body and validates inputs.
+func datasetBody(ctx *common.RuntimeContext) (map[string]interface{}, error) {
+	title, err := ctx.RequireArg("title")
+	if err != nil {
+		return nil, err
+	}
+	description, err := ctx.RequireArg("description")
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]interface{}{
+		"title":       strings.TrimSpace(title),
+		"description": strings.TrimSpace(description),
+	}
+	if v := strings.TrimSpace(ctx.Arg("license-id")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			return nil, fmt.Errorf("invalid --license-id %q: use a positive integer", v)
+		}
+		body["license_id"] = n
+	}
+	if v := strings.TrimSpace(ctx.Arg("paper-content")); v != "" {
+		body["paper_content"] = v
+	}
+	return body, nil
+}
+
+func repoDatasetPath(ctx *common.RuntimeContext) string {
+	return "/v1" + ctx.RepoPath() + "/dataset"
+}
+
+// normalizeIDs validates a comma-separated list of positive integer project IDs.
 func normalizeIDs(raw string) (string, error) {
 	parts := strings.Split(raw, ",")
 	cleaned := make([]string, 0, len(parts))
@@ -103,45 +204,10 @@ func normalizeIDs(raw string) (string, error) {
 	return strings.Join(cleaned, ","), nil
 }
 
-// resolveProjectID resolves the numeric GitLink project ID from the current
-// owner/repo via the repository info endpoint.
-func resolveProjectID(ctx *common.RuntimeContext) (int64, error) {
-	env, err := ctx.CallAPI("GET", ctx.RepoPath(), nil)
-	if err != nil {
-		return 0, fmt.Errorf("resolve project id: %w", err)
+func setIfPresent(q url.Values, key, value string) {
+	if v := strings.TrimSpace(value); v != "" {
+		q.Set(key, v)
 	}
-	data, ok := env.Data.(map[string]interface{})
-	if !ok {
-		return 0, fmt.Errorf("resolve project id: unexpected repository response")
-	}
-	for _, key := range []string{"id", "project_id"} {
-		if id, ok := projectIDValue(data[key]); ok {
-			return id, nil
-		}
-	}
-	return 0, fmt.Errorf("resolve project id: repository response did not include id")
-}
-
-func projectIDValue(value interface{}) (int64, bool) {
-	switch v := value.(type) {
-	case float64:
-		if v > 0 {
-			return int64(v), true
-		}
-	case int:
-		if v > 0 {
-			return int64(v), true
-		}
-	case int64:
-		if v > 0 {
-			return v, true
-		}
-	case string:
-		if n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil && n > 0 {
-			return n, true
-		}
-	}
-	return 0, false
 }
 
 func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
