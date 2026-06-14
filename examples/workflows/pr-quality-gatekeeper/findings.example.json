@@ -1,0 +1,23 @@
+{
+  "_comment": "对 Gitlink/gitlink-cli PR #15222（feat/org-team-projects，head bcc27bf）真实 diff 的人工+AI 代码审查发现。每条均可在该 PR 的 shortcuts/org/org.go 对应行号复核——非样例数据。",
+  "findings": [
+    {
+      "severity": "major",
+      "file": "shortcuts/org/org.go",
+      "line": 156,
+      "message": "parseBool 只把字面 \"true\" 当真：用户传 --dry-run=1 / t / TRUE 以外写法会被静默解析为 false。该 flag 守护的是 team-projects-remove-all（批量移除团队全部项目）这类破坏性操作——预览意图被静默降级为真实执行。建议改用 strconv.ParseBool（与 shortcuts/common/runner.go:52 解析 flag 默认值的行为一致），无法识别的值应报错而非吞掉"
+    },
+    {
+      "severity": "minor",
+      "file": "shortcuts/org/org.go",
+      "line": 103,
+      "message": "team-projects-remove-all 一条命令清空团队全部项目绑定，除 --dry-run 外无确认机制；建议在 Description/help 标注危险性，或要求显式 --yes 二次确认"
+    },
+    {
+      "severity": "minor",
+      "file": "shortcuts/org/org.go",
+      "line": 142,
+      "message": "dry-run 预览 payload 中 action（add_all_team_projects/remove_all_team_projects）与实际请求 path 段（create_all/destroy_all，见 :134）是两套词汇，排查问题时易误导；建议统一或在 payload 同时给出两者映射"
+    }
+  ]
+}

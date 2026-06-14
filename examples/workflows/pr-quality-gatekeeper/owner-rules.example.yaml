@@ -1,0 +1,62 @@
+# owner-rules.yaml — 文件路径 → reviewer 路由表（gitlink-gatekeeper 工作流步骤 1）
+#
+# 作用：PR 看门人闭环的第一步「路由」。脚本拉取 PR 变更文件后，按下面的
+#       glob 规则把每个文件映射到建议 reviewer，写进评分卡的「Suggested
+#       reviewers」分区（REQUEST_CHANGES 时也写进 tracking issue）。
+#
+# 语义（见 scripts/gatekeeper_workflow.py route_reviewers）：
+#   - rules 按顺序匹配，**首个命中的规则生效**（顺序即优先级，把更具体的放前面）。
+#   - glob 用 Python fnmatch 语法（* 不跨目录段时也会匹配 /，与 fnmatch 行为一致）。
+#   - 一个文件命中后不再继续匹配后续规则；多个 reviewer 写在同一规则的 reviewers 列表里。
+#   - 未命中任何规则的文件归到 default_reviewers（兜底）。
+#
+# 排序示例（首个命中即生效、顺序即优先级，请按需排序）：
+#   下面把目录 glob `skills/**` 放在语言 glob `**/*.go` 之前，于是 `skills/foo.go`
+#   会先命中 `skills/**` → 路由给 skill-owner，而不会落到 go-reviewer。若你希望
+#   skills 下的 Go 文件仍由 go-reviewer 审，就把语言规则提到目录规则之前
+#   （或在目录规则里收窄 glob，如 `skills/**/*.md`）。
+#
+# 注意：本表只产出「建议」，不调用任何写操作；真正分配 reviewer 由维护者在
+#       PR 页面决定。gatekeeper 不替人点提交（SSOT 第 8 节安全规则）。
+#
+# reviewers 填 GitLink 用户名（login）。下方为占位示例，真实使用时替换为本仓库的维护者。
+
+rules:
+  # —— 文档：只改文档走文档维护者，避免占用代码 reviewer ——
+  - glob: "docs/**"
+    reviewers: ["doc-maintainer"]
+  - glob: "**/*.md"
+    reviewers: ["doc-maintainer"]
+
+  # —— 工作流 / 脚本本体 ——
+  - glob: "workflow/**"
+    reviewers: ["workflow-owner"]
+  - glob: "skills/**"
+    reviewers: ["skill-owner"]
+
+  # —— 按语言路由到对应方向的 reviewer ——
+  - glob: "**/*_test.go"
+    reviewers: ["go-reviewer", "qa-reviewer"]
+  - glob: "**/*.go"
+    reviewers: ["go-reviewer"]
+  - glob: "test_*.py"
+    reviewers: ["py-reviewer", "qa-reviewer"]
+  - glob: "**/*.py"
+    reviewers: ["py-reviewer"]
+  - glob: "**/*.ts"
+    reviewers: ["fe-reviewer"]
+  - glob: "**/*.js"
+    reviewers: ["fe-reviewer"]
+
+  # —— 高敏感区：CI / 依赖 / 安全配置，强制资深 reviewer ——
+  - glob: ".gitea/**"
+    reviewers: ["ci-owner", "security-reviewer"]
+  - glob: "**/Dockerfile"
+    reviewers: ["ci-owner"]
+  - glob: "go.mod"
+    reviewers: ["security-reviewer"]
+  - glob: "go.sum"
+    reviewers: ["security-reviewer"]
+
+# 未命中上面任何规则的文件，兜底分配给这些人
+default_reviewers: ["maintainer"]

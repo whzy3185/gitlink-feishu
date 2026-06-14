@@ -1,0 +1,19 @@
+# config.example.yaml — PR 看门人闭环的工作流配置（gatekeeper_workflow.py --config 用）
+#
+# 命令行参数（--owner/--repo/--pr/--policy/--owner-rules/--findings）会覆盖这里的同名字段。
+# 相对路径以本配置文件所在目录为基准解析。
+
+owner: Gitlink            # 目标仓库 owner（GitLink 主分支为 master）
+repo: gitlink-cli         # 目标仓库名
+pr: 1                     # 目标 PR 编号（用 --pr 覆盖以复用同一配置跑不同 PR）
+
+# 策略文件（Policy-as-Code）。缺省 / 文件不存在时回退脚本内置默认策略（SSOT 第 2 节）。
+policy: ../skills/gitlink-gatekeeper/examples/gatekeeper.yaml
+
+# 文件路径 → reviewer 路由表（工作流步骤 1）
+owner_rules: owner-rules.yaml
+
+# 可选：AI 审查发现 JSON（注入 review_findings 维度）。
+# 缺省为空 → 评分仍确定性可复现（同策略 + 同 PR 上下文 → 同裁决）。
+# 这里默认指向随附的示例（1 major + 2 minor），开箱即可跑通；用 --findings 覆盖为你自己的产物。
+findings: findings.sample.json
