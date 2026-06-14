@@ -90,6 +90,8 @@
   "cmd.repo.tree.short": "List repository files and directories",
   "cmd.root.long": "Manage repositories, issues, pull requests, releases, CI and workflows on GitLink.",
   "cmd.root.short": "GitLink CLI - command-line tool for GitLink",
+  "cmd.search.recommend.long": "List the platform's recommended/featured projects (id, name, visits, author, category).",
+  "cmd.search.recommend.short": "List recommended projects",
   "cmd.search.repos.short": "Search repositories",
   "cmd.search.short": "Search operations",
   "cmd.search.users.short": "Search users",

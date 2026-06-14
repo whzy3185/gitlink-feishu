@@ -495,6 +495,9 @@ gitlink-cli search +repos -k "machine learning"
 
 # Search users
 gitlink-cli search +users -k "zhangsan"
+
+# List recommended / featured projects
+gitlink-cli search +recommend
 ```
 
 ### User Profile
