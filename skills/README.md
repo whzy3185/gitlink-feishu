@@ -153,6 +153,7 @@ skills/
 | **gitlink-pm** | 项目管理 | 通过 Raw API 访问 |
 | **gitlink-workflow** | AI 工作流 | Issue 分类、PR Review、Release Notes |
 | **gitlink-health** | 开源项目健康度 | 详情见SKILL.md |
+| **gitlink-research-profile** | 科研主体画像（人/团队） | `profile +ability`, `profile +major`, `profile +role` |
 
 ---
 
