@@ -106,6 +106,7 @@
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
 | 🔍 搜索 | 搜索仓库、用户 |
+| 📊 数据集 | 按项目查询科研数据集 |
 | 👤 用户 | 查看用户资料和信息 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
 | 🤖 工作流 | AI 驱动的 Issue 分类、PR Review、Release Notes |
@@ -454,6 +455,20 @@ gitlink-cli search +repos -k "machine learning"
 # 搜索用户
 gitlink-cli search +users -k "zhangsan"
 ```
+
+### 数据集
+
+`dataset` 查询 GitLink 科研数据集（标题、描述、论文内容、许可证、所属项目）。
+
+```bash
+# 按数字项目 ID 列出一个或多个项目的数据集
+gitlink-cli dataset +list --ids 5988
+
+# 查看仓库的数据集（project_id 从 --owner/--repo 解析）
+gitlink-cli dataset +view --owner Gitlink --repo forgeplus
+```
+
+> 注意：生产环境 gitlink.org.cn 仅提供平台级数据集查询端点；按仓库的数据集增删改查路由尚未在生产部署。
 
 ### Raw API
 

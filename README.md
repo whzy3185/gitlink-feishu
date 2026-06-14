@@ -107,6 +107,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
 | 🔍 Search | Search repositories, users |
+| 📊 Dataset | Query research datasets by project |
 | 👤 User | View user profiles and info |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
 | 🤖 Workflow | AI-powered issue triage, PR review, release notes |
@@ -575,6 +576,22 @@ Safety:
 - They do not depend on LLM APIs.
 - `workflow +pr-summary` does not comment, approve, reject, or merge pull requests.
 - `workflow +repo-report` aggregates health, issue triage, and PR review summary signals without remote writes.
+
+### Dataset
+
+`dataset` queries GitLink research datasets (title, description, paper content,
+license, owning project).
+
+```bash
+# List datasets for one or more projects (by numeric project ID)
+gitlink-cli dataset +list --ids 5988
+
+# View a repository's dataset (project ID resolved from --owner/--repo)
+gitlink-cli dataset +view --owner Gitlink --repo forgeplus
+```
+
+> Note: only the platform-wide dataset query endpoint is available on production
+> gitlink.org.cn; the per-repo dataset CRUD routes are not yet deployed there.
 
 ### Raw API
 
