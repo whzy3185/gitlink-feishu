@@ -262,6 +262,62 @@ type BitableRecord struct {
 }
 ```
 
+## Feishu Docs Scope
+
+Official Feishu Open Platform docs show that cloud document integration belongs to the self-built app flow, not the custom bot flow.
+
+Add this after the custom bot MVP:
+
+```text
+feishu +doc-export
+```
+
+Inputs:
+
+```text
+--from-workflow-json
+--folder-token
+--document-id optional later
+--wiki-url optional later
+--wiki-node-token optional later
+--title
+--send
+```
+
+Environment:
+
+```text
+FEISHU_APP_ID
+FEISHU_APP_SECRET
+```
+
+API flow:
+
+```text
+1. POST /open-apis/auth/v3/tenant_access_token/internal
+2. Optional: GET /open-apis/wiki/v2/spaces/get_node?token=<wiki_node_token>
+3. POST /open-apis/docx/v1/documents
+4. POST /open-apis/docx/v1/documents/{document_id}/blocks/{block_id}/children
+```
+
+Implementation notes:
+
+- Default remains preview only.
+- `--send` is required before creating or updating a document.
+- The app must have both application scopes and document/folder-level permission.
+- The command should return a document ID and URL for `+notify --doc-url`.
+- If `--wiki-url` or `--wiki-node-token` is provided, resolve the wiki node first and use the underlying `docx` object token when possible.
+- Mock all HTTP tests.
+- Do not implement document sharing or permission changes in the first doc export pass.
+
+Recommended product flow:
+
+```text
+workflow +repo-report -> feishu +doc-export --wiki-url -> feishu +notify --doc-url -> feishu +bitable-records
+```
+
+This should land before any real Bitable write because DocX export has clearer value and simpler consistency semantics than Bitable upsert.
+
 ## Tests To Add
 
 ```text
@@ -300,4 +356,3 @@ $env:GOPROXY='https://goproxy.cn,direct'; go test ./...
 ```
 
 Keep this as the baseline before implementation.
-

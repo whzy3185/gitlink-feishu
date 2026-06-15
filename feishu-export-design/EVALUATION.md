@@ -46,6 +46,20 @@ The remaining design adjustments are:
 5. Do not implement real Bitable OpenAPI writes in this task.
 6. Keep `doctor` out of the first implementation unless the other commands already exist.
 
+After checking Feishu Open Platform documentation and the BotBuilder shutdown notice, add one more adjustment:
+
+7. Add Feishu Docs export as the first real custom-app integration after the custom bot MVP.
+
+Reason:
+
+```text
+Feishu custom bot = notification.
+Feishu DocX = collaborative report artifact.
+Bitable = structured tracking.
+```
+
+The previous design handled notification and Bitable dry-run, but did not use Feishu Docs. That makes the workflow less useful as a collaboration handoff.
+
 ## What Is Complete
 
 The v2 task chain is complete enough for:
@@ -72,6 +86,14 @@ The following should not be implemented in the first pass:
 - Feishu Base/table/view creation.
 - Any GitLink remote write.
 
+The following should be designed before real Bitable writes:
+
+- `feishu +doc-export`
+- app_id/app_secret loading
+- tenant_access_token fetch and cache
+- document folder permission diagnostics
+- DocX create-document and create-block behavior
+
 These require a separate authentication and data consistency design.
 
 ## Practical Utility
@@ -85,6 +107,14 @@ The design is useful in a real CLI workflow:
 
 This produces a small, testable feature that is useful without requiring Feishu enterprise app credentials.
 
+The stronger practical workflow is:
+
+```text
+workflow JSON -> markdown report -> Feishu DocX -> Feishu bot card with doc link -> Bitable dry-run records
+```
+
+That path gives users both an immediate group notification and a persistent collaborative report.
+
 ## Implementation Scope Rating
 
 ```text
@@ -94,4 +124,3 @@ Repository fit: strong
 First implementation size: acceptable after removing real Bitable writes
 Direct executability: good after using the clean task chain in this directory
 ```
-
