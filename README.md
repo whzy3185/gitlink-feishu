@@ -104,7 +104,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | Category | Capabilities |
 |----------|-------------|
 | 📦 Repo | List, create, fork, delete repositories, view repo info, insights, and interactions |
-| 🐛 Issue | Create, update, close, batch close, comment on issues |
+| 🐛 Issue | Create, update, close, batch close/update/delete, comment on issues |
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
 | 👥 Member | List, add, remove repository members, change roles, create and accept invite links |
@@ -321,6 +321,14 @@ gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,12
 
 # Batch close issues from a CSV file
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --from issues.csv
+
+# Preview batch metadata update by API issue IDs
+# Note: --ids uses API issue IDs, not web URL issue numbers.
+gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --ids 101,102 --status-id 3 --priority-id 2 --dry-run
+
+# Destructive batch delete requires both dry-run first and --yes for real execution
+gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --dry-run
+gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --yes
 
 # Add a comment
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "Fixed"
@@ -707,7 +715,7 @@ See [skills/README.md](./skills/README.md) for details.
 |-------|-------------|
 | `gitlink-shared` | Authentication, global parameters, safety rules, API notes |
 | `gitlink-repo` | Repository operations (create, view, delete, fork, insights, etc.) |
-| `gitlink-issue` | Issue operations (create, update, close, comment, etc.) |
+| `gitlink-issue` | Issue operations (create, update, close, batch update/delete, comment, etc.) |
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
 | `gitlink-member` | Repository member and invite link management |
 | `gitlink-branch` | Branch management (create, delete, list, protect, unprotect) |

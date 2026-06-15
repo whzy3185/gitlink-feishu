@@ -1,7 +1,7 @@
 ---
 name: gitlink-issue
 version: 2.0.0
-description: "Issue 管理：创建、查看、更新、关闭/批量关闭 Issue，添加评论。当用户需要操作 GitLink Issue 时触发。"
+description: "Issue 管理：创建、查看、更新、关闭/批量关闭/批量更新/批量删除 Issue，添加评论。当用户需要操作 GitLink Issue 时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -26,6 +26,8 @@ metadata:
 | `issue +update` | 更新 Issue | 是 |
 | `issue +close` | 关闭 Issue | 是 |
 | `issue +batch-close` | 批量关闭 Issue，支持 `--dry-run` 预览 | 是（dry-run 不写入） |
+| `issue +batch-update` | 按 API issue id 批量更新状态、优先级、里程碑、标签、负责人 | 是（dry-run 不写入） |
+| `issue +batch-delete` | 按 API issue id 批量删除 Issue；真实删除必须 `--yes` | 是（dry-run 不写入） |
 | `issue +comment` | 添加评论 | 是 |
 | `issue +assigners` | 查询 Issue 负责人列表 | 否（公开项目） |
 | `issue +authors` | 查询 Issue 发布人列表 | 否（公开项目） |
@@ -60,6 +62,13 @@ gitlink-cli issue +batch-close --owner myuser --repo myrepo --numbers 123,124 --
 # 从 CSV 文件批量关闭 Issue
 gitlink-cli issue +batch-close --owner myuser --repo myrepo --from issues.csv
 
+# 按 API issue id 预览批量更新元数据（注意不是网页 Issue 编号）
+gitlink-cli issue +batch-update --owner myuser --repo myrepo --ids 101,102 --status-id 3 --priority-id 2 --dry-run
+
+# 危险批量删除：必须先 dry-run，真实执行还要 --yes
+gitlink-cli issue +batch-delete --owner myuser --repo myrepo --ids 101,102 --dry-run
+gitlink-cli issue +batch-delete --owner myuser --repo myrepo --ids 101,102 --yes
+
 # 添加评论
 gitlink-cli issue +comment --number 4 --body "已修复，请验证"
 
@@ -69,6 +78,14 @@ gitlink-cli issue +assigners --owner Gitlink --repo forgeplus --keyword alice
 # 查询 Issue 发布人
 gitlink-cli issue +authors --owner Gitlink --repo forgeplus --keyword bob
 ```
+
+## 批量维护安全约束
+
+- `issue +batch-close --numbers` 使用网页 URL 中的 Issue 编号，即 `project_issues_index`。
+- `issue +batch-update --ids` 和 `issue +batch-delete --ids` 使用 OpenAPI 返回的 API issue id，不是网页 Issue 编号。
+- 执行 `batch-update` / `batch-delete` 前，先用 `issue +list` 或 `issue +view` 确认 id 来源。
+- 写操作先执行 `--dry-run`，展示 `method`、`path`、`body` 给用户确认。
+- `batch-delete` 是破坏性操作，真实执行必须显式传 `--yes`。
 
 ## Raw API 补充
 
