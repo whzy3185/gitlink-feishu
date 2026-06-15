@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
 )
 
 func TestShortcutsExposeExpectedCommands(t *testing.T) {
@@ -18,7 +19,7 @@ func TestShortcutsExposeExpectedCommands(t *testing.T) {
 	for _, shortcut := range Shortcuts() {
 		got[shortcut.Name] = true
 	}
-	for _, name := range []string{"bot-test", "notify", "weekly-report", "bitable-schema", "bitable-records"} {
+	for _, name := range []string{"bot-test", "notify", "weekly-report", "doc-export", "bitable-schema", "bitable-records"} {
 		if !got[name] {
 			t.Fatalf("Shortcuts missing %s", name)
 		}
@@ -135,4 +136,85 @@ func TestBitableSchemaAndRecords(t *testing.T) {
 	if len(records.Tables["reports"]) != 1 {
 		t.Fatalf("reports records = %d, want 1", len(records.Tables["reports"]))
 	}
+}
+
+func TestWikiNodeTokenFromURL(t *testing.T) {
+	got := wikiNodeTokenFromURL("https://tenant.feishu.cn/wiki/NodeToken123?from=from_copylink")
+	if got != "NodeToken123" {
+		t.Fatalf("wikiNodeTokenFromURL = %q", got)
+	}
+}
+
+func TestDocExportOptionsRequireAppCredentialsForSend(t *testing.T) {
+	ctx := &common.RuntimeContext{Args: map[string]string{
+		"send":       "true",
+		"wiki-url":   "https://tenant.feishu.cn/wiki/NodeToken123",
+		"app-id":     "",
+		"app-secret": "",
+	}}
+	_, err := docExportOptionsFromContext(ctx)
+	if err == nil {
+		t.Fatal("expected missing app credential error")
+	}
+}
+
+func TestOpenAPIClientDocExportFlow(t *testing.T) {
+	var sawBlocks bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/auth/v3/tenant_access_token/internal":
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","tenant_access_token":"tenant-token","expire":7200}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/wiki/v2/spaces/get_node":
+			if r.URL.Query().Get("token") != "NodeToken123" {
+				t.Fatalf("wiki token = %q", r.URL.Query().Get("token"))
+			}
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","data":{"node":{"space_id":"space","node_token":"NodeToken123","obj_token":"doc_token","obj_type":"docx","node_type":"origin","title":"Report"}}}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/docx/v1/documents/doc_token/blocks/doc_token/children":
+			sawBlocks = true
+			var payload struct {
+				Children []DocBlock `json:"children"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode blocks: %v", err)
+			}
+			if len(payload.Children) == 0 {
+				t.Fatal("no blocks in payload")
+			}
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","data":{"revision_id":9}}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := OpenAPIClient{BaseURL: server.URL, HTTP: server.Client()}
+	token, err := client.TenantAccessToken(context.Background(), "cli_xxx", "secret")
+	if err != nil {
+		t.Fatalf("TenantAccessToken returned error: %v", err)
+	}
+	node, err := client.GetWikiNode(context.Background(), token.Value, "NodeToken123")
+	if err != nil {
+		t.Fatalf("GetWikiNode returned error: %v", err)
+	}
+	if node.ObjToken != "doc_token" || node.ObjType != "docx" {
+		t.Fatalf("node = %+v", node)
+	}
+	blocks := BuildDocBlocks(workflowReportFixture(t), "en")
+	created, err := client.CreateBlocks(context.Background(), token.Value, node.ObjToken, node.ObjToken, blocks)
+	if err != nil {
+		t.Fatalf("CreateBlocks returned error: %v", err)
+	}
+	if created.RevisionID != 9 || !sawBlocks {
+		t.Fatalf("created = %+v sawBlocks=%t", created, sawBlocks)
+	}
+}
+
+func workflowReportFixture(t *testing.T) workflow.RepoReportResult {
+	t.Helper()
+	report, err := readWorkflowReport(filepath.Join("..", "workflow", "testdata", "repo_report.json"), "en")
+	if err != nil {
+		t.Fatalf("readWorkflowReport returned error: %v", err)
+	}
+	return report
 }

@@ -207,6 +207,20 @@ Bot card = notification and entry link.
 Bitable records = structured data for later dashboards.
 ```
 
+Observed permission behavior:
+
+```text
+tenant_access_token acquisition succeeded.
+Wiki get_node succeeded.
+DocX create-block failed with HTTP 403 / code 1770032 / forBidden.
+```
+
+This means the design must include explicit permission diagnostics:
+
+```text
+The self-built app must have both approved DocX/Drive scopes and write access to the target Wiki/DocX page or folder.
+```
+
 ## Bitable Real Write Requirements
 
 Keep current `+bitable-schema` and `+bitable-records` as dry-run commands.

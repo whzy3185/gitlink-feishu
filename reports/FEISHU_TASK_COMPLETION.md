@@ -30,6 +30,11 @@ gitlink-cli feishu +bitable-records
 - Added project activity card generation from workflow JSON.
 - Added weekly report rendering from workflow JSON.
 - Added `--doc-url` support for notification cards.
+- Added `feishu +doc-export` for Feishu DocX / Wiki export.
+- Added self-built app tenant token acquisition.
+- Added Wiki node resolution.
+- Added DocX block creation client.
+- Added document export preview and explicit `--send` behavior.
 - Added Bitable dry-run schema generation.
 - Added Bitable-ready dry-run records.
 - Registered the new shortcut group in `shortcuts/register.go`.
@@ -73,6 +78,22 @@ object token: present
 ```
 
 No document content was modified in this check.
+
+The first real DocX block write attempt reached the DocX block endpoint but Feishu rejected the write:
+
+```text
+HTTP status: 403
+Feishu code: 1770032
+Message: forBidden
+```
+
+Interpretation:
+
+```text
+The app credentials are valid and the Wiki node is readable, but the app does not currently have write permission on the target Wiki-backed DocX page or lacks the required document scope approval.
+```
+
+The command now reports a permission hint for this case.
 
 ## Knowledge Base Design Update
 
@@ -128,9 +149,8 @@ DocX content write
 
 ## Next Engineering Step
 
-Add `feishu +doc-export` as the first self-built app integration:
+Complete the Feishu document permission setup and rerun:
 
 ```text
-app_id/app_secret -> tenant_access_token -> resolve Wiki node or create DocX -> write report blocks -> return doc URL
+gitlink-cli feishu +doc-export --from-workflow-json report.json --wiki-url <wiki_url> --send --format table
 ```
-

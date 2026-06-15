@@ -24,6 +24,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		newBotTestShortcut(),
 		newNotifyShortcut(),
 		newWeeklyReportShortcut(),
+		newDocExportShortcut(),
 		newBitableSchemaShortcut(),
 		newBitableRecordsShortcut(),
 	}
@@ -69,6 +70,27 @@ func newWeeklyReportShortcut() *common.Shortcut {
 			common.Flag{Name: "lang", Usage: "Output language: en or zh-CN", Default: defaultLang},
 		),
 		Run: runWeeklyReport,
+	}
+}
+
+func newDocExportShortcut() *common.Shortcut {
+	return &common.Shortcut{
+		Name:        "doc-export",
+		Description: "Preview or export a workflow report to Feishu DocX or Wiki",
+		Flags: []common.Flag{
+			{Name: "from-workflow-json", Usage: "Read workflow repo report JSON from a file", Required: true},
+			{Name: "title", Usage: "Document title"},
+			{Name: "folder-token", Usage: "Feishu folder token for creating a new DocX. Defaults to FEISHU_DOC_FOLDER_TOKEN"},
+			{Name: "document-id", Usage: "Existing Feishu DocX document ID. Defaults to FEISHU_DOCUMENT_ID"},
+			{Name: "wiki-url", Usage: "Existing Feishu Wiki URL. Defaults to FEISHU_WIKI_URL"},
+			{Name: "wiki-node-token", Usage: "Existing Feishu Wiki node token. Defaults to FEISHU_WIKI_NODE_TOKEN"},
+			{Name: "app-id", Usage: "Feishu self-built app ID. Defaults to FEISHU_APP_ID"},
+			{Name: "app-secret", Usage: "Feishu self-built app secret. Defaults to FEISHU_APP_SECRET"},
+			{Name: "send", Usage: "Create or update a Feishu document. Without --send, preview locally", Bool: true, Default: "false"},
+			{Name: "dry-run", Usage: "Force local preview. Cannot be combined with --send", Bool: true, Default: "false"},
+			{Name: "lang", Usage: "Output language: en or zh-CN", Default: defaultLang},
+		},
+		Run: runDocExport,
 	}
 }
 
@@ -151,6 +173,18 @@ func runWeeklyReport(ctx *common.RuntimeContext) error {
 	}
 	_, err = fmt.Fprint(os.Stdout, rendered)
 	return err
+}
+
+func runDocExport(ctx *common.RuntimeContext) error {
+	opts, err := docExportOptionsFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	report, err := readWorkflowReport(ctx.Arg("from-workflow-json"), normalizeLang(ctx.Arg("lang")))
+	if err != nil {
+		return err
+	}
+	return exportDocOrPreview(ctx, opts, report, normalizeLang(ctx.Arg("lang")))
 }
 
 func runBitableSchema(ctx *common.RuntimeContext) error {
