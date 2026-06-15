@@ -7,14 +7,24 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/client"
+	"github.com/gitlink-org/gitlink-cli/internal/context"
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
+)
+
+// apiOwnerPlaceholder and apiRepoPlaceholder match the REST-style :owner / :repo
+// path placeholders used throughout the GitLink API docs and shortcut commands.
+// The \b boundary keeps :owner/:repo from matching longer tokens like :owner_id.
+var (
+	apiOwnerPlaceholder = regexp.MustCompile(`:owner\b`)
+	apiRepoPlaceholder  = regexp.MustCompile(`:repo\b`)
 )
 
 func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
@@ -30,6 +40,8 @@ func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
   gitlink-cli api GET /projects --query 'page=1&limit=10'
   gitlink-cli api POST /:owner/:repo/issues --body '{"subject":"Bug","description":"..."}'
   gitlink-cli api POST /:owner/:repo/issues --body-file issue.json
+  gitlink-cli api GET /:owner/:repo/commits --owner Gitlink --repo gitlink-cli
+  gitlink-cli api GET /v1/{{owner}}/gitlink-cli/issues --var owner=Gitlink
   gitlink-cli api --batch-file plan.json --dry-run
   gitlink-cli api --batch-file plan.json --var owner=Gitlink --var repo=gitlink-cli`,
 		Args: validateAPIArgs,
@@ -67,10 +79,9 @@ func runAPI(c *cobra.Command, args []string) error {
 	}
 
 	method := strings.ToUpper(args[0])
-	path := args[1]
-
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
+	path, err := resolveAPIPath(c, args[1])
+	if err != nil {
+		return err
 	}
 
 	cli, err := client.New()
@@ -105,6 +116,42 @@ func runAPI(c *cobra.Command, args []string) error {
 	}
 
 	return output.Print(env, resolveFormat())
+}
+
+// resolveAPIPath prepares a single-call path: it renders {{var}} templates
+// supplied via --var (consistent with batch mode), substitutes the REST-style
+// :owner / :repo placeholders (resolved from --owner/--repo or the git remote,
+// exactly like the shortcut commands), and ensures a leading slash.
+func resolveAPIPath(c *cobra.Command, rawPath string) (string, error) {
+	path := rawPath
+
+	overrides, err := parseBatchVars(c)
+	if err != nil {
+		return "", err
+	}
+	if len(overrides) > 0 {
+		rendered, rerr := renderTemplate(path, overrides)
+		if rerr != nil {
+			return "", rerr
+		}
+		path = rendered
+	}
+
+	if apiOwnerPlaceholder.MatchString(path) || apiRepoPlaceholder.MatchString(path) {
+		owner, repo, rerr := context.ResolveOwnerRepo(cmdutil.Owner, cmdutil.Repo)
+		if rerr != nil {
+			return "", fmt.Errorf("path contains :owner/:repo placeholders but they could not be resolved: %w", rerr)
+		}
+		// ReplaceAllLiteralString avoids interpreting $ in owner/repo as a
+		// regexp replacement reference.
+		path = apiOwnerPlaceholder.ReplaceAllLiteralString(path, owner)
+		path = apiRepoPlaceholder.ReplaceAllLiteralString(path, repo)
+	}
+
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return path, nil
 }
 
 func readJSONBody(c *cobra.Command) (interface{}, error) {

@@ -202,6 +202,56 @@ func TestRunAPINoPrefix(t *testing.T) {
 	}
 }
 
+func TestRunAPIResolvesOwnerRepoPlaceholders(t *testing.T) {
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/testowner/testrepo/commits.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+	})
+	cmdutil.Format = "json"
+	cmdutil.Owner, cmdutil.Repo = "testowner", "testrepo"
+	defer func() { cmdutil.Owner, cmdutil.Repo = "", "" }()
+
+	cmd := NewAPICmd()
+	cmd.SetArgs([]string{"GET", "/:owner/:repo/commits"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("runAPI :owner/:repo error: %v", err)
+	}
+}
+
+func TestRunAPIRendersVarTemplateSingleCall(t *testing.T) {
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/Mengz/gitlink-cli/issues.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+	})
+	cmdutil.Format = "json"
+	cmdutil.Owner, cmdutil.Repo = "", ""
+
+	cmd := NewAPICmd()
+	cmd.SetArgs([]string{"GET", "/v1/{{owner}}/gitlink-cli/issues", "--var", "owner=Mengz"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("runAPI --var single call error: %v", err)
+	}
+}
+
+func TestRunAPIMissingVarTemplateSingleCall(t *testing.T) {
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach server")
+	})
+	cmdutil.Format = "json"
+
+	cmd := NewAPICmd()
+	cmd.SetArgs([]string{"GET", "/{{missing}}", "--var", "present=1"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected error for missing template variable")
+	}
+}
+
 func TestRenderBatchRequestsTemplateVars(t *testing.T) {
 	requests, err := renderBatchRequests([]batchRequest{
 		{
