@@ -140,6 +140,7 @@ skills/
 | **gitlink-ci** | CI/CD | `ci +builds`, `ci +logs` |
 | **gitlink-pm** | 项目管理 | 通过 Raw API 访问 |
 | **gitlink-workflow** | AI 工作流 | Issue 分类、PR Review、Release Notes |
+| **gitlink-docs-assistant** | 文档智能维护 ★ | `wiki +list/+create/+update/+view` |
 
 ---
 
