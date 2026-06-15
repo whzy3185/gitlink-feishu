@@ -30,7 +30,7 @@ gitlink-cli feishu +bitable-records
 - Added project activity card generation from workflow JSON.
 - Added weekly report rendering from workflow JSON.
 - Added `--doc-url` support for notification cards.
-- Added `feishu +doc-export` for Feishu DocX / Wiki export.
+- Added experimental `feishu +doc-export` for Feishu DocX / Wiki export.
 - Added self-built app tenant token acquisition.
 - Added Wiki node resolution.
 - Added DocX block creation client.
@@ -109,6 +109,20 @@ Design now treats Feishu Knowledge Base / Wiki pages as a project showcase and r
 workflow JSON -> DocX/Wiki report -> bot card with doc URL -> Bitable dry-run records
 ```
 
+After scope review, DocX / Wiki export is explicitly experimental and not part of the stable clean workflow.
+
+Stable path:
+
+```text
+workflow JSON -> bot card / weekly report / Bitable dry-run records
+```
+
+Experimental path:
+
+```text
+workflow JSON -> DocX/Wiki export through self-built app OpenAPI
+```
+
 ## Tests
 
 Commands run:
@@ -147,9 +161,13 @@ document permission modification
 DocX content write
 ```
 
+Note: experimental `doc-export` can attempt DocX block writes when explicitly invoked with `--send`, but it remains outside the stable clean export path.
+
 ## Next Engineering Step
 
-Complete the Feishu document permission setup and rerun:
+For stable delivery, continue validating custom bot delivery, weekly reports, and Bitable dry-run output.
+
+For experimental DocX/Wiki export, complete the Feishu document permission setup and rerun:
 
 ```text
 gitlink-cli feishu +doc-export --from-workflow-json report.json --wiki-url <wiki_url> --send --format table

@@ -76,7 +76,7 @@ func newWeeklyReportShortcut() *common.Shortcut {
 func newDocExportShortcut() *common.Shortcut {
 	return &common.Shortcut{
 		Name:        "doc-export",
-		Description: "Preview or export a workflow report to Feishu DocX or Wiki",
+		Description: "Experimental: preview or export a workflow report to Feishu DocX or Wiki",
 		Flags: []common.Flag{
 			{Name: "from-workflow-json", Usage: "Read workflow repo report JSON from a file", Required: true},
 			{Name: "title", Usage: "Document title"},

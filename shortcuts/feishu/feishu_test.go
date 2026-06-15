@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -117,6 +118,31 @@ func TestReadWorkflowReportSupportsInputFixture(t *testing.T) {
 	}
 	if report.Repository != "Gitlink/gitlink-cli" || report.ReportScore == 0 {
 		t.Fatalf("report = %+v", report)
+	}
+}
+
+func TestReadWorkflowReportSupportsPowerShellUTF16Redirect(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "workflow", "testdata", "repo_report.json"))
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	utf16Data := []byte{0xFF, 0xFE}
+	for _, r := range string(raw) {
+		if r > 0xFFFF {
+			t.Fatalf("fixture contains non-BMP rune %q", r)
+		}
+		utf16Data = append(utf16Data, byte(r), byte(r>>8))
+	}
+	path := filepath.Join(t.TempDir(), "report.json")
+	if err := os.WriteFile(path, utf16Data, 0600); err != nil {
+		t.Fatalf("write UTF-16 fixture: %v", err)
+	}
+	report, err := readWorkflowReport(path, "en")
+	if err != nil {
+		t.Fatalf("readWorkflowReport returned error: %v", err)
+	}
+	if report.Repository != "Gitlink/gitlink-cli" {
+		t.Fatalf("Repository = %q", report.Repository)
 	}
 }
 

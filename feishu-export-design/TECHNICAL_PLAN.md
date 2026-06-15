@@ -266,7 +266,7 @@ type BitableRecord struct {
 
 Official Feishu Open Platform docs show that cloud document integration belongs to the self-built app flow, not the custom bot flow.
 
-Add this after the custom bot MVP:
+Experimental command:
 
 ```text
 feishu +doc-export
@@ -310,13 +310,19 @@ Implementation notes:
 - Mock all HTTP tests.
 - Do not implement document sharing or permission changes in the first doc export pass.
 
-Recommended product flow:
+Stable product flow:
+
+```text
+workflow +repo-report -> feishu +weekly-report -> feishu +notify --doc-url -> feishu +bitable-records
+```
+
+Experimental product flow:
 
 ```text
 workflow +repo-report -> feishu +doc-export --wiki-url -> feishu +notify --doc-url -> feishu +bitable-records
 ```
 
-This should land before any real Bitable write because DocX export has clearer value and simpler consistency semantics than Bitable upsert.
+DocX export should remain clearly marked as experimental until tenant permissions, scopes, and document-write behavior are stable.
 
 ## Tests To Add
 

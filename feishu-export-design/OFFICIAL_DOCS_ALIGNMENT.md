@@ -266,7 +266,8 @@ But it is incomplete for a "Feishu collaboration export" feature because it does
 Required design adjustment:
 
 ```text
-Add doc-export with DocX/Wiki support as the first Open Platform custom-app integration.
-Keep real Bitable writes after doc-export.
-Keep custom bot as the low-friction smoke test path.
+Keep custom bot as the low-friction stable smoke test path.
+Keep Bitable as dry-run in the stable path.
+Treat doc-export with DocX/Wiki support as experimental because it uses self-built app OpenAPI and document write permissions.
+Keep real Bitable writes out of scope.
 ```

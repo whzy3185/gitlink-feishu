@@ -1,7 +1,7 @@
 ---
 name: gitlink-feishu
 version: 1.0.0
-description: "Export GitLink workflow JSON to Feishu bot cards, DocX/Wiki reports, and Bitable-ready dry-run records."
+description: "Export GitLink workflow JSON to Feishu custom bot cards, weekly reports, and Bitable-ready dry-run records."
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -10,47 +10,58 @@ metadata:
 
 # gitlink-feishu
 
-Use this skill when a user needs to send or export GitLink workflow analysis to Feishu.
+Use this skill when a user needs to export GitLink workflow analysis into Feishu.
 
-## Rules
+## Purpose
 
-- Prefer local preview first.
-- Use `--send` only when the user explicitly wants a Feishu network write.
-- Never use BotBuilder or Robot Assistant workflows.
-- Do not write to GitLink resources.
-- Do not print webhook URLs, app secrets, or access tokens.
-- Use `+bitable-records` for dry-run output only; do not claim that Bitable has been written.
+Stable path:
 
-## Workflow
+```text
+workflow JSON -> Feishu bot card / weekly report / Bitable dry-run records
+```
 
-Generate workflow JSON:
+Experimental path:
+
+```text
+workflow JSON -> Feishu DocX / Wiki export
+```
+
+## Inputs
+
+Workflow JSON should usually come from:
 
 ```bash
 gitlink-cli workflow +repo-report --owner <owner> --repo <repo> --format json > report.json
 ```
 
-Preview a Feishu card:
+## Safety Rules
+
+- Preview first.
+- Use `--send` only when the user explicitly wants a Feishu network write.
+- Never use BotBuilder or Robot Assistant workflows.
+- Do not write to GitLink resources.
+- Do not print webhook URLs, app secrets, access tokens, or table tokens.
+- Treat `+bitable-schema` and `+bitable-records` as local dry-run commands only.
+- Treat `+doc-export` as experimental because it uses self-built app OpenAPI and document write permissions.
+
+## Preview Flow
+
+Preview a card:
 
 ```bash
 gitlink-cli feishu +notify --from-workflow-json report.json --format json
 ```
 
-Send a Feishu card:
+Render a weekly report:
 
 ```bash
-gitlink-cli feishu +notify --from-workflow-json report.json --send --format table
+gitlink-cli feishu +weekly-report --from-workflow-json report.json --format markdown
 ```
 
-Preview a document export:
+Generate Bitable schemas:
 
 ```bash
-gitlink-cli feishu +doc-export --from-workflow-json report.json --wiki-url "<wiki_url>" --format markdown
-```
-
-Export to DocX or Wiki:
-
-```bash
-gitlink-cli feishu +doc-export --from-workflow-json report.json --wiki-url "<wiki_url>" --send --format table
+gitlink-cli feishu +bitable-schema --format markdown
 ```
 
 Generate Bitable-ready records:
@@ -59,7 +70,7 @@ Generate Bitable-ready records:
 gitlink-cli feishu +bitable-records --from-workflow-json report.json --format json
 ```
 
-## Feishu Setup
+## Send Flow
 
 Custom bot commands need:
 
@@ -68,12 +79,46 @@ FEISHU_WEBHOOK_URL
 FEISHU_WEBHOOK_SECRET optional
 ```
 
-DocX/Wiki export needs:
+Send a card:
+
+```bash
+gitlink-cli feishu +notify --from-workflow-json report.json --send --format table
+```
+
+Send a weekly report card:
+
+```bash
+gitlink-cli feishu +weekly-report --from-workflow-json report.json --send --format table
+```
+
+## Experimental Doc Export
+
+DocX / Wiki export needs:
 
 ```text
 FEISHU_APP_ID
 FEISHU_APP_SECRET
 ```
 
-The self-built app must also have permission to write the target DocX/Wiki page or folder.
+Preview only:
+
+```bash
+gitlink-cli feishu +doc-export --from-workflow-json report.json --wiki-url "<wiki_url>" --format markdown
+```
+
+Write to Feishu:
+
+```bash
+gitlink-cli feishu +doc-export --from-workflow-json report.json --wiki-url "<wiki_url>" --send --format table
+```
+
+If Feishu returns `1770032: forBidden`, the app token is valid but the app cannot write to the target DocX/Wiki page or folder.
+
+## Non-Goals
+
+- No GitLink remote writes.
+- No GitLink comments, issue closure, merge, or webhook creation.
+- No Bitable real writes in the stable path.
+- No BotBuilder integration.
+- No automatic Feishu permission changes.
 

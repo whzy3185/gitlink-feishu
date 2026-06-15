@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode/utf16"
 
 	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
 )
@@ -13,6 +14,10 @@ func readWorkflowReport(path string, lang string) (workflow.RepoReportResult, er
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return workflow.RepoReportResult{}, fmt.Errorf("read workflow JSON: %w", err)
+	}
+	data, err = normalizeJSONBytes(data)
+	if err != nil {
+		return workflow.RepoReportResult{}, err
 	}
 	data, err = unwrapWorkflowJSON(data)
 	if err != nil {
@@ -30,6 +35,34 @@ func readWorkflowReport(path string, lang string) (workflow.RepoReportResult, er
 	}
 
 	return workflow.RepoReportResult{}, fmt.Errorf("parse workflow JSON: expected workflow RepoReportResult or RepoReportInput")
+}
+
+func normalizeJSONBytes(data []byte) ([]byte, error) {
+	if len(data) >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF {
+		return data[3:], nil
+	}
+	if len(data) >= 2 && data[0] == 0xFF && data[1] == 0xFE {
+		return decodeUTF16(data[2:], true)
+	}
+	if len(data) >= 2 && data[0] == 0xFE && data[1] == 0xFF {
+		return decodeUTF16(data[2:], false)
+	}
+	return data, nil
+}
+
+func decodeUTF16(data []byte, littleEndian bool) ([]byte, error) {
+	if len(data)%2 != 0 {
+		return nil, fmt.Errorf("parse workflow JSON: invalid UTF-16 byte length")
+	}
+	words := make([]uint16, 0, len(data)/2)
+	for i := 0; i < len(data); i += 2 {
+		if littleEndian {
+			words = append(words, uint16(data[i])|uint16(data[i+1])<<8)
+		} else {
+			words = append(words, uint16(data[i])<<8|uint16(data[i+1]))
+		}
+	}
+	return []byte(string(utf16.Decode(words))), nil
 }
 
 func unwrapWorkflowJSON(data []byte) ([]byte, error) {
