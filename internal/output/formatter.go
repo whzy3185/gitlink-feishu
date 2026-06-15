@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -53,7 +54,11 @@ func printYAML(w io.Writer, envelope *Envelope) error {
 func printTable(w io.Writer, envelope *Envelope) error {
 	if !envelope.OK {
 		if envelope.Error != nil {
-			fmt.Fprintf(w, "Error: %s\n", envelope.Error.Message)
+			if envelope.Error.Code != nil && fmt.Sprintf("%v", envelope.Error.Code) != "" {
+				fmt.Fprintf(w, "Error [%v]: %s\n", envelope.Error.Code, envelope.Error.Message)
+			} else {
+				fmt.Fprintf(w, "Error: %s\n", envelope.Error.Message)
+			}
 			if envelope.Error.Suggestion != "" {
 				fmt.Fprintf(w, "Suggestion: %s\n", envelope.Error.Suggestion)
 			}
@@ -136,8 +141,10 @@ func printMapTable(w io.Writer, m map[string]interface{}) error {
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(tw, "KEY\tVALUE")
 	fmt.Fprintln(tw, "---\t-----")
-	for k, v := range m {
-		fmt.Fprintf(tw, "%s\t%s\n", k, formatValue(v))
+	// collectKeys yields a deterministic order (priority keys first, then the
+	// remaining keys sorted), so table output is stable across runs.
+	for _, k := range collectKeys(m) {
+		fmt.Fprintf(tw, "%s\t%s\n", k, formatValue(m[k]))
 	}
 	return tw.Flush()
 }
@@ -153,11 +160,16 @@ func collectKeys(m map[string]interface{}) []string {
 			seen[k] = true
 		}
 	}
+	remaining := make([]string, 0, len(m))
 	for k := range m {
 		if !seen[k] {
-			keys = append(keys, k)
+			remaining = append(remaining, k)
 		}
 	}
+	// Sort the non-priority keys so column/row order is deterministic instead of
+	// depending on Go's randomized map iteration order.
+	sort.Strings(remaining)
+	keys = append(keys, remaining...)
 	return keys
 }
 

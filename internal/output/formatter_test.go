@@ -122,11 +122,82 @@ func TestPrintToTableError(t *testing.T) {
 		t.Fatalf("PrintTo table error: %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "Error: server error") {
-		t.Fatalf("expected error message, got: %s", out)
+	if !strings.Contains(out, "Error [500]: server error") {
+		t.Fatalf("expected error message with code, got: %s", out)
 	}
 	if !strings.Contains(out, "try again") {
 		t.Fatalf("expected suggestion, got: %s", out)
+	}
+}
+
+func TestPrintToTableErrorWithoutCode(t *testing.T) {
+	var buf bytes.Buffer
+	env := ErrorEnvelope(nil, "plain error", "")
+	if err := PrintTo(&buf, env, "table"); err != nil {
+		t.Fatalf("PrintTo table error without code: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Error: plain error") {
+		t.Fatalf("expected plain error line, got: %s", out)
+	}
+	if strings.Contains(out, "Error [") {
+		t.Fatalf("did not expect a code prefix, got: %s", out)
+	}
+}
+
+func TestCollectKeysSortsRemaining(t *testing.T) {
+	m := map[string]interface{}{
+		"zebra": 1, "id": 1, "alpha": 1, "mango": 1, "name": 1,
+	}
+	keys := collectKeys(m)
+	// Priority keys first (id, name), then the rest in sorted order.
+	want := []string{"id", "name", "alpha", "mango", "zebra"}
+	if len(keys) != len(want) {
+		t.Fatalf("keys = %v, want %v", keys, want)
+	}
+	for i := range want {
+		if keys[i] != want[i] {
+			t.Fatalf("keys = %v, want %v", keys, want)
+		}
+	}
+}
+
+func TestPrintToTableMapDeterministic(t *testing.T) {
+	m := map[string]interface{}{
+		"zebra": "z", "id": float64(1), "alpha": "a", "name": "n", "mango": "m",
+	}
+	render := func() string {
+		var buf bytes.Buffer
+		if err := PrintTo(&buf, SuccessEnvelope(m, nil), "table"); err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		return buf.String()
+	}
+	first := render()
+	for i := 0; i < 25; i++ {
+		if got := render(); got != first {
+			t.Fatalf("table output is not deterministic:\n%q\nvs\n%q", first, got)
+		}
+	}
+}
+
+func TestPrintToTableSliceDeterministic(t *testing.T) {
+	items := []interface{}{
+		map[string]interface{}{"id": float64(1), "zebra": "z", "alpha": "a", "name": "n"},
+		map[string]interface{}{"id": float64(2), "zebra": "z2", "alpha": "a2", "name": "n2"},
+	}
+	render := func() string {
+		var buf bytes.Buffer
+		if err := PrintTo(&buf, SuccessEnvelope(items, nil), "table"); err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		return buf.String()
+	}
+	first := render()
+	for i := 0; i < 25; i++ {
+		if got := render(); got != first {
+			t.Fatalf("slice table header order is not deterministic:\n%q\nvs\n%q", first, got)
+		}
 	}
 }
 
