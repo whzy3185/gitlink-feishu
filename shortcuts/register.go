@@ -23,6 +23,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/release"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/repo"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/search"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/template"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/user"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/webhook"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
@@ -55,6 +56,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"webhook":   webhook.Shortcuts(tr),
 		"health":    health.Shortcuts(tr),
 		"ignore":    ignore.Shortcuts(),
+		"template":  template.Shortcuts(),
 		"workflow":  workflow.Shortcuts(),
 	}
 
@@ -79,6 +81,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"webhook":   tr.T("cmd.webhook.short"),
 		"health":    "Project health data collection",
 		"ignore":    tr.T("cmd.ignore.short"),
+		"template":  "项目模板操作",
 		"workflow":  "AI agent workflow analysis",
 	}
 
