@@ -182,3 +182,4 @@ gitlink-cli wiki +update \
 - `wiki +delete` 在 GitLink 平台上只清空内容，不真正删除页面（已知平台限制）
 - `--content` 参数直接传 Markdown 文本，CLI 内部会自动处理 base64 编码
 - 在 git 仓库目录下运行时，`--owner` 和 `--repo` 可省略（自动从 remote 解析）
+- `api GET /:owner/:repo/sub_entries` 端点在某些环境返回 HTML 页面而非文件列表；检测文档是否存在时，优先用更可靠的 `gitlink-cli repo +readme`（README）或 `repo +info`。
