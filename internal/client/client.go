@@ -115,22 +115,35 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 	}
 
 	// Check GitLink error-in-body pattern
+	// Support both {"status":N, "message":"..."} and gateway {"code":N, "msg":"..."}
+	var bodyCode float64
+	var bodyMsg string
 	if status, ok := raw["status"]; ok {
-		var statusCode float64
 		switch v := status.(type) {
 		case float64:
-			statusCode = v
+			bodyCode = v
 		case int:
-			statusCode = float64(v)
+			bodyCode = float64(v)
 		}
-		if statusCode != 0 && statusCode != 200 && statusCode != 1 {
-			msg, _ := raw["message"].(string)
-			suggestion := suggestFix(int(statusCode))
-			return output.ErrorEnvelope(int(statusCode), msg, suggestion), &APIError{
-				StatusCode: int(statusCode),
-				Code:       int(statusCode),
-				Message:    msg,
-			}
+		bodyMsg, _ = raw["message"].(string)
+	} else if code, ok := raw["code"]; ok {
+		switch v := code.(type) {
+		case float64:
+			bodyCode = v
+		case int:
+			bodyCode = float64(v)
+		}
+		bodyMsg, _ = raw["msg"].(string)
+		if bodyMsg == "" {
+			bodyMsg, _ = raw["message"].(string)
+		}
+	}
+	if bodyCode != 0 && bodyCode != 200 && bodyCode != 201 && bodyCode != 204 && bodyCode != 1 {
+		suggestion := suggestFix(int(bodyCode))
+		return output.ErrorEnvelope(int(bodyCode), bodyMsg, suggestion), &APIError{
+			StatusCode: int(bodyCode),
+			Code:       int(bodyCode),
+			Message:    bodyMsg,
 		}
 	}
 
@@ -169,6 +182,10 @@ func shouldAppendJSONSuffix(path string) bool {
 		if part == "raw" && i >= 2 && i+2 < len(parts) {
 			return false
 		}
+	}
+	// Wiki open API endpoints do not use .json suffix
+	if len(parts) >= 3 && parts[0] == "wiki" && parts[1] == "open" {
+		return false
 	}
 	return true
 }
