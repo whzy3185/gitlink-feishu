@@ -324,6 +324,82 @@ workflow +repo-report -> feishu +doc-export --wiki-url -> feishu +notify --doc-u
 
 DocX export should remain clearly marked as experimental until tenant permissions, scopes, and document-write behavior are stable.
 
+## Role-Based Collaboration Extension
+
+The next design layer is role-aware delivery, documented in:
+
+```text
+feishu-export-design/ROLE_BASED_COLLABORATION.md
+```
+
+Core split:
+
+```text
+Owner / maintainer: periodic aggregated digest, not per-event spam.
+Contributor: immediate personal feedback for PR comments, reviews, rebase needs, and merge results.
+```
+
+Owner-facing features should build on aggregated workflow and PR data:
+
+```text
+daily digest
+weekly report
+review queue summary
+PR stage color report
+milestone status
+Feishu Doc / Wiki full report link
+```
+
+Contributor-facing features need a separate event model:
+
+```text
+review comment received
+changes requested
+needs rebase
+conflict detected
+approved
+merged
+closed or refused
+```
+
+PR stage colors should be derived from explainable inputs such as review status, patchset count, mergeability, requested changes, and stale activity:
+
+```text
+blue: new / unreviewed
+grey: active review
+green: near ready or merged
+yellow: needs rebase
+orange: major changes requested
+red: blocked
+```
+
+The first role-aware extension should stay local and dry-run by default:
+
+```text
+feishu +owner-digest --from-workflow-json
+feishu +pr-stage-report --from-pr-json
+feishu +contributor-events --from-event-json
+feishu +readme-doc --from-readme
+```
+
+Do not add real-time contributor delivery until identity mapping is designed:
+
+```text
+GitLink username -> Feishu open_id / union_id / email
+```
+
+Feishu Docs / Wiki should hold long-form project context:
+
+```text
+README summary
+contribution guide summary
+owner digest archive
+milestone plan
+PR stage table
+```
+
+The owner configures Feishu permissions. The CLI must not change document permissions automatically.
+
 ## Tests To Add
 
 ```text

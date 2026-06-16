@@ -118,6 +118,46 @@ gitlink-cli feishu +bitable-records --from-workflow-json report.json --format js
 
 These records are summary records derived from workflow repo-report JSON. They are not a per-issue or per-PR synchronization.
 
+## Role-Aware Collaboration Roadmap
+
+The Feishu integration is designed to support two different notification modes:
+
+```text
+Owner / maintainer: summarized digest.
+Contributor: immediate personal feedback.
+```
+
+Owner-oriented cards should group PRs by review stage instead of sending one message for every PR event. Recommended stages:
+
+```text
+blue: new or unreviewed
+grey: active review
+green: close to merge or merged
+yellow: needs rebase
+orange: major changes requested
+red: blocked
+```
+
+Contributor notifications are different. A contributor should receive fast feedback when their own PR is reviewed, commented on, blocked by rebase/conflict, approved, merged, or closed.
+
+Long-form project material should be exported to Feishu Docs / Wiki:
+
+```text
+README summary
+contribution guide
+owner digest archive
+milestone plan
+PR stage table
+```
+
+Milestone and Gantt support should start as Bitable-ready records and document sections. Real Bitable writes and view creation require a separate permissioned OpenAPI design.
+
+Detailed design:
+
+```text
+feishu-export-design/ROLE_BASED_COLLABORATION.md
+```
+
 ## Experimental DocX / Wiki Export
 
 `feishu +doc-export` is experimental because it uses Feishu self-built app credentials and writes to DocX / Wiki through OpenAPI.

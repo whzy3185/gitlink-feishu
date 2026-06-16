@@ -38,6 +38,40 @@ gitlink-cli feishu +bitable-schema --format markdown
 gitlink-cli feishu +bitable-records --from-workflow-json report.json --format json
 ```
 
+## Role-Aware Collaboration Direction
+
+Owner digest:
+
+```text
+aggregate PR and workflow state
+group PRs by review stage
+send daily or weekly summary cards
+link to Feishu Doc / Wiki full report
+```
+
+Contributor feedback:
+
+```text
+send fast notifications only for the contributor's own PR events
+review comment
+changes requested
+needs rebase
+approved
+merged
+closed
+```
+
+Planned color semantics:
+
+```text
+blue = new / unreviewed
+green = close to merge
+yellow = needs rebase
+orange = major changes requested
+red = blocked
+grey = active review or closed
+```
+
 ## Experimental DocX / Wiki Export
 
 `+doc-export` is available for Feishu self-built app experiments. It is not part of the stable clean export path.
@@ -60,4 +94,3 @@ gitlink-cli feishu +doc-export \
   --send \
   --format table
 ```
-
