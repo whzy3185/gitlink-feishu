@@ -108,7 +108,6 @@ gitlink-cli auth login
 | Create File 需要 base64 | `POST /:owner/:repo/create_file` 的 `content` 字段必须 base64 编码 | 不编码会返回"文件已存在"错误 |
 | Update File 需要 SHA | `PUT /:owner/:repo/update_file` 需要 `sha` 参数，通过 `sub_entries` 接口获取 | 见下方文件操作说明 |
 | PR 合并需要 `do` 参数 | `pr +merge` 需传 `do` 字段指定合并方式（merge/rebase/squash） | `pr +merge` 已内置处理 |
-| PR 列表 state 过滤 | `--state` 参数仅影响统计计数，返回列表可能包含所有状态 | 需通过 `pull_request_status` 字段客户端过滤：0=open, 1=merged, 2=closed |
 | PR 创建需要代码差异 | 分支内容必须与目标分支不同，否则拒绝创建 | 需要先在分支上有实际提交 |
 
 ## 文件操作 API
