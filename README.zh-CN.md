@@ -327,6 +327,13 @@ gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role D
 
 # 生成邀请链接
 gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
+
+# 通过邀请码申请加入项目
+gitlink-cli member +apply --code MPzQgH --role developer --dry-run
+
+# 退出仓库成员关系
+gitlink-cli member +quit --owner Gitlink --repo forgeplus --dry-run
+gitlink-cli member +quit --owner Gitlink --repo forgeplus --yes
 ```
 
 ### Issue 管理
