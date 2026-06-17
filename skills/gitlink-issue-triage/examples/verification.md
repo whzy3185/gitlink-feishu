@@ -184,9 +184,20 @@ invalid JSON body: invalid character 's' looking for beginning of object key str
 **已确认事实：**
 - `cmd/api/api.go` 的 `--body` 解析逻辑用 Go `encoding/json`，对合法 JSON 一定解析成功（源码已读）
 - 失败 100% 是 PowerShell 引号问题，反引号 / `--%` / 单引号 + 变量三种方式均被 PS 5 吞掉引号
-- 在 **Git Bash** 或 **Linux/macOS** 终端跑同一条命令可正常通过（bash 单引号 100% 原样保留 JSON）
+- **Windows shell 双坑（后续 ylly 环境 Git Bash 补充验证）：** PowerShell 5 吞 JSON 双引号；**Git Bash/MSYS2 会把 `/` 开头的路径参数改写成 `<Git安装目录>/v1/...`**（`--debug` 实测：`/v1/ylly/gitlink-cli/issues/9` 被改成 `/api/F:/Git/Git/v1/...`），请求 URL 错误返回 404。**两个坑都不能直接跑 raw api PATCH。** 解决：`MSYS_NO_PATHCONV=1 gitlink-cli api PATCH /v1/.../issues/9 ...`（实测返回 `ok:true`），或用 cmd.exe 配合正确转义。
+- **`.json` 与 404 无关：** `--debug` 实测 `api` 命令会自动补 `.json`（不带 `.json` 的请求最终 URL 仍是 `.../issues/9.json`）。PATCH 404 的唯一原因是 MSYS2 路径转换，**不是漏 `.json`**。
 
-**对工作流的影响：** 仅"分配责任人"这步无法在本机 PowerShell 实跑验证；分类打标签、查看 Issue、列通知等其他命令全部实跑通过。建议团队在最终演示时用 Git Bash 跑 PATCH 完整复现。
+**owner_id 兜底实测无效（结论 B）：**
+
+```bash
+$ MSYS_NO_PATHCONV=1 gitlink-cli api PATCH /v1/ylly/gitlink-cli/issues/9 --body \
+    '{"subject":"bug: wiki +view...","description":"...","assigned_to_id":148899}'
+{ "ok": true, "data": { "subject": "bug: wiki +view...", "assigned_to": null, "assigned_to_id": null } }
+```
+
+PATCH 返回 `ok:true`（subject 更新成功），但 `assigned_to` / `assigned_to_id` 仍为 `null`——**服务器静默忽略了 owner_id**。原因：GitLink 校验 `assigned_to_id` 必须在 `issue +assigners` 候选列表内，个人仓库该列表为空，owner 也不在其中。**因此 SKILL.md 注意事项已删除"可改用 owner user_id 兜底"，改为"个人仓库 assigners 为空时无法分配，跳过并在报告标注"。**
+
+**对工作流的影响：** 分类打标签、查看 Issue、列通知等命令全部实跑通过；"分配责任人"在 Git Bash + `MSYS_NO_PATHCONV=1` 下 PATCH 可跑通（HTTP 200），但个人仓库场景因 assigners 为空，实际无法分配成功（需先 `member +add` 加 collaborator）。
 
 ---
 
@@ -214,7 +225,7 @@ invalid JSON body: invalid character 's' looking for beginning of object key str
 | 2 分配+通知 | `issue +assigners` | ✅ | 真实返回空（个人仓库场景）|
 | 2 分配+通知 | `notification +list`（自己）| ✅ | zhangqing23 返回 9 条 |
 | 2 分配+通知 | `notification +list`（他人）| ⚠️ 403 | 平台限制：只允许查自己 |
-| 2 分配+通知 | `api PATCH`（分配）| ⚠️ 待完整复现 | 源码已核对，PowerShell 引号阻塞实跑，Git Bash 可跑通 |
+| 2 分配+通知 | `api PATCH`（分配）| ✅ 已跑通 | PowerShell 用 `--body-file` / Git Bash 用 `MSYS_NO_PATHCONV=1`，实跑返回 `ok:true`（见 2.4） |
 | 3 批量分拣 | 复用 1+2 命令 | ✅ | 原子命令全过，组合即可 |
 
 **Agent 平台兼容性：** 标准 YAML frontmatter，兼容 Claude Code / Cursor / OpenClaw（格式与 gitlink-onboarding / gitlink-docs-assistant 一致）。
@@ -225,18 +236,18 @@ invalid JSON body: invalid character 's' looking for beginning of object key str
 
 ## 截图清单
 
-> **本任务按用户指示跳过截图存证环节**，以原始命令输出（见上文代码块）作为验证证据。如团队后续需要补截图，可在 Claude Code 中喂入 SKILL.md 让 Agent 自主执行（参照 ylly/ZxR 的做法），完整截图路径如下：
+> 截图已补全（ylly 环境在 PowerShell / Git Bash 实跑），存放于 `screenshots/` 目录：
 
-| 建议文件名 | 对应步骤 | 内容 |
+| 文件名 | 对应步骤 | 内容 |
 |----------|---------|------|
-| `screenshots/00-环境确认.png` | 第 0 步 | auth status + go build 成功 |
-| `screenshots/01-issue-list.png` | 工作流 1 | issue +list 返回 8 条 |
+| `screenshots/00-环境确认.png` | 第 0 步 | auth status（ylly 登录） |
+| `screenshots/01-issue-list.png` | 工作流 1 | issue +list（3 个开放，#9 未分类） |
 | `screenshots/02-label-list.png` | 工作流 1 | label +list 返回 12 个标签 |
-| `screenshots/03-标签写入.png` | 工作流 1 | issue +update #7 后 view 显示"缺陷" |
-| `screenshots/04-assigners空.png` | 工作流 2 | assigners 返回空（个人仓库）|
-| `screenshots/05-notification自查询.png` | 工作流 2 | zhangqing23 的 9 条通知 |
-| `screenshots/06-跨用户403.png` | 工作流 2 | 查 ylly 通知被 403 拒绝 |
-| `screenshots/07-PATCH分配.png`（可选）| 工作流 2 | Git Bash 跑 PATCH 成功（团队演示时补）|
+| `screenshots/03-标签写入.png` | 工作流 1 | #9 打"缺陷"标签后 view 确认 |
+| `screenshots/04-assigners空.png` | 工作流 2 | assigners 返回空（个人仓库） |
+| `screenshots/05-patch分配.png` | 工作流 2 | ⭐ PATCH 返回 `ok:true`（PowerShell `--body-file` / Git Bash `MSYS_NO_PATHCONV=1`） |
+| `screenshots/06-列出通知.png` | 工作流 2 | notification +list 自查询（ylly 的通知） |
+| `screenshots/07-没有权限.png` | 工作流 2 | 跨用户查询被 403 拒绝 |
 
 ---
 

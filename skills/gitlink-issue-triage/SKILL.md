@@ -154,7 +154,10 @@ gitlink-cli issue +assigners --owner <owner> --repo <repo> --format json
 gitlink-cli issue +view --owner <owner> --repo <repo> --number <n> --format json
 
 # Step 3b：PATCH 分配（assigned_to_id 用 assigners 返回的用户 id）
-gitlink-cli api PATCH /v1/<owner>/<repo>/issues/<n> --body '{
+# ⚠️ Git Bash 用户必须加 MSYS_NO_PATHCONV=1 前缀，否则 / 开头路径会被 MSYS2 转成
+#    Windows 路径（debug 实测：/v1/... 变成 /api/F:/Git/Git/v1/...），导致 404
+# 注：api 命令会自动补 .json 后缀，路径无需手动加（已实测确认）
+MSYS_NO_PATHCONV=1 gitlink-cli api PATCH /v1/<owner>/<repo>/issues/<n> --body '{
   "subject": "<原 subject 原样回传>",
   "description": "<原 description 原样回传>",
   "assigned_to_id": <user_id>
@@ -246,7 +249,8 @@ gitlink-cli issue +list --owner <owner> --repo <repo> --state open --format json
 
 ```bash
 # 分配责任人（issue +update 当前不支持 --assignee，必须走 Raw API）
-gitlink-cli api PATCH /v1/<owner>/<repo>/issues/<n> --body '{
+# ⚠️ Git Bash 加 MSYS_NO_PATHCONV=1 前缀（见注意事项）；.json 由 api 自动补
+MSYS_NO_PATHCONV=1 gitlink-cli api PATCH /v1/<owner>/<repo>/issues/<n> --body '{
   "subject": "<原标题>", "description": "<原描述>", "assigned_to_id": <user_id>
 }'
 
@@ -270,7 +274,8 @@ gitlink-cli notification +read --owner <assignee_login> --id <notification_id>
 - **标签名长度限制：** GitLink 标签名上限 **15 字符**。中文标签（如"文档"）通常没问题，英文长名（如"enhancement" 11 字符 OK，"good first issue" 16 字符会被截断）需注意。
 - **`issue +update` 不支持 `--assignee`：** 当前 Shortcut 的 update 子命令仅支持 `--title/--body/--state/--label`。分配责任人需走 Raw API `PATCH /v1/:owner/:repo/issues/:n`，且必须带上原 `subject` 和 `description`（参考 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md) API 注意事项：Issue 更新不带 subject/description 可能被清空）。
 - **PowerShell 跑 Raw API --body JSON 会被吞双引号：** Windows PowerShell 5 把含 `"` 的字符串传给原生 exe 时会 strip 引号，导致 `encoding/json` 解析失败（报错 `invalid character 's' looking for beginning of object key string`）。**改用 Git Bash 或 cmd.exe 跑同一条命令可正常通过**（bash 单引号原样保留 JSON）。
-- **`assigned_to_id` 用数字 ID：** 不是 login 字符串。从 `issue +assigners` 返回里取 `id` 字段。若 `assigners` 为空（个人仓库），可改用仓库 owner 的 user_id（从 `repo +info` 或 `issue +view` 的 `author.id` 字段拿）。
+- **Git Bash（MSYS2）会转换 `/` 开头的路径参数（PATCH 404 的真正原因）：** 以 `/` 开头的 Raw API 路径（如 `/v1/owner/repo/issues/9`）会被 Git Bash 自动转成 Windows 路径（debug 实测：`/v1/...` 被改成 `/api/F:/Git/Git/v1/...`），请求 URL 错误、返回 404。**这是本机 PATCH 失败的唯一原因，与 .json 无关**（`api` 命令会自动补 `.json` 后缀，已用 `--debug` 实测确认：不带 `.json` 的请求最终 URL 仍是 `.../issues/9.json`）。**解决：命令前加 `MSYS_NO_PATHCONV=1`**（实测 `MSYS_NO_PATHCONV=1 gitlink-cli api PATCH /v1/.../issues/9 ...` 返回 `ok:true`）；或路径用双斜杠 `//v1/...`。cmd.exe 无此路径转换问题（PowerShell 的坑是引号，见上一条）。
+- **`assigned_to_id` 用数字 ID：** 不是 login 字符串。从 `issue +assigners` 返回里取 `id` 字段。⚠️ **实测：个人仓库 `assigners` 为空时，用 owner user_id 兜底分配也不生效**——GitLink 校验 `assigned_to_id` 必须在 assigners 候选列表内，PATCH 虽返回 `ok:true` 但 `assigned_to` 仍为空。个人仓库需先 `member +add` 添加 collaborator 才能分配，否则跳过分配并在报告标注"无可分配成员"。
 - **notification +list 是自查询限定：** 该命令查 `/users/<login>/messages`，**GitLink 平台只允许用户查询自己的通知**，跨用户查询返回 `[403] 您没有权限进行该操作`（实测：zhangqing23 查 ylly 的通知被拒）。因此无法第三方代为验证通知到达，只能由责任人本人自查。
 - **分配会自动触发通知：** GitLink 平台在 `assigned_to_id` 变更时会自动给被分配人发站内消息，**无需也不存在** "send notification" 命令。`notification +list` 只用于**验证**通知已生成（且只能自验证）。
 - **`assigners` 字段两个位置：** Issue 对象里 `assigners` 是已分配人列表（数组），`issue +assigners` 命令返回的是**可分配的候选人**列表。两者不同，别混淆。
