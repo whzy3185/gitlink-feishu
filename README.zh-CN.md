@@ -444,6 +444,25 @@ gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved 
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
 ```
 
+### 分支管理
+
+```bash
+# 列出分支，支持关键词和删除分支过滤
+gitlink-cli branch +list --owner Gitlink --repo forgeplus
+gitlink-cli branch +list --owner Gitlink --repo forgeplus --keyword fix --state deleted
+
+# 无分页列出全部分支
+gitlink-cli branch +all --owner Gitlink --repo forgeplus
+
+# 创建 / 删除分支
+gitlink-cli branch +create --owner Gitlink --repo forgeplus --name feature/new-feature
+gitlink-cli branch +delete --owner Gitlink --repo forgeplus --name feature/old-feature
+
+# 设置默认分支或恢复已删除分支（先 dry-run 预览）
+gitlink-cli branch +set-default --owner Gitlink --repo forgeplus --name main --dry-run
+gitlink-cli branch +restore --owner Gitlink --repo forgeplus --id 7 --name feature/old --dry-run
+```
+
 ### 发布管理
 
 ```bash
