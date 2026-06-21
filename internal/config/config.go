@@ -8,22 +8,25 @@ import (
 )
 
 const (
-	DefaultBaseURL = "https://www.gitlink.org.cn/api"
-	DefaultFormat  = "table"
+	DefaultBaseURL    = "https://www.gitlink.org.cn/api"
+	DefaultGatewayURL = "https://gateway.gitlink.org.cn/api"
+	DefaultFormat     = "table"
 )
 
 type Config struct {
-	BaseURL string `yaml:"base_url"`
-	Format  string `yaml:"default_format"`
-	Editor  string `yaml:"editor,omitempty"`
-	Pager   string `yaml:"pager,omitempty"`
-	Lang    string `yaml:"lang,omitempty"`
+	BaseURL    string `yaml:"base_url"`
+	GatewayURL string `yaml:"gateway_url"`
+	Format     string `yaml:"default_format"`
+	Editor     string `yaml:"editor,omitempty"`
+	Pager      string `yaml:"pager,omitempty"`
+	Lang       string `yaml:"lang,omitempty"`
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		BaseURL: DefaultBaseURL,
-		Format:  DefaultFormat,
+		BaseURL:    DefaultBaseURL,
+		GatewayURL: DefaultGatewayURL,
+		Format:     DefaultFormat,
 	}
 }
 
@@ -54,6 +57,9 @@ func Load() (*Config, error) {
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = DefaultBaseURL
 	}
+	if cfg.GatewayURL == "" {
+		cfg.GatewayURL = DefaultGatewayURL
+	}
 	if cfg.Format == "" {
 		cfg.Format = DefaultFormat
 	}
@@ -80,6 +86,8 @@ func Get(key string) (string, error) {
 	switch key {
 	case "base_url":
 		return cfg.BaseURL, nil
+	case "gateway_url":
+		return cfg.GatewayURL, nil
 	case "default_format":
 		return cfg.Format, nil
 	case "editor":
@@ -101,6 +109,8 @@ func Set(key, value string) error {
 	switch key {
 	case "base_url":
 		cfg.BaseURL = value
+	case "gateway_url":
+		cfg.GatewayURL = value
 	case "default_format":
 		cfg.Format = value
 	case "editor":

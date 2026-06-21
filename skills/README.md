@@ -110,6 +110,8 @@ skills/
 │       └── ci-workflow.md             # CI 工作流
 ├── gitlink-pipeline/                  # 流水线工作流
 │   └── SKILL.md                       # Pipeline 操作指南
+├── gitlink-wiki/                      # Wiki 页面管理
+│   └── SKILL.md                       # Wiki 操作指南
 ├── gitlink-pm/                        # 项目管理
 │   └── SKILL.md                       # PM 操作指南
 ├── gitlink-health/                    # 项目健康度分析
@@ -150,6 +152,7 @@ skills/
 | **gitlink-org** | 组织管理 | `org +list`, `org +info`, `org +members` |
 | **gitlink-ci** | CI/CD | `ci +builds`, `ci +logs` |
 | **gitlink-pipeline** | 流水线工作流 | `pipeline +runs`, `pipeline +run`, `pipeline +logs` |
+| **gitlink-wiki** | Wiki 页面管理 | `wiki +list`, `wiki +view`, `wiki +create`, `wiki +update`, `wiki +delete` |
 | **gitlink-pm** | 项目管理 | 通过 Raw API 访问 |
 | **gitlink-workflow** | AI 工作流 | Issue 分类、PR Review、Release Notes |
 | **gitlink-health** | 开源项目健康度 | 详情见SKILL.md |

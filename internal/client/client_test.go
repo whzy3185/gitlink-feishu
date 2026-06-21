@@ -169,6 +169,45 @@ func TestClientDoStatusError(t *testing.T) {
 	}
 }
 
+func TestClientDoGatewayCodeError(t *testing.T) {
+	// Gateway returns {"code":N, "msg":"..."} instead of {"status":N, "message":"..."}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"code":400,"msg":"Bad Request"}`))
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
+	env, err := c.Do("GET", "/api/test", nil, nil)
+	if err == nil {
+		t.Fatal("expected error for code=400")
+	}
+	if env == nil {
+		t.Fatal("expected envelope for code error")
+	}
+	if env.OK {
+		t.Fatal("expected OK=false for code=400")
+	}
+}
+
+func TestClientDoGatewayCode201Success(t *testing.T) {
+	// Gateway returns code=201 with JSON string data — should be treated as success
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"code":201,"msg":"","data":"{\"title\":\"test\"}"}`))
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
+	env, err := c.Do("POST", "/api/test", map[string]string{"title": "test"}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error for code=201: %v", err)
+	}
+	if !env.OK {
+		t.Fatal("expected OK=true for code=201")
+	}
+}
+
 func TestClientDoStatusZero(t *testing.T) {
 	// status=0, 200, 1 are treated as success
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -523,5 +562,20 @@ func TestShouldAppendJSONSuffixKeepsRawRepositoryName(t *testing.T) {
 func TestShouldAppendJSONSuffixSkipsExistingJSONPath(t *testing.T) {
 	if shouldAppendJSONSuffix("/projects.json") {
 		t.Fatal("existing .json path should not get another suffix")
+	}
+}
+
+func TestShouldAppendJSONSuffixSkipsWikiOpenPaths(t *testing.T) {
+	paths := []string{
+		"/wiki/open/createWiki",
+		"/wiki/open/getWiki",
+		"/wiki/open/updateWiki",
+		"/wiki/open/deleteWiki",
+		"/wiki/open/wikiPages",
+	}
+	for _, p := range paths {
+		if shouldAppendJSONSuffix(p) {
+			t.Errorf("wiki/open path %q should not get .json suffix", p)
+		}
 	}
 }

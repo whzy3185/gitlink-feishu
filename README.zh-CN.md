@@ -113,6 +113,7 @@
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
+| 📖 Wiki | 列出、查看、创建、更新、删除 Wiki 页面 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 📊 数据集 | 按项目查询科研数据集 |
 | 👤 用户 | 查看用户资料和信息 |
@@ -282,6 +283,28 @@ gitlink-cli webhook +test --owner Gitlink --repo forgeplus --id 68
 
 # 查看 webhook 投递任务
 gitlink-cli webhook +tasks --owner Gitlink --repo forgeplus --id 68
+```
+
+### Wiki 管理
+
+```bash
+# 列出 Wiki 页面（目录结构）
+gitlink-cli wiki +list --owner Gitlink --repo forgeplus --project-id 12345
+
+# 查看 Wiki 页面
+gitlink-cli wiki +view --owner Gitlink --repo forgeplus --project-id 12345 -n home
+
+# 创建 Wiki 页面
+gitlink-cli wiki +create --owner Gitlink --repo forgeplus --project-id 12345 \
+  -n getting-started -t "快速开始" -c "# 快速开始指南"
+
+# 更新 Wiki 页面标题和/或内容
+gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n home -t "新标题"
+gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n home -c "# 更新后的内容"
+gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n home -t "新标题" -c "新内容"
+
+# 删除 Wiki 页面
+gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 12345 -n old-page
 ```
 
 ### 成员管理
