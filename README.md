@@ -113,6 +113,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🏢 Org | Manage organizations, members, teams |
 | 🔧 CI | View builds, logs, CI/CD operations |
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
+| 🔔 Message Settings | Inspect and update personal message delivery preferences |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
 | 📖 Wiki | List, view, create, update, and delete wiki pages |
 | 🔔 Notification | List, read, and delete user messages |
