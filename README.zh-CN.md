@@ -406,6 +406,27 @@ gitlink-cli label +update --owner Gitlink --repo forgeplus -i 42 -c "#00FF00"
 gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
 ```
 
+### 模板管理
+
+```bash
+# 列出项目模板
+gitlink-cli template +list --owner Gitlink --repo forgeplus
+
+# 按 ID 获取模板详情
+gitlink-cli template +get --owner Gitlink --repo forgeplus -i 42
+
+# 创建 Issue 模板
+gitlink-cli template +create --owner Gitlink --repo forgeplus \
+  -t "ProjectTemplates::Issue" -n "缺陷报告" -c "## 问题描述\n## 复现步骤\n## 期望行为"
+
+# 更新模板
+gitlink-cli template +update --owner Gitlink --repo forgeplus \
+  -i 5 -t "ProjectTemplates::Issue" -n "缺陷报告 v2" -c "## 更新后的内容"
+
+# 删除模板
+gitlink-cli template +delete --owner Gitlink --repo forgeplus -i 5
+```
+
 ### Pull Request
 
 ```bash
