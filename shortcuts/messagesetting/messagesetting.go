@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -60,10 +61,10 @@ type settingRegistry struct {
 }
 
 type groupedSettingOutput struct {
-	Group     string                `json:"group"`
-	GroupName string                `json:"group_name,omitempty"`
-	Settings  []settingOutput       `json:"settings"`
-	Summary   channelSummaryOutput  `json:"summary"`
+	Group     string               `json:"group"`
+	GroupName string               `json:"group_name,omitempty"`
+	Settings  []settingOutput      `json:"settings"`
+	Summary   channelSummaryOutput `json:"summary"`
 }
 
 type settingOutput struct {
@@ -107,53 +108,61 @@ var allowedPresetNames = map[string]presetSpec{
 }
 
 // Shortcuts returns message settings shortcuts.
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "catalog",
-			Description: "List available message setting groups and keys",
+			Description: tr.T("cmd.message_settings.catalog.short"),
 			Flags: []common.Flag{
-				{Name: "group", Usage: "Filter groups by short name, for example: Normal,ManageProject"},
+				{Name: "group", Usage: tr.T("flag.message_settings.group")},
 			},
 			Run: runCatalog,
 		},
 		{
 			Name:        "view",
-			Description: "Show effective message settings for a user",
+			Description: tr.T("cmd.message_settings.view.short"),
 			Flags: []common.Flag{
-				{Name: "login", Short: "l", Usage: "Target user login (defaults to current authenticated user)"},
-				{Name: "group", Usage: "Filter groups by short name, for example: Normal,ManageProject"},
+				{Name: "login", Short: "l", Usage: tr.T("flag.message_settings.login")},
+				{Name: "group", Usage: tr.T("flag.message_settings.group")},
 			},
 			Run: runView,
 		},
 		{
 			Name:        "update",
-			Description: "Update message settings for selected keys while preserving other values",
+			Description: tr.T("cmd.message_settings.update.short"),
 			Flags: []common.Flag{
-				{Name: "login", Short: "l", Usage: "Target user login (defaults to current authenticated user)"},
-				{Name: "channel", Usage: "Channel to change: notification, email, or both", Required: true},
-				{Name: "state", Usage: "Desired state: on/off, true/false, enable/disable", Required: true},
-				{Name: "keys", Usage: "Comma-separated setting keys, for example: Normal::Permission,ManageProject::Issue"},
-				{Name: "group", Usage: "Apply to all keys in one or more groups, for example: Normal,ManageProject"},
-				{Name: "all", Usage: "Apply to all known setting keys", Bool: true, Default: "false"},
-				{Name: "dry-run", Usage: "Preview the update without sending it", Bool: true, Default: "false"},
+				{Name: "login", Short: "l", Usage: tr.T("flag.message_settings.login")},
+				{Name: "channel", Usage: tr.T("flag.message_settings.channel"), Required: true},
+				{Name: "state", Usage: tr.T("flag.message_settings.state"), Required: true},
+				{Name: "keys", Usage: tr.T("flag.message_settings.keys")},
+				{Name: "group", Usage: tr.T("flag.message_settings.group")},
+				{Name: "all", Usage: tr.T("flag.message_settings.all"), Bool: true, Default: "false"},
+				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
 			},
 			Run: runUpdate,
 		},
 		{
 			Name:        "preset",
-			Description: "Apply a preset to selected message settings",
+			Description: tr.T("cmd.message_settings.preset.short"),
 			Flags: []common.Flag{
-				{Name: "login", Short: "l", Usage: "Target user login (defaults to current authenticated user)"},
-				{Name: "name", Usage: "Preset name: all-on, all-off, notification-only, email-only", Required: true},
-				{Name: "keys", Usage: "Comma-separated setting keys, for example: Normal::Permission,ManageProject::Issue"},
-				{Name: "group", Usage: "Apply to all keys in one or more groups, for example: Normal,ManageProject"},
-				{Name: "all", Usage: "Apply to all known setting keys", Bool: true, Default: "false"},
-				{Name: "dry-run", Usage: "Preview the update without sending it", Bool: true, Default: "false"},
+				{Name: "login", Short: "l", Usage: tr.T("flag.message_settings.login")},
+				{Name: "name", Usage: tr.T("flag.message_settings.preset_name"), Required: true},
+				{Name: "keys", Usage: tr.T("flag.message_settings.keys")},
+				{Name: "group", Usage: tr.T("flag.message_settings.group")},
+				{Name: "all", Usage: tr.T("flag.message_settings.all"), Bool: true, Default: "false"},
+				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
 			},
 			Run: runPreset,
 		},
 	}
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }
 
 func runCatalog(ctx *common.RuntimeContext) error {

@@ -18,6 +18,9 @@ func runMessageSettingShortcut(t *testing.T, server *httptest.Server, name strin
 		Format: "json",
 		Args:   args,
 	}
+	if ctx.Args == nil {
+		ctx.Args = map[string]string{}
+	}
 	return shortcut.Run(ctx)
 }
 
@@ -182,9 +185,9 @@ func TestMessageSettingsPresetPostsSelectedKeys(t *testing.T) {
 	defer server.Close()
 
 	err := runMessageSettingShortcut(t, server, "preset", map[string]string{
-		"name":  "all-off",
-		"keys":  "Permission,ManageProject::Issue",
-		"all":   "false",
+		"name": "all-off",
+		"keys": "Permission,ManageProject::Issue",
+		"all":  "false",
 	})
 	if err != nil {
 		t.Fatalf("preset failed: %v", err)
@@ -202,6 +205,45 @@ func TestMessageSettingsPresetPostsSelectedKeys(t *testing.T) {
 	}
 	if notificationBody["ManageProject::PullRequest"] != true {
 		t.Fatalf("unselected keys should remain unchanged, got %#v", notificationBody["ManageProject::PullRequest"])
+	}
+}
+
+func TestSelectKeysRequiresSelector(t *testing.T) {
+	registry := buildRegistry(mustCatalogResponse(t, catalogFixture()), mustUserSettingResponse(t, userSettingFixture()))
+	if _, _, err := selectKeys(selectorArgs{}, registry); err == nil {
+		t.Fatal("expected selector validation error")
+	}
+}
+
+func TestParseGroupFilterRejectsUnknownGroup(t *testing.T) {
+	registry := buildRegistry(mustCatalogResponse(t, catalogFixture()), nil)
+	if _, err := parseGroupFilter("UnknownGroup", registry); err == nil {
+		t.Fatal("expected unknown group error")
+	}
+}
+
+func TestResolveKeyFilterRejectsAmbiguousShortKey(t *testing.T) {
+	catalog := &catalogResponse{
+		SettingTypes: []catalogGroup{
+			{
+				Type:     "TemplateMessageSetting::Normal",
+				TypeName: "Normal",
+				Settings: []catalogSettingRow{
+					{Name: "Issue", Key: "Issue"},
+				},
+			},
+			{
+				Type:     "TemplateMessageSetting::ManageProject",
+				TypeName: "Manage",
+				Settings: []catalogSettingRow{
+					{Name: "Issue", Key: "Issue"},
+				},
+			},
+		},
+	}
+	registry := buildRegistry(catalog, nil)
+	if _, err := resolveKeyFilter("Issue", registry); err == nil {
+		t.Fatal("expected ambiguous key error")
 	}
 }
 
@@ -255,14 +297,40 @@ func userSettingFixture() map[string]interface{} {
 			"name":  "Alice",
 		},
 		"notification_body": map[string]interface{}{
-			"Normal::Permission":        true,
-			"ManageProject::Issue":      true,
+			"Normal::Permission":         true,
+			"ManageProject::Issue":       true,
 			"ManageProject::PullRequest": true,
 		},
 		"email_body": map[string]interface{}{
-			"Normal::Permission":        false,
-			"ManageProject::Issue":      false,
+			"Normal::Permission":         false,
+			"ManageProject::Issue":       false,
 			"ManageProject::PullRequest": false,
 		},
 	}
+}
+
+func mustCatalogResponse(t *testing.T, value map[string]interface{}) *catalogResponse {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal catalog fixture: %v", err)
+	}
+	var result catalogResponse
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("unmarshal catalog fixture: %v", err)
+	}
+	return &result
+}
+
+func mustUserSettingResponse(t *testing.T, value map[string]interface{}) *userSettingResponse {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal user setting fixture: %v", err)
+	}
+	var result userSettingResponse
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("unmarshal user setting fixture: %v", err)
+	}
+	return &result
 }

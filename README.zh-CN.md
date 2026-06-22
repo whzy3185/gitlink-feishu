@@ -113,6 +113,7 @@
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
+| 🔔 消息通知设置 | 查看并更新个人消息通知投递偏好 |
 | 📖 Wiki | 列出、查看、创建、更新、删除 Wiki 页面 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 📊 数据集 | 按项目查询科研数据集 |
@@ -266,6 +267,29 @@ gitlink-cli repo +create -n my-project -d "项目描述"
 
 # Fork 仓库
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+```
+
+### 消息通知设置
+
+```bash
+# 列出可用的消息通知设置分组和键
+gitlink-cli message-settings +catalog
+
+# 查看当前用户生效中的消息通知设置
+gitlink-cli message-settings +view
+
+# 只看另一个用户的仓库管理类消息设置
+gitlink-cli message-settings +view --login Mengz --group ManageProject
+
+# 预览关闭指定设置键的站内通知，不发送请求
+gitlink-cli message-settings +update \
+  --channel notification \
+  --state off \
+  --keys Normal::Permission,ManageProject::Issue \
+  --dry-run
+
+# 将预设应用到所有已知设置
+gitlink-cli message-settings +preset --name notification-only --all
 ```
 
 ### Webhook 管理
