@@ -32,6 +32,8 @@ func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
   gitlink-cli api GET /projects --query 'page=1&limit=10'
   gitlink-cli api POST /:owner/:repo/issues --body '{"subject":"Bug","description":"..."}'
   gitlink-cli api POST /:owner/:repo/issues --body-file issue.json
+  gitlink-cli api POST /v1/{{owner}}/{{repo}}/issues/{{number}}/journals --body '{"notes":"handled by {{actor}}"}' --var owner=Gitlink --var repo=gitlink-cli --var number=42 --var actor=bot
+  gitlink-cli api POST /v1/{{owner}}/{{repo}}/issues --body-file issue.json --var owner=Gitlink --var repo=gitlink-cli --dry-run
   gitlink-cli api --batch-file plan.json --dry-run
   gitlink-cli api --batch-file plan.json --var owner=Gitlink --var repo=gitlink-cli`,
 		Args: validateAPIArgs,

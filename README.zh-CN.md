@@ -569,6 +569,20 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 
 # 带查询参数
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
+
+# 从 git 上下文或显式 owner/repo 渲染路径占位符
+gitlink-cli api POST /:owner/:repo/issues --body '{"subject":"Bug","description":"..."}'
+
+# 在单次请求中复用模板变量
+gitlink-cli api POST /v1/{{owner}}/{{repo}}/issues/{{number}}/journals \
+  --body '{"notes":"handled by {{actor}}"}' \
+  --var owner=Gitlink --var repo=gitlink-cli --var number=42 --var actor=bot
+
+# 先预览渲染后的单次请求，再决定是否真正发送
+gitlink-cli api POST /v1/{{owner}}/{{repo}}/issues \
+  --body-file issue.json \
+  --var owner=Gitlink --var repo=gitlink-cli \
+  --dry-run
 ```
 
 ## 全局参数
