@@ -2,12 +2,13 @@
 
 ## Summary
 
-This PR adds four read-only workflow commands for repository maintenance:
+This PR adds five read-only workflow commands for repository maintenance:
 
 - `workflow +triage`
 - `workflow +health`
 - `workflow +pr-summary`
 - `workflow +repo-report`
+- `workflow +stale`
 
 The commands provide rule-based, explainable analysis with stable `json`, concise `table`,
 and copy-friendly `markdown` output.
@@ -52,6 +53,12 @@ without introducing LLM dependencies or remote write behavior.
 - Produces a repository workflow report with score, risk level, recommendations, and reasoning
 - Supports partial read-only remote aggregation when optional sections are unavailable
 
+### `workflow +stale`
+
+- Scans issue and pull request queues for stale activity without remote writes
+- Buckets results into `watch`, `stale`, and `zombie` severity levels
+- Produces queue summaries, per-item recommendations, and fallback notes when PR activity requires journal probing
+
 ## Safety
 
 - Remote mode is read-only
@@ -87,12 +94,11 @@ Coverage includes:
 - `README.md`
 - `docs/workflow-agent-design.md`
 - `docs/workflow-agent-test-report.md`
-- `skills/gitlink-workflow/SKILL.md`
+- `doc/changes/workflow-stale.md`
 
 ## Known Limitations
 
 - `workflow +release-notes` is not implemented.
-- `workflow +stale` is not implemented.
 - Real GitLink API shapes may require follow-up normalization.
 
 ## Examples
@@ -102,4 +108,5 @@ gitlink-cli workflow +triage --from shortcuts/workflow/testdata/issue_bug.json -
 gitlink-cli workflow +health --from shortcuts/workflow/testdata/health_good.json --format markdown
 gitlink-cli workflow +pr-summary --from shortcuts/workflow/testdata/pr_summary.json --format markdown
 gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format markdown
+gitlink-cli workflow +stale --from shortcuts/workflow/testdata/stale_input.json --format markdown
 ```

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"text/tabwriter"
+	"time"
 )
 
 func renderTriageReport(w io.Writer, report TriageReport, format string) error {
@@ -31,6 +32,19 @@ func renderHealthResult(w io.Writer, result HealthResult, format string) error {
 		return writeHealthMarkdown(w, result)
 	case "table":
 		return writeHealthTable(w, result)
+	default:
+		return fmt.Errorf("unsupported workflow output format %q", format)
+	}
+}
+
+func renderStaleReport(w io.Writer, report StaleReport, format string, lang string) error {
+	switch normalizeFormat(format) {
+	case "json":
+		return writeJSON(w, report)
+	case "markdown":
+		return writeStaleMarkdown(w, report, lang)
+	case "table":
+		return writeStaleTable(w, report)
 	default:
 		return fmt.Errorf("unsupported workflow output format %q", format)
 	}
@@ -183,6 +197,28 @@ func writeRepoReportTable(w io.Writer, result RepoReportResult, lang string) err
 	return tw.Flush()
 }
 
+func writeStaleTable(w io.Writer, report StaleReport) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(tw, "TYPE\tNUMBER\tBUCKET\tAGE_DAYS\tLAST_ACTIVITY\tCOMMENTS\tACTION\tTITLE"); err != nil {
+		return err
+	}
+	for _, item := range report.Items {
+		if _, err := fmt.Fprintf(tw, "%s\t#%d\t%s\t%d\t%s\t%d\t%s\t%s\n",
+			item.Kind,
+			item.Number,
+			item.Bucket,
+			item.AgeDays,
+			formatStaleActivity(item.LastActivityAt),
+			item.CommentsCount,
+			truncateTableText(item.SuggestedAction, 52),
+			truncateTableText(item.Title, 64),
+		); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
 func writeTriageMarkdown(w io.Writer, report TriageReport) error {
 	if _, err := fmt.Fprintf(w, "# Issue Triage Report\n\nRepository: `%s`\n\n", report.Repository); err != nil {
 		return err
@@ -284,6 +320,85 @@ func writeRepoReportMarkdown(w io.Writer, result RepoReportResult, lang string) 
 		return err
 	}
 	return writeRepoReportMarkdownList(w, repoReportText(lang, "reasoning"), result.Reasoning, repoReportText(lang, "not_available"))
+}
+
+func writeStaleMarkdown(w io.Writer, report StaleReport, lang string) error {
+	lang = normalizeLang(lang)
+	if _, err := fmt.Fprintf(w, "# %s\n\n", staleText(lang, "title")); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "## %s\n\n", staleText(lang, "overview")); err != nil {
+		return err
+	}
+	lines := []string{
+		fmt.Sprintf("- Repository: `%s`", report.Repository),
+		fmt.Sprintf("- Source: `%s`", report.Source),
+		fmt.Sprintf("- State: `%s`", report.State),
+		fmt.Sprintf("- Stale threshold: `%d` days", report.StaleDays),
+		fmt.Sprintf("- Scanned: `%d`", report.ScannedTotal),
+		fmt.Sprintf("- Flagged: `%d`", report.FlaggedTotal),
+		fmt.Sprintf("- Shown: `%d`", report.ShownTotal),
+		fmt.Sprintf("- Omitted: `%d`", report.OmittedTotal),
+		fmt.Sprintf("- Oldest age: `%d` days", report.OldestAgeDays),
+		fmt.Sprintf("- Buckets: `fresh=%d`, `watch=%d`, `stale=%d`, `zombie=%d`", report.ByBucket[staleBucketFresh], report.ByBucket[staleBucketWatch], report.ByBucket[staleBucketStale], report.ByBucket[staleBucketZombie]),
+	}
+	for _, line := range lines {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+
+	if _, err := fmt.Fprintf(w, "\n## %s\n\n", staleText(lang, "items")); err != nil {
+		return err
+	}
+	if len(report.Items) == 0 {
+		if _, err := fmt.Fprintf(w, "- %s\n", staleText(lang, "no_items")); err != nil {
+			return err
+		}
+	} else {
+		if _, err := fmt.Fprintln(w, "| Type | Number | Bucket | Age (days) | Last activity | Action | Title |"); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(w, "| --- | ---: | --- | ---: | --- | --- | --- |"); err != nil {
+			return err
+		}
+		for _, item := range report.Items {
+			if _, err := fmt.Fprintf(w, "| %s | #%d | %s | %d | %s | %s | %s |\n",
+				item.Kind,
+				item.Number,
+				item.Bucket,
+				item.AgeDays,
+				formatStaleActivity(item.LastActivityAt),
+				item.SuggestedAction,
+				strings.ReplaceAll(item.Title, "|", "\\|"),
+			); err != nil {
+				return err
+			}
+		}
+	}
+
+	if _, err := fmt.Fprintf(w, "\n## %s\n\n", staleText(lang, "recommendations")); err != nil {
+		return err
+	}
+	for _, recommendation := range report.Recommendations {
+		if _, err := fmt.Fprintf(w, "- %s\n", recommendation); err != nil {
+			return err
+		}
+	}
+
+	if _, err := fmt.Fprintf(w, "\n## %s\n\n", staleText(lang, "notes")); err != nil {
+		return err
+	}
+	if len(report.Notes) == 0 {
+		_, err := fmt.Fprintf(w, "- %s\n", staleText(lang, "no_notes"))
+		return err
+	}
+	for _, note := range report.Notes {
+		if _, err := fmt.Fprintf(w, "- %s\n", note); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeCountMapMarkdown(w io.Writer, title string, values map[string]int) error {
@@ -419,4 +534,11 @@ func truncateTableText(value string, max int) string {
 		return string(runes[:max])
 	}
 	return string(runes[:max-3]) + "..."
+}
+
+func formatStaleActivity(value time.Time) string {
+	if value.IsZero() {
+		return "-"
+	}
+	return value.Format("2006-01-02")
 }
