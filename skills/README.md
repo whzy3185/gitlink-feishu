@@ -114,6 +114,10 @@ skills/
 │   │   └── queries.md                 # SQL 查询参考
 │   └── asset/
 │       └── health_report_template.md  # 报告模板
+├── gitlink-research-trust/            # 科研开源可信度评估
+│   ├── SKILL.md                       # 复现性、可追踪性、合规与文档评分
+│   └── examples/
+│       └── research-trust-workflow.md # 科研可信度工作流示例
 └── gitlink-workflow/                  # AI 自动化工作流
     └── SKILL.md                       # 工作流模板（Issue 分类、PR Review、Release Notes）
 ```
@@ -147,6 +151,7 @@ skills/
 | **gitlink-pm** | 项目管理 | 通过 Raw API 访问 |
 | **gitlink-workflow** | AI 工作流 | Issue 分类、PR Review、Release Notes |
 | **gitlink-health** | 开源项目健康度 | 详情见SKILL.md |
+| **gitlink-research-trust** | 科研开源可信度评估 | `search +repos`, `repo +info`, `repo +tree`, `repo +readme` |
 
 ---
 
