@@ -175,6 +175,89 @@ func TestPRListStateAllOmitsStatus(t *testing.T) {
 	}
 }
 
+func TestPRListByNumberUsesDetailEndpoint(t *testing.T) {
+	var requestedPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedPath = r.URL.Path
+		if r.URL.Path != "/v1/owner/repo/pulls/42.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"id":    float64(101),
+			"index": float64(42),
+			"title": "feat: search by number",
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "list", map[string]string{"number": "42"})
+	if err != nil {
+		t.Fatalf("list by number failed: %v", err)
+	}
+	if requestedPath == "" {
+		t.Fatal("expected detail endpoint to be called")
+	}
+}
+
+func TestPRListByIDAliasUsesDetailEndpoint(t *testing.T) {
+	var requestedPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedPath = r.URL.Path
+		if r.URL.Path != "/v1/owner/repo/pulls/7.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"id":    float64(202),
+			"index": float64(7),
+			"title": "feat: alias",
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "list", map[string]string{"id": "7"})
+	if err != nil {
+		t.Fatalf("list by id alias failed: %v", err)
+	}
+	if requestedPath == "" {
+		t.Fatal("expected detail endpoint to be called")
+	}
+}
+
+func TestPullRequestListNumberArgPrefersNumber(t *testing.T) {
+	ctx := &common.RuntimeContext{
+		Args: map[string]string{
+			"number": "15",
+			"id":     "9",
+		},
+	}
+	if got := pullRequestListNumberArg(ctx); got != "15" {
+		t.Fatalf("pullRequestListNumberArg() = %q, want 15", got)
+	}
+}
+
+func TestWrapPullRequestListByNumberResult(t *testing.T) {
+	pr := map[string]interface{}{
+		"id":     float64(303),
+		"number": float64(88),
+		"title":  "feat: wrapped number",
+	}
+
+	data, meta := wrapPullRequestListByNumberResult(pr)
+
+	assertEqual(t, data["total_count"], 1)
+	assertEqual(t, data["page"], 1)
+	assertEqual(t, data["limit"], 1)
+	pulls := data["pulls"].([]interface{})
+	wrapped := pulls[0].(map[string]interface{})
+	assertEqual(t, wrapped["number"], float64(88))
+	if meta == nil {
+		t.Fatal("expected meta to be set")
+	}
+	assertEqual(t, meta.TotalCount, 1)
+	assertEqual(t, meta.Page, 1)
+	assertEqual(t, meta.Limit, 1)
+}
+
 // --- create ---
 
 func TestPRCreate(t *testing.T) {
