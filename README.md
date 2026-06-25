@@ -695,6 +695,16 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 
 # With query parameters
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
+
+# Reuse --owner/--repo placeholders in a single request
+gitlink-cli api GET /:owner/:repo/issues --owner Gitlink --repo gitlink-cli --query 'page=1&limit=5'
+
+# Render one-off template variables in path, query, body, and headers
+gitlink-cli api POST /{{owner}}/{{repo}}/issues/{{number}}/journals \
+  --var owner=Gitlink --var repo=gitlink-cli --var number=42 --var actor=codex \
+  --query 'notify={{actor}}' \
+  --header 'X-Actor: {{actor}}' \
+  --body '{"notes":"handled by {{actor}}"}'
 ```
 
 ## Global Parameters

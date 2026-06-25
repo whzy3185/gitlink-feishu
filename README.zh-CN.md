@@ -569,6 +569,16 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 
 # 带查询参数
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
+
+# 鍗曟璇锋眰涓洿鎺ュ鐢?--owner / --repo 鍗犱綅绗?
+gitlink-cli api GET /:owner/:repo/issues --owner Gitlink --repo gitlink-cli --query 'page=1&limit=5'
+
+# 鍦?path / query / body / header 涓覆鏌撲竴娆℃€фā鏉垮彉閲?
+gitlink-cli api POST /{{owner}}/{{repo}}/issues/{{number}}/journals \
+  --var owner=Gitlink --var repo=gitlink-cli --var number=42 --var actor=codex \
+  --query 'notify={{actor}}' \
+  --header 'X-Actor: {{actor}}' \
+  --body '{"notes":"handled by {{actor}}"}'
 ```
 
 ## 全局参数
