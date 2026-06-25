@@ -402,6 +402,9 @@ gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
 # List PRs
 gitlink-cli pr +list --owner Gitlink --repo forgeplus
 
+# List PRs with the user-facing PR number column
+gitlink-cli pr +list --owner Gitlink --repo forgeplus --format table
+
 # Create a PR (same-repo branch)
 gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: Search feature" --head feature/search --base master
 

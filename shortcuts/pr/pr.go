@@ -86,6 +86,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
+				normalizePullRequestListNumbers(env)
 				return ctx.Output(env)
 			},
 		},
@@ -470,6 +471,33 @@ func extractIssueID(env *output.Envelope) (int64, error) {
 	return int64(idFloat), nil
 }
 
+func normalizePullRequestListNumbers(env *output.Envelope) {
+	if env == nil {
+		return
+	}
+
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	pulls, ok := data["pulls"].([]interface{})
+	if !ok {
+		return
+	}
+
+	for i, item := range pulls {
+		pr, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if number := firstPullRequestNumber(pr); number != nil {
+			pr["number"] = number
+		}
+		pulls[i] = pr
+	}
+}
+
 func enrichPullRequestClosedAt(ctx *common.RuntimeContext, env *output.Envelope) error {
 	data, ok := env.Data.(map[string]interface{})
 	if !ok {
@@ -558,4 +586,13 @@ func numberField(m map[string]interface{}, key string) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func firstPullRequestNumber(pr map[string]interface{}) interface{} {
+	for _, key := range []string{"number", "pull_request_number", "index"} {
+		if value, ok := pr[key]; ok {
+			return value
+		}
+	}
+	return nil
 }

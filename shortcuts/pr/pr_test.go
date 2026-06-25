@@ -175,6 +175,50 @@ func TestPRListStateAllOmitsStatus(t *testing.T) {
 	}
 }
 
+func TestNormalizePullRequestListNumbersCopiesIndex(t *testing.T) {
+	env := &output.Envelope{
+		OK: true,
+		Data: map[string]interface{}{
+			"pulls": []interface{}{
+				map[string]interface{}{
+					"id":    float64(11),
+					"index": float64(7),
+					"title": "feat: show number",
+				},
+			},
+		},
+	}
+
+	normalizePullRequestListNumbers(env)
+
+	data := env.Data.(map[string]interface{})
+	pulls := data["pulls"].([]interface{})
+	pr := pulls[0].(map[string]interface{})
+	assertEqual(t, pr["number"], float64(7))
+}
+
+func TestNormalizePullRequestListNumbersKeepsExistingNumber(t *testing.T) {
+	env := &output.Envelope{
+		OK: true,
+		Data: map[string]interface{}{
+			"pulls": []interface{}{
+				map[string]interface{}{
+					"number": float64(9),
+					"index":  float64(7),
+					"title":  "feat: keep number",
+				},
+			},
+		},
+	}
+
+	normalizePullRequestListNumbers(env)
+
+	data := env.Data.(map[string]interface{})
+	pulls := data["pulls"].([]interface{})
+	pr := pulls[0].(map[string]interface{})
+	assertEqual(t, pr["number"], float64(9))
+}
+
 // --- create ---
 
 func TestPRCreate(t *testing.T) {

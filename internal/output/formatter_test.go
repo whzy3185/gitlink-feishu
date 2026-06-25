@@ -200,6 +200,7 @@ func TestHasComplexValues(t *testing.T) {
 
 func TestCollectKeys(t *testing.T) {
 	m := map[string]interface{}{
+		"number":     float64(3),
 		"title":      "test",
 		"id":         float64(1),
 		"status":     "open",
@@ -207,17 +208,20 @@ func TestCollectKeys(t *testing.T) {
 	}
 	keys := collectKeys(m)
 	// Priority keys should come first
-	if len(keys) != 4 {
-		t.Fatalf("expected 4 keys, got %d", len(keys))
+	if len(keys) != 5 {
+		t.Fatalf("expected 5 keys, got %d", len(keys))
 	}
-	if keys[0] != "id" {
-		t.Fatalf("first key should be 'id', got %q", keys[0])
+	if keys[0] != "number" {
+		t.Fatalf("first key should be 'number', got %q", keys[0])
 	}
-	if keys[1] != "title" {
-		t.Fatalf("second key should be 'title', got %q", keys[1])
+	if keys[1] != "id" {
+		t.Fatalf("second key should be 'id', got %q", keys[1])
 	}
-	if keys[2] != "status" {
-		t.Fatalf("third key should be 'status', got %q", keys[2])
+	if keys[2] != "title" {
+		t.Fatalf("third key should be 'title', got %q", keys[2])
+	}
+	if keys[3] != "status" {
+		t.Fatalf("fourth key should be 'status', got %q", keys[3])
 	}
 }
 
