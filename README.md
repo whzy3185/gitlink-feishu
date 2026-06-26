@@ -253,8 +253,46 @@ gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 gitlink-cli repo +create -n my-project -d "Project description"
 
 # Fork a repository
-gitlink-cli repo +fork --owner Gitlink --repo forgeplus
-```
+ gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+ 
+ # View repository details
+ gitlink-cli repo +detail --owner Gitlink --repo forgeplus
+ 
+ # View repository simple info
+ gitlink-cli repo +simple --owner Gitlink --repo forgeplus
+ 
+ # View repository settings
+ gitlink-cli repo +settings --owner Gitlink --repo forgeplus
+ 
+ # List navigation units
+ gitlink-cli repo +units --owner Gitlink --repo forgeplus
+ 
+ # Update navigation units
+ gitlink-cli repo +units-update --owner Gitlink --repo forgeplus --unit-types code,issues,pulls --dry-run
+ gitlink-cli repo +units-update --owner Gitlink --repo forgeplus --unit-types code,issues,pulls
+ 
+ # List project topics
+ gitlink-cli repo +topics --owner Gitlink --repo forgeplus
+ 
+ # Add a project topic
+ gitlink-cli repo +topic-add --owner Gitlink --repo forgeplus --name "machine-learning" --dry-run
+ gitlink-cli repo +topic-add --owner Gitlink --repo forgeplus --name "machine-learning"
+ 
+ # Delete a project topic
+ gitlink-cli repo +topic-delete --owner Gitlink --repo forgeplus --id 123 --dry-run
+ gitlink-cli repo +topic-delete --owner Gitlink --repo forgeplus --id 123
+ 
+ # List organizations available for transfer
+ gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
+ 
+ # Apply for repository transfer
+ gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --org-id 456 --dry-run
+ gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --org-id 456
+ 
+ # Cancel transfer application
+ gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --dry-run
+ gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus
+ ```
 
 ### Webhook Management
 

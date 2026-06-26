@@ -264,8 +264,46 @@ gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 gitlink-cli repo +create -n my-project -d "项目描述"
 
 # Fork 仓库
-gitlink-cli repo +fork --owner Gitlink --repo forgeplus
-```
+ gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+ 
+ # 查看仓库详情
+ gitlink-cli repo +detail --owner Gitlink --repo forgeplus
+ 
+ # 查看仓库简要信息
+ gitlink-cli repo +simple --owner Gitlink --repo forgeplus
+ 
+ # 查看仓库设置
+ gitlink-cli repo +settings --owner Gitlink --repo forgeplus
+ 
+ # 列出导航单元
+ gitlink-cli repo +units --owner Gitlink --repo forgeplus
+ 
+ # 更新导航单元
+ gitlink-cli repo +units-update --owner Gitlink --repo forgeplus --unit-types code,issues,pulls --dry-run
+ gitlink-cli repo +units-update --owner Gitlink --repo forgeplus --unit-types code,issues,pulls
+ 
+ # 列出项目标签
+ gitlink-cli repo +topics --owner Gitlink --repo forgeplus
+ 
+ # 添加项目标签
+ gitlink-cli repo +topic-add --owner Gitlink --repo forgeplus --name "machine-learning" --dry-run
+ gitlink-cli repo +topic-add --owner Gitlink --repo forgeplus --name "machine-learning"
+ 
+ # 删除项目标签
+ gitlink-cli repo +topic-delete --owner Gitlink --repo forgeplus --id 123 --dry-run
+ gitlink-cli repo +topic-delete --owner Gitlink --repo forgeplus --id 123
+ 
+ # 列出可转移的组织
+ gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
+ 
+ # 申请转移仓库
+ gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --org-id 456 --dry-run
+ gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --org-id 456
+ 
+ # 取消转移申请
+ gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --dry-run
+ gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus
+ ```
 
 ### Webhook 管理
 
