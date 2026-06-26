@@ -152,6 +152,50 @@ func TestRepoReadmeUsesRepositoryReadmeEndpoint(t *testing.T) {
 	}
 }
 
+func TestRepoFileUsesSubEntriesAndDefaultsToMaster(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+		assertEqual(t, r.URL.Query().Get("filepath"), "README.md")
+		assertEqual(t, r.URL.Query().Get("ref"), "master")
+		writeJSON(t, w, map[string]interface{}{
+			"entries": map[string]interface{}{
+				"name":    "README.md",
+				"type":    "file",
+				"sha":     "abc123",
+				"size":    float64(12),
+				"content": "# docs\n",
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "file", map[string]string{"path": "/README.md"})
+	if err != nil {
+		t.Fatalf("file shortcut failed: %v", err)
+	}
+}
+
+func TestRepoFileUsesExplicitRef(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+		assertEqual(t, r.URL.Query().Get("filepath"), "go.mod")
+		assertEqual(t, r.URL.Query().Get("ref"), "release/v1")
+		writeJSON(t, w, map[string]interface{}{
+			"entries": map[string]interface{}{
+				"name":    "go.mod",
+				"type":    "file",
+				"content": "module example.com/demo\n",
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "file", map[string]string{"path": "go.mod", "ref": "release/v1"})
+	if err != nil {
+		t.Fatalf("file shortcut failed: %v", err)
+	}
+}
+
 func TestRepoTreeListsRootOnDefaultRef(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
@@ -215,6 +259,42 @@ func TestRepoTreeShortcutRegistersHelpFlags(t *testing.T) {
 	}
 	if refFlag.Short != "r" || refFlag.Default != "master" || refFlag.Usage == "" {
 		t.Fatalf("unexpected ref flag: %+v", refFlag)
+	}
+}
+
+func TestRepoFileShortcutRegistersHelpFlags(t *testing.T) {
+	file := findShortcut(t, "file")
+	if file.Description == "" {
+		t.Fatal("file shortcut description is empty")
+	}
+
+	flags := map[string]common.Flag{}
+	for _, flag := range file.Flags {
+		flags[flag.Name] = flag
+	}
+
+	pathFlag, ok := flags["path"]
+	if !ok {
+		t.Fatal("file shortcut missing path flag")
+	}
+	if pathFlag.Short != "p" || !pathFlag.Required || pathFlag.Usage == "" {
+		t.Fatalf("unexpected path flag: %+v", pathFlag)
+	}
+
+	refFlag, ok := flags["ref"]
+	if !ok {
+		t.Fatal("file shortcut missing ref flag")
+	}
+	if refFlag.Short != "r" || refFlag.Default != "master" || refFlag.Usage == "" {
+		t.Fatalf("unexpected ref flag: %+v", refFlag)
+	}
+
+	contentOnlyFlag, ok := flags["content-only"]
+	if !ok {
+		t.Fatal("file shortcut missing content-only flag")
+	}
+	if !contentOnlyFlag.Bool || contentOnlyFlag.Default != "false" || contentOnlyFlag.Usage == "" {
+		t.Fatalf("unexpected content-only flag: %+v", contentOnlyFlag)
 	}
 }
 
@@ -507,6 +587,16 @@ func TestRepoInsightValidation(t *testing.T) {
 			args:     map[string]string{"pass-year": "0"},
 		},
 		{
+			name:     "missing file path",
+			shortcut: "file",
+			args:     map[string]string{},
+		},
+		{
+			name:     "invalid file path",
+			shortcut: "file",
+			args:     map[string]string{"path": "/"},
+		},
+		{
 			name:     "invalid start timestamp",
 			shortcut: "watchers",
 			args:     map[string]string{"start-at": "abc"},
@@ -618,6 +708,66 @@ func TestRepoCreateUserNoLogin(t *testing.T) {
 	err := runShortcut(t, server, "create", map[string]string{"name": "new-repo"})
 	if err == nil {
 		t.Fatal("expected error when user response has no login")
+	}
+}
+
+func TestRepoFileRejectsDirectoryPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+		writeJSON(t, w, map[string]interface{}{
+			"entries": []map[string]interface{}{
+				{"name": "main.go", "type": "file"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "file", map[string]string{"path": "cmd"})
+	if err == nil {
+		t.Fatal("expected directory error")
+	}
+}
+
+func TestRepoFileContentOnlyRequiresContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+		writeJSON(t, w, map[string]interface{}{
+			"entries": map[string]interface{}{
+				"name": "README.md",
+				"type": "file",
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "file", map[string]string{
+		"path":         "README.md",
+		"content-only": "true",
+	})
+	if err == nil {
+		t.Fatal("expected missing content error")
+	}
+}
+
+func TestBuildRepoFileResult(t *testing.T) {
+	result := buildRepoFileResult(map[string]interface{}{
+		"name":    "go.mod",
+		"type":    "file",
+		"sha":     "abc123",
+		"size":    float64(42),
+		"content": "module demo\n",
+		"commit":  map[string]interface{}{"sha": "nested"},
+	}, "go.mod", "master")
+
+	assertEqual(t, result["path"], "go.mod")
+	assertEqual(t, result["ref"], "master")
+	assertEqual(t, result["name"], "go.mod")
+	assertEqual(t, result["type"], "file")
+	assertEqual(t, result["sha"], "abc123")
+	assertEqual(t, result["size"], float64(42))
+	assertEqual(t, result["content"], "module demo\n")
+	if _, ok := result["commit"]; ok {
+		t.Fatal("did not expect nested commit metadata in flattened file result")
 	}
 }
 

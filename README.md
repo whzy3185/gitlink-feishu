@@ -223,6 +223,10 @@ gitlink-cli repo +info --owner Gitlink --repo forgeplus
 # Read repository README
 gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 
+# Read any repository file
+gitlink-cli repo +file --owner Gitlink --repo forgeplus --path go.mod --ref master
+gitlink-cli repo +file --owner Gitlink --repo forgeplus --path .gitignore --content-only
+
 # List repository files at root or a directory
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main

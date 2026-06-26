@@ -234,6 +234,10 @@ gitlink-cli repo +info --owner Gitlink --repo forgeplus
 # 读取仓库 README
 gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 
+# 读取仓库任意文件
+gitlink-cli repo +file --owner Gitlink --repo forgeplus --path go.mod --ref master
+gitlink-cli repo +file --owner Gitlink --repo forgeplus --path .gitignore --content-only
+
 # 列出仓库根目录或指定目录文件
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main

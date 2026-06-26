@@ -82,6 +82,16 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "file",
+			Description: "Show repository file content",
+			Flags: []common.Flag{
+				{Name: "path", Short: "p", Usage: "Repository file path", Required: true},
+				{Name: "ref", Short: "r", Usage: "Branch, tag, or commit SHA", Default: "master"},
+				{Name: "content-only", Usage: "Output file content only", Bool: true, Default: "false"},
+			},
+			Run: runFile,
+		},
+		{
 			Name:        "tree",
 			Description: tr.T("cmd.repo.tree.short"),
 			Flags: []common.Flag{
@@ -285,6 +295,44 @@ func runContributors(ctx *common.RuntimeContext) error {
 	return ctx.Output(env)
 }
 
+func runFile(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	path, err := normalizeRepoFilePath(ctx)
+	if err != nil {
+		return err
+	}
+
+	ref := strings.TrimSpace(ctx.Arg("ref"))
+	if ref == "" {
+		ref = "master"
+	}
+
+	q := url.Values{}
+	q.Set("filepath", path)
+	q.Set("ref", ref)
+
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
+	if err != nil {
+		return err
+	}
+
+	entry, err := extractRepoFileEntry(env.Data, path)
+	if err != nil {
+		return err
+	}
+	if ctx.Arg("content-only") == "true" {
+		content, _ := entry["content"].(string)
+		if content == "" {
+			return fmt.Errorf("file response did not include content for %q", path)
+		}
+		return ctx.OutputData(content)
+	}
+
+	return ctx.OutputData(buildRepoFileResult(entry, path, ref))
+}
+
 func runContributorStats(ctx *common.RuntimeContext) error {
 	if err := ctx.ResolveOwnerRepo(); err != nil {
 		return err
@@ -480,6 +528,58 @@ func setRepoQueryIfPresent(q url.Values, key, value string) {
 	if value := strings.TrimSpace(value); value != "" {
 		q.Set(key, value)
 	}
+}
+
+func normalizeRepoFilePath(ctx *common.RuntimeContext) (string, error) {
+	path, err := ctx.RequireArg("path")
+	if err != nil {
+		return "", err
+	}
+	path = strings.TrimLeft(strings.TrimSpace(path), "/")
+	if path == "" {
+		return "", fmt.Errorf("invalid --path %q: provide a repository file path", ctx.Arg("path"))
+	}
+	return path, nil
+}
+
+func extractRepoFileEntry(data interface{}, path string) (map[string]interface{}, error) {
+	payload, ok := data.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected file response format")
+	}
+
+	entry, ok := payload["entries"]
+	if !ok {
+		return nil, fmt.Errorf("unexpected file response format")
+	}
+
+	if _, isDir := entry.([]interface{}); isDir {
+		return nil, fmt.Errorf("path %q is a directory; use repo +tree instead", path)
+	}
+
+	fileEntry, ok := entry.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected file response format")
+	}
+
+	if entryType, _ := fileEntry["type"].(string); entryType != "" && entryType != "file" {
+		return nil, fmt.Errorf("path %q is not a file; use repo +tree instead", path)
+	}
+
+	return fileEntry, nil
+}
+
+func buildRepoFileResult(entry map[string]interface{}, path, ref string) map[string]interface{} {
+	result := map[string]interface{}{
+		"path": path,
+		"ref":  ref,
+	}
+	for _, key := range []string{"name", "type", "size", "sha", "content"} {
+		if value, ok := entry[key]; ok {
+			result[key] = value
+		}
+	}
+	return result
 }
 
 func parseOptionalRepoNonNegativeInt(value, name string) (int, bool, error) {
