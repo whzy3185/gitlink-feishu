@@ -245,15 +245,10 @@ function Write-SmokeReport {
     "",
     "This log file is ignored and should not be committed after real runs.",
     "",
-    "## Screenshot Checklist",
+    "## Image Evidence",
     "",
-    "Run:",
-    "",
-    '```powershell',
-    ".\scripts\feishu-gitlink-screenshot-check.ps1",
-    '```',
-    "",
-    "Do not fabricate screenshots. Capture missing images manually after real Feishu runs."
+    "Image files are intentionally not part of this smoke output.",
+    "Use the command results, permission matrix, and redacted terminal log as evidence for this round."
   )
   $lines | Set-Content -LiteralPath $SmokeReport -Encoding utf8
   Write-Host "Smoke report written: $SmokeReport"

@@ -555,7 +555,9 @@ gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --ye
 
 `feishu` 将 `workflow +repo-report` JSON 转成飞书协作内容。
 
-稳定用法：
+#### 稳定层：自定义机器人通知
+
+稳定层只依赖飞书群自定义机器人。它适合把 GitLink 项目状态、周报、Owner 摘要和贡献者摘要推送到群里。默认只预览，真实发送必须显式传 `--send`。
 
 ```bash
 gitlink-cli workflow +repo-report --owner "$GITLINK_OWNER" --repo "$GITLINK_REPO" --format json > report.json
@@ -570,7 +572,19 @@ gitlink-cli feishu +bitable-records --from-workflow-json report.json --format js
 gitlink-cli feishu +task-preview --from-workflow-json report.json --format markdown
 ```
 
-实验性开放平台用法：
+中文输出建议同时给 workflow 和 feishu 命令传 `--lang zh-CN`：
+
+```bash
+gitlink-cli workflow +repo-report --owner "$GITLINK_OWNER" --repo "$GITLINK_REPO" --lang zh-CN --format json > report.zh-CN.json
+
+gitlink-cli feishu +notify --from-workflow-json report.zh-CN.json --lang zh-CN --send --format table
+gitlink-cli feishu +owner-digest --from-workflow-json report.zh-CN.json --lang zh-CN --send --format table
+gitlink-cli feishu +contributor-digest --from-workflow-json report.zh-CN.json --lang zh-CN --send --format table
+```
+
+#### 实验层：飞书开放平台写入
+
+实验层使用飞书开放平台自建应用。当前已在测试企业中验证 DocX 追加、多维表格写入和飞书任务创建，但这部分不是零配置稳定能力。真实写入仍然必须显式传 `--send`，并且要求自建应用有对应 API scope 和目标资源权限。
 
 ```bash
 gitlink-cli feishu +doc-export --from-workflow-json report.json --wiki-url "$FEISHU_WIKI_URL" --send --format table
@@ -578,7 +592,24 @@ gitlink-cli feishu +bitable-sync --from-workflow-json report.json --tables repor
 gitlink-cli feishu +task-create --from-workflow-json report.json --send --format table
 ```
 
+为了完成端到端验证，测试企业里的自建应用授予了较宽的权限。正式部署时不建议照搬测试权限，应由维护者或管理员按命令实际需要开最小权限。
+
+多维表格已完成两类真实验证：
+
+- 单表多视图验证：把 `reports/issues/prs/contributors/tasks` 写入同一张测试表，证明字段和写入链路可用。
+- 独立表验证：拆成 `gitlink_reports`、`gitlink_issues`、`gitlink_prs`、`gitlink_contributors`、`gitlink_tasks` 五张表，分别写入 `1/5/2/1/7` 条记录，证明每类记录都能写入独立表。
+
+#### 当前边界
+
 本分支不实现 GitLink 写操作。飞书卡片按钮仅用于跳转。开放平台能力必须显式传 `--send`，并要求自建应用具备对应资源权限。是否在正式部署中启用这些实验能力，由 GitLink 维护者和部署管理员决定。
+
+下一阶段再考虑：
+
+- 飞书任务项目/分组归属。
+- 飞书任务执行者/关注人。
+- 飞书侧任务去重或搜索。
+- 多维表格自动建 Base、建表、建字段、建视图。
+- 飞书卡片回调和 GitLink 低风险写动作。
 
 详细文档：
 

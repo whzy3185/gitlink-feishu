@@ -23,22 +23,24 @@ Stable previews: available from .local/report.json and .local/report.zh-CN.json.
 Real Feishu sends: passed through custom bot webhook.
 Real DocX append: passed through self-built app OpenAPI.
 Real Bitable sync: passed after target table fields were created.
+Split Bitable sync: passed with five separate tables.
 Real Task create: passed; project/section placement remains unmapped.
 GitLink write operations: not implemented and not tested.
+Test enterprise permissions: intentionally broad for validation; production should use minimum scopes.
 ```
 
 ## API Collection Status
 
 | Item | Status | Evidence | Next action |
 | --- | --- | --- | --- |
-| Custom bot webhook | Complete and real-tested | `shortcuts/feishu/client.go`, `sign.go`, `card.go` | Capture screenshots |
+| Custom bot webhook | Complete and real-tested | `shortcuts/feishu/client.go`, `sign.go`, `card.go` | Image evidence deferred |
 | Custom bot signing | Complete and real-tested | `SignCustomBotRequest` unit test plus signed bot smoke | Keep secrets redacted |
 | tenant_access_token | Complete and real-tested | `OpenAPIClient.TenantAccessToken` | Add future `+app-check` |
 | Wiki node resolution | Complete | `OpenAPIClient.GetWikiNode` | Still depends on target Wiki node permission |
 | DocX create | Complete | `OpenAPIClient.CreateDocument` | Requires folder permission when creating new docs |
 | DocX block append | Complete and real-tested | `OpenAPIClient.CreateBlocks` | App must have target DocX edit permission |
 | Bitable search | Complete and real-tested | `SearchBitableRecord` | Requires `unique_key` field |
-| Bitable create | Complete and real-tested | `CreateBitableRecord` | Requires existing table and compatible fields |
+| Bitable create | Complete and real-tested | `CreateBitableRecord` | Requires existing table and compatible fields; split-table write passed |
 | Bitable update | Complete and real-tested | `UpdateBitableRecord` | Never deletes records |
 | Task create | Complete at minimal level and real-tested | `CreateTask` sends summary and description | Confirm project/section request fields |
 | IM app bot message | Planned | Official API collected | Not needed for stable webhook path |
@@ -81,11 +83,10 @@ These remain manual or owner-side tasks and should not be committed to the
 repository.
 
 ```text
-1. Capture Feishu UI screenshots for the PR visual guide.
-2. Decide whether the test Base should use one table with views or separate
-   reports/issues/prs/contributors/tasks tables.
-3. If separate tables are desired, create them and copy each table ID into the
-   local env file.
+1. Defer Feishu UI screenshots and image evidence for this upload.
+2. Keep the split-table validation as text evidence.
+3. Decide later whether the final demonstration should use split tables only or
+   also keep the one-table/multiple-view proof as background evidence.
 4. Decide whether `+bitable-sync` should stay experimental or be narrowed to
    dry-run-only for upstream review.
 5. Confirm Feishu Task project/section request fields before placing tasks in
@@ -137,7 +138,7 @@ go test ./...
 ```text
 Task project/section placement needs official request-field confirmation.
 Current Base output is summary-oriented and not yet row-level project cockpit data.
-Screenshot evidence still needs manual capture.
+Image evidence is deferred and is not part of this upload.
 ```
 
 ## Verification Run
@@ -158,6 +159,7 @@ Executed on 2026-06-26 after the API inventory update:
 | `+contributor-digest --send` | Pass | Custom bot delivered English/default and Chinese contributor digest |
 | `+bitable-sync` preview | Pass | 1 report, 5 issue, 2 PR, 1 contributor, 7 task records |
 | `+bitable-sync --send` | Pass | Search/create/update real-tested after field creation |
+| Split-table `+bitable-sync --send` | Pass | Created 1 report, 5 issue, 2 PR, 1 contributor, and 7 task records across five separate Bitable tables |
 | `+doc-export` preview | Pass | 9 DocX-ready blocks |
 | `+doc-export --send` | Pass | Appended English/default and Chinese DocX blocks |
 | `+task-preview` preview | Pass | 7 task candidates |
@@ -169,7 +171,7 @@ Executed on 2026-06-26 after the API inventory update:
 | `go test ./shortcuts` | Pass | Shortcut package regression passed |
 | `go test ./...` | Pass | Full repository test suite passed |
 | Raw secret scan | Pass | No raw secret values found in tracked/unignored candidate files |
-| Screenshot checklist | Expected fail | Real send/write screenshots still need manual capture |
+| Image evidence | Deferred | No screenshots or image files are included in this upload |
 
 ## Do Not Commit
 
