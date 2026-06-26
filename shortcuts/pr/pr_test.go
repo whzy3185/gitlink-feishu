@@ -157,6 +157,51 @@ func TestPRListWithFilters(t *testing.T) {
 	}
 }
 
+func TestPRListWithLoginFilter(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/owner/repo/pulls.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"pulls": []interface{}{
+				map[string]interface{}{
+					"id":    float64(1),
+					"title": "PR by alice",
+					"issue": map[string]interface{}{
+						"author": map[string]interface{}{"login": "alice"},
+					},
+				},
+				map[string]interface{}{
+					"id":    float64(2),
+					"title": "PR by bob",
+					"issue": map[string]interface{}{
+						"author": map[string]interface{}{"login": "bob"},
+					},
+				},
+				map[string]interface{}{
+					"id":    float64(3),
+					"title": "PR by Alice (uppercase)",
+					"issue": map[string]interface{}{
+						"author": map[string]interface{}{"login": "Alice"},
+					},
+				},
+			},
+			"total_count": float64(3),
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "list", map[string]string{
+		"state": "open",
+		"login": "alice",
+		"page":  "1",
+		"limit": "20",
+	})
+	if err != nil {
+		t.Fatalf("list with login filter failed: %v", err)
+	}
+}
+
 func TestPRListStateAllOmitsStatus(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/owner/repo/pulls.json" {
