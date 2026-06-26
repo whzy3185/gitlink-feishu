@@ -634,3 +634,373 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
 	}
 }
+
+// --- Repository Settings Shortcuts Tests ---
+
+func TestRepoDetail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/detail.json")
+		writeJSON(t, w, map[string]interface{}{
+			"name":        "repo",
+			"description": "test repo",
+			"identifier":  "repo",
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "detail", nil)
+	if err != nil {
+		t.Fatalf("detail failed: %v", err)
+	}
+}
+
+func TestRepoSimple(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/simple.json")
+		writeJSON(t, w, map[string]interface{}{
+			"name": "repo",
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "simple", nil)
+	if err != nil {
+		t.Fatalf("simple failed: %v", err)
+	}
+}
+
+func TestRepoSettings(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/edit.json")
+		writeJSON(t, w, map[string]interface{}{
+			"name":        "repo",
+			"description": "test repo",
+			"private":     false,
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "settings", nil)
+	if err != nil {
+		t.Fatalf("settings failed: %v", err)
+	}
+}
+
+func TestRepoUnits(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/project_units.json")
+		writeJSON(t, w, []interface{}{
+			map[string]interface{}{"type": "code"},
+			map[string]interface{}{"type": "issues"},
+			map[string]interface{}{"type": "pulls"},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "units", nil)
+	if err != nil {
+		t.Fatalf("units failed: %v", err)
+	}
+}
+
+func TestRepoUnitsUpdate(t *testing.T) {
+	var body map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/owner/repo/project_units.json")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		writeJSON(t, w, map[string]interface{}{"status": 0})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "units-update", map[string]string{
+		"units": "code,issues,pulls",
+	})
+	if err != nil {
+		t.Fatalf("units-update failed: %v", err)
+	}
+
+	unitTypes, ok := body["unit_types"].([]interface{})
+	if !ok {
+		t.Fatalf("unit_types not found in body")
+	}
+	if len(unitTypes) != 3 {
+		t.Fatalf("expected 3 unit types, got %d", len(unitTypes))
+	}
+}
+
+func TestRepoUnitsUpdateDryRun(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "units-update", map[string]string{
+		"units":   "code,issues",
+		"dry-run": "true",
+	})
+	if err != nil {
+		t.Fatalf("units-update dry-run failed: %v", err)
+	}
+}
+
+func TestRepoUnitsUpdateValidation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("validation error should not call API, got: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	cases := []struct {
+		name string
+		args map[string]string
+	}{
+		{
+			name: "empty units",
+			args: map[string]string{"units": ""},
+		},
+		{
+			name: "invalid unit type",
+			args: map[string]string{"units": "code,invalid"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := runShortcut(t, server, "units-update", tc.args)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
+	}
+}
+
+func TestRepoTopics(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/v1/project_topics.json")
+		assertEqual(t, r.URL.Query().Get("keyword"), "go")
+		writeJSON(t, w, map[string]interface{}{
+			"topics": []interface{}{
+				map[string]interface{}{"id": float64(1), "name": "golang"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "topics", map[string]string{"keyword": "go"})
+	if err != nil {
+		t.Fatalf("topics failed: %v", err)
+	}
+}
+
+func TestRepoTopicAdd(t *testing.T) {
+	requests := 0
+	var body map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		switch requests {
+		case 1:
+			assertRequest(t, r, "GET", "/owner/repo.json")
+			writeJSON(t, w, map[string]interface{}{"id": float64(123)})
+		case 2:
+			assertRequest(t, r, "POST", "/v1/project_topics.json")
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode request body: %v", err)
+			}
+			writeJSON(t, w, map[string]interface{}{"id": float64(1), "name": "test-topic"})
+		default:
+			t.Fatalf("unexpected extra request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "topic-add", map[string]string{"name": "test-topic"})
+	if err != nil {
+		t.Fatalf("topic-add failed: %v", err)
+	}
+	assertEqual(t, body["name"], "test-topic")
+	assertEqual(t, body["project_id"], "123")
+}
+
+func TestRepoTopicAddDryRun(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		switch requests {
+		case 1:
+			assertRequest(t, r, "GET", "/owner/repo.json")
+			writeJSON(t, w, map[string]interface{}{"id": float64(123)})
+		default:
+			t.Fatalf("dry-run should not make extra requests, got: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "topic-add", map[string]string{
+		"name":    "test-topic",
+		"dry-run": "true",
+	})
+	if err != nil {
+		t.Fatalf("topic-add dry-run failed: %v", err)
+	}
+	assertEqual(t, requests, 1)
+}
+
+func TestRepoTopicDelete(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		switch requests {
+		case 1:
+			assertRequest(t, r, "GET", "/owner/repo.json")
+			writeJSON(t, w, map[string]interface{}{"id": float64(123)})
+		case 2:
+			assertRequest(t, r, "DELETE", "/v1/project_topics/456.json")
+			assertEqual(t, r.URL.Query().Get("project_id"), "123")
+			writeJSON(t, w, map[string]interface{}{"status": 0})
+		default:
+			t.Fatalf("unexpected extra request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "topic-delete", map[string]string{"id": "456"})
+	if err != nil {
+		t.Fatalf("topic-delete failed: %v", err)
+	}
+	assertEqual(t, requests, 2)
+}
+
+func TestRepoTopicDeleteDryRun(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		switch requests {
+		case 1:
+			assertRequest(t, r, "GET", "/owner/repo.json")
+			writeJSON(t, w, map[string]interface{}{"id": float64(123)})
+		default:
+			t.Fatalf("dry-run should not make extra requests, got: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "topic-delete", map[string]string{
+		"id":      "456",
+		"dry-run": "true",
+	})
+	if err != nil {
+		t.Fatalf("topic-delete dry-run failed: %v", err)
+	}
+	assertEqual(t, requests, 1)
+}
+
+func TestRepoTransferOrgs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/applied_transfer_projects/organizations.json")
+		writeJSON(t, w, []interface{}{
+			map[string]interface{}{"name": "org1"},
+			map[string]interface{}{"name": "org2"},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "transfer-orgs", nil)
+	if err != nil {
+		t.Fatalf("transfer-orgs failed: %v", err)
+	}
+}
+
+func TestRepoTransfer(t *testing.T) {
+	var body map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/owner/repo/applied_transfer_projects.json")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		writeJSON(t, w, map[string]interface{}{"status": 0})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "transfer", map[string]string{"owner": "new-owner"})
+	if err != nil {
+		t.Fatalf("transfer failed: %v", err)
+	}
+	assertEqual(t, body["owner_name"], "new-owner")
+}
+
+func TestRepoTransferDryRun(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "transfer", map[string]string{
+		"owner":   "new-owner",
+		"dry-run": "true",
+	})
+	if err != nil {
+		t.Fatalf("transfer dry-run failed: %v", err)
+	}
+}
+
+func TestRepoTransferCancel(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/owner/repo/applied_transfer_projects/cancel.json")
+		writeJSON(t, w, map[string]interface{}{"status": 0})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "transfer-cancel", nil)
+	if err != nil {
+		t.Fatalf("transfer-cancel failed: %v", err)
+	}
+}
+
+func TestRepoTransferCancelDryRun(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "transfer-cancel", map[string]string{"dry-run": "true"})
+	if err != nil {
+		t.Fatalf("transfer-cancel dry-run failed: %v", err)
+	}
+}
+
+func TestRepoTopicAddFailsWithoutName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no API call should be made")
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "topic-add", map[string]string{})
+	if err == nil {
+		t.Fatal("expected error for missing name")
+	}
+}
+
+func TestRepoTopicDeleteFailsWithoutID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no API call should be made")
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "topic-delete", map[string]string{})
+	if err == nil {
+		t.Fatal("expected error for missing id")
+	}
+}
+
+func TestRepoTransferFailsWithoutOwner(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no API call should be made")
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "transfer", map[string]string{})
+	if err == nil {
+		t.Fatal("expected error for missing owner")
+	}
+}
