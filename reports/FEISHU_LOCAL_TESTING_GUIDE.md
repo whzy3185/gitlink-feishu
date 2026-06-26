@@ -4,7 +4,48 @@ Date: 2026-06-26
 
 This guide verifies the layered Feishu integration without committing secrets.
 
-## 1. Configure GitLink Test Repository
+## 1. Run Local Setup Wizard
+
+```powershell
+.\scripts\feishu-gitlink-setup.ps1
+```
+
+The setup wizard opens these pages as needed:
+
+```text
+Feishu custom bot documentation
+Feishu developer console
+Feishu Docs / Wiki
+Feishu Base / Bitable
+Feishu Tasks
+GitLink
+```
+
+The user logs in and authorizes in the browser. Values are pasted into the local PowerShell prompt, not into ChatGPT.
+
+The wizard writes only to:
+
+```text
+.local/feishu-gitlink.env.ps1
+```
+
+This file is ignored and must not be committed. A tracked empty example is available at:
+
+```text
+.local/feishu-gitlink.env.example.ps1
+```
+
+## 2. Check Local Environment
+
+```powershell
+.\scripts\feishu-gitlink-env-check.ps1 -Layer stable
+.\scripts\feishu-gitlink-env-check.ps1 -Layer open-platform
+.\scripts\feishu-gitlink-env-check.ps1 -Layer all
+```
+
+The checker prints only redacted values.
+
+## 3. Configure GitLink Test Repository Manually If Needed
 
 ```powershell
 $env:GITLINK_OWNER="OWNER"
@@ -17,7 +58,43 @@ If the current workflow command cannot filter specific PR IDs, keep the PR IDs i
 $env:GITLINK_TEST_PR_IDS="1,2,3"
 ```
 
-## 2. Generate Workflow Report JSON
+## 4. Run Scripted Smoke Tests
+
+Preview only:
+
+```powershell
+.\scripts\feishu-gitlink-smoke.ps1 -Mode preview
+```
+
+Stable custom bot sends:
+
+```powershell
+.\scripts\feishu-gitlink-smoke.ps1 -Mode stable
+```
+
+Experimental Open Platform sends:
+
+```powershell
+.\scripts\feishu-gitlink-smoke.ps1 -Mode open-platform
+```
+
+All available tests:
+
+```powershell
+.\scripts\feishu-gitlink-smoke.ps1 -Mode all
+```
+
+The smoke runner writes:
+
+```text
+.local/report.json
+reports/FEISHU_SMOKE_YYYYMMDD.md
+reports/feishu-real-smoke-terminal.log
+```
+
+The terminal log is ignored and must not be committed after real runs.
+
+## 5. Generate Workflow Report JSON Manually
 
 ```bash
 gitlink-cli workflow +repo-report \
@@ -28,13 +105,13 @@ gitlink-cli workflow +repo-report \
 
 Windows PowerShell redirection may produce UTF-16 with BOM. The Feishu workflow JSON reader supports UTF-8 and UTF-16 BOM inputs.
 
-## 3. Preview Feishu Notify Card
+## 6. Preview Feishu Notify Card
 
 ```bash
 gitlink-cli feishu +notify --from-workflow-json report.json --format json
 ```
 
-## 4. Send Feishu Notify Card
+## 7. Send Feishu Notify Card
 
 ```bash
 gitlink-cli feishu +notify --from-workflow-json report.json --send --format table
@@ -47,50 +124,50 @@ FEISHU_WEBHOOK_URL
 FEISHU_WEBHOOK_SECRET optional
 ```
 
-## 5. Render Weekly Report
+## 8. Render Weekly Report
 
 ```bash
 gitlink-cli feishu +weekly-report --from-workflow-json report.json --format markdown
 ```
 
-## 6. Send Weekly Report
+## 9. Send Weekly Report
 
 ```bash
 gitlink-cli feishu +weekly-report --from-workflow-json report.json --send --format table
 ```
 
-## 7. Generate Owner Digest
+## 10. Generate Owner Digest
 
 ```bash
 gitlink-cli feishu +owner-digest --from-workflow-json report.json --format markdown
 ```
 
-## 8. Send Owner Digest
+## 11. Send Owner Digest
 
 ```bash
 gitlink-cli feishu +owner-digest --from-workflow-json report.json --send --format table
 ```
 
-## 9. Generate Contributor Digest
+## 12. Generate Contributor Digest
 
 ```bash
 gitlink-cli feishu +contributor-digest --from-workflow-json report.json --format markdown
 ```
 
-## 10. Send Contributor Digest
+## 13. Send Contributor Digest
 
 ```bash
 gitlink-cli feishu +contributor-digest --from-workflow-json report.json --send --format table
 ```
 
-## 11. Generate Bitable-Ready Records
+## 14. Generate Bitable-Ready Records
 
 ```bash
 gitlink-cli feishu +bitable-schema --tables reports,issues,prs,contributors,tasks --format markdown
 gitlink-cli feishu +bitable-records --from-workflow-json report.json --format json
 ```
 
-## 12. Preview Bitable Sync
+## 15. Preview Bitable Sync
 
 ```bash
 gitlink-cli feishu +bitable-sync \
@@ -99,7 +176,7 @@ gitlink-cli feishu +bitable-sync \
   --format table
 ```
 
-## 13. Execute Bitable Sync
+## 16. Execute Bitable Sync
 
 ```bash
 gitlink-cli feishu +bitable-sync \
@@ -122,7 +199,7 @@ FEISHU_CONTRIBUTOR_TABLE_ID optional
 FEISHU_TASK_TABLE_ID optional
 ```
 
-## 14. Preview DocX / Wiki Export
+## 17. Preview DocX / Wiki Export
 
 ```bash
 gitlink-cli feishu +doc-export \
@@ -131,7 +208,7 @@ gitlink-cli feishu +doc-export \
   --format markdown
 ```
 
-## 15. Execute DocX / Wiki Export
+## 18. Execute DocX / Wiki Export
 
 ```bash
 gitlink-cli feishu +doc-export \
@@ -141,13 +218,13 @@ gitlink-cli feishu +doc-export \
   --format table
 ```
 
-## 16. Preview Feishu Tasks
+## 19. Preview Feishu Tasks
 
 ```bash
 gitlink-cli feishu +task-preview --from-workflow-json report.json --format markdown
 ```
 
-## 17. Create Feishu Tasks
+## 20. Create Feishu Tasks
 
 ```bash
 gitlink-cli feishu +task-create --from-workflow-json report.json --send --format table
@@ -162,7 +239,15 @@ FEISHU_TASK_PROJECT_ID optional
 FEISHU_TASK_SECTION_ID optional
 ```
 
-## 18. Run Go Tests
+## 21. Run Screenshot Check
+
+```powershell
+.\scripts\feishu-gitlink-screenshot-check.ps1
+```
+
+The script lists missing screenshots. It does not fabricate images.
+
+## 22. Run Go Tests
 
 ```bash
 gofmt -w shortcuts/feishu
@@ -172,7 +257,7 @@ go test ./shortcuts
 go test ./...
 ```
 
-## 19. Capture Evidence
+## 23. Capture Evidence
 
 Capture terminal logs and screenshots listed in `docs/PR_VISUAL_GUIDE.md`.
 

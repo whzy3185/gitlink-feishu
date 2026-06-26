@@ -686,6 +686,16 @@ Details:
 - [Feishu environment variables](./docs/FEISHU_ENVIRONMENT.md)
 - [Feishu permission matrix](./reports/FEISHU_PERMISSION_MATRIX.md)
 
+Local setup and smoke testing:
+
+```powershell
+.\scripts\feishu-gitlink-setup.ps1
+.\scripts\feishu-gitlink-env-check.ps1 -Layer stable
+.\scripts\feishu-gitlink-smoke.ps1 -Mode preview
+```
+
+The setup script stores real values only in `.local/feishu-gitlink.env.ps1`, which is ignored.
+
 ### Dataset
 
 `dataset` manages and queries GitLink research datasets (title, description,

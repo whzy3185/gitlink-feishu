@@ -53,6 +53,15 @@ Experimental commands use Feishu self-built app OpenAPI and are not part of the 
 
 Use a Feishu custom group bot for notification cards.
 
+Recommended local setup:
+
+```powershell
+.\scripts\feishu-gitlink-setup.ps1
+.\scripts\feishu-gitlink-env-check.ps1 -Layer stable
+```
+
+The setup wizard opens Feishu / GitLink pages and stores values only in `.local/feishu-gitlink.env.ps1`.
+
 Environment:
 
 ```powershell
@@ -287,4 +296,13 @@ docs/FEISHU_CAPABILITY_LAYERS.md
 docs/FEISHU_ENVIRONMENT.md
 reports/FEISHU_PERMISSION_MATRIX.md
 reports/FEISHU_LOCAL_TESTING_GUIDE.md
+```
+
+Scripted smoke test:
+
+```powershell
+.\scripts\feishu-gitlink-smoke.ps1 -Mode preview
+.\scripts\feishu-gitlink-smoke.ps1 -Mode stable
+.\scripts\feishu-gitlink-smoke.ps1 -Mode open-platform
+.\scripts\feishu-gitlink-smoke.ps1 -Mode all
 ```

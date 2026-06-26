@@ -6,6 +6,12 @@ This file lists the manual screenshots to capture after local and real smoke tes
 
 Do not fabricate screenshots. If a capability is not available in the test enterprise, keep the placeholder and record the failure in `reports/FEISHU_SMOKE_20260626.md`.
 
+Use the helper to check current screenshot status:
+
+```powershell
+.\scripts\feishu-gitlink-screenshot-check.ps1
+```
+
 | Screenshot | Expected path | Capture note |
 | --- | --- | --- |
 | Feishu bot card in test group | `docs/images/feishu-bot-card.png` | Capture after `+bot-test --send` or `+notify --send` |

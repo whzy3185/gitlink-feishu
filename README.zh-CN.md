@@ -586,6 +586,16 @@ gitlink-cli feishu +task-create --from-workflow-json report.json --send --format
 - [飞书能力分层](./docs/FEISHU_CAPABILITY_LAYERS.md)
 - [飞书环境变量](./docs/FEISHU_ENVIRONMENT.md)
 - [飞书权限矩阵](./reports/FEISHU_PERMISSION_MATRIX.md)
+
+本地配置和 smoke 测试：
+
+```powershell
+.\scripts\feishu-gitlink-setup.ps1
+.\scripts\feishu-gitlink-env-check.ps1 -Layer stable
+.\scripts\feishu-gitlink-smoke.ps1 -Mode preview
+```
+
+真实值只会写入被忽略的 `.local/feishu-gitlink.env.ps1`，不要提交。
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：

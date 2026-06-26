@@ -1,3 +1,9 @@
 
 gitlink-cli.exe
 /gitlink-cli
+.local/*
+!.local/
+!.local/feishu-gitlink.env.example.ps1
+*.local.ps1
+*.secret.*
+reports/feishu-real-smoke-terminal.log

@@ -4,6 +4,26 @@ Date: 2026-06-26
 
 Do not commit real values. Use a local shell profile, CI secret store, or test terminal session.
 
+Recommended local workflow:
+
+```powershell
+.\scripts\feishu-gitlink-setup.ps1
+.\scripts\feishu-gitlink-env-check.ps1 -Layer stable
+.\scripts\feishu-gitlink-smoke.ps1 -Mode preview
+```
+
+`feishu-gitlink-setup.ps1` opens the relevant Feishu / GitLink pages, lets the user paste values locally, and writes only to:
+
+```text
+.local/feishu-gitlink.env.ps1
+```
+
+The real local env file is ignored. The tracked example is:
+
+```text
+.local/feishu-gitlink.env.example.ps1
+```
+
 ## Stable Custom Bot Variables
 
 | Name | Purpose | Required | Used by | Sensitive | How to obtain |
@@ -112,6 +132,7 @@ $env:GITLINK_TOKEN="REDACTED"
 
 ```text
 Never paste real secrets into committed docs.
+Never paste real secrets into ChatGPT.
 Never print raw webhook URLs or app secrets in smoke reports.
 Do not commit tenant_access_token or user_access_token.
 Do not enable --send in shared scripts unless the target test enterprise is intentional.
