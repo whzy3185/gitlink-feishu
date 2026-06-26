@@ -71,6 +71,39 @@ func redactWebhookURL(raw string) string {
 	return parsed.Scheme + "://" + parsed.Host + "/.../" + last
 }
 
+func redactToken(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if len(value) <= 8 {
+		return "***"
+	}
+	return value[:4] + "..." + value[len(value)-4:]
+}
+
+func redactResourceURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return "***"
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	for i := 0; i+1 < len(parts); i++ {
+		switch parts[i] {
+		case "wiki", "docx", "base", "folder":
+			parts[i+1] = redactToken(parts[i+1])
+		}
+	}
+	parsed.Path = "/" + strings.Join(parts, "/")
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String()
+}
+
 func parseBool(value string) bool {
 	parsed, err := strconv.ParseBool(strings.TrimSpace(value))
 	return err == nil && parsed

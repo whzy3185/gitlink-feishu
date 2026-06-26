@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
 )
@@ -28,14 +29,16 @@ type BitableField struct {
 }
 
 type BitableRecords struct {
-	DryRun bool                       `json:"dry_run"`
-	Tables map[string][]BitableRecord `json:"tables"`
-	Schema []BitableTableSchema       `json:"schema"`
-	Notes  []string                   `json:"notes,omitempty"`
+	DryRun     bool                       `json:"dry_run"`
+	Repository string                     `json:"repository"`
+	Tables     map[string][]BitableRecord `json:"tables"`
+	Schema     []BitableTableSchema       `json:"schema"`
+	Notes      []string                   `json:"notes,omitempty"`
 }
 
 type BitableRecord struct {
-	Fields map[string]interface{} `json:"fields"`
+	UniqueKey string                 `json:"unique_key"`
+	Fields    map[string]interface{} `json:"fields"`
 }
 
 func BuildBitableSchema(tables []string) BitableSchema {
@@ -46,27 +49,31 @@ func BuildBitableSchema(tables []string) BitableSchema {
 	return result
 }
 
-func BuildBitableRecords(report workflow.RepoReportResult, tables []string) BitableRecords {
+func BuildBitableRecords(report workflow.RepoReportResult, tables []string, docURL string) BitableRecords {
 	tables = normalizeTables(tables)
 	result := BitableRecords{
-		DryRun: true,
-		Tables: map[string][]BitableRecord{},
-		Schema: BuildBitableSchema(tables).Tables,
+		DryRun:     true,
+		Repository: report.Repository,
+		Tables:     map[string][]BitableRecord{},
+		Schema:     BuildBitableSchema(tables).Tables,
 		Notes: []string{
-			"Dry-run only: this command does not call Feishu Bitable OpenAPI.",
-			"Use these records to validate table shape before adding app authentication and upsert behavior.",
+			"Dry-run by default: +bitable-records does not call Feishu Bitable OpenAPI.",
+			"Records use stable unique_key values so experimental +bitable-sync can search-before-update.",
+			"Generated records are workflow-report summaries, not Feishu user-personalized records.",
 		},
 	}
 	for _, table := range tables {
 		switch table {
 		case "reports":
-			result.Tables[table] = reportRecords(report)
+			result.Tables[table] = reportRecords(report, docURL)
 		case "issues":
 			result.Tables[table] = issueRecords(report)
 		case "prs":
 			result.Tables[table] = prRecords(report)
 		case "contributors":
-			result.Tables[table] = []BitableRecord{}
+			result.Tables[table] = contributorRecords(report)
+		case "tasks":
+			result.Tables[table] = taskRecords(report, docURL)
 		}
 	}
 	return result
@@ -76,7 +83,7 @@ func normalizeTables(tables []string) []string {
 	if len(tables) == 0 {
 		tables = parseList(defaultTables)
 	}
-	allowed := map[string]bool{"issues": true, "prs": true, "contributors": true, "reports": true}
+	allowed := map[string]bool{"reports": true, "issues": true, "prs": true, "contributors": true, "tasks": true}
 	seen := map[string]bool{}
 	result := []string{}
 	for _, table := range tables {
@@ -97,146 +104,272 @@ func schemaForTable(table string) BitableTableSchema {
 	case "issues":
 		return BitableTableSchema{
 			Name:        "issues",
-			Description: "Issue summary buckets from workflow repo report output.",
-			Fields: []BitableField{
-				{Name: "repository", Type: "text"},
-				{Name: "bucket_type", Type: "single_select", Description: "type or priority"},
-				{Name: "bucket", Type: "text"},
-				{Name: "count", Type: "number"},
-				{Name: "high_risk_total", Type: "number"},
-				{Name: "missing_info_total", Type: "number"},
-			},
+			Description: "Issue summary and risk buckets from workflow repo report output.",
+			Fields: bitableFields([]string{
+				"unique_key:text",
+				"repository:text",
+				"issue_group:single_select",
+				"priority:single_select",
+				"count:number",
+				"risk_reason:multi_text",
+				"recommended_action:multi_text",
+				"gitlink_url:url",
+			}),
 		}
 	case "prs":
 		return BitableTableSchema{
 			Name:        "prs",
-			Description: "Pull request summary buckets from workflow repo report output.",
-			Fields: []BitableField{
-				{Name: "repository", Type: "text"},
-				{Name: "bucket_type", Type: "single_select", Description: "change_type or risk"},
-				{Name: "bucket", Type: "text"},
-				{Name: "count", Type: "number"},
-				{Name: "high_risk_total", Type: "number"},
-				{Name: "review_focus", Type: "multi_text"},
-			},
+			Description: "Pull request summary and review-risk buckets from workflow repo report output.",
+			Fields: bitableFields([]string{
+				"unique_key:text",
+				"repository:text",
+				"pr_group:single_select",
+				"risk_level:single_select",
+				"count:number",
+				"review_focus:multi_text",
+				"recommended_action:multi_text",
+				"gitlink_url:url",
+			}),
 		}
 	case "contributors":
 		return BitableTableSchema{
 			Name:        "contributors",
-			Description: "Reserved table for contributor activity once workflow JSON includes contributor data.",
-			Fields: []BitableField{
-				{Name: "repository", Type: "text"},
-				{Name: "login", Type: "text"},
-				{Name: "role", Type: "single_select"},
-				{Name: "activity_count", Type: "number"},
-			},
+			Description: "Role-oriented contributor summary records derived from workflow report signals.",
+			Fields: bitableFields([]string{
+				"unique_key:text",
+				"repository:text",
+				"contributor:text",
+				"role:single_select",
+				"open_items:number",
+				"risk_items:number",
+				"recommended_action:multi_text",
+				"gitlink_url:url",
+			}),
+		}
+	case "tasks":
+		return BitableTableSchema{
+			Name:        "tasks",
+			Description: "Task candidates derived from workflow recommendations, high-risk issues, PRs, and missing information.",
+			Fields: bitableFields([]string{
+				"unique_key:text",
+				"repository:text",
+				"task_title:text",
+				"task_type:single_select",
+				"priority:single_select",
+				"source_type:single_select",
+				"source_key:text",
+				"recommended_owner:text",
+				"status:single_select",
+				"due_hint:text",
+				"gitlink_url:url",
+			}),
 		}
 	default:
 		return BitableTableSchema{
 			Name:        "reports",
 			Description: "One row per repository workflow report.",
-			Fields: []BitableField{
-				{Name: "repository", Type: "text"},
-				{Name: "report_score", Type: "number"},
-				{Name: "risk_level", Type: "single_select"},
-				{Name: "health_score", Type: "number"},
-				{Name: "issues_total", Type: "number"},
-				{Name: "high_risk_issues", Type: "number"},
-				{Name: "prs_total", Type: "number"},
-				{Name: "high_risk_prs", Type: "number"},
-				{Name: "source", Type: "text"},
-				{Name: "recommendations", Type: "multi_text"},
-			},
+			Fields: bitableFields([]string{
+				"unique_key:text",
+				"repository:text",
+				"health_score:number",
+				"risk_level:single_select",
+				"report_score:number",
+				"issue_total:number",
+				"issue_high_risk:number",
+				"issue_missing_info:number",
+				"pr_total:number",
+				"pr_high_risk:number",
+				"review_focus_count:number",
+				"generated_at:datetime",
+				"source:text",
+				"doc_url:url",
+			}),
 		}
 	}
 }
 
-func reportRecords(report workflow.RepoReportResult) []BitableRecord {
+func bitableFields(specs []string) []BitableField {
+	fields := make([]BitableField, 0, len(specs))
+	for _, spec := range specs {
+		parts := strings.SplitN(spec, ":", 2)
+		fieldType := "text"
+		if len(parts) == 2 {
+			fieldType = parts[1]
+		}
+		fields = append(fields, BitableField{Name: parts[0], Type: fieldType})
+	}
+	return fields
+}
+
+func reportRecords(report workflow.RepoReportResult, docURL string) []BitableRecord {
 	healthScore := interface{}(nil)
 	if report.Health != nil {
 		healthScore = report.Health.HealthScore
 	}
-	return []BitableRecord{{
-		Fields: map[string]interface{}{
-			"repository":       report.Repository,
-			"report_score":     report.ReportScore,
-			"risk_level":       report.RiskLevel,
-			"health_score":     healthScore,
-			"issues_total":     report.IssueSummary.Total,
-			"high_risk_issues": report.IssueSummary.HighRisk,
-			"prs_total":        report.PRSummary.Total,
-			"high_risk_prs":    report.PRSummary.HighRisk,
-			"source":           report.Source,
-			"recommendations":  report.Recommendations,
-		},
-	}}
+	fields := map[string]interface{}{
+		"unique_key":         stableKey("report", report.Repository),
+		"repository":         report.Repository,
+		"health_score":       healthScore,
+		"risk_level":         report.RiskLevel,
+		"report_score":       report.ReportScore,
+		"issue_total":        report.IssueSummary.Total,
+		"issue_high_risk":    report.IssueSummary.HighRisk,
+		"issue_missing_info": report.IssueSummary.MissingInfo,
+		"pr_total":           report.PRSummary.Total,
+		"pr_high_risk":       report.PRSummary.HighRisk,
+		"review_focus_count": len(report.PRSummary.ReviewFocus),
+		"generated_at":       time.Now().UTC().Format(time.RFC3339),
+		"source":             report.Source,
+	}
+	if strings.TrimSpace(docURL) != "" {
+		fields["doc_url"] = strings.TrimSpace(docURL)
+	}
+	return []BitableRecord{{UniqueKey: fields["unique_key"].(string), Fields: fields}}
 }
 
 func issueRecords(report workflow.RepoReportResult) []BitableRecord {
 	records := []BitableRecord{}
-	records = appendCountMapRecords(records, report.Repository, "type", report.IssueSummary.ByType, map[string]interface{}{
-		"high_risk_total":    report.IssueSummary.HighRisk,
-		"missing_info_total": report.IssueSummary.MissingInfo,
-	})
-	records = appendCountMapRecords(records, report.Repository, "priority", report.IssueSummary.ByPriority, map[string]interface{}{
-		"high_risk_total":    report.IssueSummary.HighRisk,
-		"missing_info_total": report.IssueSummary.MissingInfo,
-	})
+	keys := sortedIntMapKeys(report.IssueSummary.ByPriority)
+	for _, priority := range keys {
+		fields := issueRecordFields(report, "priority", priority, report.IssueSummary.ByPriority[priority])
+		records = append(records, BitableRecord{UniqueKey: fields["unique_key"].(string), Fields: fields})
+	}
+	keys = sortedIntMapKeys(report.IssueSummary.ByType)
+	for _, issueType := range keys {
+		fields := issueRecordFields(report, "type", issueType, report.IssueSummary.ByType[issueType])
+		records = append(records, BitableRecord{UniqueKey: fields["unique_key"].(string), Fields: fields})
+	}
 	if len(records) == 0 {
-		records = append(records, BitableRecord{Fields: map[string]interface{}{
-			"repository":         report.Repository,
-			"bucket_type":        "summary",
-			"bucket":             "total",
-			"count":              report.IssueSummary.Total,
-			"high_risk_total":    report.IssueSummary.HighRisk,
-			"missing_info_total": report.IssueSummary.MissingInfo,
-		}})
+		fields := issueRecordFields(report, "summary", "total", report.IssueSummary.Total)
+		records = append(records, BitableRecord{UniqueKey: fields["unique_key"].(string), Fields: fields})
 	}
 	return records
+}
+
+func issueRecordFields(report workflow.RepoReportResult, groupType string, group string, count int) map[string]interface{} {
+	recommended := []string{"Review issue triage details in GitLink."}
+	if report.IssueSummary.MissingInfo > 0 {
+		recommended = append(recommended, "Request missing reproduction steps, logs, or environment details.")
+	}
+	if report.IssueSummary.HighRisk > 0 {
+		recommended = append(recommended, "Prioritize high-risk issue review.")
+	}
+	fields := map[string]interface{}{
+		"unique_key":         stableKey("issue", report.Repository, groupType, group),
+		"repository":         report.Repository,
+		"issue_group":        groupType + ":" + group,
+		"priority":           group,
+		"count":              count,
+		"risk_reason":        []string{fmt.Sprintf("high_risk=%d", report.IssueSummary.HighRisk), fmt.Sprintf("missing_info=%d", report.IssueSummary.MissingInfo)},
+		"recommended_action": uniqueDigestStrings(recommended),
+	}
+	if repoURL := gitlinkRepoURL(report.Repository); repoURL != "" {
+		fields["gitlink_url"] = repoURL + "/issues"
+	}
+	return fields
 }
 
 func prRecords(report workflow.RepoReportResult) []BitableRecord {
 	records := []BitableRecord{}
-	records = appendCountMapRecords(records, report.Repository, "change_type", report.PRSummary.ByType, map[string]interface{}{
-		"high_risk_total": report.PRSummary.HighRisk,
-		"review_focus":    report.PRSummary.ReviewFocus,
-	})
-	records = appendCountMapRecords(records, report.Repository, "risk", report.PRSummary.ByRisk, map[string]interface{}{
-		"high_risk_total": report.PRSummary.HighRisk,
-		"review_focus":    report.PRSummary.ReviewFocus,
-	})
+	keys := sortedIntMapKeys(report.PRSummary.ByRisk)
+	for _, risk := range keys {
+		fields := prRecordFields(report, "risk", risk, report.PRSummary.ByRisk[risk])
+		records = append(records, BitableRecord{UniqueKey: fields["unique_key"].(string), Fields: fields})
+	}
+	keys = sortedIntMapKeys(report.PRSummary.ByType)
+	for _, changeType := range keys {
+		fields := prRecordFields(report, "change_type", changeType, report.PRSummary.ByType[changeType])
+		records = append(records, BitableRecord{UniqueKey: fields["unique_key"].(string), Fields: fields})
+	}
 	if len(records) == 0 {
-		records = append(records, BitableRecord{Fields: map[string]interface{}{
-			"repository":      report.Repository,
-			"bucket_type":     "summary",
-			"bucket":          "total",
-			"count":           report.PRSummary.Total,
-			"high_risk_total": report.PRSummary.HighRisk,
-			"review_focus":    report.PRSummary.ReviewFocus,
-		}})
+		fields := prRecordFields(report, "summary", "total", report.PRSummary.Total)
+		records = append(records, BitableRecord{UniqueKey: fields["unique_key"].(string), Fields: fields})
 	}
 	return records
 }
 
-func appendCountMapRecords(records []BitableRecord, repository string, bucketType string, values map[string]int, extras map[string]interface{}) []BitableRecord {
+func prRecordFields(report workflow.RepoReportResult, groupType string, group string, count int) map[string]interface{} {
+	recommended := []string{"Review PR focus items in GitLink."}
+	if report.PRSummary.HighRisk > 0 {
+		recommended = append(recommended, "Prioritize high-risk pull requests before lower-risk changes.")
+	}
+	fields := map[string]interface{}{
+		"unique_key":         stableKey("pr", report.Repository, groupType, group),
+		"repository":         report.Repository,
+		"pr_group":           groupType + ":" + group,
+		"risk_level":         group,
+		"count":              count,
+		"review_focus":       report.PRSummary.ReviewFocus,
+		"recommended_action": uniqueDigestStrings(recommended),
+	}
+	if repoURL := gitlinkRepoURL(report.Repository); repoURL != "" {
+		fields["gitlink_url"] = repoURL + "/pulls"
+	}
+	return fields
+}
+
+func contributorRecords(report workflow.RepoReportResult) []BitableRecord {
+	openItems := report.PRSummary.Total + report.IssueSummary.Total
+	riskItems := report.PRSummary.HighRisk + report.IssueSummary.HighRisk
+	fields := map[string]interface{}{
+		"unique_key":         stableKey("contributor", report.Repository, "role-oriented"),
+		"repository":         report.Repository,
+		"contributor":        "role-oriented digest",
+		"role":               "contributor",
+		"open_items":         openItems,
+		"risk_items":         riskItems,
+		"recommended_action": BuildContributorDigest(report, "").NextSteps,
+	}
+	if repoURL := gitlinkRepoURL(report.Repository); repoURL != "" {
+		fields["gitlink_url"] = repoURL
+	}
+	return []BitableRecord{{UniqueKey: fields["unique_key"].(string), Fields: fields}}
+}
+
+func taskRecords(report workflow.RepoReportResult, docURL string) []BitableRecord {
+	tasks := BuildTaskCandidates(report, docURL)
+	records := make([]BitableRecord, 0, len(tasks))
+	for _, task := range tasks {
+		fields := map[string]interface{}{
+			"unique_key":        task.UniqueKey,
+			"repository":        task.Repository,
+			"task_title":        task.Title,
+			"task_type":         task.TaskType,
+			"priority":          task.Priority,
+			"source_type":       task.SourceType,
+			"source_key":        task.SourceKey,
+			"recommended_owner": task.RecommendedOwner,
+			"status":            task.Status,
+			"due_hint":          task.DueHint,
+		}
+		if task.GitLinkURL != "" {
+			fields["gitlink_url"] = task.GitLinkURL
+		}
+		records = append(records, BitableRecord{UniqueKey: task.UniqueKey, Fields: fields})
+	}
+	return records
+}
+
+func sortedIntMapKeys(values map[string]int) []string {
 	keys := make([]string, 0, len(values))
 	for key := range values {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	for _, key := range keys {
-		fields := map[string]interface{}{
-			"repository":  repository,
-			"bucket_type": bucketType,
-			"bucket":      key,
-			"count":       values[key],
+	return keys
+}
+
+func stableKey(parts ...string) string {
+	cleaned := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.ToLower(strings.TrimSpace(part))
+		part = strings.NewReplacer(" ", "-", "/", "_", "\\", "_", ":", "-", "#", "").Replace(part)
+		if part == "" {
+			part = "unknown"
 		}
-		for extraKey, extraValue := range extras {
-			fields[extraKey] = extraValue
-		}
-		records = append(records, BitableRecord{Fields: fields})
+		cleaned = append(cleaned, part)
 	}
-	return records
+	return strings.Join(cleaned, ":")
 }
 
 func renderBitableSchema(w io.Writer, schema BitableSchema, format string) error {
@@ -311,11 +444,7 @@ func writeRecordsMarkdown(w io.Writer, records BitableRecords) error {
 	if _, err := fmt.Fprintln(w); err != nil {
 		return err
 	}
-	tableNames := make([]string, 0, len(records.Tables))
-	for table := range records.Tables {
-		tableNames = append(tableNames, table)
-	}
-	sort.Strings(tableNames)
+	tableNames := sortedTableNames(records.Tables)
 	for _, table := range tableNames {
 		rows := records.Tables[table]
 		if _, err := fmt.Fprintf(w, "## %s\n\nRecords: `%d`\n\n", table, len(rows)); err != nil {
@@ -330,12 +459,7 @@ func writeRecordsTable(w io.Writer, records BitableRecords) error {
 	if _, err := fmt.Fprintln(tw, "TABLE\tRECORDS"); err != nil {
 		return err
 	}
-	tableNames := make([]string, 0, len(records.Tables))
-	for table := range records.Tables {
-		tableNames = append(tableNames, table)
-	}
-	sort.Strings(tableNames)
-	for _, table := range tableNames {
+	for _, table := range sortedTableNames(records.Tables) {
 		if _, err := fmt.Fprintf(tw, "%s\t%d\n", table, len(records.Tables[table])); err != nil {
 			return err
 		}
@@ -343,6 +467,11 @@ func writeRecordsTable(w io.Writer, records BitableRecords) error {
 	return tw.Flush()
 }
 
-func joinStrings(values []string) string {
-	return strings.Join(values, ", ")
+func sortedTableNames(records map[string][]BitableRecord) []string {
+	tableNames := make([]string, 0, len(records))
+	for table := range records {
+		tableNames = append(tableNames, table)
+	}
+	sort.Strings(tableNames)
+	return tableNames
 }

@@ -240,13 +240,19 @@ The app credentials and Wiki read path can work, but document writes still requi
 
 ### Current Bitable Usage
 
-Current Bitable implementation is local-only.
+Current Bitable implementation has two surfaces:
+
+```text
+stable dry-run records
+experimental Open Platform sync
+```
 
 Implemented:
 
 ```text
 feishu +bitable-schema
 feishu +bitable-records
+feishu +bitable-sync
 ```
 
 Current tables:
@@ -256,6 +262,7 @@ reports
 issues
 prs
 contributors
+tasks
 ```
 
 Current records:
@@ -264,21 +271,28 @@ Current records:
 reports: one row per workflow report
 issues: summary bucket rows
 prs: summary bucket rows
-contributors: reserved, empty unless workflow JSON contains contributor details
+contributors: role-oriented contributor digest row
+tasks: task candidates derived from workflow recommendations and risk buckets
 ```
 
-Not implemented:
+Experimental real-write behavior:
 
 ```text
-real Bitable API write
+Bitable record search by unique_key
+Bitable record create
+Bitable record update
+create-only fallback when search fails
+no record deletion
+```
+
+Still not implemented:
+
+```text
 create Base
 create table
 create field
 create view
 batch create records
-update records
-upsert records
-search before update
 Gantt / Kanban / Calendar / Gallery / Dashboard creation
 field permission setup
 ```
@@ -286,7 +300,7 @@ field permission setup
 Conclusion:
 
 ```text
-Current Bitable support is useful as schema and data-shape proof, but not yet useful as an actual project management cockpit.
+Current Bitable support is useful as schema and data-shape proof. The experimental sync path can validate writes into an existing Base, but it does not yet create views or a full project management cockpit.
 ```
 
 To support project management, the next Bitable model must become row-level instead of summary-only:
@@ -842,8 +856,8 @@ No:
 ```text
 no callback server
 no GitLink write actions
-no real Bitable writes
-no task creation
+no default real Bitable writes
+no default task creation
 no permission management
 ```
 
@@ -1122,8 +1136,8 @@ audit log
 ### Avoid
 
 ```text
-claiming real Bitable sync before API writes exist
-claiming Feishu task creation before Task API exists in code
+claiming stable real Bitable sync before more real-enterprise validation
+claiming stable Feishu task creation before more real-enterprise validation
 claiming card callback support before server and validation exist
 claiming Feishu-triggered GitLink write actions before gateway exists
 putting real secrets, IDs, table IDs, chat IDs, open IDs, or document tokens in repo

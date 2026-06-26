@@ -550,6 +550,42 @@ gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --ye
 ```
 
 > 注意：`dataset +list`（平台数据集查询）已在生产 gitlink.org.cn 验证可用。按仓库的 `+view`/`+create`/`+update` 遵循已发布的 OpenAPI 契约，但生产环境尚未部署（当前返回 404），待平台上线后即可生效。
+
+### 飞书协作导出
+
+`feishu` 将 `workflow +repo-report` JSON 转成飞书协作内容。
+
+稳定用法：
+
+```bash
+gitlink-cli workflow +repo-report --owner "$GITLINK_OWNER" --repo "$GITLINK_REPO" --format json > report.json
+
+gitlink-cli feishu +notify --from-workflow-json report.json --format json
+gitlink-cli feishu +notify --from-workflow-json report.json --send --format table
+
+gitlink-cli feishu +weekly-report --from-workflow-json report.json --format markdown
+gitlink-cli feishu +owner-digest --from-workflow-json report.json --format markdown
+gitlink-cli feishu +contributor-digest --from-workflow-json report.json --format markdown
+gitlink-cli feishu +bitable-records --from-workflow-json report.json --format json
+gitlink-cli feishu +task-preview --from-workflow-json report.json --format markdown
+```
+
+实验性开放平台用法：
+
+```bash
+gitlink-cli feishu +doc-export --from-workflow-json report.json --wiki-url "$FEISHU_WIKI_URL" --send --format table
+gitlink-cli feishu +bitable-sync --from-workflow-json report.json --tables reports,issues,prs,tasks --send --format table
+gitlink-cli feishu +task-create --from-workflow-json report.json --send --format table
+```
+
+本分支不实现 GitLink 写操作。飞书卡片按钮仅用于跳转。开放平台能力必须显式传 `--send`，并要求自建应用具备对应资源权限。是否在正式部署中启用这些实验能力，由 GitLink 维护者和部署管理员决定。
+
+详细文档：
+
+- [飞书集成](./docs/feishu-integration.md)
+- [飞书能力分层](./docs/FEISHU_CAPABILITY_LAYERS.md)
+- [飞书环境变量](./docs/FEISHU_ENVIRONMENT.md)
+- [飞书权限矩阵](./reports/FEISHU_PERMISSION_MATRIX.md)
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：

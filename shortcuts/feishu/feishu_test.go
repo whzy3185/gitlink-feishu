@@ -20,7 +20,7 @@ func TestShortcutsExposeExpectedCommands(t *testing.T) {
 	for _, shortcut := range Shortcuts() {
 		got[shortcut.Name] = true
 	}
-	for _, name := range []string{"bot-test", "notify", "weekly-report", "doc-export", "bitable-schema", "bitable-records"} {
+	for _, name := range []string{"bot-test", "notify", "weekly-report", "owner-digest", "contributor-digest", "doc-export", "bitable-schema", "bitable-records", "bitable-sync", "task-preview", "task-create"} {
 		if !got[name] {
 			t.Fatalf("Shortcuts missing %s", name)
 		}
@@ -51,6 +51,16 @@ func TestRedactWebhookURL(t *testing.T) {
 	got := redactWebhookURL("https://open.feishu.cn/open-apis/bot/v2/hook/12345678-1234-1234-1234-123456789abc")
 	if strings.Contains(got, "1234-1234") || !strings.Contains(got, "https://open.feishu.cn/.../") {
 		t.Fatalf("redacted webhook URL leaked too much: %s", got)
+	}
+}
+
+func TestRedactTokenAndResourceURL(t *testing.T) {
+	if got := redactToken("abcdef1234567890"); got != "abcd...7890" {
+		t.Fatalf("redactToken = %q", got)
+	}
+	got := redactResourceURL("https://tenant.feishu.cn/wiki/NodeToken123456789?from=copy")
+	if strings.Contains(got, "Token123") || strings.Contains(got, "from=copy") {
+		t.Fatalf("redactResourceURL leaked token or query: %s", got)
 	}
 }
 
@@ -155,12 +165,182 @@ func TestBitableSchemaAndRecords(t *testing.T) {
 	if len(schema.Tables) != 3 {
 		t.Fatalf("schema table count = %d", len(schema.Tables))
 	}
-	records := BuildBitableRecords(report, parseList("issues,prs,reports"))
+	records := BuildBitableRecords(report, parseList("issues,prs,reports,tasks"), "https://example.feishu.cn/wiki/node")
 	if !records.DryRun {
 		t.Fatal("records must be dry-run")
 	}
 	if len(records.Tables["reports"]) != 1 {
 		t.Fatalf("reports records = %d, want 1", len(records.Tables["reports"]))
+	}
+	if len(records.Tables["tasks"]) == 0 {
+		t.Fatal("tasks records should be generated")
+	}
+}
+
+func TestOwnerAndContributorDigestMapping(t *testing.T) {
+	report := workflowReportFixture(t)
+	owner := BuildOwnerDigest(report, "https://tenant.feishu.cn/wiki/node")
+	if owner.Role != "owner" || owner.Repository != report.Repository {
+		t.Fatalf("owner digest = %+v", owner)
+	}
+	if owner.IssueTotal != report.IssueSummary.Total || owner.PRTotal != report.PRSummary.Total {
+		t.Fatalf("owner digest counts = %+v", owner)
+	}
+	contributor := BuildContributorDigest(report, "")
+	if contributor.Role != "contributor" {
+		t.Fatalf("contributor digest role = %q", contributor.Role)
+	}
+	if !strings.Contains(contributor.BoundaryDescription, "not personalized") {
+		t.Fatalf("contributor boundary missing personalization warning: %s", contributor.BoundaryDescription)
+	}
+	card := BuildOwnerDigestCard(owner, "", "en")
+	encoded, err := json.Marshal(card)
+	if err != nil {
+		t.Fatalf("json.Marshal returned error: %v", err)
+	}
+	if !strings.Contains(string(encoded), "Open GitLink repository") {
+		t.Fatalf("owner card missing repository button: %s", string(encoded))
+	}
+}
+
+func TestTaskCandidatesAreStable(t *testing.T) {
+	report := workflowReportFixture(t)
+	tasks := BuildTaskCandidates(report, "https://tenant.feishu.cn/wiki/node")
+	if len(tasks) == 0 {
+		t.Fatal("expected task candidates")
+	}
+	seen := map[string]bool{}
+	for _, task := range tasks {
+		if task.UniqueKey == "" || seen[task.UniqueKey] {
+			t.Fatalf("unstable or duplicate task key: %+v", task)
+		}
+		seen[task.UniqueKey] = true
+		if task.Repository != report.Repository {
+			t.Fatalf("task repository = %q, want %q", task.Repository, report.Repository)
+		}
+	}
+}
+
+func TestBitableSyncOptionsRejectSendDryRun(t *testing.T) {
+	ctx := &common.RuntimeContext{Args: map[string]string{
+		"send":           "true",
+		"dry-run":        "true",
+		"app-id":         "cli_xxx",
+		"app-secret":     "secret",
+		"base-app-token": "base",
+	}}
+	if _, err := bitableSyncOptionsFromContext(ctx); err == nil {
+		t.Fatal("expected --send --dry-run error")
+	}
+}
+
+func TestBitableSyncMockHTTP(t *testing.T) {
+	report := workflowReportFixture(t)
+	records := BuildBitableRecords(report, []string{"reports"}, "")
+	var sawCreate bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/auth/v3/tenant_access_token/internal":
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","tenant_access_token":"tenant-token","expire":7200}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/bitable/v1/apps/base_token/tables/tbl_report/records/search":
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","data":{"items":[]}}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/bitable/v1/apps/base_token/tables/tbl_report/records":
+			sawCreate = true
+			var payload struct {
+				Fields map[string]interface{} `json:"fields"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode bitable payload: %v", err)
+			}
+			if payload.Fields["unique_key"] == "" {
+				t.Fatalf("payload missing unique_key: %+v", payload.Fields)
+			}
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","data":{"record":{"record_id":"rec_1234567890"}}}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	oldBaseURL := openAPIBaseURL
+	openAPIBaseURL = server.URL
+	defer func() { openAPIBaseURL = oldBaseURL }()
+
+	opts := BitableSyncOptions{
+		AppID:        "cli_xxx",
+		AppSecret:    "secret",
+		BaseAppToken: "base_token",
+		TableIDs:     map[string]string{"reports": "tbl_report"},
+		Tables:       []string{"reports"},
+		Send:         true,
+	}
+	if err := syncBitableOrPreview(&common.RuntimeContext{}, opts, records); err != nil {
+		t.Fatalf("syncBitableOrPreview returned error: %v", err)
+	}
+	if !sawCreate {
+		t.Fatal("expected create request")
+	}
+}
+
+func TestTaskCreateOptionsRejectSendDryRun(t *testing.T) {
+	ctx := &common.RuntimeContext{Args: map[string]string{
+		"send":       "true",
+		"dry-run":    "true",
+		"app-id":     "cli_xxx",
+		"app-secret": "secret",
+	}}
+	if _, err := taskCreateOptionsFromContext(ctx); err == nil {
+		t.Fatal("expected --send --dry-run error")
+	}
+}
+
+func TestTaskCreateMockHTTP(t *testing.T) {
+	var sawTask bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/auth/v3/tenant_access_token/internal":
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","tenant_access_token":"tenant-token","expire":7200}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/task/v2/tasks":
+			sawTask = true
+			var payload struct {
+				Summary string `json:"summary"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode task payload: %v", err)
+			}
+			if payload.Summary == "" {
+				t.Fatal("task summary is empty")
+			}
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","data":{"task":{"guid":"task_guid_123456"}}}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	oldBaseURL := openAPIBaseURL
+	openAPIBaseURL = server.URL
+	defer func() { openAPIBaseURL = oldBaseURL }()
+
+	tasks := []TaskCandidate{{
+		UniqueKey:   "task:test",
+		Title:       "Review GitLink workflow report",
+		Description: "Workflow report task",
+		SourceType:  "report",
+		SourceKey:   "report-review",
+		Repository:  "Gitlink/gitlink-cli",
+		Priority:    "low",
+		TaskType:    "report_review",
+		Status:      "todo",
+	}}
+	opts := TaskCreateOptions{AppID: "cli_xxx", AppSecret: "secret", Send: true}
+	if err := createTasksOrPreview(&common.RuntimeContext{}, opts, tasks); err != nil {
+		t.Fatalf("createTasksOrPreview returned error: %v", err)
+	}
+	if !sawTask {
+		t.Fatal("expected task create request")
 	}
 }
 

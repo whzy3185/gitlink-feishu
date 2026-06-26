@@ -15,8 +15,15 @@ Supported environment variables:
 ```text
 FEISHU_WEBHOOK_URL
 FEISHU_WEBHOOK_SECRET
-FEISHU_APP_ID experimental doc-export only
-FEISHU_APP_SECRET experimental doc-export only
+FEISHU_APP_ID experimental Open Platform commands only
+FEISHU_APP_SECRET experimental Open Platform commands only
+FEISHU_BASE_APP_TOKEN experimental bitable-sync only
+FEISHU_REPORT_TABLE_ID experimental bitable-sync only
+FEISHU_ISSUE_TABLE_ID experimental bitable-sync only
+FEISHU_PR_TABLE_ID experimental bitable-sync only
+FEISHU_WIKI_URL experimental doc-export only
+FEISHU_WIKI_NODE_TOKEN experimental doc-export only
+FEISHU_FOLDER_TOKEN experimental doc-export only
 ```
 
 Do not commit real webhook URLs, app secrets, access tokens, Base app tokens, table IDs, or document tokens.
@@ -31,6 +38,8 @@ The stable surface uses Feishu custom bot webhooks:
 feishu +bot-test
 feishu +notify
 feishu +weekly-report
+feishu +owner-digest
+feishu +contributor-digest
 ```
 
 These commands can send Feishu cards, but they do not read or write Feishu documents, tables, users, or groups.
@@ -42,13 +51,22 @@ The Bitable commands are local only:
 ```text
 feishu +bitable-schema
 feishu +bitable-records
+feishu +task-preview
 ```
 
-They do not call Feishu OpenAPI and cannot create, update, or upsert Bitable records.
+They do not call Feishu OpenAPI and cannot create, update, or upsert remote Feishu resources.
 
 ## Experimental Surface
 
-`feishu +doc-export` is experimental. It uses:
+These commands are experimental:
+
+```text
+feishu +doc-export
+feishu +bitable-sync
+feishu +task-create
+```
+
+They use:
 
 ```text
 app_id
@@ -56,9 +74,15 @@ app_secret
 tenant_access_token
 Wiki OpenAPI
 DocX OpenAPI
+Bitable OpenAPI
+Task OpenAPI
 ```
 
-It should not be treated as part of the stable clean export path. If used, grant the self-built app only the minimum required document permissions.
+They should not be treated as part of the stable clean export path. If used, grant the self-built app only the minimum required resource permissions.
+
+`+bitable-sync` never deletes records. It searches by `unique_key`, updates when found, creates when missing, and records diagnostics when Feishu rejects the call.
+
+`+task-create` does not deduplicate against existing Feishu tasks unless Feishu-side identifiers and scopes later support that search path.
 
 ## Non-Goals
 
@@ -70,6 +94,7 @@ GitLink remote writes
 GitLink comments
 Issue closure
 merge actions
-real Bitable writes
+Feishu card callback execution
+GitLink write actions from Feishu
 ```
 

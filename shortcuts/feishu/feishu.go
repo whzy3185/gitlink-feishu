@@ -13,7 +13,7 @@ import (
 
 const (
 	defaultInclude = "issues,prs,contributors,health"
-	defaultTables  = "issues,prs,contributors,reports"
+	defaultTables  = "reports,issues,prs,contributors,tasks"
 	defaultLang    = "en"
 )
 
@@ -24,9 +24,14 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		newBotTestShortcut(),
 		newNotifyShortcut(),
 		newWeeklyReportShortcut(),
+		newOwnerDigestShortcut(),
+		newContributorDigestShortcut(),
 		newDocExportShortcut(),
 		newBitableSchemaShortcut(),
 		newBitableRecordsShortcut(),
+		newBitableSyncShortcut(),
+		newTaskPreviewShortcut(),
+		newTaskCreateShortcut(),
 	}
 }
 
@@ -73,6 +78,34 @@ func newWeeklyReportShortcut() *common.Shortcut {
 	}
 }
 
+func newOwnerDigestShortcut() *common.Shortcut {
+	return &common.Shortcut{
+		Name:        "owner-digest",
+		Description: "Preview or send a role-aware owner digest from workflow JSON",
+		Flags: append(deliveryFlags(),
+			common.Flag{Name: "from-workflow-json", Usage: "Read workflow repo report JSON from a file", Required: true},
+			common.Flag{Name: "title", Usage: "Override card title"},
+			common.Flag{Name: "doc-url", Usage: "Feishu DocX or Wiki URL to include in the card"},
+			common.Flag{Name: "lang", Usage: "Output language: en or zh-CN", Default: defaultLang},
+		),
+		Run: runOwnerDigest,
+	}
+}
+
+func newContributorDigestShortcut() *common.Shortcut {
+	return &common.Shortcut{
+		Name:        "contributor-digest",
+		Description: "Preview or send a role-oriented contributor digest from workflow JSON",
+		Flags: append(deliveryFlags(),
+			common.Flag{Name: "from-workflow-json", Usage: "Read workflow repo report JSON from a file", Required: true},
+			common.Flag{Name: "title", Usage: "Override card title"},
+			common.Flag{Name: "doc-url", Usage: "Feishu DocX or Wiki URL to include in the card"},
+			common.Flag{Name: "lang", Usage: "Output language: en or zh-CN", Default: defaultLang},
+		),
+		Run: runContributorDigest,
+	}
+}
+
 func newDocExportShortcut() *common.Shortcut {
 	return &common.Shortcut{
 		Name:        "doc-export",
@@ -99,7 +132,7 @@ func newBitableSchemaShortcut() *common.Shortcut {
 		Name:        "bitable-schema",
 		Description: "Generate a dry-run Feishu Bitable schema",
 		Flags: []common.Flag{
-			{Name: "tables", Usage: "Comma-separated tables: issues,prs,contributors,reports", Default: defaultTables},
+			{Name: "tables", Usage: "Comma-separated tables: reports,issues,prs,contributors,tasks", Default: defaultTables},
 			{Name: "lang", Usage: "Output language: en or zh-CN", Default: defaultLang},
 		},
 		Run: runBitableSchema,
@@ -112,10 +145,67 @@ func newBitableRecordsShortcut() *common.Shortcut {
 		Description: "Generate dry-run Feishu Bitable-ready records from workflow JSON",
 		Flags: []common.Flag{
 			{Name: "from-workflow-json", Usage: "Read workflow repo report JSON from a file", Required: true},
-			{Name: "tables", Usage: "Comma-separated tables: issues,prs,contributors,reports", Default: defaultTables},
+			{Name: "tables", Usage: "Comma-separated tables: reports,issues,prs,contributors,tasks", Default: defaultTables},
+			{Name: "doc-url", Usage: "Feishu DocX or Wiki URL to include in generated records"},
 			{Name: "lang", Usage: "Output language: en or zh-CN", Default: defaultLang},
 		},
 		Run: runBitableRecords,
+	}
+}
+
+func newBitableSyncShortcut() *common.Shortcut {
+	return &common.Shortcut{
+		Name:        "bitable-sync",
+		Description: "Experimental: preview or sync workflow records to Feishu Bitable",
+		Flags: []common.Flag{
+			{Name: "from-workflow-json", Usage: "Read workflow repo report JSON from a file", Required: true},
+			{Name: "tables", Usage: "Comma-separated tables: reports,issues,prs,contributors,tasks", Default: defaultTables},
+			{Name: "doc-url", Usage: "Feishu DocX or Wiki URL to include in generated records"},
+			{Name: "app-id", Usage: "Feishu self-built app ID. Defaults to FEISHU_APP_ID"},
+			{Name: "app-secret", Usage: "Feishu self-built app secret. Defaults to FEISHU_APP_SECRET"},
+			{Name: "base-app-token", Usage: "Feishu Base app token. Defaults to FEISHU_BASE_APP_TOKEN"},
+			{Name: "report-table-id", Usage: "Reports table ID. Defaults to FEISHU_REPORT_TABLE_ID"},
+			{Name: "issue-table-id", Usage: "Issues table ID. Defaults to FEISHU_ISSUE_TABLE_ID"},
+			{Name: "pr-table-id", Usage: "Pull requests table ID. Defaults to FEISHU_PR_TABLE_ID"},
+			{Name: "contributor-table-id", Usage: "Contributors table ID. Defaults to FEISHU_CONTRIBUTOR_TABLE_ID"},
+			{Name: "task-table-id", Usage: "Tasks table ID. Defaults to FEISHU_TASK_TABLE_ID"},
+			{Name: "send", Usage: "Write to Feishu Bitable. Without --send, preview locally", Bool: true, Default: "false"},
+			{Name: "dry-run", Usage: "Force local preview. Cannot be combined with --send", Bool: true, Default: "false"},
+			{Name: "lang", Usage: "Output language: en or zh-CN", Default: defaultLang},
+		},
+		Run: runBitableSync,
+	}
+}
+
+func newTaskPreviewShortcut() *common.Shortcut {
+	return &common.Shortcut{
+		Name:        "task-preview",
+		Description: "Preview Feishu task candidates from workflow JSON",
+		Flags: []common.Flag{
+			{Name: "from-workflow-json", Usage: "Read workflow repo report JSON from a file", Required: true},
+			{Name: "doc-url", Usage: "Feishu DocX or Wiki URL to include in generated tasks"},
+			{Name: "lang", Usage: "Output language: en or zh-CN", Default: defaultLang},
+		},
+		Run: runTaskPreview,
+	}
+}
+
+func newTaskCreateShortcut() *common.Shortcut {
+	return &common.Shortcut{
+		Name:        "task-create",
+		Description: "Experimental: preview or create Feishu tasks from workflow JSON",
+		Flags: []common.Flag{
+			{Name: "from-workflow-json", Usage: "Read workflow repo report JSON from a file", Required: true},
+			{Name: "doc-url", Usage: "Feishu DocX or Wiki URL to include in generated tasks"},
+			{Name: "app-id", Usage: "Feishu self-built app ID. Defaults to FEISHU_APP_ID"},
+			{Name: "app-secret", Usage: "Feishu self-built app secret. Defaults to FEISHU_APP_SECRET"},
+			{Name: "task-project-id", Usage: "Feishu task project ID. Defaults to FEISHU_TASK_PROJECT_ID"},
+			{Name: "task-section-id", Usage: "Feishu task section ID. Defaults to FEISHU_TASK_SECTION_ID"},
+			{Name: "send", Usage: "Create Feishu tasks. Without --send, preview locally", Bool: true, Default: "false"},
+			{Name: "dry-run", Usage: "Force local preview. Cannot be combined with --send", Bool: true, Default: "false"},
+			{Name: "lang", Usage: "Output language: en or zh-CN", Default: defaultLang},
+		},
+		Run: runTaskCreate,
 	}
 }
 
@@ -175,6 +265,40 @@ func runWeeklyReport(ctx *common.RuntimeContext) error {
 	return err
 }
 
+func runOwnerDigest(ctx *common.RuntimeContext) error {
+	opts, err := deliveryOptionsFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	report, err := readWorkflowReport(ctx.Arg("from-workflow-json"), normalizeLang(ctx.Arg("lang")))
+	if err != nil {
+		return err
+	}
+	digest := BuildOwnerDigest(report, ctx.Arg("doc-url"))
+	if opts.Send {
+		title := firstNonEmpty(ctx.Arg("title"), "GitLink owner digest: "+report.Repository)
+		return deliverOrPreview(ctx, opts, NewInteractivePayload(BuildOwnerDigestCard(digest, title, normalizeLang(ctx.Arg("lang")))), "")
+	}
+	return renderDigest(os.Stdout, digest, formatOrDefault(ctx, "markdown"))
+}
+
+func runContributorDigest(ctx *common.RuntimeContext) error {
+	opts, err := deliveryOptionsFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	report, err := readWorkflowReport(ctx.Arg("from-workflow-json"), normalizeLang(ctx.Arg("lang")))
+	if err != nil {
+		return err
+	}
+	digest := BuildContributorDigest(report, ctx.Arg("doc-url"))
+	if opts.Send {
+		title := firstNonEmpty(ctx.Arg("title"), "GitLink contributor digest: "+report.Repository)
+		return deliverOrPreview(ctx, opts, NewInteractivePayload(BuildContributorDigestCard(digest, title, normalizeLang(ctx.Arg("lang")))), "")
+	}
+	return renderDigest(os.Stdout, digest, formatOrDefault(ctx, "markdown"))
+}
+
 func runDocExport(ctx *common.RuntimeContext) error {
 	opts, err := docExportOptionsFromContext(ctx)
 	if err != nil {
@@ -197,8 +321,43 @@ func runBitableRecords(ctx *common.RuntimeContext) error {
 	if err != nil {
 		return err
 	}
-	records := BuildBitableRecords(report, parseList(firstNonEmpty(ctx.Arg("tables"), defaultTables)))
+	records := BuildBitableRecords(report, parseList(firstNonEmpty(ctx.Arg("tables"), defaultTables)), ctx.Arg("doc-url"))
 	return renderBitableRecords(os.Stdout, records, formatOrDefault(ctx, "json"))
+}
+
+func runBitableSync(ctx *common.RuntimeContext) error {
+	opts, err := bitableSyncOptionsFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	report, err := readWorkflowReport(ctx.Arg("from-workflow-json"), normalizeLang(ctx.Arg("lang")))
+	if err != nil {
+		return err
+	}
+	records := BuildBitableRecords(report, opts.Tables, ctx.Arg("doc-url"))
+	return syncBitableOrPreview(ctx, opts, records)
+}
+
+func runTaskPreview(ctx *common.RuntimeContext) error {
+	report, err := readWorkflowReport(ctx.Arg("from-workflow-json"), normalizeLang(ctx.Arg("lang")))
+	if err != nil {
+		return err
+	}
+	tasks := BuildTaskCandidates(report, ctx.Arg("doc-url"))
+	return renderTaskOutput(os.Stdout, TaskOutput{Mode: "preview", DryRun: true, Tasks: tasks}, formatOrDefault(ctx, "markdown"))
+}
+
+func runTaskCreate(ctx *common.RuntimeContext) error {
+	opts, err := taskCreateOptionsFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	report, err := readWorkflowReport(ctx.Arg("from-workflow-json"), normalizeLang(ctx.Arg("lang")))
+	if err != nil {
+		return err
+	}
+	tasks := BuildTaskCandidates(report, ctx.Arg("doc-url"))
+	return createTasksOrPreview(ctx, opts, tasks)
 }
 
 func normalizeLang(lang string) string {

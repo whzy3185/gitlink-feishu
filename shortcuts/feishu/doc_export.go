@@ -40,6 +40,7 @@ type DocExportOutput struct {
 	TokenExpire   int              `json:"token_expire,omitempty"`
 	RevisionID    int              `json:"revision_id,omitempty"`
 	Preview       string           `json:"preview,omitempty"`
+	Diagnostics   []string         `json:"diagnostics,omitempty"`
 }
 
 type WikiNodeSummary struct {
@@ -54,7 +55,7 @@ func docExportOptionsFromContext(ctx *common.RuntimeContext) (DocExportOptions, 
 	opts := DocExportOptions{
 		AppID:         firstNonEmpty(ctx.Arg("app-id"), os.Getenv("FEISHU_APP_ID")),
 		AppSecret:     firstNonEmpty(ctx.Arg("app-secret"), os.Getenv("FEISHU_APP_SECRET")),
-		FolderToken:   firstNonEmpty(ctx.Arg("folder-token"), os.Getenv("FEISHU_DOC_FOLDER_TOKEN")),
+		FolderToken:   firstNonEmpty(ctx.Arg("folder-token"), os.Getenv("FEISHU_FOLDER_TOKEN"), os.Getenv("FEISHU_DOC_FOLDER_TOKEN")),
 		DocumentID:    firstNonEmpty(ctx.Arg("document-id"), os.Getenv("FEISHU_DOCUMENT_ID")),
 		WikiURL:       firstNonEmpty(ctx.Arg("wiki-url"), os.Getenv("FEISHU_WIKI_URL")),
 		WikiNodeToken: firstNonEmpty(ctx.Arg("wiki-node-token"), os.Getenv("FEISHU_WIKI_NODE_TOKEN")),
@@ -99,13 +100,13 @@ func exportDocOrPreview(ctx *common.RuntimeContext, opts DocExportOptions, repor
 		TargetType:  docTargetType(opts),
 		Operation:   docOperation(opts),
 		Title:       title,
-		DocumentID:  opts.DocumentID,
-		DocumentURL: firstNonEmpty(opts.WikiURL),
+		DocumentID:  redactToken(opts.DocumentID),
+		DocumentURL: redactResourceURL(firstNonEmpty(opts.WikiURL)),
 		BlockCount:  len(blocks),
 		Preview:     markdown,
 	}
 	if opts.WikiNodeToken != "" {
-		output.WikiNodeToken = opts.WikiNodeToken
+		output.WikiNodeToken = redactToken(opts.WikiNodeToken)
 	}
 	if !opts.Send {
 		return renderDocExportOutput(os.Stdout, output, formatOrDefault(ctx, "markdown"))
@@ -114,6 +115,8 @@ func exportDocOrPreview(ctx *common.RuntimeContext, opts DocExportOptions, repor
 	client := NewOpenAPIClient(http.DefaultClient)
 	token, err := client.TenantAccessToken(context.Background(), opts.AppID, opts.AppSecret)
 	if err != nil {
+		output.Diagnostics = append(output.Diagnostics, diagnoseOpenAPIError(err, "docx", "tenant_access_token"))
+		_ = renderDocExportOutput(os.Stdout, output, formatOrDefault(ctx, "json"))
 		return err
 	}
 	output.TokenExpire = token.Expire
@@ -122,36 +125,45 @@ func exportDocOrPreview(ctx *common.RuntimeContext, opts DocExportOptions, repor
 	if opts.WikiNodeToken != "" {
 		node, err := client.GetWikiNode(context.Background(), token.Value, opts.WikiNodeToken)
 		if err != nil {
+			output.Diagnostics = append(output.Diagnostics, diagnoseOpenAPIError(err, "docx", "wiki node"))
+			_ = renderDocExportOutput(os.Stdout, output, formatOrDefault(ctx, "json"))
 			return err
 		}
 		output.TargetType = "wiki"
 		if node.ObjType != "" && node.ObjType != "docx" {
+			output.Diagnostics = append(output.Diagnostics, "wiki node object type is not supported; expected docx")
+			_ = renderDocExportOutput(os.Stdout, output, formatOrDefault(ctx, "json"))
 			return fmt.Errorf("Feishu wiki node object type %q is not supported; expected docx", node.ObjType)
 		}
 		documentID = node.ObjToken
-		output.DocumentID = documentID
+		output.DocumentID = redactToken(documentID)
 		output.WikiNode = &WikiNodeSummary{
 			NodeType: node.NodeType,
 			ObjType:  node.ObjType,
 			Title:    node.Title,
 		}
 		if output.DocumentURL == "" {
-			output.DocumentURL = node.URL
+			output.DocumentURL = redactResourceURL(node.URL)
 		}
 	}
 	if documentID == "" {
 		created, err := client.CreateDocument(context.Background(), token.Value, opts.FolderToken, title)
 		if err != nil {
+			output.Diagnostics = append(output.Diagnostics, diagnoseOpenAPIError(err, "docx", "folder"))
+			_ = renderDocExportOutput(os.Stdout, output, formatOrDefault(ctx, "json"))
 			return err
 		}
 		documentID = created.DocumentID
-		output.DocumentID = created.DocumentID
-		output.DocumentURL = created.URL
+		output.DocumentID = redactToken(created.DocumentID)
+		output.DocumentURL = redactResourceURL(created.URL)
 		output.RevisionID = created.RevisionID
 		output.Operation = "create"
 	}
 	createdBlocks, err := client.CreateBlocks(context.Background(), token.Value, documentID, documentID, blocks)
 	if err != nil {
+		output.Diagnostics = append(output.Diagnostics, diagnoseOpenAPIError(err, "docx", output.TargetType))
+		output.Diagnostics = append(output.Diagnostics, "required permission: app can edit the target DocX/Wiki page, or create documents in the target folder")
+		_ = renderDocExportOutput(os.Stdout, output, formatOrDefault(ctx, "json"))
 		return fmt.Errorf("%w\nhint: grant the Feishu self-built app edit access to the target DocX/Wiki page, or export to a folder where the app has document creation permission", err)
 	}
 	if createdBlocks.RevisionID != 0 {
@@ -238,6 +250,11 @@ func writeDocExportMarkdown(w io.Writer, output DocExportOutput) error {
 	}
 	if _, err := fmt.Fprintln(w, strings.Join(lines, "\n")); err != nil {
 		return err
+	}
+	for _, diagnostic := range output.Diagnostics {
+		if _, err := fmt.Fprintf(w, "- Diagnostic: %s\n", diagnostic); err != nil {
+			return err
+		}
 	}
 	if output.Preview != "" {
 		if _, err := fmt.Fprint(w, "\n## Preview\n\n"); err != nil {

@@ -12,8 +12,14 @@ feat/feishu-export-clean
 gitlink-cli feishu +bot-test
 gitlink-cli feishu +notify
 gitlink-cli feishu +weekly-report
+gitlink-cli feishu +owner-digest
+gitlink-cli feishu +contributor-digest
 gitlink-cli feishu +bitable-schema
 gitlink-cli feishu +bitable-records
+gitlink-cli feishu +bitable-sync
+gitlink-cli feishu +doc-export
+gitlink-cli feishu +task-preview
+gitlink-cli feishu +task-create
 ```
 
 ## Implemented Behavior
@@ -29,6 +35,8 @@ gitlink-cli feishu +bitable-records
 - Added workflow JSON input support for `RepoReportInput`, `RepoReportResult`, and envelope-like `data`.
 - Added project activity card generation from workflow JSON.
 - Added weekly report rendering from workflow JSON.
+- Added role-aware owner digest rendering and optional custom bot sending.
+- Added role-oriented contributor digest rendering and optional custom bot sending.
 - Added `--doc-url` support for notification cards.
 - Added experimental `feishu +doc-export` for Feishu DocX / Wiki export.
 - Added self-built app tenant token acquisition.
@@ -37,6 +45,10 @@ gitlink-cli feishu +bitable-records
 - Added document export preview and explicit `--send` behavior.
 - Added Bitable dry-run schema generation.
 - Added Bitable-ready dry-run records.
+- Expanded Bitable records to `reports`, `issues`, `prs`, `contributors`, and `tasks`.
+- Added experimental `feishu +bitable-sync` with `unique_key` search-before-update, create fallback, and no-delete behavior.
+- Added local task candidate generation through `feishu +task-preview`.
+- Added experimental `feishu +task-create` using Feishu Open Platform Task API.
 - Registered the new shortcut group in `shortcuts/register.go`.
 - Updated shortcut registration tests.
 
@@ -55,6 +67,8 @@ Message: success
 Webhook output was redacted.
 
 A second notification card was sent with a Feishu Wiki URL as the report entry link.
+
+The 2026-06-26 implementation smoke in the current shell did not have Feishu environment variables available, so real `--send` calls were not repeated in that shell. Public GitLink read smoke and local preview commands passed; see `reports/FEISHU_SMOKE_20260626.md`.
 
 ## Open Platform Checks
 
@@ -95,6 +109,13 @@ The app credentials are valid and the Wiki node is readable, but the app does no
 
 The command now reports a permission hint for this case.
 
+Additional experimental Open Platform paths added after the original smoke:
+
+```text
+bitable-sync: mock HTTP tested for tenant token, search, and create.
+task-create: mock HTTP tested for tenant token and task create.
+```
+
 ## Knowledge Base Design Update
 
 Added official-docs alignment notes:
@@ -114,13 +135,13 @@ After scope review, DocX / Wiki export is explicitly experimental and not part o
 Stable path:
 
 ```text
-workflow JSON -> bot card / weekly report / Bitable dry-run records
+workflow JSON -> bot card / weekly report / owner digest / contributor digest / Bitable dry-run records / task preview
 ```
 
 Experimental path:
 
 ```text
-workflow JSON -> DocX/Wiki export through self-built app OpenAPI
+workflow JSON -> DocX/Wiki export / Bitable sync / Task create through self-built app OpenAPI
 ```
 
 ## Tests
@@ -145,7 +166,6 @@ passed
 ```text
 BotBuilder integration
 Feishu Robot Assistant workflows
-Feishu task creation
 Feishu approval creation
 callback server
 button callbacks
@@ -154,14 +174,11 @@ GitLink comments
 Issue closure
 code merge actions
 direct GitLink webhook creation
-real Bitable OpenAPI writes
-Bitable create/update/upsert
 Feishu Base/table/view creation
 document permission modification
-DocX content write
 ```
 
-Note: experimental `doc-export` can attempt DocX block writes when explicitly invoked with `--send`, but it remains outside the stable clean export path.
+Note: experimental `doc-export`, `bitable-sync`, and `task-create` can attempt Open Platform writes when explicitly invoked with `--send`, but they remain outside the stable custom-bot export path.
 
 ## Next Engineering Step
 

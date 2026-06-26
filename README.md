@@ -650,6 +650,42 @@ Safety:
 - `workflow +pr-summary` does not comment, approve, reject, or merge pull requests.
 - `workflow +repo-report` aggregates health, issue triage, and PR review summary signals without remote writes.
 
+### Feishu Collaboration Export
+
+`feishu` turns `workflow +repo-report` JSON into Feishu collaboration outputs.
+
+Stable usage:
+
+```bash
+gitlink-cli workflow +repo-report --owner "$GITLINK_OWNER" --repo "$GITLINK_REPO" --format json > report.json
+
+gitlink-cli feishu +notify --from-workflow-json report.json --format json
+gitlink-cli feishu +notify --from-workflow-json report.json --send --format table
+
+gitlink-cli feishu +weekly-report --from-workflow-json report.json --format markdown
+gitlink-cli feishu +owner-digest --from-workflow-json report.json --format markdown
+gitlink-cli feishu +contributor-digest --from-workflow-json report.json --format markdown
+gitlink-cli feishu +bitable-records --from-workflow-json report.json --format json
+gitlink-cli feishu +task-preview --from-workflow-json report.json --format markdown
+```
+
+Experimental Open Platform usage:
+
+```bash
+gitlink-cli feishu +doc-export --from-workflow-json report.json --wiki-url "$FEISHU_WIKI_URL" --send --format table
+gitlink-cli feishu +bitable-sync --from-workflow-json report.json --tables reports,issues,prs,tasks --send --format table
+gitlink-cli feishu +task-create --from-workflow-json report.json --send --format table
+```
+
+GitLink write operations are not implemented in this branch. Feishu card buttons are navigation-only. Open Platform commands require explicit `--send` and a self-built app with resource permissions. Whether these experimental capabilities should be enabled in official deployments is left to GitLink maintainers and deployment administrators.
+
+Details:
+
+- [Feishu integration](./docs/feishu-integration.md)
+- [Feishu capability layers](./docs/FEISHU_CAPABILITY_LAYERS.md)
+- [Feishu environment variables](./docs/FEISHU_ENVIRONMENT.md)
+- [Feishu permission matrix](./reports/FEISHU_PERMISSION_MATRIX.md)
+
 ### Dataset
 
 `dataset` manages and queries GitLink research datasets (title, description,

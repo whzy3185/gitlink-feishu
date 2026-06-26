@@ -1,14 +1,17 @@
 # Feishu Bitable Dry-Run Schema
 
-`gitlink-cli feishu` currently generates Bitable schema and records locally.
+`gitlink-cli feishu` generates Bitable schema and records locally.
 
-It does not call Feishu Bitable OpenAPI.
+`+bitable-schema` and `+bitable-records` do not call Feishu Bitable OpenAPI.
+
+`+bitable-sync` is an experimental Open Platform command. It requires explicit `--send` before it writes.
 
 ## Commands
 
 ```bash
 gitlink-cli feishu +bitable-schema --format markdown
 gitlink-cli feishu +bitable-records --from-workflow-json report.json --format json
+gitlink-cli feishu +bitable-sync --from-workflow-json report.json --tables reports,issues,prs,tasks --format table
 ```
 
 ## Tables
@@ -20,6 +23,7 @@ issues
 prs
 contributors
 reports
+tasks
 ```
 
 ## Record Semantics
@@ -34,35 +38,34 @@ Current behavior:
 reports: one summary row per repo report
 issues: summary buckets by issue type and priority
 prs: summary buckets by change type and risk
-contributors: reserved schema; records are empty unless workflow JSON later includes contributor details
+contributors: role-oriented contributor digest summary
+tasks: task candidates derived from recommendations, high-risk issues, high-risk PRs, and missing information
 ```
 
 ## Real Write Boundary
 
+Implemented experimentally:
+
+```text
+Bitable record search by unique_key
+Bitable record create
+Bitable record update
+create-only fallback when search fails
+no-delete behavior
+```
+
 Not implemented:
 
 ```text
-Bitable OpenAPI create
-Bitable OpenAPI batch create
-Bitable update
-Bitable upsert
+pagination
+batch create
 Base creation
 table creation
 view creation
 field creation
 person/open_id mapping
-```
-
-Real Bitable writes require a separate design for:
-
-```text
-app authentication
-table IDs
-record unique keys
-search-before-update
-pagination
-partial failure handling
 rate limits
-permission diagnostics
 ```
+
+Real Bitable writes require existing Base app and table IDs. The target tables should include a text field named `unique_key`.
 

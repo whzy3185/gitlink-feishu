@@ -8,7 +8,9 @@ The stable command path is intentionally narrow:
 workflow JSON -> local preview
 workflow JSON -> Feishu custom bot card
 workflow JSON -> weekly report
+workflow JSON -> owner / contributor digest
 workflow JSON -> Bitable schema / records dry-run
+workflow JSON -> task candidates
 ```
 
 ## Stable Commands
@@ -17,11 +19,22 @@ workflow JSON -> Bitable schema / records dry-run
 gitlink-cli feishu +bot-test
 gitlink-cli feishu +notify
 gitlink-cli feishu +weekly-report
+gitlink-cli feishu +owner-digest
+gitlink-cli feishu +contributor-digest
 gitlink-cli feishu +bitable-schema
 gitlink-cli feishu +bitable-records
+gitlink-cli feishu +task-preview
 ```
 
-`feishu +doc-export` exists as an experimental command. It uses Feishu self-built app OpenAPI and is not part of the clean first-path workflow.
+Experimental commands:
+
+```text
+gitlink-cli feishu +doc-export
+gitlink-cli feishu +bitable-sync
+gitlink-cli feishu +task-create
+```
+
+Experimental commands use Feishu self-built app OpenAPI and are not part of the stable custom-bot path.
 
 ## Safety Model
 
@@ -31,7 +44,10 @@ gitlink-cli feishu +bitable-records
 - Webhook URLs are redacted in command output.
 - Secrets and tokens are never intentionally printed.
 - The stable commands do not write to GitLink resources.
-- Bitable commands are dry-run only and do not call Bitable OpenAPI.
+- `+bitable-schema`, `+bitable-records`, and `+task-preview` are dry-run only and do not call Feishu OpenAPI.
+- `+doc-export`, `+bitable-sync`, and `+task-create` require explicit `--send` before attempting Open Platform writes.
+- Feishu card buttons are navigation-only.
+- GitLink write operations are not implemented.
 
 ## Custom Bot Setup
 
@@ -102,6 +118,24 @@ Send a weekly summary card:
 gitlink-cli feishu +weekly-report --from-workflow-json report.json --send --format table
 ```
 
+## Owner and Contributor Digests
+
+Owner digests summarize the repository state for maintainers:
+
+```bash
+gitlink-cli feishu +owner-digest --from-workflow-json report.json --format markdown
+gitlink-cli feishu +owner-digest --from-workflow-json report.json --send --format table
+```
+
+Contributor digests summarize role-oriented follow-up work:
+
+```bash
+gitlink-cli feishu +contributor-digest --from-workflow-json report.json --format markdown
+gitlink-cli feishu +contributor-digest --from-workflow-json report.json --send --format table
+```
+
+These digests are not Feishu-user-personalized. They do not use `open_id`, `union_id`, or personal routing.
+
 ## Bitable Dry Run
 
 Generate recommended table schemas:
@@ -116,7 +150,58 @@ Generate Bitable-ready records:
 gitlink-cli feishu +bitable-records --from-workflow-json report.json --format json
 ```
 
+Default tables:
+
+```text
+reports
+issues
+prs
+contributors
+tasks
+```
+
 These records are summary records derived from workflow repo-report JSON. They are not a per-issue or per-PR synchronization.
+
+## Experimental Bitable Sync
+
+`feishu +bitable-sync` reuses the records produced by `+bitable-records`.
+
+Preview:
+
+```bash
+gitlink-cli feishu +bitable-sync \
+  --from-workflow-json report.json \
+  --tables reports,issues,prs,contributors,tasks \
+  --format table
+```
+
+Write with existing Base app and table IDs:
+
+```bash
+gitlink-cli feishu +bitable-sync \
+  --from-workflow-json report.json \
+  --tables reports,issues,prs,tasks \
+  --send \
+  --format table
+```
+
+The command searches by `unique_key`, updates when found, creates when missing, and never deletes records. If search fails, it falls back to create-only and prints diagnostics.
+
+## Task Preview and Experimental Task Create
+
+Preview task candidates:
+
+```bash
+gitlink-cli feishu +task-preview --from-workflow-json report.json --format markdown
+```
+
+Attempt real Feishu task creation:
+
+```bash
+gitlink-cli feishu +task-create --from-workflow-json report.json --send --format table
+```
+
+`+task-create` is experimental and requires Feishu Task scopes. It does not create or update GitLink issues.
 
 ## Role-Aware Collaboration Roadmap
 
@@ -164,10 +249,7 @@ feishu-export-design/ROLE_BASED_COLLABORATION.md
 
 Environment:
 
-```powershell
-$env:FEISHU_APP_ID="cli_xxx"
-$env:FEISHU_APP_SECRET="..."
-```
+See `docs/FEISHU_ENVIRONMENT.md` for all Open Platform variables.
 
 Preview:
 
@@ -194,4 +276,15 @@ Required Feishu setup:
 1. The self-built app must have approved DocX / Drive scopes.
 2. The target Wiki / DocX / folder must grant the app write permission.
 3. If Feishu returns 1770032: forBidden, credentials are valid but the app cannot write the target document.
+```
+
+## Layered Documentation
+
+Detailed boundaries:
+
+```text
+docs/FEISHU_CAPABILITY_LAYERS.md
+docs/FEISHU_ENVIRONMENT.md
+reports/FEISHU_PERMISSION_MATRIX.md
+reports/FEISHU_LOCAL_TESTING_GUIDE.md
 ```

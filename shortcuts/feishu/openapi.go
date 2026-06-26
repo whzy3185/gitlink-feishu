@@ -46,6 +46,21 @@ type CreatedBlocks struct {
 	RevisionID int `json:"revision_id"`
 }
 
+type BitableSearchResult struct {
+	RecordID string `json:"record_id,omitempty"`
+	Found    bool   `json:"found"`
+}
+
+type BitableWriteResult struct {
+	RecordID string `json:"record_id,omitempty"`
+	Created  bool   `json:"created,omitempty"`
+	Updated  bool   `json:"updated,omitempty"`
+}
+
+type CreatedTask struct {
+	TaskID string `json:"task_id,omitempty"`
+}
+
 func NewOpenAPIClient(httpClient *http.Client) OpenAPIClient {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
@@ -185,6 +200,156 @@ func (c OpenAPIClient) CreateBlocks(ctx context.Context, tenantToken string, doc
 	return CreatedBlocks{RevisionID: resp.Data.RevisionID}, nil
 }
 
+func (c OpenAPIClient) SearchBitableRecord(ctx context.Context, tenantToken string, appToken string, tableID string, uniqueKey string) (BitableSearchResult, error) {
+	body := map[string]interface{}{
+		"filter": map[string]interface{}{
+			"conjunction": "and",
+			"conditions": []map[string]interface{}{
+				{
+					"field_name": "unique_key",
+					"operator":   "is",
+					"value":      []string{uniqueKey},
+				},
+			},
+		},
+	}
+	reqBody, err := json.Marshal(body)
+	if err != nil {
+		return BitableSearchResult{}, err
+	}
+	path := fmt.Sprintf("/bitable/v1/apps/%s/tables/%s/records/search?page_size=1", url.PathEscape(appToken), url.PathEscape(tableID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint(path), bytes.NewReader(reqBody))
+	if err != nil {
+		return BitableSearchResult{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantToken)
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+
+	var resp struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			Items []struct {
+				RecordID string `json:"record_id"`
+			} `json:"items"`
+		} `json:"data"`
+	}
+	if err := c.doJSON(req, &resp); err != nil {
+		return BitableSearchResult{}, err
+	}
+	if resp.Code != 0 {
+		return BitableSearchResult{}, fmt.Errorf("Feishu bitable search returned code %d: %s", resp.Code, resp.Msg)
+	}
+	if len(resp.Data.Items) == 0 || strings.TrimSpace(resp.Data.Items[0].RecordID) == "" {
+		return BitableSearchResult{Found: false}, nil
+	}
+	return BitableSearchResult{RecordID: resp.Data.Items[0].RecordID, Found: true}, nil
+}
+
+func (c OpenAPIClient) CreateBitableRecord(ctx context.Context, tenantToken string, appToken string, tableID string, fields map[string]interface{}) (BitableWriteResult, error) {
+	body := map[string]interface{}{"fields": fields}
+	reqBody, err := json.Marshal(body)
+	if err != nil {
+		return BitableWriteResult{}, err
+	}
+	path := fmt.Sprintf("/bitable/v1/apps/%s/tables/%s/records", url.PathEscape(appToken), url.PathEscape(tableID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint(path), bytes.NewReader(reqBody))
+	if err != nil {
+		return BitableWriteResult{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantToken)
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+
+	var resp struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			Record struct {
+				RecordID string `json:"record_id"`
+			} `json:"record"`
+			RecordID string `json:"record_id"`
+		} `json:"data"`
+	}
+	if err := c.doJSON(req, &resp); err != nil {
+		return BitableWriteResult{}, err
+	}
+	if resp.Code != 0 {
+		return BitableWriteResult{}, fmt.Errorf("Feishu bitable create returned code %d: %s", resp.Code, resp.Msg)
+	}
+	recordID := firstNonEmpty(resp.Data.Record.RecordID, resp.Data.RecordID)
+	return BitableWriteResult{RecordID: recordID, Created: true}, nil
+}
+
+func (c OpenAPIClient) UpdateBitableRecord(ctx context.Context, tenantToken string, appToken string, tableID string, recordID string, fields map[string]interface{}) (BitableWriteResult, error) {
+	body := map[string]interface{}{"fields": fields}
+	reqBody, err := json.Marshal(body)
+	if err != nil {
+		return BitableWriteResult{}, err
+	}
+	path := fmt.Sprintf("/bitable/v1/apps/%s/tables/%s/records/%s", url.PathEscape(appToken), url.PathEscape(tableID), url.PathEscape(recordID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.endpoint(path), bytes.NewReader(reqBody))
+	if err != nil {
+		return BitableWriteResult{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantToken)
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+
+	var resp struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			Record struct {
+				RecordID string `json:"record_id"`
+			} `json:"record"`
+			RecordID string `json:"record_id"`
+		} `json:"data"`
+	}
+	if err := c.doJSON(req, &resp); err != nil {
+		return BitableWriteResult{}, err
+	}
+	if resp.Code != 0 {
+		return BitableWriteResult{}, fmt.Errorf("Feishu bitable update returned code %d: %s", resp.Code, resp.Msg)
+	}
+	return BitableWriteResult{RecordID: firstNonEmpty(resp.Data.Record.RecordID, resp.Data.RecordID, recordID), Updated: true}, nil
+}
+
+func (c OpenAPIClient) CreateTask(ctx context.Context, tenantToken string, task TaskCandidate) (CreatedTask, error) {
+	body := map[string]interface{}{
+		"summary":     task.Title,
+		"description": task.Description + taskLinkSuffix(task),
+	}
+	reqBody, err := json.Marshal(body)
+	if err != nil {
+		return CreatedTask{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint("/task/v2/tasks"), bytes.NewReader(reqBody))
+	if err != nil {
+		return CreatedTask{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantToken)
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+
+	var resp struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			Task struct {
+				GUID   string `json:"guid"`
+				TaskID string `json:"task_id"`
+			} `json:"task"`
+			TaskID string `json:"task_id"`
+			GUID   string `json:"guid"`
+		} `json:"data"`
+	}
+	if err := c.doJSON(req, &resp); err != nil {
+		return CreatedTask{}, err
+	}
+	if resp.Code != 0 {
+		return CreatedTask{}, fmt.Errorf("Feishu task create returned code %d: %s", resp.Code, resp.Msg)
+	}
+	return CreatedTask{TaskID: firstNonEmpty(resp.Data.Task.GUID, resp.Data.Task.TaskID, resp.Data.GUID, resp.Data.TaskID)}, nil
+}
+
 func (c OpenAPIClient) endpoint(path string) string {
 	base := strings.TrimRight(c.BaseURL, "/")
 	if base == "" {
@@ -234,9 +399,44 @@ func redactOpenAPIPath(path string) string {
 	}{
 		{`/documents/[^/]+`, `/documents/...`},
 		{`/blocks/[^/]+`, `/blocks/...`},
+		{`/apps/[^/]+`, `/apps/...`},
+		{`/tables/[^/]+`, `/tables/...`},
+		{`/records/[^/]+`, `/records/...`},
+		{`/tasks/[^/]+`, `/tasks/...`},
 	}
 	for _, replacement := range replacements {
 		path = regexp.MustCompile(replacement.pattern).ReplaceAllString(path, replacement.repl)
 	}
 	return path
+}
+
+func taskLinkSuffix(task TaskCandidate) string {
+	links := []string{}
+	if task.GitLinkURL != "" {
+		links = append(links, "GitLink: "+task.GitLinkURL)
+	}
+	if task.DocURL != "" {
+		links = append(links, "Feishu report: "+task.DocURL)
+	}
+	if len(links) == 0 {
+		return ""
+	}
+	return "\n\n" + strings.Join(links, "\n")
+}
+
+func diagnoseOpenAPIError(err error, category string, targetType string) string {
+	if err == nil {
+		return ""
+	}
+	message := err.Error()
+	likely := "check Feishu app scopes, resource permissions, IDs, and tenant availability"
+	switch category {
+	case "task create":
+		likely = "grant Task API scopes and verify task creation is enabled for the app"
+	case "bitable":
+		likely = "grant Base/Bitable scopes and verify app token, table ID, and unique_key field"
+	case "docx":
+		likely = "grant DocX/Drive scopes and write access to the target document, Wiki node, or folder"
+	}
+	return fmt.Sprintf("%s failed for %s: %s; likely reason: %s", category, targetType, message, likely)
 }
