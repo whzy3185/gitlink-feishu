@@ -279,7 +279,7 @@ func runOwnerDigest(ctx *common.RuntimeContext) error {
 		title := firstNonEmpty(ctx.Arg("title"), "GitLink owner digest: "+report.Repository)
 		return deliverOrPreview(ctx, opts, NewInteractivePayload(BuildOwnerDigestCard(digest, title, normalizeLang(ctx.Arg("lang")))), "")
 	}
-	return renderDigest(os.Stdout, digest, formatOrDefault(ctx, "markdown"))
+	return renderDigest(os.Stdout, digest, formatOrDefault(ctx, "markdown"), normalizeLang(ctx.Arg("lang")))
 }
 
 func runContributorDigest(ctx *common.RuntimeContext) error {
@@ -296,7 +296,7 @@ func runContributorDigest(ctx *common.RuntimeContext) error {
 		title := firstNonEmpty(ctx.Arg("title"), "GitLink contributor digest: "+report.Repository)
 		return deliverOrPreview(ctx, opts, NewInteractivePayload(BuildContributorDigestCard(digest, title, normalizeLang(ctx.Arg("lang")))), "")
 	}
-	return renderDigest(os.Stdout, digest, formatOrDefault(ctx, "markdown"))
+	return renderDigest(os.Stdout, digest, formatOrDefault(ctx, "markdown"), normalizeLang(ctx.Arg("lang")))
 }
 
 func runDocExport(ctx *common.RuntimeContext) error {
@@ -343,8 +343,8 @@ func runTaskPreview(ctx *common.RuntimeContext) error {
 	if err != nil {
 		return err
 	}
-	tasks := BuildTaskCandidates(report, ctx.Arg("doc-url"))
-	return renderTaskOutput(os.Stdout, TaskOutput{Mode: "preview", DryRun: true, Tasks: tasks}, formatOrDefault(ctx, "markdown"))
+	tasks := BuildTaskCandidatesLocalized(report, ctx.Arg("doc-url"), normalizeLang(ctx.Arg("lang")))
+	return renderTaskOutput(os.Stdout, taskPreviewOutput(tasks), formatOrDefault(ctx, "markdown"))
 }
 
 func runTaskCreate(ctx *common.RuntimeContext) error {
@@ -356,7 +356,7 @@ func runTaskCreate(ctx *common.RuntimeContext) error {
 	if err != nil {
 		return err
 	}
-	tasks := BuildTaskCandidates(report, ctx.Arg("doc-url"))
+	tasks := BuildTaskCandidatesLocalized(report, ctx.Arg("doc-url"), normalizeLang(ctx.Arg("lang")))
 	return createTasksOrPreview(ctx, opts, tasks)
 }
 
