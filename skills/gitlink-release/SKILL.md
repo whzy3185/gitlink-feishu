@@ -26,6 +26,8 @@ metadata:
 | `release +view` | 发布详情 |
 | `release +update` | 更新发布并保留未传字段 |
 | `release +delete` | 删除发布 |
+| `release +latest` | 获取最新发布版本 |
+| `release +auto-notes` | 自动生成 Release Notes |
 
 ## 使用示例
 
@@ -50,6 +52,24 @@ gitlink-cli release +update --id <version_id> --body "更新后的发布说明"
 # 删除发布（使用 version_id），删除前先 dry-run
 gitlink-cli release +delete --id <version_id> --dry-run
 gitlink-cli release +delete --id <version_id>
+
+# 获取最新发布版本（默认跳过草稿和预发布）
+gitlink-cli release +latest --owner myuser --repo myrepo
+
+# 获取最新发布版本（包含预发布版本）
+gitlink-cli release +latest --owner myuser --repo myrepo --include-prerelease
+
+# 获取最新发布版本（包含草稿）
+gitlink-cli release +latest --owner myuser --repo myrepo --include-draft
+
+# 自动生成 Release Notes（基于最近的提交和已关闭的 Issue）
+gitlink-cli release +auto-notes --owner myuser --repo myrepo --to-tag v2.0.0
+
+# 自动生成 Release Notes（指定起始标签）
+gitlink-cli release +auto-notes --owner myuser --repo myrepo --from-tag v1.0.0 --to-tag v2.0.0
+
+# 自动生成 Release Notes（JSON 格式输出，包含统计信息）
+gitlink-cli release +auto-notes --owner myuser --repo myrepo --to-tag v2.0.0 --format json
 ```
 
 ## API 注意事项
@@ -59,6 +79,8 @@ gitlink-cli release +delete --id <version_id>
 - Release 列表中的 `id` 字段可能为 null，应使用 `version_id` 字段
 - **`release +update` 会先调用 `release +edit` 对应接口读取当前值**，然后保留未传字段，避免部分更新清空描述、标签、附件等字段
 - `release +update` 和 `release +delete` 支持 `--dry-run`，写入/删除前建议先预览请求
+- **`release +latest`** 默认跳过草稿和预发布版本，返回第一个符合条件的正式发布版本
+- **`release +auto-notes`** 会根据提交信息自动分类（feat→新功能，fix→Bug修复，其他→其他变更），并包含已关闭的 Issue 列表
 
 ## References
 
@@ -67,3 +89,5 @@ gitlink-cli release +delete --id <version_id>
 - [release +update](references/gitlink-release-update.md)
 - [release +view](references/gitlink-release-view.md)
 - [release +delete](references/gitlink-release-delete.md)
+- [release +latest](references/gitlink-release-latest.md)
+- [release +auto-notes](references/gitlink-release-auto-notes.md)
