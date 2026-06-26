@@ -1,4 +1,4 @@
-# GitLink CLI x Feishu Redesign Research
+﻿# GitLink CLI x Feishu Redesign Research
 
 Date: 2026-06-26
 
@@ -111,34 +111,34 @@ Observed Bilibili content:
 https://www.bilibili.com/video/BV1rd4y167KZ/
 ```
 
-This is a Feishu Help Center Bilibili video in the "多维表格实战课" collection. The collection includes:
+This is a Feishu Help Center Bilibili video in the Feishu Base practical course collection. The collection includes:
 
 ```text
-视图：一张多维表格，多种展示方式
-表单：信息收集汇总
-仪表盘：数据可视化
-关联和引用：数据关系建模
-自动化与高级权限
-搭建心法：像打造产品一样搭建多维表格
-销售管理系统
-HR 招聘和试用期管理系统
-产研敏捷开发管理系统
-多维表格 + 飞书组合
+views: one Base, multiple presentation modes
+forms: information collection and aggregation
+dashboard: data visualization
+relations and lookup: data relationship modeling
+automation and advanced permissions
+Base-building methodology: build Base like a product
+sales management system
+HR recruiting and probation management system
+product and engineering agile development management
+Base plus Feishu collaboration combinations
 ```
 
 Social-platform-facing Feishu content also emphasizes:
 
 ```text
-一张表管公司
-企业驾驶舱
-多视图切换
-项目管理甘特图
-看板管理
-日历排期
-表单收集
-仪表盘分析
-小红书 / 抖音 / 电商内容数据管理
-AI 字段 / AI 总结 / 内容创作流程
+one table for company operations
+enterprise cockpit
+multi-view switching
+project-management Gantt charts
+Kanban management
+calendar scheduling
+form collection
+dashboard analysis
+Xiaohongshu / Douyin / e-commerce content data management
+AI fields / AI summaries / content creation workflows
 ```
 
 Direct Xiaohongshu pages are not reliably accessible through normal web indexing in this environment. The useful signal comes from Feishu official template and content pages that explicitly mention Xiaohongshu data management and content workflows:
@@ -407,6 +407,12 @@ Design rule:
 GitLink actions should be executed through gitlink-cli native commands, not through Feishu-side ad hoc HTTP calls hidden in callbacks.
 ```
 
+Detailed GitLink capability boundary:
+
+```text
+docs/GITLINK_CLI_CAPABILITY_BOUNDARY.md
+```
+
 ## 5. Bilibili / Xiaohongshu / Social Content Findings
 
 ### What Feishu Emphasizes Publicly
@@ -414,18 +420,18 @@ GitLink actions should be executed through gitlink-cli native commands, not thro
 The Bilibili tutorial collection and Feishu public materials repeatedly emphasize:
 
 ```text
-多维表格不是普通电子表格，而是轻量业务系统。
-同一份数据可以用多种视图呈现。
-管理者和执行者应该看不同视角。
-仪表盘是业务驾驶舱。
-表单用于收集。
-看板用于流程状态。
-甘特图用于时间计划。
-日历用于排期。
-画册用于卡片化展示。
-自动化用于减少人工搬运。
-高级权限用于控制敏感数据。
-AI 字段和总结用于内容生产、分类、分析。
+Base is positioned as a lightweight business system, not just a spreadsheet.
+The same data can be presented through different views.
+Managers and executors should see role-specific views.
+Dashboards serve as business cockpits.
+Forms collect structured input.
+Kanban views show workflow state.
+Gantt views show time plans.
+Calendar views show schedules.
+Gallery views show card-style records.
+Automation reduces manual data movement.
+Advanced permissions protect sensitive data.
+AI fields and summaries support content production, classification, and analysis.
 ```
 
 This matters for GitLink because GitLink data naturally has multiple roles:
@@ -613,6 +619,12 @@ GitLink username -> Feishu open_id / union_id / email
 Until identity mapping exists, the CLI should only generate dry-run contributor records.
 
 ## 6. Current gitlink-cli Capability Matrix
+
+This section summarizes the command surface. The detailed action-risk boundary is maintained in:
+
+```text
+docs/GITLINK_CLI_CAPABILITY_BOUNDARY.md
+```
 
 ### Issue
 
