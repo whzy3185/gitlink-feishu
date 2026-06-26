@@ -1,6 +1,5 @@
 ---
 name: gitlink-code-review
-version: 1.0.0
 description: "智能代码审查：获取 PR 变更、分析代码质量、自动生成 Review 评论与摘要报告。当用户需要审查 Pull Request、检查代码质量或生成审查报告时触发。"
 metadata:
   requires:
