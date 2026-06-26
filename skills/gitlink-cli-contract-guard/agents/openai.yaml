@@ -1,0 +1,4 @@
+interface:
+  display_name: "CLI 契约守卫"
+  short_description: "检查 flags、help、JSON 输出和错误提示是否发生破坏性变化。"
+  default_prompt: "Use $gitlink-cli-contract-guard 审查这个 GitLink CLI 改动是否破坏了既有命令契约，重点检查参数、帮助、JSON 输出、错误提示和兼容性。"
