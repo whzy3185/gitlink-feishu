@@ -91,6 +91,15 @@ Required Feishu permission:
 Self-built app with approved scopes and resource-level access.
 ```
 
+Test-enterprise note:
+
+```text
+The local validation enterprise used a self-built app with broad permissions so
+that DocX, Base, and Task APIs could be tested end to end. This is only a
+validation setup. Production deployments should use least-privilege scopes and
+resource-level access selected by maintainers or administrators.
+```
+
 Required environment variables:
 
 ```text
@@ -135,8 +144,19 @@ What it cannot do:
 Create Base apps, tables, fields, or views.
 Modify Feishu document permissions.
 Guarantee Task deduplication against existing Feishu tasks.
+Place created Feishu tasks into a specific Task project or section.
+Assign task executors or followers.
 Guarantee Bitable upsert if unique_key is missing from the target table.
 Treat Open Platform writes as stable zero-config behavior.
+```
+
+Next-stage Open Platform boundary:
+
+```text
+Task project placement, section placement, executors, followers, and Feishu-side
+dedupe/search should be implemented in a later stage after the exact Task API
+request fields and tenant behavior are confirmed. They are not part of the
+current stable or experimental surface.
 ```
 
 Testing:

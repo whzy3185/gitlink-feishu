@@ -40,6 +40,11 @@ GitLink write operations: not used
 All Feishu resource IDs, tokens, webhook URLs, app credentials, table IDs, and
 document IDs were kept in `.local/feishu-gitlink.env.ps1` and are not committed.
 
+The Feishu self-built app in this test enterprise was intentionally granted
+broad permissions for validation. This is not the recommended production
+permission model. A production deployment should use the smallest scopes and
+resource permissions required by the enabled commands.
+
 ## Redacted Environment Presence
 
 | Variable | Present? | Notes |
@@ -51,11 +56,11 @@ document IDs were kept in `.local/feishu-gitlink.env.ps1` and are not committed.
 | `FEISHU_FOLDER_TOKEN` | present | redacted |
 | `FEISHU_DOCUMENT_ID` | present | redacted |
 | `FEISHU_BASE_APP_TOKEN` | present | redacted |
-| `FEISHU_REPORT_TABLE_ID` | present | same test table as other table envs |
-| `FEISHU_ISSUE_TABLE_ID` | present | same test table as other table envs |
-| `FEISHU_PR_TABLE_ID` | present | same test table as other table envs |
-| `FEISHU_CONTRIBUTOR_TABLE_ID` | present | same test table as other table envs |
-| `FEISHU_TASK_TABLE_ID` | present | same test table as other table envs |
+| `FEISHU_REPORT_TABLE_ID` | present | split test table |
+| `FEISHU_ISSUE_TABLE_ID` | present | split test table |
+| `FEISHU_PR_TABLE_ID` | present | split test table |
+| `FEISHU_CONTRIBUTOR_TABLE_ID` | present | split test table |
+| `FEISHU_TASK_TABLE_ID` | present | split test table |
 | `FEISHU_TASK_PROJECT_ID` | missing | optional; current request body does not place tasks into project/section |
 | `FEISHU_TASK_SECTION_ID` | missing | optional; current request body does not place tasks into project/section |
 | `GITLINK_OWNER` | present | `Gitlink` |
@@ -104,6 +109,7 @@ The workflow command does not currently filter the report by explicit PR IDs, so
 | `feishu +bitable-sync --tables reports --send` | pass after table fields were added | created the report record |
 | `feishu +bitable-sync --tables reports,issues,prs,contributors,tasks --send` | pass | updated 1 report, created 5 issue buckets, 2 PR buckets, 1 contributor bucket, 7 task buckets |
 | `feishu +bitable-sync --lang zh-CN --send` | pass | updated existing records from the Chinese workflow JSON |
+| split-table `feishu +bitable-sync --send` | pass | wrote to 5 separate Bitable tables: reports=1, issues=5, prs=2, contributors=1, tasks=7 |
 | `feishu +task-preview --lang zh-CN` | pass | generated 7 Chinese task candidates |
 | `feishu +task-create --lang zh-CN --send` | pass | created 7 Feishu tasks |
 
@@ -126,6 +132,31 @@ source_key, recommended_owner, status, due_hint
 This confirms that `+bitable-sync` can search, create, and update records when
 the target table already has compatible fields. It does not yet create Base
 tables or views itself.
+
+After the first one-table validation, five dedicated test tables were created
+or reused in the same Base:
+
+```text
+gitlink_reports
+gitlink_issues
+gitlink_prs
+gitlink_contributors
+gitlink_tasks
+```
+
+Each table was populated with its own required fields and then validated with
+`+bitable-sync --send`. The split-table run created records in every table:
+
+```text
+reports: 1
+issues: 5
+prs: 2
+contributors: 1
+tasks: 7
+```
+
+This split-table validation is better evidence for the project-management model
+than the earlier one-table/multiple-view validation.
 
 ## i18n Result
 
@@ -175,36 +206,19 @@ module. It was not fixed in this smoke run to avoid unrelated locale churn.
 
 ```text
 1. Bitable sync requires existing Base/table/fields; CLI does not create tables or views.
-2. The current smoke used one test table for all record groups because the provided links were one table with multiple views.
+2. The first smoke used one test table for all record groups; a later smoke created split tables and proved every record group can write to its own table.
 3. Current Bitable records are summary buckets, not row-level PR/Issue/CI records.
-4. Feishu task creation does not yet map project/section placement into the request body.
+4. Feishu task creation does not yet map project/section placement into the request body; this is a next-stage capability boundary.
 5. Feishu-side task dedupe/search is not implemented; avoid repeated real task-create runs unless duplicates are acceptable.
 6. No Feishu callback server is implemented.
 7. No GitLink write operation is implemented.
-8. Screenshots still need to be captured manually from the Feishu UI.
+8. Image evidence is deferred and is not part of this upload.
 ```
 
-## Screenshot Checklist
+## Image Evidence
 
-Run:
+Image files are intentionally not included in this upload.
 
-```powershell
-.\scripts\feishu-gitlink-screenshot-check.ps1
-```
-
-Manual captures still needed:
-
-```text
-docs/images/feishu-bot-card.png
-docs/images/feishu-weekly-report.png
-docs/images/feishu-owner-digest.png
-docs/images/feishu-contributor-digest.png
-docs/images/feishu-bitable-preview.png
-docs/images/feishu-bitable-sync.png
-docs/images/feishu-docx-wiki.png
-docs/images/feishu-task-create.png
-docs/images/feishu-smoke-terminal.png
-docs/images/feishu-env-redacted.png
-```
-
-Do not fabricate screenshots. Redact IDs and tokens before committing any image.
+The validation evidence for this round is command output, real OpenAPI results,
+the permission matrix, and the smoke report. UI screenshots can be collected in
+a later documentation pass if needed.

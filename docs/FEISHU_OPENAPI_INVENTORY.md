@@ -118,7 +118,7 @@ Next hardening:
 ```text
 Add more card color/stage variants for PR review state.
 Add compact owner card and detailed digest variants.
-Add screenshot-backed smoke evidence after real webhook env is restored.
+Keep image evidence deferred for this upload; use text smoke evidence instead.
 ```
 
 ## Layer 2: Experimental Open Platform Validation
@@ -289,6 +289,19 @@ The missing fields were created manually through OpenAPI for validation.
 contributors, and task records in the test table.
 ```
 
+Follow-up split-table validation on 2026-06-26:
+
+```text
+Five dedicated test tables were created or reused in the same Base:
+gitlink_reports, gitlink_issues, gitlink_prs, gitlink_contributors, gitlink_tasks.
+Each table received the fields required by its record group.
++bitable-sync --send then wrote every group to its own table:
+reports=1, issues=5, prs=2, contributors=1, tasks=7.
+```
+
+The split-table run proves that the CLI can write each supported Bitable record
+group to an independent table when the table IDs are configured separately.
+
 Known blockers:
 
 ```text
@@ -362,6 +375,11 @@ current OpenAPI request body only sends summary and description. Project/section
 placement must be wired only after the official request fields and tenant
 behavior are confirmed in the test enterprise.
 ```
+
+This is a next-stage capability boundary, not a current implementation gap to
+hide. The current branch proves basic Task API creation; project placement,
+section placement, executors, followers, and Feishu-side task dedupe should be
+added in a later implementation stage.
 
 Next hardening:
 

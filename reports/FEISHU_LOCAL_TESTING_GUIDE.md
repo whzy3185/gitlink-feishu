@@ -239,13 +239,10 @@ FEISHU_TASK_PROJECT_ID optional
 FEISHU_TASK_SECTION_ID optional
 ```
 
-## 21. Run Screenshot Check
+## 21. Image Evidence
 
-```powershell
-.\scripts\feishu-gitlink-screenshot-check.ps1
-```
-
-The script lists missing screenshots. It does not fabricate images.
+Image evidence is deferred for this round. Do not add screenshots or image files
+to the upload.
 
 ## 22. Run Go Tests
 
@@ -259,6 +256,6 @@ go test ./...
 
 ## 23. Capture Evidence
 
-Capture terminal logs and screenshots listed in `docs/PR_VISUAL_GUIDE.md`.
+Capture terminal logs and command output only.
 
 Do not capture raw secrets. Redact webhook URLs, app secrets, app tokens, table IDs, Wiki node tokens, folder tokens, GitLink tokens, tenant tokens, open IDs, and union IDs.
