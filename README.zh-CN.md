@@ -104,7 +104,7 @@
 | 分类 | 能力 |
 |------|------|
 | 📦 仓库 | 列出、创建、Fork、删除仓库，查看仓库信息、洞察数据和互动状态 |
-| 🐛 Issue | 创建、更新、关闭、批量关闭/更新/删除、评论 Issue |
+| 🐛 Issue | 创建、更新、关闭、批量关闭/更新/删除/重开/标签/指派/评论/导出/导入、评论 Issue |
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
 | 👥 成员 | 列出、添加、移除仓库成员，调整角色，生成和接受邀请链接 |
@@ -340,6 +340,30 @@ gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --ids 101,102 -
 # 危险批量删除必须先 dry-run，真实执行还要显式 --yes
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --dry-run
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --yes
+
+# 按 Issue 编号批量重开已关闭的 Issue
+gitlink-cli issue +batch-reopen --owner Gitlink --repo forgeplus --numbers 123,124 --dry-run
+gitlink-cli issue +batch-reopen --owner Gitlink --repo forgeplus --from issues.csv
+
+# 按 API issue id 批量添加/移除标签（需要数字标签 ID）
+gitlink-cli issue +batch-label --owner Gitlink --repo forgeplus --ids 101,102 --add 1,2 --dry-run
+gitlink-cli issue +batch-label --owner Gitlink --repo forgeplus --ids 101,102 --remove 3
+
+# 按 API issue id 批量指派/取消指派负责人（需要数字用户 ID）
+gitlink-cli issue +batch-assign --owner Gitlink --repo forgeplus --ids 101,102 --add 5,6 --dry-run
+gitlink-cli issue +batch-assign --owner Gitlink --repo forgeplus --ids 101,102 --remove 7
+
+# 按 Issue 编号批量添加评论
+gitlink-cli issue +batch-comment --owner Gitlink --repo forgeplus --numbers 123,124 --message "批量更新通知" --dry-run
+gitlink-cli issue +batch-comment --owner Gitlink --repo forgeplus --from issues.csv --message "已处理"
+
+# 导出 Issue 到 CSV 或 JSON 文件（支持筛选）
+gitlink-cli issue +batch-export --owner Gitlink --repo forgeplus --state open --format csv --output issues.csv
+gitlink-cli issue +batch-export --owner Gitlink --repo forgeplus --state closed --keyword bug --format json --output closed_issues.json
+
+# 从 CSV 文件批量导入 Issue
+gitlink-cli issue +batch-import --owner Gitlink --repo forgeplus --from new_issues.csv --dry-run
+gitlink-cli issue +batch-import --owner Gitlink --repo forgeplus --from new_issues.csv
 
 # 添加评论
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "已修复"

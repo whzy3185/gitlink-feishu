@@ -104,7 +104,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | Category | Capabilities |
 |----------|-------------|
 | 📦 Repo | List, create, fork, delete repositories, view repo info, insights, and interactions |
-| 🐛 Issue | Create, update, close, batch close/update/delete, comment on issues |
+| 🐛 Issue | Create, update, close, batch close/update/delete/reopen/label/assign/comment/export/import, comment on issues |
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
 | 👥 Member | List, add, remove repository members, change roles, create and accept invite links |
@@ -329,6 +329,30 @@ gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --ids 101,102 -
 # Destructive batch delete requires both dry-run first and --yes for real execution
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --dry-run
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --yes
+
+# Batch reopen closed issues by issue numbers
+gitlink-cli issue +batch-reopen --owner Gitlink --repo forgeplus --numbers 123,124 --dry-run
+gitlink-cli issue +batch-reopen --owner Gitlink --repo forgeplus --from issues.csv
+
+# Batch add/remove labels by API issue IDs (requires numeric tag IDs)
+gitlink-cli issue +batch-label --owner Gitlink --repo forgeplus --ids 101,102 --add 1,2 --dry-run
+gitlink-cli issue +batch-label --owner Gitlink --repo forgeplus --ids 101,102 --remove 3
+
+# Batch assign/unassign users by API issue IDs (requires numeric user IDs)
+gitlink-cli issue +batch-assign --owner Gitlink --repo forgeplus --ids 101,102 --add 5,6 --dry-run
+gitlink-cli issue +batch-assign --owner Gitlink --repo forgeplus --ids 101,102 --remove 7
+
+# Batch add comments to multiple issues by issue numbers
+gitlink-cli issue +batch-comment --owner Gitlink --repo forgeplus --numbers 123,124 --message "Batch update notice" --dry-run
+gitlink-cli issue +batch-comment --owner Gitlink --repo forgeplus --from issues.csv --message "Processed"
+
+# Export issues to CSV or JSON with filters
+gitlink-cli issue +batch-export --owner Gitlink --repo forgeplus --state open --format csv --output issues.csv
+gitlink-cli issue +batch-export --owner Gitlink --repo forgeplus --state closed --keyword bug --format json --output closed_issues.json
+
+# Import issues from a CSV file
+gitlink-cli issue +batch-import --owner Gitlink --repo forgeplus --from new_issues.csv --dry-run
+gitlink-cli issue +batch-import --owner Gitlink --repo forgeplus --from new_issues.csv
 
 # Add a comment
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "Fixed"
