@@ -183,23 +183,23 @@ func BuildDocBlocks(report workflow.RepoReportResult, lang string) []DocBlock {
 		healthRisk = report.Health.RiskLevel
 	}
 	blocks := []DocBlock{
-		textBlock("GitLink workflow report: " + report.Repository),
-		textBlock(fmt.Sprintf("Report score: %d", report.ReportScore)),
-		textBlock("Risk level: " + firstNonEmpty(report.RiskLevel, "unknown")),
-		textBlock(fmt.Sprintf("Health score: %s; health risk: %s", healthScore, healthRisk)),
-		textBlock(fmt.Sprintf("Issues: total=%d, high_risk=%d, missing_info=%d", report.IssueSummary.Total, report.IssueSummary.HighRisk, report.IssueSummary.MissingInfo)),
-		textBlock(fmt.Sprintf("Pull Requests: total=%d, high_risk=%d", report.PRSummary.Total, report.PRSummary.HighRisk)),
+		textBlock(fmt.Sprintf(feishuLabel(lang, "doc_title"), report.Repository)),
+		textBlock(fmt.Sprintf(feishuLabel(lang, "doc_report_score"), report.ReportScore)),
+		textBlock(fmt.Sprintf(feishuLabel(lang, "doc_risk"), firstNonEmpty(report.RiskLevel, "unknown"))),
+		textBlock(fmt.Sprintf(feishuLabel(lang, "doc_health"), healthScore, healthRisk)),
+		textBlock(fmt.Sprintf(feishuLabel(lang, "doc_issues"), report.IssueSummary.Total, report.IssueSummary.HighRisk, report.IssueSummary.MissingInfo)),
+		textBlock(fmt.Sprintf(feishuLabel(lang, "doc_prs"), report.PRSummary.Total, report.PRSummary.HighRisk)),
 	}
 	if len(report.PRSummary.ReviewFocus) > 0 {
-		blocks = append(blocks, textBlock("Review focus:\n"+joinLines(report.PRSummary.ReviewFocus, 6)))
+		blocks = append(blocks, textBlock(feishuLabel(lang, "doc_review_focus")+":\n"+joinLines(localizeFeishuLines(report.PRSummary.ReviewFocus, lang), 6)))
 	}
 	if len(report.Recommendations) > 0 {
-		blocks = append(blocks, textBlock("Recommendations:\n"+joinLines(report.Recommendations, 8)))
+		blocks = append(blocks, textBlock(feishuLabel(lang, "doc_recommendations")+":\n"+joinLines(localizeFeishuLines(report.Recommendations, lang), 8)))
 	}
 	if len(report.Reasoning) > 0 {
-		blocks = append(blocks, textBlock("Reasoning:\n"+joinLines(report.Reasoning, 8)))
+		blocks = append(blocks, textBlock(feishuLabel(lang, "doc_reasoning")+":\n"+joinLines(localizeFeishuLines(report.Reasoning, lang), 8)))
 	}
-	blocks = append(blocks, textBlock("Source: "+firstNonEmpty(report.Source, "workflow-json")))
+	blocks = append(blocks, textBlock(fmt.Sprintf(feishuLabel(lang, "doc_source"), firstNonEmpty(report.Source, "workflow-json"))))
 	return blocks
 }
 

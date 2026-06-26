@@ -221,6 +221,21 @@ func TestTaskCandidatesAreStable(t *testing.T) {
 	}
 }
 
+func TestTaskPreviewOutputCountsTasks(t *testing.T) {
+	report := workflowReportFixture(t)
+	tasks := BuildTaskCandidates(report, "")
+	output := taskPreviewOutput(tasks)
+	if output.TaskCount != len(tasks) {
+		t.Fatalf("TaskCount = %d, want %d", output.TaskCount, len(tasks))
+	}
+	if output.Send {
+		t.Fatal("preview output must not be marked as send")
+	}
+	if !output.DryRun {
+		t.Fatal("preview output must be dry-run")
+	}
+}
+
 func TestBitableSyncOptionsRejectSendDryRun(t *testing.T) {
 	ctx := &common.RuntimeContext{Args: map[string]string{
 		"send":           "true",
@@ -231,6 +246,24 @@ func TestBitableSyncOptionsRejectSendDryRun(t *testing.T) {
 	}}
 	if _, err := bitableSyncOptionsFromContext(ctx); err == nil {
 		t.Fatal("expected --send --dry-run error")
+	}
+}
+
+func TestNormalizeBitableWriteFieldsFlattensStringSlices(t *testing.T) {
+	fields := normalizeBitableWriteFields(map[string]interface{}{
+		"unique_key":         "issue:test",
+		"recommended_action": []string{"first", "second"},
+		"review_focus":       []interface{}{"focus-a", "focus-b"},
+		"count":              2,
+	})
+	if fields["recommended_action"] != "first\nsecond" {
+		t.Fatalf("recommended_action = %#v", fields["recommended_action"])
+	}
+	if fields["review_focus"] != "focus-a\nfocus-b" {
+		t.Fatalf("review_focus = %#v", fields["review_focus"])
+	}
+	if fields["count"] != 2 {
+		t.Fatalf("count changed: %#v", fields["count"])
 	}
 }
 
@@ -341,6 +374,23 @@ func TestTaskCreateMockHTTP(t *testing.T) {
 	}
 	if !sawTask {
 		t.Fatal("expected task create request")
+	}
+}
+
+func TestTaskCreateTableShowsResults(t *testing.T) {
+	var out strings.Builder
+	output := TaskOutput{Results: []TaskCreateResult{{
+		UniqueKey: "task:test",
+		Title:     "Review report",
+		TaskID:    "task_guid_123456",
+		Created:   true,
+	}}}
+	if err := renderTaskOutput(&out, output, "table"); err != nil {
+		t.Fatalf("renderTaskOutput returned error: %v", err)
+	}
+	rendered := out.String()
+	if !strings.Contains(rendered, "CREATED") || !strings.Contains(rendered, "task...3456") {
+		t.Fatalf("task table did not show result details: %s", rendered)
 	}
 }
 

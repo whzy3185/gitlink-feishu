@@ -119,10 +119,11 @@ func syncBitableOrPreview(ctx *common.RuntimeContext, opts BitableSyncOptions, r
 		}
 		for _, record := range records.Tables[tableResult.Table] {
 			result := BitableSyncRecordResult{UniqueKey: record.UniqueKey}
+			fields := normalizeBitableWriteFields(record.Fields)
 			search, err := client.SearchBitableRecord(context.Background(), token.Value, opts.BaseAppToken, tableID, record.UniqueKey)
 			if err != nil {
 				output.Warnings = append(output.Warnings, diagnoseOpenAPIError(err, "bitable", tableResult.Table)+"; falling back to create-only for this record")
-				created, createErr := client.CreateBitableRecord(context.Background(), token.Value, opts.BaseAppToken, tableID, record.Fields)
+				created, createErr := client.CreateBitableRecord(context.Background(), token.Value, opts.BaseAppToken, tableID, fields)
 				if createErr != nil {
 					result.Action = "create"
 					result.Error = diagnoseOpenAPIError(createErr, "bitable", tableResult.Table)
@@ -137,7 +138,7 @@ func syncBitableOrPreview(ctx *common.RuntimeContext, opts BitableSyncOptions, r
 				continue
 			}
 			if search.Found {
-				updated, err := client.UpdateBitableRecord(context.Background(), token.Value, opts.BaseAppToken, tableID, search.RecordID, record.Fields)
+				updated, err := client.UpdateBitableRecord(context.Background(), token.Value, opts.BaseAppToken, tableID, search.RecordID, fields)
 				if err != nil {
 					result.Action = "update"
 					result.RecordID = redactToken(search.RecordID)
@@ -150,7 +151,7 @@ func syncBitableOrPreview(ctx *common.RuntimeContext, opts BitableSyncOptions, r
 				result.RecordID = redactToken(updated.RecordID)
 				output.Tables[i].Updated++
 			} else {
-				created, err := client.CreateBitableRecord(context.Background(), token.Value, opts.BaseAppToken, tableID, record.Fields)
+				created, err := client.CreateBitableRecord(context.Background(), token.Value, opts.BaseAppToken, tableID, fields)
 				if err != nil {
 					result.Action = "create"
 					result.Error = diagnoseOpenAPIError(err, "bitable", tableResult.Table)
@@ -166,6 +167,25 @@ func syncBitableOrPreview(ctx *common.RuntimeContext, opts BitableSyncOptions, r
 		}
 	}
 	return renderBitableSyncOutput(os.Stdout, output, formatOrDefault(ctx, "json"))
+}
+
+func normalizeBitableWriteFields(fields map[string]interface{}) map[string]interface{} {
+	normalized := make(map[string]interface{}, len(fields))
+	for key, value := range fields {
+		switch typed := value.(type) {
+		case []string:
+			normalized[key] = strings.Join(typed, "\n")
+		case []interface{}:
+			parts := make([]string, 0, len(typed))
+			for _, item := range typed {
+				parts = append(parts, fmt.Sprint(item))
+			}
+			normalized[key] = strings.Join(parts, "\n")
+		default:
+			normalized[key] = value
+		}
+	}
+	return normalized
 }
 
 func renderBitableSyncOutput(w io.Writer, output BitableSyncOutput, format string) error {

@@ -126,49 +126,49 @@ func BuildContributorDigest(report workflow.RepoReportResult, docURL string) Rol
 	}
 }
 
-func BuildOwnerDigestCard(digest RoleDigest, title string, _ string) Card {
-	return buildDigestCard(digest, firstNonEmpty(title, "GitLink owner digest: "+digest.Repository), "owner")
+func BuildOwnerDigestCard(digest RoleDigest, title string, lang string) Card {
+	return buildDigestCard(digest, firstNonEmpty(title, fmt.Sprintf(feishuLabel(lang, "owner_digest_title"), digest.Repository)), "owner", lang)
 }
 
-func BuildContributorDigestCard(digest RoleDigest, title string, _ string) Card {
-	return buildDigestCard(digest, firstNonEmpty(title, "GitLink contributor digest: "+digest.Repository), "contributor")
+func BuildContributorDigestCard(digest RoleDigest, title string, lang string) Card {
+	return buildDigestCard(digest, firstNonEmpty(title, fmt.Sprintf(feishuLabel(lang, "contributor_digest_title"), digest.Repository)), "contributor", lang)
 }
 
-func buildDigestCard(digest RoleDigest, title string, role string) Card {
+func buildDigestCard(digest RoleDigest, title string, role string, lang string) Card {
 	elements := []interface{}{
-		div(fmt.Sprintf("**Repository**\n%s", escapeMD(digest.Repository))),
+		div(fmt.Sprintf("**%s**\n%s", feishuLabel(lang, "repository"), escapeMD(digest.Repository))),
 		fields([]fieldValue{
-			{Label: "Report score", Value: fmt.Sprintf("%d", digest.ReportScore)},
-			{Label: "Risk level", Value: digest.RiskLevel},
-			{Label: "Issues", Value: fmt.Sprintf("%d", digest.IssueTotal)},
-			{Label: "Pull requests", Value: fmt.Sprintf("%d", digest.PRTotal)},
+			{Label: feishuLabel(lang, "report_score"), Value: fmt.Sprintf("%d", digest.ReportScore)},
+			{Label: feishuLabel(lang, "risk_level"), Value: digest.RiskLevel},
+			{Label: feishuLabel(lang, "issues"), Value: fmt.Sprintf("%d", digest.IssueTotal)},
+			{Label: feishuLabel(lang, "pull_requests"), Value: fmt.Sprintf("%d", digest.PRTotal)},
 		}),
 		fields([]fieldValue{
-			{Label: "High-risk issues", Value: fmt.Sprintf("%d", digest.IssueHighRisk)},
-			{Label: "Missing-info issues", Value: fmt.Sprintf("%d", digest.IssueMissingInfo)},
-			{Label: "High-risk PRs", Value: fmt.Sprintf("%d", digest.PRHighRisk)},
-			{Label: "Review focus", Value: fmt.Sprintf("%d", len(digest.ReviewFocus))},
+			{Label: feishuLabel(lang, "high_risk_issues"), Value: fmt.Sprintf("%d", digest.IssueHighRisk)},
+			{Label: feishuLabel(lang, "missing_info_issues"), Value: fmt.Sprintf("%d", digest.IssueMissingInfo)},
+			{Label: feishuLabel(lang, "high_risk_prs"), Value: fmt.Sprintf("%d", digest.PRHighRisk)},
+			{Label: feishuLabel(lang, "review_focus"), Value: fmt.Sprintf("%d", len(digest.ReviewFocus))},
 		}),
 	}
 	if digest.HealthScore != nil {
 		elements = append(elements, fields([]fieldValue{
-			{Label: "Health score", Value: fmt.Sprintf("%d", *digest.HealthScore)},
-			{Label: "Health risk", Value: digest.HealthRisk},
+			{Label: feishuLabel(lang, "health_score"), Value: fmt.Sprintf("%d", *digest.HealthScore)},
+			{Label: feishuLabel(lang, "health_risk"), Value: digest.HealthRisk},
 		}))
 	}
 	if len(digest.AttentionItems) > 0 {
-		elements = append(elements, div("**Attention**\n"+bulletList(digest.AttentionItems, 5)))
+		elements = append(elements, div(fmt.Sprintf("**%s**\n%s", feishuLabel(lang, "attention"), bulletList(localizeFeishuLines(digest.AttentionItems, lang), 5))))
 	}
 	if len(digest.NextSteps) > 0 {
-		elements = append(elements, div("**Suggested next steps**\n"+bulletList(digest.NextSteps, 5)))
+		elements = append(elements, div(fmt.Sprintf("**%s**\n%s", feishuLabel(lang, "suggested_next_steps"), bulletList(localizeFeishuLines(digest.NextSteps, lang), 5))))
 	}
 	if digest.RepositoryURL != "" {
-		elements = append(elements, actionButton("Open GitLink repository", digest.RepositoryURL))
+		elements = append(elements, actionButton(feishuLabel(lang, "open_gitlink_repository"), digest.RepositoryURL))
 	}
 	if digest.DocURL != "" {
-		elements = append(elements, actionButton("Open Feishu report", digest.DocURL))
+		elements = append(elements, actionButton(feishuLabel(lang, "open_feishu_report"), digest.DocURL))
 	}
-	elements = append(elements, note(digest.BoundaryDescription))
+	elements = append(elements, note(localizedBoundary(digest, lang)))
 	template := templateForRisk(digest.RiskLevel)
 	if role == "contributor" && digest.PRSummaryNeedsAttention() {
 		template = "yellow"
@@ -176,60 +176,121 @@ func buildDigestCard(digest RoleDigest, title string, role string) Card {
 	return baseCard(title, template, elements)
 }
 
+func localizedBoundary(digest RoleDigest, lang string) string {
+	if !isChineseLang(lang) {
+		return digest.BoundaryDescription
+	}
+	switch digest.Role {
+	case "owner":
+		return feishuLabel(lang, "boundary_owner")
+	case "contributor":
+		return feishuLabel(lang, "boundary_contributor")
+	default:
+		return localizeFeishuText(digest.BoundaryDescription, lang)
+	}
+}
+
 func (d RoleDigest) PRSummaryNeedsAttention() bool {
 	return d.PRHighRisk > 0 || len(d.ReviewFocus) > 0
 }
 
-func renderDigest(w io.Writer, digest RoleDigest, format string) error {
+func renderDigest(w io.Writer, digest RoleDigest, format string, lang string) error {
 	switch normalizeFormat(format) {
 	case "markdown":
-		return writeDigestMarkdown(w, digest)
+		return writeDigestMarkdown(w, digest, lang)
 	case "table":
-		return writeDigestTable(w, digest)
+		return writeDigestTable(w, digest, lang)
 	default:
 		return writeJSON(w, digest)
 	}
 }
 
-func writeDigestMarkdown(w io.Writer, digest RoleDigest) error {
-	if _, err := fmt.Fprintf(w, "# GitLink %s digest: %s\n\n", digest.Role, digest.Repository); err != nil {
+func writeDigestMarkdown(w io.Writer, digest RoleDigest, lang string) error {
+	title := fmt.Sprintf("# GitLink %s digest: %s\n\n", digest.Role, digest.Repository)
+	if isChineseLang(lang) {
+		role := "角色"
+		if digest.Role == "owner" {
+			role = "Owner"
+		}
+		if digest.Role == "contributor" {
+			role = "贡献者"
+		}
+		title = fmt.Sprintf("# GitLink %s摘要：%s\n\n", role, digest.Repository)
+	}
+	if _, err := fmt.Fprint(w, title); err != nil {
 		return err
 	}
-	lines := []string{
-		fmt.Sprintf("- Report score: `%d`", digest.ReportScore),
-		fmt.Sprintf("- Risk level: `%s`", firstNonEmpty(digest.RiskLevel, "unknown")),
-		fmt.Sprintf("- Issues: `%d` total, `%d` high risk, `%d` missing info", digest.IssueTotal, digest.IssueHighRisk, digest.IssueMissingInfo),
-		fmt.Sprintf("- Pull requests: `%d` total, `%d` high risk", digest.PRTotal, digest.PRHighRisk),
-	}
+	lines := digestMarkdownLines(digest, lang)
 	if digest.HealthScore != nil {
-		lines = append(lines, fmt.Sprintf("- Health score: `%d`; health risk: `%s`", *digest.HealthScore, firstNonEmpty(digest.HealthRisk, "unknown")))
+		if isChineseLang(lang) {
+			lines = append(lines, fmt.Sprintf("- 健康分：`%d`；健康风险：`%s`", *digest.HealthScore, firstNonEmpty(digest.HealthRisk, "unknown")))
+		} else {
+			lines = append(lines, fmt.Sprintf("- Health score: `%d`; health risk: `%s`", *digest.HealthScore, firstNonEmpty(digest.HealthRisk, "unknown")))
+		}
 	}
 	if digest.RepositoryURL != "" {
-		lines = append(lines, "- GitLink repository: "+digest.RepositoryURL)
+		if isChineseLang(lang) {
+			lines = append(lines, "- GitLink 仓库："+digest.RepositoryURL)
+		} else {
+			lines = append(lines, "- GitLink repository: "+digest.RepositoryURL)
+		}
 	}
 	if digest.DocURL != "" {
-		lines = append(lines, "- Feishu report: "+digest.DocURL)
+		if isChineseLang(lang) {
+			lines = append(lines, "- 飞书报告："+digest.DocURL)
+		} else {
+			lines = append(lines, "- Feishu report: "+digest.DocURL)
+		}
 	}
 	if _, err := fmt.Fprintln(w, strings.Join(lines, "\n")); err != nil {
 		return err
 	}
 	if len(digest.AttentionItems) > 0 {
-		if _, err := fmt.Fprint(w, "\n## Attention\n\n"+bulletList(digest.AttentionItems, 8)+"\n"); err != nil {
+		heading := "Attention"
+		if isChineseLang(lang) {
+			heading = "需要关注"
+		}
+		if _, err := fmt.Fprintf(w, "\n## %s\n\n%s\n", heading, bulletList(localizeFeishuLines(digest.AttentionItems, lang), 8)); err != nil {
 			return err
 		}
 	}
 	if len(digest.NextSteps) > 0 {
-		if _, err := fmt.Fprint(w, "\n## Suggested next steps\n\n"+bulletList(digest.NextSteps, 8)+"\n"); err != nil {
+		heading := "Suggested next steps"
+		if isChineseLang(lang) {
+			heading = "建议下一步"
+		}
+		if _, err := fmt.Fprintf(w, "\n## %s\n\n%s\n", heading, bulletList(localizeFeishuLines(digest.NextSteps, lang), 8)); err != nil {
 			return err
 		}
 	}
-	_, err := fmt.Fprintf(w, "\n> %s\n", digest.BoundaryDescription)
+	_, err := fmt.Fprintf(w, "\n> %s\n", localizedBoundary(digest, lang))
 	return err
 }
 
-func writeDigestTable(w io.Writer, digest RoleDigest) error {
+func digestMarkdownLines(digest RoleDigest, lang string) []string {
+	if isChineseLang(lang) {
+		return []string{
+			fmt.Sprintf("- 报告分数：`%d`", digest.ReportScore),
+			fmt.Sprintf("- 风险等级：`%s`", firstNonEmpty(digest.RiskLevel, "unknown")),
+			fmt.Sprintf("- Issue：总数 `%d`，高风险 `%d`，信息缺失 `%d`", digest.IssueTotal, digest.IssueHighRisk, digest.IssueMissingInfo),
+			fmt.Sprintf("- PR：总数 `%d`，高风险 `%d`", digest.PRTotal, digest.PRHighRisk),
+		}
+	}
+	return []string{
+		fmt.Sprintf("- Report score: `%d`", digest.ReportScore),
+		fmt.Sprintf("- Risk level: `%s`", firstNonEmpty(digest.RiskLevel, "unknown")),
+		fmt.Sprintf("- Issues: `%d` total, `%d` high risk, `%d` missing info", digest.IssueTotal, digest.IssueHighRisk, digest.IssueMissingInfo),
+		fmt.Sprintf("- Pull requests: `%d` total, `%d` high risk", digest.PRTotal, digest.PRHighRisk),
+	}
+}
+
+func writeDigestTable(w io.Writer, digest RoleDigest, lang string) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "ROLE\tREPOSITORY\tRISK\tSCORE\tISSUES\tHIGH_RISK_ISSUES\tPRS\tHIGH_RISK_PRS\tATTENTION"); err != nil {
+	header := "ROLE\tREPOSITORY\tRISK\tSCORE\tISSUES\tHIGH_RISK_ISSUES\tPRS\tHIGH_RISK_PRS\tATTENTION"
+	if isChineseLang(lang) {
+		header = "角色\t仓库\t风险\t分数\tIssue\t高风险Issue\tPR\t高风险PR\t关注项"
+	}
+	if _, err := fmt.Fprintln(tw, header); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n",

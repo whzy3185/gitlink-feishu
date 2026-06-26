@@ -59,6 +59,7 @@ $env:FEISHU_APP_SECRET="REDACTED"
 | `FEISHU_WIKI_URL` | Existing Wiki page URL | Optional target | `+doc-export` | Can expose workspace/resource ID | Copy from Feishu Wiki |
 | `FEISHU_WIKI_NODE_TOKEN` | Existing Wiki node token | Optional target | `+doc-export` | Yes | Parsed from Wiki URL or API |
 | `FEISHU_FOLDER_TOKEN` | Folder token for creating a new DocX | Optional target | `+doc-export` | Yes | Feishu Drive folder URL / Open Platform docs |
+| `FEISHU_DOCUMENT_ID` | Existing DocX document ID for append | Optional target | `+doc-export` | Yes | Existing Feishu DocX URL or Open Platform docs |
 
 Legacy compatibility:
 
@@ -71,6 +72,15 @@ Example:
 ```powershell
 $env:FEISHU_WIKI_URL="https://example.feishu.cn/wiki/REDACTED"
 $env:FEISHU_FOLDER_TOKEN="REDACTED"
+$env:FEISHU_DOCUMENT_ID="REDACTED"
+```
+
+For localized output, generate the source workflow report and the Feishu output
+with the same language flag:
+
+```powershell
+go run . workflow +repo-report --owner "$env:GITLINK_OWNER" --repo "$env:GITLINK_REPO" --lang zh-CN --format json > .local\report.zh-CN.json
+go run . feishu +notify --from-workflow-json .local\report.zh-CN.json --lang zh-CN --format table
 ```
 
 ## Base / Bitable Variables
@@ -106,8 +116,10 @@ Current limitation:
 
 ```text
 The experimental task create command creates task candidates through the Task API.
-Project/section placement may require additional Feishu Task identifiers and scopes.
-If placement fails, record the Open Platform error in the smoke report.
+Task project and section IDs are currently collected and redacted in output,
+but they are not yet mapped into the create-task request body.
+Project/section placement should be wired only after the official request fields
+and test-enterprise behavior are confirmed.
 ```
 
 ## GitLink Test Variables

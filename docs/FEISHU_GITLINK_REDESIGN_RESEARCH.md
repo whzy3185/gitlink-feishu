@@ -226,16 +226,22 @@ Observed real Feishu test:
 custom bot send: passed
 notify send: passed
 weekly-report send: passed
+owner-digest send: passed
+contributor-digest send: passed
 Bitable schema / records dry-run: passed
 tenant_access_token: acquired
-Wiki node: resolved
-DocX write: blocked by Feishu 403 / 1770032 / forBidden
+DocX append: passed after the app and target document had permission
+Bitable search/create/update: passed after the test table fields were created
+Task create: passed at minimal summary/description level
+zh-CN Feishu output: passed for cards, digests, DocX blocks, and task candidates
 ```
 
 Interpretation:
 
 ```text
-The app credentials and Wiki read path can work, but document writes still require correct DocX / Drive scopes and target document or folder permissions.
+The Open Platform path is practically usable in a configured test enterprise,
+but it should stay experimental because resource-level scopes, table fields,
+document permissions, and task placement are still operator-managed.
 ```
 
 ### Current Bitable Usage
@@ -1075,6 +1081,13 @@ docs/FEISHU_CAPABILITY_BOUNDARY.md
 docs/FEISHU_OPEN_PLATFORM_PLAN.md
 docs/FEISHU_ACTION_GATEWAY_SECURITY.md
 docs/FEISHU_LARK_CLI_INTEROP.md
+```
+
+Detailed API collection for the implemented branch is maintained in:
+
+```text
+docs/FEISHU_OPENAPI_INVENTORY.md
+reports/FEISHU_API_COLLECTION_CHECKLIST_20260626.md
 ```
 
 Recommended command planning documents:
