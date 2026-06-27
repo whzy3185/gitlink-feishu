@@ -619,6 +619,3 @@ See [skills/gitlink-shared/REFERENCE.md](skills/gitlink-shared/REFERENCE.md).
 [MulanPSL-2.0](https://license.coscl.org.cn/MulanPSL2)
 #   p i p e l i n e   t e s t  
  
-## 测试章节
-
-> 本PR用于演示GitLink智能运营平台——代码质量看门人工作流。
