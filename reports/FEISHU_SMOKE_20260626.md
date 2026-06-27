@@ -104,6 +104,10 @@ The workflow command does not currently filter the report by explicit PR IDs, so
 | `feishu +notify --lang zh-CN --send` | pass | Chinese workflow card delivered |
 | `feishu +owner-digest --lang zh-CN --send` | pass | Chinese owner digest delivered |
 | `feishu +contributor-digest --lang zh-CN --send` | pass | Chinese contributor digest delivered |
+| `feishu +app-check --remote` | pass | custom bot, app credentials, and tenant_access_token checked with redacted output |
+| `feishu +doc-check --remote` | pass | app credentials and configured DocX/folder targets checked; edit/create permission intentionally not checked without writing |
+| `feishu +bitable-check --remote` | pass | five split Bitable tables passed sentinel `unique_key` search without writing records |
+| `feishu +task-check --remote` | pass with warnings | app credentials and tenant_access_token checked; project/section/dedupe remain next-stage boundaries |
 | `feishu +doc-export --send` | pass | appended 9 DocX blocks to the configured document |
 | `feishu +doc-export --lang zh-CN --send` | pass | appended 9 localized DocX blocks |
 | `feishu +bitable-sync --tables reports --send` | pass after table fields were added | created the report record |
@@ -200,6 +204,8 @@ module. It was not fixed in this smoke run to avoid unrelated locale churn.
 | `go test ./shortcuts/workflow` | pass |
 | `go test ./shortcuts` | pass |
 | `go test ./...` | pass |
+| `go build .` | pass |
+| `go vet ./...` | pass |
 | Raw secret scan over tracked/unignored candidate files | pass |
 
 ## Known Limitations
@@ -208,11 +214,12 @@ module. It was not fixed in this smoke run to avoid unrelated locale churn.
 1. Bitable sync requires existing Base/table/fields; CLI does not create tables or views.
 2. The first smoke used one test table for all record groups; a later smoke created split tables and proved every record group can write to its own table.
 3. Current Bitable records are summary buckets, not row-level PR/Issue/CI records.
-4. Feishu task creation does not yet map project/section placement into the request body; this is a next-stage capability boundary.
-5. Feishu-side task dedupe/search is not implemented; avoid repeated real task-create runs unless duplicates are acceptable.
-6. No Feishu callback server is implemented.
-7. No GitLink write operation is implemented.
-8. Image evidence is deferred and is not part of this upload.
+4. `+bitable-check --remote` can verify table access and unique_key search before writes, but it still does not create fields or validate every field type.
+5. Feishu task creation does not yet map project/section placement into the request body; this is a next-stage capability boundary.
+6. Feishu-side task dedupe/search is not implemented; avoid repeated real task-create runs unless duplicates are acceptable.
+7. No Feishu callback server is implemented.
+8. No GitLink write operation is implemented.
+9. Image evidence is deferred and is not part of this upload.
 ```
 
 ## Image Evidence

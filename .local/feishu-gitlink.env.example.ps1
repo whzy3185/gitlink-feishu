@@ -10,6 +10,7 @@ $env:FEISHU_APP_SECRET=""
 $env:FEISHU_WIKI_URL=""
 $env:FEISHU_WIKI_NODE_TOKEN=""
 $env:FEISHU_FOLDER_TOKEN=""
+$env:FEISHU_DOCUMENT_ID=""
 
 # Feishu Base / Bitable
 $env:FEISHU_BASE_APP_TOKEN=""

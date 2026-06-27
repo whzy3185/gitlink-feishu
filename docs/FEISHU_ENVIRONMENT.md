@@ -42,8 +42,8 @@ $env:FEISHU_WEBHOOK_SECRET="REDACTED"
 
 | Name | Purpose | Required | Used by | Sensitive | How to obtain |
 | --- | --- | --- | --- | --- | --- |
-| `FEISHU_APP_ID` | Self-built app ID | Required for Open Platform `--send` | `+doc-export`, `+bitable-sync`, `+task-create` | Yes | Feishu Open Platform app page |
-| `FEISHU_APP_SECRET` | Self-built app secret | Required for Open Platform `--send` | same as above | Yes | Feishu Open Platform app credentials |
+| `FEISHU_APP_ID` | Self-built app ID | Required for Open Platform `--send` or diagnostic `--remote` | `+app-check`, `+doc-check`, `+bitable-check`, `+task-check`, `+doc-export`, `+bitable-sync`, `+task-create` | Yes | Feishu Open Platform app page |
+| `FEISHU_APP_SECRET` | Self-built app secret | Required for Open Platform `--send` or diagnostic `--remote` | same as above | Yes | Feishu Open Platform app credentials |
 
 Example:
 
@@ -56,10 +56,10 @@ $env:FEISHU_APP_SECRET="REDACTED"
 
 | Name | Purpose | Required | Used by | Sensitive | How to obtain |
 | --- | --- | --- | --- | --- | --- |
-| `FEISHU_WIKI_URL` | Existing Wiki page URL | Optional target | `+doc-export` | Can expose workspace/resource ID | Copy from Feishu Wiki |
-| `FEISHU_WIKI_NODE_TOKEN` | Existing Wiki node token | Optional target | `+doc-export` | Yes | Parsed from Wiki URL or API |
-| `FEISHU_FOLDER_TOKEN` | Folder token for creating a new DocX | Optional target | `+doc-export` | Yes | Feishu Drive folder URL / Open Platform docs |
-| `FEISHU_DOCUMENT_ID` | Existing DocX document ID for append | Optional target | `+doc-export` | Yes | Existing Feishu DocX URL or Open Platform docs |
+| `FEISHU_WIKI_URL` | Existing Wiki page URL | Optional target | `+doc-check`, `+doc-export` | Can expose workspace/resource ID | Copy from Feishu Wiki |
+| `FEISHU_WIKI_NODE_TOKEN` | Existing Wiki node token | Optional target | `+doc-check`, `+doc-export` | Yes | Parsed from Wiki URL or API |
+| `FEISHU_FOLDER_TOKEN` | Folder token for creating a new DocX | Optional target | `+doc-check`, `+doc-export` | Yes | Feishu Drive folder URL / Open Platform docs |
+| `FEISHU_DOCUMENT_ID` | Existing DocX document ID for append | Optional target | `+doc-check`, `+doc-export` | Yes | Existing Feishu DocX URL or Open Platform docs |
 
 Legacy compatibility:
 
@@ -87,12 +87,12 @@ go run . feishu +notify --from-workflow-json .local\report.zh-CN.json --lang zh-
 
 | Name | Purpose | Required | Used by | Sensitive | How to obtain |
 | --- | --- | --- | --- | --- | --- |
-| `FEISHU_BASE_APP_TOKEN` | Base app token | Required for `+bitable-sync --send` | `+bitable-sync` | Yes | Feishu Base URL / Open Platform docs |
-| `FEISHU_REPORT_TABLE_ID` | Reports table ID | Required when syncing `reports` | `+bitable-sync` | Yes | Base table settings / API |
-| `FEISHU_ISSUE_TABLE_ID` | Issues table ID | Required when syncing `issues` | `+bitable-sync` | Yes | Base table settings / API |
-| `FEISHU_PR_TABLE_ID` | Pull request table ID | Required when syncing `prs` | `+bitable-sync` | Yes | Base table settings / API |
-| `FEISHU_CONTRIBUTOR_TABLE_ID` | Contributors table ID | Optional | `+bitable-sync` | Yes | Base table settings / API |
-| `FEISHU_TASK_TABLE_ID` | Task-candidate table ID | Optional | `+bitable-sync` | Yes | Base table settings / API |
+| `FEISHU_BASE_APP_TOKEN` | Base app token | Required for `+bitable-check` and `+bitable-sync --send` | `+bitable-check`, `+bitable-sync` | Yes | Feishu Base URL / Open Platform docs |
+| `FEISHU_REPORT_TABLE_ID` | Reports table ID | Required when checking or syncing `reports` | `+bitable-check`, `+bitable-sync` | Yes | Base table settings / API |
+| `FEISHU_ISSUE_TABLE_ID` | Issues table ID | Required when checking or syncing `issues` | `+bitable-check`, `+bitable-sync` | Yes | Base table settings / API |
+| `FEISHU_PR_TABLE_ID` | Pull request table ID | Required when checking or syncing `prs` | `+bitable-check`, `+bitable-sync` | Yes | Base table settings / API |
+| `FEISHU_CONTRIBUTOR_TABLE_ID` | Contributors table ID | Optional unless selected | `+bitable-check`, `+bitable-sync` | Yes | Base table settings / API |
+| `FEISHU_TASK_TABLE_ID` | Task-candidate table ID | Optional unless selected | `+bitable-check`, `+bitable-sync` | Yes | Base table settings / API |
 
 Example:
 
@@ -109,8 +109,8 @@ $env:FEISHU_TASK_TABLE_ID="REDACTED"
 
 | Name | Purpose | Required | Used by | Sensitive | How to obtain |
 | --- | --- | --- | --- | --- | --- |
-| `FEISHU_TASK_PROJECT_ID` | Optional task project target | Optional | `+task-create` | Yes | Feishu Task project settings / API |
-| `FEISHU_TASK_SECTION_ID` | Optional task section target | Optional | `+task-create` | Yes | Feishu Task section settings / API |
+| `FEISHU_TASK_PROJECT_ID` | Optional task project target | Optional | `+task-check`, `+task-create` | Yes | Feishu Task project settings / API |
+| `FEISHU_TASK_SECTION_ID` | Optional task section target | Optional | `+task-check`, `+task-create` | Yes | Feishu Task section settings / API |
 
 Current limitation:
 

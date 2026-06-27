@@ -20,7 +20,7 @@ func TestShortcutsExposeExpectedCommands(t *testing.T) {
 	for _, shortcut := range Shortcuts() {
 		got[shortcut.Name] = true
 	}
-	for _, name := range []string{"bot-test", "notify", "weekly-report", "owner-digest", "contributor-digest", "doc-export", "bitable-schema", "bitable-records", "bitable-sync", "task-preview", "task-create"} {
+	for _, name := range []string{"bot-test", "notify", "weekly-report", "owner-digest", "contributor-digest", "app-check", "doc-check", "bitable-check", "task-check", "doc-export", "bitable-schema", "bitable-records", "bitable-sync", "task-preview", "task-create"} {
 		if !got[name] {
 			t.Fatalf("Shortcuts missing %s", name)
 		}
@@ -313,6 +313,103 @@ func TestBitableSyncMockHTTP(t *testing.T) {
 	}
 	if !sawCreate {
 		t.Fatal("expected create request")
+	}
+}
+
+func TestAppCheckRemoteMockHTTP(t *testing.T) {
+	var sawToken bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost && r.URL.Path == "/auth/v3/tenant_access_token/internal" {
+			sawToken = true
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","tenant_access_token":"tenant-token","expire":7200}`))
+			return
+		}
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	oldBaseURL := openAPIBaseURL
+	openAPIBaseURL = server.URL
+	defer func() { openAPIBaseURL = oldBaseURL }()
+
+	ctx := &common.RuntimeContext{Args: map[string]string{
+		"app-id":      "cli_xxx",
+		"app-secret":  "secret",
+		"webhook-url": "https://open.feishu.cn/open-apis/bot/v2/hook/test",
+		"remote":      "true",
+	}}
+	if err := runFeishuAppCheck(ctx); err != nil {
+		t.Fatalf("runFeishuAppCheck returned error: %v", err)
+	}
+	if !sawToken {
+		t.Fatal("expected tenant token request")
+	}
+}
+
+func TestBitableCheckRemoteUsesSearchOnly(t *testing.T) {
+	var sawSearch bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/auth/v3/tenant_access_token/internal":
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","tenant_access_token":"tenant-token","expire":7200}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/bitable/v1/apps/base_token/tables/tbl_report/records/search":
+			sawSearch = true
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","data":{"items":[]}}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	oldBaseURL := openAPIBaseURL
+	openAPIBaseURL = server.URL
+	defer func() { openAPIBaseURL = oldBaseURL }()
+
+	ctx := &common.RuntimeContext{Args: map[string]string{
+		"app-id":          "cli_xxx",
+		"app-secret":      "secret",
+		"base-app-token":  "base_token",
+		"tables":          "reports",
+		"report-table-id": "tbl_report",
+		"remote":          "true",
+	}}
+	if err := runFeishuBitableCheck(ctx); err != nil {
+		t.Fatalf("runFeishuBitableCheck returned error: %v", err)
+	}
+	if !sawSearch {
+		t.Fatal("expected bitable search request")
+	}
+}
+
+func TestTaskCheckRemoteDoesNotCreateTask(t *testing.T) {
+	var requestCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost && r.URL.Path == "/auth/v3/tenant_access_token/internal" {
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","tenant_access_token":"tenant-token","expire":7200}`))
+			return
+		}
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	oldBaseURL := openAPIBaseURL
+	openAPIBaseURL = server.URL
+	defer func() { openAPIBaseURL = oldBaseURL }()
+
+	ctx := &common.RuntimeContext{Args: map[string]string{
+		"app-id":     "cli_xxx",
+		"app-secret": "secret",
+		"remote":     "true",
+	}}
+	if err := runFeishuTaskCheck(ctx); err != nil {
+		t.Fatalf("runFeishuTaskCheck returned error: %v", err)
+	}
+	if requestCount != 1 {
+		t.Fatalf("expected only tenant token request, got %d requests", requestCount)
 	}
 }
 

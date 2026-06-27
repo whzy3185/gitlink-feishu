@@ -112,12 +112,13 @@ if (Missing @("FEISHU_APP_ID", "FEISHU_APP_SECRET")) {
   $env:FEISHU_APP_SECRET = Read-SecretValue "FEISHU_APP_SECRET" (Env "FEISHU_APP_SECRET") "Self-built app secret."
 }
 
-if (Missing @("FEISHU_WIKI_URL", "FEISHU_WIKI_NODE_TOKEN", "FEISHU_FOLDER_TOKEN")) {
+if (Missing @("FEISHU_WIKI_URL", "FEISHU_WIKI_NODE_TOKEN", "FEISHU_FOLDER_TOKEN", "FEISHU_DOCUMENT_ID")) {
   Open-Url "https://www.feishu.cn/" "Feishu Docs / Wiki"
   Pause-User "Open your target Wiki/Doc page or folder and copy the URL/token. Press Enter when ready."
   $env:FEISHU_WIKI_URL = Read-OptionalValue "FEISHU_WIKI_URL" (Env "FEISHU_WIKI_URL") "Existing Wiki or Doc URL for +doc-export."
   $env:FEISHU_WIKI_NODE_TOKEN = Read-OptionalValue "FEISHU_WIKI_NODE_TOKEN" (Env "FEISHU_WIKI_NODE_TOKEN") "Optional. Usually parsed from FEISHU_WIKI_URL."
   $env:FEISHU_FOLDER_TOKEN = Read-OptionalValue "FEISHU_FOLDER_TOKEN" (Env "FEISHU_FOLDER_TOKEN") "Optional. Used when creating a new DocX in a folder."
+  $env:FEISHU_DOCUMENT_ID = Read-OptionalValue "FEISHU_DOCUMENT_ID" (Env "FEISHU_DOCUMENT_ID") "Optional. Existing DocX document ID for append."
 }
 
 if (Missing @("FEISHU_BASE_APP_TOKEN", "FEISHU_REPORT_TABLE_ID", "FEISHU_ISSUE_TABLE_ID", "FEISHU_PR_TABLE_ID")) {
@@ -165,6 +166,7 @@ $vars = @(
   "FEISHU_WIKI_URL",
   "FEISHU_WIKI_NODE_TOKEN",
   "FEISHU_FOLDER_TOKEN",
+  "FEISHU_DOCUMENT_ID",
   "FEISHU_BASE_APP_TOKEN",
   "FEISHU_REPORT_TABLE_ID",
   "FEISHU_ISSUE_TABLE_ID",

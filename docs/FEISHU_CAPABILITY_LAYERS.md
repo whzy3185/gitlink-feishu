@@ -75,6 +75,52 @@ Unit and mock tests are implemented.
 Real custom bot sending can be tested when FEISHU_WEBHOOK_URL exists.
 ```
 
+## Layer 1.5: Configuration Diagnostics
+
+Status: stable read/check surface.
+
+Purpose:
+
+```text
+Help users discover missing env vars, invalid tokens, missing table IDs, missing
+unique_key fields, and next-stage Task limitations before running --send writes.
+```
+
+Implemented commands:
+
+```text
+gitlink-cli feishu +app-check
+gitlink-cli feishu +doc-check
+gitlink-cli feishu +bitable-check
+gitlink-cli feishu +task-check
+```
+
+Default behavior:
+
+```text
+Local checks only. No Feishu OpenAPI call is made unless --remote is explicit.
+```
+
+Remote behavior:
+
+```text
+--remote acquires tenant_access_token.
++doc-check --remote may resolve a Wiki node.
++bitable-check --remote searches a sentinel unique_key to verify table access
+and the unique_key field.
++task-check --remote verifies app credentials only; it does not create tasks.
+```
+
+What it cannot do:
+
+```text
+Create Feishu resources.
+Modify Feishu resources.
+Modify GitLink resources.
+Guarantee DocX edit permission without an actual append.
+Guarantee Feishu Task project/section placement.
+```
+
 ## Layer 2: Experimental Open Platform Validation
 
 Status: experimental validation surface.
@@ -120,6 +166,10 @@ FEISHU_TASK_SECTION_ID optional
 Implemented commands:
 
 ```text
+gitlink-cli feishu +app-check
+gitlink-cli feishu +doc-check
+gitlink-cli feishu +bitable-check
+gitlink-cli feishu +task-check
 gitlink-cli feishu +doc-export
 gitlink-cli feishu +bitable-sync
 gitlink-cli feishu +task-create

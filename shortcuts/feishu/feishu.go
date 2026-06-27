@@ -26,12 +26,83 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		newWeeklyReportShortcut(),
 		newOwnerDigestShortcut(),
 		newContributorDigestShortcut(),
+		newAppCheckShortcut(),
+		newDocCheckShortcut(),
+		newBitableCheckShortcut(),
+		newTaskCheckShortcut(),
 		newDocExportShortcut(),
 		newBitableSchemaShortcut(),
 		newBitableRecordsShortcut(),
 		newBitableSyncShortcut(),
 		newTaskPreviewShortcut(),
 		newTaskCreateShortcut(),
+	}
+}
+
+func newAppCheckShortcut() *common.Shortcut {
+	return &common.Shortcut{
+		Name:        "app-check",
+		Description: "Check Feishu custom bot and self-built app configuration without writing resources",
+		Flags: []common.Flag{
+			{Name: "webhook-url", Usage: "Feishu custom bot webhook URL. Defaults to FEISHU_WEBHOOK_URL"},
+			{Name: "secret", Usage: "Feishu custom bot signing secret. Defaults to FEISHU_WEBHOOK_SECRET"},
+			{Name: "app-id", Usage: "Feishu self-built app ID. Defaults to FEISHU_APP_ID"},
+			{Name: "app-secret", Usage: "Feishu self-built app secret. Defaults to FEISHU_APP_SECRET"},
+			{Name: "remote", Usage: "Call Feishu OpenAPI read/check endpoints. No resources are written", Bool: true, Default: "false"},
+		},
+		Run: runAppCheck,
+	}
+}
+
+func newDocCheckShortcut() *common.Shortcut {
+	return &common.Shortcut{
+		Name:        "doc-check",
+		Description: "Check Feishu DocX/Wiki export configuration without writing documents",
+		Flags: []common.Flag{
+			{Name: "app-id", Usage: "Feishu self-built app ID. Defaults to FEISHU_APP_ID"},
+			{Name: "app-secret", Usage: "Feishu self-built app secret. Defaults to FEISHU_APP_SECRET"},
+			{Name: "folder-token", Usage: "Feishu folder token for creating a new DocX. Defaults to FEISHU_FOLDER_TOKEN"},
+			{Name: "document-id", Usage: "Existing Feishu DocX document ID. Defaults to FEISHU_DOCUMENT_ID"},
+			{Name: "wiki-url", Usage: "Existing Feishu Wiki URL. Defaults to FEISHU_WIKI_URL"},
+			{Name: "wiki-node-token", Usage: "Existing Feishu Wiki node token. Defaults to FEISHU_WIKI_NODE_TOKEN"},
+			{Name: "remote", Usage: "Call Feishu OpenAPI read/check endpoints. No resources are written", Bool: true, Default: "false"},
+		},
+		Run: runDocCheck,
+	}
+}
+
+func newBitableCheckShortcut() *common.Shortcut {
+	return &common.Shortcut{
+		Name:        "bitable-check",
+		Description: "Check Feishu Base/Bitable sync configuration and table readiness without writing records",
+		Flags: []common.Flag{
+			{Name: "tables", Usage: "Comma-separated tables: reports,issues,prs,contributors,tasks", Default: defaultTables},
+			{Name: "app-id", Usage: "Feishu self-built app ID. Defaults to FEISHU_APP_ID"},
+			{Name: "app-secret", Usage: "Feishu self-built app secret. Defaults to FEISHU_APP_SECRET"},
+			{Name: "base-app-token", Usage: "Feishu Base app token. Defaults to FEISHU_BASE_APP_TOKEN"},
+			{Name: "report-table-id", Usage: "Reports table ID. Defaults to FEISHU_REPORT_TABLE_ID"},
+			{Name: "issue-table-id", Usage: "Issues table ID. Defaults to FEISHU_ISSUE_TABLE_ID"},
+			{Name: "pr-table-id", Usage: "Pull requests table ID. Defaults to FEISHU_PR_TABLE_ID"},
+			{Name: "contributor-table-id", Usage: "Contributors table ID. Defaults to FEISHU_CONTRIBUTOR_TABLE_ID"},
+			{Name: "task-table-id", Usage: "Tasks table ID. Defaults to FEISHU_TASK_TABLE_ID"},
+			{Name: "remote", Usage: "Call Feishu OpenAPI read/check endpoints. No resources are written", Bool: true, Default: "false"},
+		},
+		Run: runBitableCheck,
+	}
+}
+
+func newTaskCheckShortcut() *common.Shortcut {
+	return &common.Shortcut{
+		Name:        "task-check",
+		Description: "Check Feishu Task configuration without creating tasks",
+		Flags: []common.Flag{
+			{Name: "app-id", Usage: "Feishu self-built app ID. Defaults to FEISHU_APP_ID"},
+			{Name: "app-secret", Usage: "Feishu self-built app secret. Defaults to FEISHU_APP_SECRET"},
+			{Name: "task-project-id", Usage: "Feishu task project ID. Defaults to FEISHU_TASK_PROJECT_ID"},
+			{Name: "task-section-id", Usage: "Feishu task section ID. Defaults to FEISHU_TASK_SECTION_ID"},
+			{Name: "remote", Usage: "Call Feishu OpenAPI read/check endpoints. No resources are written", Bool: true, Default: "false"},
+		},
+		Run: runTaskCheck,
 	}
 }
 
@@ -297,6 +368,22 @@ func runContributorDigest(ctx *common.RuntimeContext) error {
 		return deliverOrPreview(ctx, opts, NewInteractivePayload(BuildContributorDigestCard(digest, title, normalizeLang(ctx.Arg("lang")))), "")
 	}
 	return renderDigest(os.Stdout, digest, formatOrDefault(ctx, "markdown"), normalizeLang(ctx.Arg("lang")))
+}
+
+func runAppCheck(ctx *common.RuntimeContext) error {
+	return runFeishuAppCheck(ctx)
+}
+
+func runDocCheck(ctx *common.RuntimeContext) error {
+	return runFeishuDocCheck(ctx)
+}
+
+func runBitableCheck(ctx *common.RuntimeContext) error {
+	return runFeishuBitableCheck(ctx)
+}
+
+func runTaskCheck(ctx *common.RuntimeContext) error {
+	return runFeishuTaskCheck(ctx)
 }
 
 func runDocExport(ctx *common.RuntimeContext) error {

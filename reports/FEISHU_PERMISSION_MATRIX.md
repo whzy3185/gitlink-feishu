@@ -11,6 +11,10 @@ GitLink write permission is `No` for every implemented command in this branch.
 | Weekly report | `feishu +weekly-report` | Stable webhook export | Yes for `--send` | No | No | No | No | No | No | Yes | preview and real send passed | Card is summary-level |
 | Owner digest | `feishu +owner-digest` | Stable webhook export | Yes for `--send` | No | No | No | No | No | No | Yes | unit, preview, and real send passed, including zh-CN | Role-oriented, not personalized |
 | Contributor digest | `feishu +contributor-digest` | Stable webhook export | Yes for `--send` | No | No | No | No | No | No | Yes | unit, preview, and real send passed, including zh-CN | Role-oriented, not open_id routed |
+| App diagnostics | `feishu +app-check` | Stable diagnostics | No | Yes for `--remote` | No | No | No | No | No | Yes | unit, mock remote, and real remote passed | Remote mode only gets tenant_access_token; no writes |
+| Doc diagnostics | `feishu +doc-check` | Stable diagnostics | No | Yes for `--remote` | Yes for Wiki node read | No | No | No | No | Yes | local and real remote diagnostics passed | Does not prove edit permission without append |
+| Bitable diagnostics | `feishu +bitable-check` | Stable diagnostics | No | Yes for `--remote` | No | Yes for remote search | No | No | No | Yes | unit, mock remote, and five-table real remote passed | Checks table access and unique_key search; does not create fields |
+| Task diagnostics | `feishu +task-check` | Stable diagnostics | No | Yes for `--remote` | No | No | No; token check only | No | No | Yes | mock remote and real remote passed with expected warnings | Does not create tasks; project/section still next-stage |
 | Bitable schema | `feishu +bitable-schema` | Stable dry-run | No | No | No | No | No | No | No | Yes | preview passed | Does not create tables or views |
 | Bitable records | `feishu +bitable-records` | Stable dry-run | No | No | No | No | No | No | No | Yes | preview passed | Summary records, not one row per raw issue/PR |
 | Task preview | `feishu +task-preview` | Stable dry-run | No | No | No | No | No | No | No | Yes | preview passed, including zh-CN | Local candidates only |
