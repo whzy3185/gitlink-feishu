@@ -77,6 +77,18 @@ func TestBuildWorkflowCardIncludesDocButton(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readWorkflowReport returned error: %v", err)
 	}
+	report.PRSummary.RiskSources = map[string]int{"security-sensitive keyword": 2}
+	report.PRReviewAudit = &workflow.RepoPRReviewAudit{
+		Audited:             3,
+		Reviewed:            2,
+		Unreviewed:          1,
+		NeedsReReview:       1,
+		FormalReviews:       2,
+		ReviewerComments:    4,
+		SubmitterComments:   3,
+		ParticipantComments: 1,
+		SystemEvents:        2,
+	}
 	card := BuildWorkflowCard(report, parseList(defaultInclude), "", "en", "https://example.feishu.cn/wiki/node")
 	encoded, err := json.Marshal(card)
 	if err != nil {
@@ -84,6 +96,15 @@ func TestBuildWorkflowCardIncludesDocButton(t *testing.T) {
 	}
 	if !strings.Contains(string(encoded), "Open Feishu report") {
 		t.Fatalf("card missing doc button: %s", string(encoded))
+	}
+	if !strings.Contains(string(encoded), "Issues analyzed") || !strings.Contains(string(encoded), "not repository totals") {
+		t.Fatalf("card missing analyzed-count boundary: %s", string(encoded))
+	}
+	if !strings.Contains(string(encoded), "PR risk rule sources") || !strings.Contains(string(encoded), "security-sensitive keyword: 2") {
+		t.Fatalf("card missing PR risk sources: %s", string(encoded))
+	}
+	if !strings.Contains(string(encoded), "Reviewed PRs") || !strings.Contains(string(encoded), "Needs re-review") || !strings.Contains(string(encoded), "Reviewer comments: 4") {
+		t.Fatalf("card missing PR review audit: %s", string(encoded))
 	}
 }
 
@@ -186,6 +207,11 @@ func TestOwnerAndContributorDigestMapping(t *testing.T) {
 	if owner.IssueTotal != report.IssueSummary.Total || owner.PRTotal != report.PRSummary.Total {
 		t.Fatalf("owner digest counts = %+v", owner)
 	}
+	report.PRReviewAudit = &workflow.RepoPRReviewAudit{Audited: 2, Reviewed: 1, Unreviewed: 1, NeedsReReview: 1, FormalReviews: 1}
+	owner = BuildOwnerDigest(report, "https://tenant.feishu.cn/wiki/node")
+	if owner.PRReviewAudit == nil || owner.PRReviewAudit.Reviewed != 1 {
+		t.Fatalf("owner digest missing review audit: %+v", owner)
+	}
 	contributor := BuildContributorDigest(report, "")
 	if contributor.Role != "contributor" {
 		t.Fatalf("contributor digest role = %q", contributor.Role)
@@ -200,6 +226,9 @@ func TestOwnerAndContributorDigestMapping(t *testing.T) {
 	}
 	if !strings.Contains(string(encoded), "Open GitLink repository") {
 		t.Fatalf("owner card missing repository button: %s", string(encoded))
+	}
+	if !strings.Contains(string(encoded), "Issues analyzed") || !strings.Contains(string(encoded), "not repository totals") {
+		t.Fatalf("owner card missing analyzed-count boundary: %s", string(encoded))
 	}
 }
 

@@ -58,18 +58,40 @@ func BuildWorkflowCard(report workflow.RepoReportResult, include []string, title
 	}
 	if hasItem(include, "issues") {
 		elements = append(elements, fields([]fieldValue{
-			{Label: feishuLabel(lang, "issues"), Value: fmt.Sprintf("%d", report.IssueSummary.Total)},
+			{Label: feishuLabel(lang, "issues_analyzed"), Value: fmt.Sprintf("%d", report.IssueSummary.Total)},
 			{Label: feishuLabel(lang, "high_risk_issues"), Value: fmt.Sprintf("%d", report.IssueSummary.HighRisk)},
 			{Label: feishuLabel(lang, "missing_info"), Value: fmt.Sprintf("%d", report.IssueSummary.MissingInfo)},
 		}))
 	}
 	if hasItem(include, "prs") {
 		elements = append(elements, fields([]fieldValue{
-			{Label: feishuLabel(lang, "pull_requests"), Value: fmt.Sprintf("%d", report.PRSummary.Total)},
+			{Label: feishuLabel(lang, "prs_analyzed"), Value: fmt.Sprintf("%d", report.PRSummary.Total)},
 			{Label: feishuLabel(lang, "high_risk_prs"), Value: fmt.Sprintf("%d", report.PRSummary.HighRisk)},
 		}))
+		if report.PRLifecycle != nil {
+			elements = append(elements, fields([]fieldValue{
+				{Label: feishuLabel(lang, "open_prs"), Value: fmt.Sprintf("%d", report.PRLifecycle.Open)},
+				{Label: feishuLabel(lang, "merged_prs"), Value: fmt.Sprintf("%d", report.PRLifecycle.Merged)},
+				{Label: feishuLabel(lang, "closed_prs"), Value: fmt.Sprintf("%d", report.PRLifecycle.ClosedOrRejected)},
+			}))
+		}
+		if report.PRReviewAudit != nil {
+			elements = append(elements, fields([]fieldValue{
+				{Label: feishuLabel(lang, "review_audited"), Value: fmt.Sprintf("%d", report.PRReviewAudit.Audited)},
+				{Label: feishuLabel(lang, "reviewed_prs"), Value: fmt.Sprintf("%d", report.PRReviewAudit.Reviewed)},
+				{Label: feishuLabel(lang, "unreviewed_prs"), Value: fmt.Sprintf("%d", report.PRReviewAudit.Unreviewed)},
+				{Label: feishuLabel(lang, "needs_re_review"), Value: fmt.Sprintf("%d", report.PRReviewAudit.NeedsReReview)},
+				{Label: feishuLabel(lang, "formal_reviews"), Value: fmt.Sprintf("%d", report.PRReviewAudit.FormalReviews)},
+			}))
+			elements = append(elements, div(fmt.Sprintf("**%s**\n%s",
+				feishuLabel(lang, "review_actor_attribution"),
+				bulletList(reviewAuditActorLines(report.PRReviewAudit, lang), 6))))
+		}
 		if len(report.PRSummary.ReviewFocus) > 0 {
 			elements = append(elements, div(fmt.Sprintf("**%s**\n%s", feishuLabel(lang, "review_focus"), bulletList(localizeFeishuLines(report.PRSummary.ReviewFocus, lang), 4))))
+		}
+		if lines := riskSourceLines(report.PRSummary.RiskSources); len(lines) > 0 {
+			elements = append(elements, div(fmt.Sprintf("**%s**\n%s", feishuLabel(lang, "risk_sources"), bulletList(lines, 8))))
 		}
 	}
 	if len(report.Recommendations) > 0 {
@@ -78,6 +100,7 @@ func BuildWorkflowCard(report workflow.RepoReportResult, include []string, title
 	if strings.TrimSpace(docURL) != "" {
 		elements = append(elements, actionButton(feishuLabel(lang, "open_feishu_report"), docURL))
 	}
+	elements = append(elements, note(feishuLabel(lang, "analysis_scope")))
 	elements = append(elements, note(feishuLabel(lang, "preview_note")))
 	return baseCard(title, templateForRisk(report.RiskLevel), elements)
 }

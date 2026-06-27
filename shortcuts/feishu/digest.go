@@ -3,6 +3,7 @@ package feishu
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -10,24 +11,27 @@ import (
 )
 
 type RoleDigest struct {
-	Role                string   `json:"role"`
-	Repository          string   `json:"repository"`
-	RepositoryURL       string   `json:"repository_url,omitempty"`
-	DocURL              string   `json:"doc_url,omitempty"`
-	HealthScore         *int     `json:"health_score,omitempty"`
-	HealthRisk          string   `json:"health_risk,omitempty"`
-	RiskLevel           string   `json:"risk_level"`
-	ReportScore         int      `json:"report_score"`
-	IssueTotal          int      `json:"issue_total"`
-	IssueHighRisk       int      `json:"issue_high_risk"`
-	IssueMissingInfo    int      `json:"issue_missing_info"`
-	PRTotal             int      `json:"pr_total"`
-	PRHighRisk          int      `json:"pr_high_risk"`
-	ReviewFocus         []string `json:"review_focus,omitempty"`
-	Recommendations     []string `json:"recommendations,omitempty"`
-	AttentionItems      []string `json:"attention_items,omitempty"`
-	NextSteps           []string `json:"next_steps,omitempty"`
-	BoundaryDescription string   `json:"boundary_description"`
+	Role                string                      `json:"role"`
+	Repository          string                      `json:"repository"`
+	RepositoryURL       string                      `json:"repository_url,omitempty"`
+	DocURL              string                      `json:"doc_url,omitempty"`
+	HealthScore         *int                        `json:"health_score,omitempty"`
+	HealthRisk          string                      `json:"health_risk,omitempty"`
+	RiskLevel           string                      `json:"risk_level"`
+	ReportScore         int                         `json:"report_score"`
+	IssueTotal          int                         `json:"issue_total"`
+	IssueHighRisk       int                         `json:"issue_high_risk"`
+	IssueMissingInfo    int                         `json:"issue_missing_info"`
+	PRTotal             int                         `json:"pr_total"`
+	PRHighRisk          int                         `json:"pr_high_risk"`
+	PRRiskSources       map[string]int              `json:"pr_risk_sources,omitempty"`
+	PRLifecycle         *workflow.RepoPRLifecycle   `json:"pr_lifecycle,omitempty"`
+	PRReviewAudit       *workflow.RepoPRReviewAudit `json:"pr_review_audit,omitempty"`
+	ReviewFocus         []string                    `json:"review_focus,omitempty"`
+	Recommendations     []string                    `json:"recommendations,omitempty"`
+	AttentionItems      []string                    `json:"attention_items,omitempty"`
+	NextSteps           []string                    `json:"next_steps,omitempty"`
+	BoundaryDescription string                      `json:"boundary_description"`
 }
 
 func BuildOwnerDigest(report workflow.RepoReportResult, docURL string) RoleDigest {
@@ -70,6 +74,9 @@ func BuildOwnerDigest(report workflow.RepoReportResult, docURL string) RoleDiges
 		IssueMissingInfo:    report.IssueSummary.MissingInfo,
 		PRTotal:             report.PRSummary.Total,
 		PRHighRisk:          report.PRSummary.HighRisk,
+		PRRiskSources:       report.PRSummary.RiskSources,
+		PRLifecycle:         report.PRLifecycle,
+		PRReviewAudit:       report.PRReviewAudit,
 		ReviewFocus:         report.PRSummary.ReviewFocus,
 		Recommendations:     report.Recommendations,
 		AttentionItems:      uniqueDigestStrings(attention),
@@ -118,6 +125,9 @@ func BuildContributorDigest(report workflow.RepoReportResult, docURL string) Rol
 		IssueMissingInfo:    report.IssueSummary.MissingInfo,
 		PRTotal:             report.PRSummary.Total,
 		PRHighRisk:          report.PRSummary.HighRisk,
+		PRRiskSources:       report.PRSummary.RiskSources,
+		PRLifecycle:         report.PRLifecycle,
+		PRReviewAudit:       report.PRReviewAudit,
 		ReviewFocus:         report.PRSummary.ReviewFocus,
 		Recommendations:     report.Recommendations,
 		AttentionItems:      limitStrings(uniqueDigestStrings(attention), 8),
@@ -140,8 +150,8 @@ func buildDigestCard(digest RoleDigest, title string, role string, lang string) 
 		fields([]fieldValue{
 			{Label: feishuLabel(lang, "report_score"), Value: fmt.Sprintf("%d", digest.ReportScore)},
 			{Label: feishuLabel(lang, "risk_level"), Value: digest.RiskLevel},
-			{Label: feishuLabel(lang, "issues"), Value: fmt.Sprintf("%d", digest.IssueTotal)},
-			{Label: feishuLabel(lang, "pull_requests"), Value: fmt.Sprintf("%d", digest.PRTotal)},
+			{Label: feishuLabel(lang, "issues_analyzed"), Value: fmt.Sprintf("%d", digest.IssueTotal)},
+			{Label: feishuLabel(lang, "prs_analyzed"), Value: fmt.Sprintf("%d", digest.PRTotal)},
 		}),
 		fields([]fieldValue{
 			{Label: feishuLabel(lang, "high_risk_issues"), Value: fmt.Sprintf("%d", digest.IssueHighRisk)},
@@ -156,8 +166,30 @@ func buildDigestCard(digest RoleDigest, title string, role string, lang string) 
 			{Label: feishuLabel(lang, "health_risk"), Value: digest.HealthRisk},
 		}))
 	}
+	if digest.PRLifecycle != nil {
+		elements = append(elements, fields([]fieldValue{
+			{Label: feishuLabel(lang, "open_prs"), Value: fmt.Sprintf("%d", digest.PRLifecycle.Open)},
+			{Label: feishuLabel(lang, "merged_prs"), Value: fmt.Sprintf("%d", digest.PRLifecycle.Merged)},
+			{Label: feishuLabel(lang, "closed_prs"), Value: fmt.Sprintf("%d", digest.PRLifecycle.ClosedOrRejected)},
+		}))
+	}
+	if digest.PRReviewAudit != nil {
+		elements = append(elements, fields([]fieldValue{
+			{Label: feishuLabel(lang, "review_audited"), Value: fmt.Sprintf("%d", digest.PRReviewAudit.Audited)},
+			{Label: feishuLabel(lang, "reviewed_prs"), Value: fmt.Sprintf("%d", digest.PRReviewAudit.Reviewed)},
+			{Label: feishuLabel(lang, "unreviewed_prs"), Value: fmt.Sprintf("%d", digest.PRReviewAudit.Unreviewed)},
+			{Label: feishuLabel(lang, "needs_re_review"), Value: fmt.Sprintf("%d", digest.PRReviewAudit.NeedsReReview)},
+			{Label: feishuLabel(lang, "formal_reviews"), Value: fmt.Sprintf("%d", digest.PRReviewAudit.FormalReviews)},
+		}))
+		elements = append(elements, div(fmt.Sprintf("**%s**\n%s",
+			feishuLabel(lang, "review_actor_attribution"),
+			bulletList(reviewAuditActorLines(digest.PRReviewAudit, lang), 6))))
+	}
 	if len(digest.AttentionItems) > 0 {
 		elements = append(elements, div(fmt.Sprintf("**%s**\n%s", feishuLabel(lang, "attention"), bulletList(localizeFeishuLines(digest.AttentionItems, lang), 5))))
+	}
+	if lines := riskSourceLines(digest.PRRiskSources); len(lines) > 0 {
+		elements = append(elements, div(fmt.Sprintf("**%s**\n%s", feishuLabel(lang, "risk_sources"), bulletList(lines, 8))))
 	}
 	if len(digest.NextSteps) > 0 {
 		elements = append(elements, div(fmt.Sprintf("**%s**\n%s", feishuLabel(lang, "suggested_next_steps"), bulletList(localizeFeishuLines(digest.NextSteps, lang), 5))))
@@ -168,6 +200,7 @@ func buildDigestCard(digest RoleDigest, title string, role string, lang string) 
 	if digest.DocURL != "" {
 		elements = append(elements, actionButton(feishuLabel(lang, "open_feishu_report"), digest.DocURL))
 	}
+	elements = append(elements, note(feishuLabel(lang, "analysis_scope")))
 	elements = append(elements, note(localizedBoundary(digest, lang)))
 	template := templateForRisk(digest.RiskLevel)
 	if role == "contributor" && digest.PRSummaryNeedsAttention() {
@@ -228,6 +261,40 @@ func writeDigestMarkdown(w io.Writer, digest RoleDigest, lang string) error {
 			lines = append(lines, fmt.Sprintf("- Health score: `%d`; health risk: `%s`", *digest.HealthScore, firstNonEmpty(digest.HealthRisk, "unknown")))
 		}
 	}
+	if digest.PRLifecycle != nil {
+		if isChineseLang(lang) {
+			lines = append(lines, fmt.Sprintf("- PR 生命周期：开放 `%d`，已合并 `%d`，已关闭/拒绝 `%d`",
+				digest.PRLifecycle.Open,
+				digest.PRLifecycle.Merged,
+				digest.PRLifecycle.ClosedOrRejected,
+			))
+		} else {
+			lines = append(lines, fmt.Sprintf("- PR lifecycle: open `%d`, merged `%d`, closed/rejected `%d`",
+				digest.PRLifecycle.Open,
+				digest.PRLifecycle.Merged,
+				digest.PRLifecycle.ClosedOrRejected,
+			))
+		}
+	}
+	if digest.PRReviewAudit != nil {
+		if isChineseLang(lang) {
+			lines = append(lines, fmt.Sprintf("- Review 判别：已归因 `%d`，已被 review `%d`，未被 review `%d`，待重新 review `%d`，正式 Review `%d`",
+				digest.PRReviewAudit.Audited,
+				digest.PRReviewAudit.Reviewed,
+				digest.PRReviewAudit.Unreviewed,
+				digest.PRReviewAudit.NeedsReReview,
+				digest.PRReviewAudit.FormalReviews,
+			))
+		} else {
+			lines = append(lines, fmt.Sprintf("- Review audit: audited `%d`, reviewed `%d`, unreviewed `%d`, needs re-review `%d`, formal reviews `%d`",
+				digest.PRReviewAudit.Audited,
+				digest.PRReviewAudit.Reviewed,
+				digest.PRReviewAudit.Unreviewed,
+				digest.PRReviewAudit.NeedsReReview,
+				digest.PRReviewAudit.FormalReviews,
+			))
+		}
+	}
 	if digest.RepositoryURL != "" {
 		if isChineseLang(lang) {
 			lines = append(lines, "- GitLink 仓库："+digest.RepositoryURL)
@@ -254,6 +321,12 @@ func writeDigestMarkdown(w io.Writer, digest RoleDigest, lang string) error {
 			return err
 		}
 	}
+	if lines := riskSourceLines(digest.PRRiskSources); len(lines) > 0 {
+		heading := feishuLabel(lang, "risk_sources")
+		if _, err := fmt.Fprintf(w, "\n## %s\n\n%s\n", heading, bulletList(lines, 8)); err != nil {
+			return err
+		}
+	}
 	if len(digest.NextSteps) > 0 {
 		heading := "Suggested next steps"
 		if isChineseLang(lang) {
@@ -272,28 +345,42 @@ func digestMarkdownLines(digest RoleDigest, lang string) []string {
 		return []string{
 			fmt.Sprintf("- 报告分数：`%d`", digest.ReportScore),
 			fmt.Sprintf("- 风险等级：`%s`", firstNonEmpty(digest.RiskLevel, "unknown")),
-			fmt.Sprintf("- Issue：总数 `%d`，高风险 `%d`，信息缺失 `%d`", digest.IssueTotal, digest.IssueHighRisk, digest.IssueMissingInfo),
-			fmt.Sprintf("- PR：总数 `%d`，高风险 `%d`", digest.PRTotal, digest.PRHighRisk),
+			fmt.Sprintf("- 已分析 Issue：`%d`，其中高风险 `%d`，信息缺失 `%d`", digest.IssueTotal, digest.IssueHighRisk, digest.IssueMissingInfo),
+			fmt.Sprintf("- 已分析 PR：`%d`，其中高风险 `%d`", digest.PRTotal, digest.PRHighRisk),
+			"- " + feishuLabel(lang, "analysis_scope"),
 		}
 	}
 	return []string{
 		fmt.Sprintf("- Report score: `%d`", digest.ReportScore),
 		fmt.Sprintf("- Risk level: `%s`", firstNonEmpty(digest.RiskLevel, "unknown")),
-		fmt.Sprintf("- Issues: `%d` total, `%d` high risk, `%d` missing info", digest.IssueTotal, digest.IssueHighRisk, digest.IssueMissingInfo),
-		fmt.Sprintf("- Pull requests: `%d` total, `%d` high risk", digest.PRTotal, digest.PRHighRisk),
+		fmt.Sprintf("- Issues analyzed: `%d`, including `%d` high risk and `%d` missing info", digest.IssueTotal, digest.IssueHighRisk, digest.IssueMissingInfo),
+		fmt.Sprintf("- Pull requests analyzed: `%d`, including `%d` high risk", digest.PRTotal, digest.PRHighRisk),
+		"- " + feishuLabel(lang, "analysis_scope"),
 	}
 }
 
 func writeDigestTable(w io.Writer, digest RoleDigest, lang string) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	header := "ROLE\tREPOSITORY\tRISK\tSCORE\tISSUES\tHIGH_RISK_ISSUES\tPRS\tHIGH_RISK_PRS\tATTENTION"
+	header := "ROLE\tREPOSITORY\tRISK\tSCORE\tISSUES_ANALYZED\tHIGH_RISK_ISSUES\tPRS_ANALYZED\tHIGH_RISK_PRS\tOPEN_PRS\tMERGED_PRS\tCLOSED_PRS\tREVIEWED_PRS\tUNREVIEWED_PRS\tNEEDS_RE_REVIEW\tATTENTION"
 	if isChineseLang(lang) {
-		header = "角色\t仓库\t风险\t分数\tIssue\t高风险Issue\tPR\t高风险PR\t关注项"
+		header = "角色\t仓库\t风险\t分数\t已分析Issue\t高风险Issue\t已分析PR\t高风险PR\t开放PR\t已合并PR\t已关闭PR\t已Review PR\t未Review PR\t待重新Review\t关注项"
 	}
 	if _, err := fmt.Fprintln(tw, header); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n",
+	openPRs, mergedPRs, closedPRs := 0, 0, 0
+	if digest.PRLifecycle != nil {
+		openPRs = digest.PRLifecycle.Open
+		mergedPRs = digest.PRLifecycle.Merged
+		closedPRs = digest.PRLifecycle.ClosedOrRejected
+	}
+	reviewedPRs, unreviewedPRs, needsReReviewPRs := 0, 0, 0
+	if digest.PRReviewAudit != nil {
+		reviewedPRs = digest.PRReviewAudit.Reviewed
+		unreviewedPRs = digest.PRReviewAudit.Unreviewed
+		needsReReviewPRs = digest.PRReviewAudit.NeedsReReview
+	}
+	if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
 		digest.Role,
 		digest.Repository,
 		digest.RiskLevel,
@@ -302,11 +389,45 @@ func writeDigestTable(w io.Writer, digest RoleDigest, lang string) error {
 		digest.IssueHighRisk,
 		digest.PRTotal,
 		digest.PRHighRisk,
+		openPRs,
+		mergedPRs,
+		closedPRs,
+		reviewedPRs,
+		unreviewedPRs,
+		needsReReviewPRs,
 		len(digest.AttentionItems),
 	); err != nil {
 		return err
 	}
 	return tw.Flush()
+}
+
+func riskSourceLines(sources map[string]int) []string {
+	if len(sources) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(sources))
+	for key := range sources {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	lines := make([]string, 0, len(keys))
+	for _, key := range keys {
+		lines = append(lines, fmt.Sprintf("%s: %d", key, sources[key]))
+	}
+	return lines
+}
+
+func reviewAuditActorLines(audit *workflow.RepoPRReviewAudit, lang string) []string {
+	if audit == nil {
+		return nil
+	}
+	return []string{
+		fmt.Sprintf("%s: %d", feishuLabel(lang, "reviewer_comments"), audit.ReviewerComments),
+		fmt.Sprintf("%s: %d", feishuLabel(lang, "submitter_comments"), audit.SubmitterComments),
+		fmt.Sprintf("%s: %d", feishuLabel(lang, "participant_comments"), audit.ParticipantComments),
+		fmt.Sprintf("%s: %d", feishuLabel(lang, "system_events"), audit.SystemEvents),
+	}
 }
 
 func digestHealth(report workflow.RepoReportResult) (*int, string) {

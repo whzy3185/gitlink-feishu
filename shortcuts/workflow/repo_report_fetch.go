@@ -2,33 +2,29 @@ package workflow
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
 type RepoReportFetchOptions struct {
-	Owner         string
-	Repo          string
-	IssueLimit    int
-	PRLimit       int
-	StaleDays     int
-	IncludeIssues bool
-	IncludePRs    bool
-	IncludeHealth bool
+	Owner                string
+	Repo                 string
+	IssueLimit           int
+	PRLimit              int
+	StaleDays            int
+	PRReviewAuditLimit   int
+	IncludeIssues        bool
+	IncludePRs           bool
+	IncludePRLifecycle   bool
+	IncludePRReviewAudit bool
+	IncludeHealth        bool
 }
 
 func FetchRepoReportInput(ctx *common.RuntimeContext, opts RepoReportFetchOptions) (RepoReportInput, []ScoringNote, error) {
 	owner, repo, err := resolveFetchRepo(ctx, opts.Owner, opts.Repo)
 	if err != nil {
 		return RepoReportInput{}, nil, fmt.Errorf("workflow +repo-report remote mode requires --owner and --repo or a Git remote: %w", err)
-	}
-	if opts.IssueLimit <= 0 {
-		opts.IssueLimit = 20
-	}
-	if opts.PRLimit <= 0 {
-		opts.PRLimit = 10
 	}
 	if opts.StaleDays <= 0 {
 		opts.StaleDays = 30
@@ -60,13 +56,7 @@ func FetchRepoReportInput(ctx *common.RuntimeContext, opts RepoReportFetchOption
 	}
 
 	if opts.IncludeIssues {
-		issues, err := FetchIssuesForTriage(ctx, TriageFetchOptions{
-			Owner: owner,
-			Repo:  repo,
-			State: "open",
-			Limit: opts.IssueLimit,
-			Page:  1,
-		})
+		issues, err := fetchIssueListForReport(ctx, owner, repo, opts.IssueLimit)
 		if err != nil {
 			notes = append(notes, ScoringNote{Metric: "repo_report_issues", Note: fmt.Sprintf("issue fetch failed: %v", err)})
 		} else {
@@ -82,6 +72,16 @@ func FetchRepoReportInput(ctx *common.RuntimeContext, opts RepoReportFetchOption
 		} else {
 			input.PullRequests = prs
 			successes++
+			if opts.IncludePRLifecycle {
+				lifecycle, lifecycleNotes := fetchPRLifecycle(ctx, owner, repo)
+				input.PRLifecycle = lifecycle
+				notes = append(notes, lifecycleNotes...)
+			}
+			if opts.IncludePRReviewAudit {
+				audit, auditNotes := fetchPRReviewAudit(ctx, owner, repo, prs, opts.PRReviewAuditLimit)
+				input.PRReviewAudit = audit
+				notes = append(notes, auditNotes...)
+			}
 			if len(prs) > 0 {
 				notes = append(notes, ScoringNote{
 					Metric: "repo_report_prs",
@@ -100,26 +100,65 @@ func FetchRepoReportInput(ctx *common.RuntimeContext, opts RepoReportFetchOption
 	return input, uniqueScoringNotes(notes), nil
 }
 
-func fetchPRListForReport(ctx *common.RuntimeContext, owner, repo string, limit int) ([]PRSummaryInput, error) {
-	if limit <= 0 {
-		limit = 10
+func fetchPRLifecycle(ctx *common.RuntimeContext, owner, repo string) (*RepoPRLifecycle, []ScoringNote) {
+	states := []struct {
+		name  string
+		value *int
+	}{
+		{name: "open"},
+		{name: "merged"},
+		{name: "closed"},
 	}
-	query := url.Values{}
-	query.Set("state", "open")
-	query.Set("page", "1")
-	query.Set("limit", fmt.Sprintf("%d", limit))
+	lifecycle := &RepoPRLifecycle{Source: "remote-read-only-fetch:list-totals"}
+	states[0].value = &lifecycle.Open
+	states[1].value = &lifecycle.Merged
+	states[2].value = &lifecycle.ClosedOrRejected
+	notes := []ScoringNote{}
+	successes := 0
+	for _, state := range states {
+		total, err := fetchPRStateTotal(ctx, owner, repo, state.name)
+		if err != nil {
+			notes = append(notes, ScoringNote{
+				Metric: "repo_report_pr_lifecycle",
+				Note:   fmt.Sprintf("%s PR total unavailable: %v", state.name, err),
+			})
+			continue
+		}
+		*state.value = total
+		successes++
+	}
+	if successes == 0 {
+		return nil, notes
+	}
+	lifecycle.Total = lifecycle.Open + lifecycle.Merged + lifecycle.ClosedOrRejected
+	return lifecycle, notes
+}
 
+func fetchPRStateTotal(ctx *common.RuntimeContext, owner, repo, state string) (int, error) {
+	query := pullListQuery(state)
+	query.Set("page", "1")
+	query.Set("limit", "1")
 	env, err := ctx.CallAPIWithQuery("GET", workflowRepoPath(owner, repo)+"/pulls", query)
+	if err != nil {
+		return 0, err
+	}
+	if env.Meta != nil && env.Meta.TotalCount > 0 {
+		return env.Meta.TotalCount, nil
+	}
+	if total := apiListTotal(env.Data); total > 0 {
+		return total, nil
+	}
+	return len(apiList(env.Data)), nil
+}
+
+func fetchPRListForReport(ctx *common.RuntimeContext, owner, repo string, limit int) ([]PRSummaryInput, error) {
+	pageSize := reportPageSize(limit)
+	items, err := fetchListItems(ctx, workflowRepoPath(owner, repo)+"/pulls", pullListQuery("open"), pageSize, limit)
 	if err != nil {
 		return nil, err
 	}
-	items := apiList(env.Data)
 	inputs := make([]PRSummaryInput, 0, len(items))
-	for _, raw := range items {
-		item, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
+	for _, item := range items {
 		input, ok := normalizePRSummaryItem(item)
 		if !ok {
 			continue
@@ -130,9 +169,37 @@ func fetchPRListForReport(ctx *common.RuntimeContext, owner, repo string, limit 
 			input.State = "open"
 		}
 		inputs = append(inputs, input)
-		if len(inputs) >= limit {
+		if limit > 0 && len(inputs) >= limit {
 			break
 		}
 	}
 	return inputs, nil
+}
+
+func fetchIssueListForReport(ctx *common.RuntimeContext, owner, repo string, limit int) ([]IssueInput, error) {
+	pageSize := reportPageSize(limit)
+	items, err := fetchListItems(ctx, workflowRepoPath(owner, repo)+"/issues", issueListQuery("open"), pageSize, limit)
+	if err != nil {
+		return nil, err
+	}
+	issues := make([]IssueInput, 0, len(items))
+	for _, item := range items {
+		issue, ok := normalizeIssueItem(item)
+		if !ok {
+			continue
+		}
+		issues = append(issues, issue)
+		if limit > 0 && len(issues) >= limit {
+			break
+		}
+	}
+	return issues, nil
+}
+
+func reportPageSize(limit int) int {
+	const maxPageSize = 50
+	if limit > 0 && limit < maxPageSize {
+		return limit
+	}
+	return maxPageSize
 }

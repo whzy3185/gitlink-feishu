@@ -26,5 +26,14 @@ jobs:
       - name: Scan i18n key references
         run: go run ./internal/i18n/cmd/check --scan-code
 
+      - name: Test Feishu shortcuts
+        run: go test ./shortcuts/feishu
+
+      - name: Test workflow shortcuts
+        run: go test ./shortcuts/workflow
+
       - name: Run Go tests
         run: go test ./...
+
+      - name: Vet
+        run: go vet ./...

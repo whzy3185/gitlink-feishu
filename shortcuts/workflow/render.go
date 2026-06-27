@@ -164,10 +164,22 @@ func writeRepoReportTable(w io.Writer, result RepoReportResult, lang string) err
 	if len(result.Recommendations) > 0 {
 		topRecommendation = truncateTableText(result.Recommendations[0], 96)
 	}
-	if _, err := fmt.Fprintln(tw, "REPOSITORY\tREPORT_SCORE\tRISK\tHEALTH_SCORE\tISSUES\tHIGH_RISK_ISSUES\tPRS\tHIGH_RISK_PRS\tTOP_RECOMMENDATION"); err != nil {
+	openPRs, mergedPRs, closedPRs := "N/A", "N/A", "N/A"
+	if result.PRLifecycle != nil {
+		openPRs = fmt.Sprintf("%d", result.PRLifecycle.Open)
+		mergedPRs = fmt.Sprintf("%d", result.PRLifecycle.Merged)
+		closedPRs = fmt.Sprintf("%d", result.PRLifecycle.ClosedOrRejected)
+	}
+	reviewedPRs, unreviewedPRs, needsReReviewPRs := "N/A", "N/A", "N/A"
+	if result.PRReviewAudit != nil {
+		reviewedPRs = fmt.Sprintf("%d", result.PRReviewAudit.Reviewed)
+		unreviewedPRs = fmt.Sprintf("%d", result.PRReviewAudit.Unreviewed)
+		needsReReviewPRs = fmt.Sprintf("%d", result.PRReviewAudit.NeedsReReview)
+	}
+	if _, err := fmt.Fprintln(tw, "REPOSITORY\tREPORT_SCORE\tRISK\tHEALTH_SCORE\tISSUES_ANALYZED\tHIGH_RISK_ISSUES\tPRS_ANALYZED\tHIGH_RISK_PRS\tOPEN_PRS\tMERGED_PRS\tCLOSED_PRS\tREVIEWED_PRS\tUNREVIEWED_PRS\tNEEDS_RE_REVIEW\tTOP_RECOMMENDATION"); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%d\t%d\t%d\t%d\t%s\n",
+	if _, err := fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 		result.Repository,
 		result.ReportScore,
 		result.RiskLevel,
@@ -176,6 +188,12 @@ func writeRepoReportTable(w io.Writer, result RepoReportResult, lang string) err
 		result.IssueSummary.HighRisk,
 		result.PRSummary.Total,
 		result.PRSummary.HighRisk,
+		openPRs,
+		mergedPRs,
+		closedPRs,
+		reviewedPRs,
+		unreviewedPRs,
+		needsReReviewPRs,
 		topRecommendation,
 	); err != nil {
 		return err
@@ -269,6 +287,36 @@ func writeRepoReportMarkdown(w io.Writer, result RepoReportResult, lang string) 
 	}
 	writeCountMapMarkdown(w, "By type", result.PRSummary.ByType)
 	writeCountMapMarkdown(w, "By risk", result.PRSummary.ByRisk)
+	writeCountMapMarkdown(w, "Risk rule sources", result.PRSummary.RiskSources)
+	if result.PRLifecycle != nil {
+		if _, err := fmt.Fprintf(w, "- Lifecycle totals: open `%d`, merged `%d`, closed/rejected `%d`, all states `%d`\n",
+			result.PRLifecycle.Open,
+			result.PRLifecycle.Merged,
+			result.PRLifecycle.ClosedOrRejected,
+			result.PRLifecycle.Total,
+		); err != nil {
+			return err
+		}
+	}
+	if result.PRReviewAudit != nil {
+		if _, err := fmt.Fprintf(w, "- Review audit: audited `%d`, reviewed `%d`, unreviewed `%d`, needs re-review `%d`, formal reviews `%d`\n",
+			result.PRReviewAudit.Audited,
+			result.PRReviewAudit.Reviewed,
+			result.PRReviewAudit.Unreviewed,
+			result.PRReviewAudit.NeedsReReview,
+			result.PRReviewAudit.FormalReviews,
+		); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(w, "- Review actor attribution: reviewer comments `%d`, submitter comments `%d`, participant comments `%d`, system events `%d`\n",
+			result.PRReviewAudit.ReviewerComments,
+			result.PRReviewAudit.SubmitterComments,
+			result.PRReviewAudit.ParticipantComments,
+			result.PRReviewAudit.SystemEvents,
+		); err != nil {
+			return err
+		}
+	}
 	if len(result.PRSummary.ReviewFocus) > 0 {
 		if _, err := fmt.Fprintln(w, "- Review focus:"); err != nil {
 			return err

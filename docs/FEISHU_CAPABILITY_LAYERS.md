@@ -270,3 +270,33 @@ Authorization policy:
 GitLink write permissions must be defined by GitLink official maintainers, project owners, and deployers.
 This module must not hard-code a write-action authorization policy.
 ```
+
+## Next-Stage Read-Only PR Activity Layer
+
+Before any GitLink action gateway, a read-only PR activity layer should support:
+
+```text
+Complete open/merged/closed inventory.
+Formal review status.
+Review and journal attribution by submitter/reviewer/participant/system.
+Previous-snapshot comparison.
+Maintainer-role enrichment when authenticated member data is available.
+Review-content fingerprints and change detection.
+```
+
+The generic actor, review, fallback, and snapshot rules are defined in
+`docs/FEISHU_PR_ACTIVITY_STRATEGY.md`. Member lookup is optional enrichment:
+when GitLink authentication or permission is unavailable, the CLI must not
+guess that a participant is a maintainer.
+
+Current implementation status:
+
+```text
+implemented: complete open/merged/closed PR inventory
+implemented: optional read-only formal review and journal actor attribution
+implemented: conservative reviewed/unreviewed classification
+implemented: needs_re_review when submitter activity or PR updates happen after reviewer feedback
+not implemented: previous-snapshot diff
+not implemented: maintainer-role enrichment
+not implemented: review-content fingerprint persistence
+```

@@ -82,6 +82,9 @@ func TestAnalyzePRSummaryAuthTokenCriticalRisk(t *testing.T) {
 	if result.RiskLevel != PRRiskCritical {
 		t.Fatalf("RiskLevel = %q, want %q", result.RiskLevel, PRRiskCritical)
 	}
+	if len(result.RiskReasons) != 1 || result.RiskReasons[0] != "security-sensitive keyword" {
+		t.Fatalf("RiskReasons = %v, want security-sensitive keyword", result.RiskReasons)
+	}
 }
 
 func TestAnalyzePRSummaryMixedFiles(t *testing.T) {

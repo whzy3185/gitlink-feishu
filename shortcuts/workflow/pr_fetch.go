@@ -156,7 +156,7 @@ func prAPIObject(data interface{}) map[string]interface{} {
 }
 
 func normalizePRSummaryItem(item map[string]interface{}) (PRSummaryInput, bool) {
-	number := firstPRInt(item, "number", "iid", "pull_request_number")
+	number := firstPRInt(item, "number", "index", "iid", "pull_request_number")
 	title := firstPRString(item, "title", "subject")
 	if number == 0 && strings.TrimSpace(title) == "" {
 		return PRSummaryInput{}, false
@@ -164,18 +164,28 @@ func normalizePRSummaryItem(item map[string]interface{}) (PRSummaryInput, bool) 
 	body := firstPRString(item, "body", "description", "content")
 	state := firstPRString(item, "state", "status")
 	author := firstPRAuthor(item)
+	issueID := firstPRIssueID(item)
 	base := firstPRBranch(item, "base_branch", "target_branch", "base")
 	head := firstPRBranch(item, "head_branch", "source_branch", "head")
+	createdAt := firstPRTime(item, "created_at", "createdAt")
+	updatedAt := apiLatestTime(
+		firstPRTime(item, "updated_at", "updatedAt"),
+		firstPRTime(item, "last_updated_at", "lastUpdatedAt"),
+		firstPRTime(item, "last_activity_at", "lastActivityAt"),
+	)
 	additions := firstPRInt(item, "additions", "additions_count")
 	deletions := firstPRInt(item, "deletions", "deletions_count")
 
 	return PRSummaryInput{
 		Number:     number,
+		IssueID:    issueID,
 		Title:      title,
 		Author:     author,
 		State:      state,
 		BaseBranch: base,
 		HeadBranch: head,
+		CreatedAt:  createdAt,
+		UpdatedAt:  updatedAt,
 		Body:       body,
 		Additions:  additions,
 		Deletions:  deletions,
@@ -296,6 +306,26 @@ func firstPRCommitAuthor(item map[string]interface{}) string {
 		}
 	}
 	return ""
+}
+
+func firstPRIssueID(item map[string]interface{}) int {
+	for _, key := range []string{"issue_id", "issueId"} {
+		if value, ok := item[key]; ok {
+			if id := apiInt(value); id != 0 {
+				return id
+			}
+		}
+	}
+	for _, key := range []string{"issue", "issue_info"} {
+		if raw, ok := item[key].(map[string]interface{}); ok {
+			for _, field := range []string{"id", "issue_id"} {
+				if id := apiInt(raw[field]); id != 0 {
+					return id
+				}
+			}
+		}
+	}
+	return 0
 }
 
 func firstPRBranch(item map[string]interface{}, keys ...string) string {

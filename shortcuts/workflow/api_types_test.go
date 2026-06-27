@@ -495,8 +495,27 @@ func TestQueryWithPageLimit(t *testing.T) {
 
 func TestIssueListQuery(t *testing.T) {
 	q := issueListQuery("open")
-	if q.Get("state") != "open" {
-		t.Fatalf("issueListQuery state = %q", q.Get("state"))
+	if q.Get("category") != "opened" || q.Get("state") != "" {
+		t.Fatalf("issueListQuery = %v, want category=opened", q)
+	}
+	q = issueListQuery("closed")
+	if q.Get("category") != "closed" {
+		t.Fatalf("issueListQuery closed = %v", q)
+	}
+}
+
+func TestPullListQuery(t *testing.T) {
+	q := pullListQuery("open")
+	if q.Get("status") != "0" || q.Get("state") != "" {
+		t.Fatalf("pullListQuery = %v, want status=0", q)
+	}
+	q = pullListQuery("merged")
+	if q.Get("status") != "1" {
+		t.Fatalf("pullListQuery merged = %v", q)
+	}
+	q = pullListQuery("closed")
+	if q.Get("status") != "2" {
+		t.Fatalf("pullListQuery closed = %v", q)
 	}
 }
 
