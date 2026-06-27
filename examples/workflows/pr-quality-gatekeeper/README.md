@@ -55,13 +55,15 @@ python3 scripts/gatekeeper_sweep.py \
 | 注入真实审查发现 | 同一 PR + `findings.example.json` | ❌ REQUEST_CHANGES 55/100（裁决翻转，确定性可复算） |
 | `--apply` 真实回写 | 自有 fork 的演练 PR | 评分卡评论 + tracking issue + 裁决标签全部由 API 回执确认 |
 | **全仓批量体检** | 本仓库**全部 113 个 open PR** | 113/113 成功：PASS 105 / COMMENT 6 / REQUEST_CHANGES 2，均分 88.5；96% 未关联 issue |
-| 单测 | `tests/test_scoring.py` | 全绿（锁定四个权威裁决案例的分值与裁决） |
+| **咨询标记（advisory）** | 真实 open PR #275（10 文件） | 触发「建议拆分」提示，但**裁决不变** PASS 87/100（软建议不改判） |
+| 单测 | `tests/test_scoring.py` | 15 全绿（8 评分案例 + 7 advisory，锁定确定性） |
 
 ## 设计要点
 
 - **确定性评分**：AI 只负责产出「发现列表」（可选注入），扣分与裁决由纯函数完成——同策略 + 同 PR → 同裁决，可逐位手算复现、可审计。
 - **安全默认**：默认 dry-run 什么都不写；即便策略开了 `auto_merge`，也必须 `verdict == PASS` 且显式 `--apply` 才会合并；强语义的 approve/reject 始终留给人，自动裁决只以建议性 `common` 评论 + 标签呈现。
 - **原生适配 GitLink**：PR 标题/描述取自 `pr +view` 的 `issue.subject/description`；标签挂载走「`label +list` 查 id → Raw API `POST /:owner/:repo/issues/<issue_id>`」；尊重 `common/approved/rejected` 三态 review。
+- **硬门禁 + 软建议两层**：硬门禁命中即拦截（真牙齿）；可选的 `advisory_flags`（默认关闭、向后兼容、确定性）只在评分卡里提示、不改裁决——把「超体量 PR 该提示拆分但不该阻断」这类治理建议留给人工，正回应活跃仓库的 PR 积压实况。
 - **零依赖、零常驻**：纯标准库脚本 + `gitlink-cli`，无需部署 webhook 服务或数据库，CI 一条 step 即可接入（见 `ci-example/`）；确定性意味着**大规模治理零 AI 成本**。
 
 ## 许可证

@@ -40,14 +40,23 @@
 - 完整报告（含全量明细表）：[`../examples/demo-outputs/sweep-report-2026-06-10.md`](../examples/demo-outputs/sweep-report-2026-06-10.md)
 - 诚实口径：批扫不注入审查发现（review_findings 维未评、按满分计），CI 统一 `--skip-ci`（unknown 半分）——总分代表「除人工/AI 审查外的工程卫生分」，偏乐观
 
-## E. 单元测试（确定性回归护栏）
+## E. 咨询标记（advisory）→ 真实 PR 触发但不改裁决
+
+开启 `advisory_flags`（`enabled: true, large_pr_files: 10`）对本仓库真实 open PR `#275`（feat(shortcut): add repo upload，10 个变更文件）跑 dry-run：
+
+- `large_pr_files` 标记**触发**（10 ≥ 阈值 10），评分卡新增 `### 💡 Advisory` 节提示「建议拆分」
+- **裁决不变**：仍为 **PASS 87/100**——咨询标记不参与评分、不改变裁决（与 `test_scoring.py` 的 `test_advisory_does_not_change_verdict` 不变量一致）
+- 这是与硬门禁互补的「软」一层：硬门禁命中即拦截（真牙齿），咨询标记只提示、把判断留给人——正回应 D 节里 166-PR 积压仓库「超体量 PR 该提示拆分但不该阻断」的真实场景
+- 产物：[`../examples/demo-outputs/scorecard-advisory.md`](../examples/demo-outputs/scorecard-advisory.md)
+
+## F. 单元测试（确定性回归护栏）
 
 ```bash
 $ python3 tests/test_scoring.py
-OK
+OK   # 15 tests（8 评分案例 + 7 advisory）
 ```
 
-锁定四个权威裁决案例（PASS / REQUEST_CHANGES / COMMENT / 硬门禁直拒）的**总分与裁决**与 Skill 文档逐位一致；任何改动若破坏「同输入 → 同分 → 同裁决」，测试立即变红。
+锁定四个权威裁决案例（PASS / REQUEST_CHANGES / COMMENT / 硬门禁直拒）的**总分与裁决**与 Skill 文档逐位一致；advisory 测试另锁「默认关闭向后兼容」与「开启触发也不改总分/裁决」两条不变量。任何改动若破坏「同输入 → 同分 → 同裁决」，测试立即变红。
 
 ## 真实运行当场暴露过的问题（透明记录）
 
