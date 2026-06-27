@@ -153,12 +153,45 @@ docs/FEISHU_PR_ACTIVITY_STRATEGY.md
 
 ## Evidence
 
+Validation evidence is text-only in the repository. No screenshots or other
+binary evidence are committed. If visual proof is requested, use redacted
+screenshots pasted directly into the PR description, not repository files.
+
 ```text
 reports/FEISHU_SMOKE_20260626.md
 reports/FEISHU_SMOKE_20260627.md
 reports/FEISHU_SMOKE_EVIDENCE_20260627.md
 reports/FEISHU_PERMISSION_MATRIX.md
 docs/FEISHU_OPENAPI_INVENTORY.md
+```
+
+Text-only validation summary:
+
+```text
+Real Feishu custom bot delivery passed:
+- final English notify card: HTTP 200 / Feishu code 0
+- final English owner digest card: HTTP 200 / Feishu code 0
+
+Real GitLink repository data:
+- repository: Gitlink/gitlink-cli
+- open issues analyzed: 9
+- open PRs analyzed: 166
+- PR lifecycle totals: open 166, merged 65, closed/rejected 74
+
+Full PR review audit:
+- PRs audited: 166
+- reviewed PRs: 4
+- unreviewed PRs: 162
+- needs re-review: 0
+- formal reviews: 4
+- reviewer comments: 6
+- submitter comments: 0
+- participant comments: 436
+- system events: 0
+- audit errors: 0
+
+Risk source:
+- high-risk PRs from metadata rule `security-sensitive keyword`: 13
 ```
 
 ## Out of Scope
