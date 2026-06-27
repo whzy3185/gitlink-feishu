@@ -56,11 +56,11 @@ https://www.feishu.cn/feishu-cli
 | --- | --- | --- | --- | --- | --- |
 | Custom bot webhook | `POST /open-apis/bot/v2/hook/{token}` | `+bot-test`, `+notify`, `+weekly-report`, `+owner-digest`, `+contributor-digest` | Implemented stable | Feishu chat message | Requires `--send`; preview by default |
 | Custom bot signature | timestamp + HMAC-SHA256 signing secret | same as above | Implemented stable | Request signature only | `FEISHU_WEBHOOK_SECRET` optional |
-| Tenant token | `POST /auth/v3/tenant_access_token/internal` | `+doc-export`, `+bitable-sync`, `+task-create` | Implemented experimental | Tenant token | No token cache yet |
-| Wiki node resolution | `GET /wiki/v2/spaces/get_node?token=...` | `+doc-export` | Implemented experimental | Wiki metadata read | Used to resolve Wiki node to DocX object token |
+| Tenant token | `POST /auth/v3/tenant_access_token/internal` | `+app-check --remote`, `+doc-check --remote`, `+bitable-check --remote`, `+task-check --remote`, `+doc-export`, `+bitable-sync`, `+task-create` | Implemented | Tenant token | No token cache yet |
+| Wiki node resolution | `GET /wiki/v2/spaces/get_node?token=...` | `+doc-check --remote`, `+doc-export` | Implemented | Wiki metadata read | Used to resolve Wiki node to DocX object token |
 | DocX create | `POST /docx/v1/documents` | `+doc-export` | Implemented experimental | New DocX document | Requires folder/resource permission |
 | DocX append blocks | `POST /docx/v1/documents/{document_id}/blocks/{block_id}/children` | `+doc-export` | Implemented experimental | DocX block tree | Real write can fail on scope or document permission |
-| Bitable search | `POST /bitable/v1/apps/{app_token}/tables/{table_id}/records/search` | `+bitable-sync` | Implemented experimental | Existing Base table | Searches by `unique_key` field |
+| Bitable search | `POST /bitable/v1/apps/{app_token}/tables/{table_id}/records/search` | `+bitable-check --remote`, `+bitable-sync` | Implemented | Existing Base table | `+bitable-check` searches a sentinel key without writing |
 | Bitable create record | `POST /bitable/v1/apps/{app_token}/tables/{table_id}/records` | `+bitable-sync` | Implemented experimental | Existing Base table | No table/field/view creation |
 | Bitable update record | `PUT /bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}` | `+bitable-sync` | Implemented experimental | Existing Base table | Never deletes records |
 | Task create | `POST /task/v2/tasks` | `+task-create` | Implemented experimental | Feishu task | Project/section placement is not mapped into request body yet |
@@ -137,6 +137,10 @@ Current commands:
 +doc-export
 +bitable-sync
 +task-create
++app-check
++doc-check
++bitable-check
++task-check
 ```
 
 Inputs:
@@ -157,7 +161,8 @@ Does not print the raw token.
 Next hardening:
 
 ```text
-Add +app-check.
+`+app-check` now exists. Add richer scope-name hints once official scope names
+are mapped in the code.
 Cache token in memory during one command execution only.
 Add scope diagnostics where official scope names are confirmed.
 ```
@@ -220,7 +225,8 @@ must be handled by the owner/admin outside the CLI.
 Next hardening:
 
 ```text
-Add +app-check diagnostics for DocX/Wiki scopes.
+`+doc-check` now validates DocX/Wiki target configuration and can resolve Wiki
+nodes with --remote.
 Add clearer output for target type: wiki node, existing doc, folder creation.
 Add optional markdown-only export for manual paste into Feishu Docs.
 ```
@@ -240,6 +246,7 @@ Current commands:
 ```text
 +bitable-schema
 +bitable-records
++bitable-check
 +bitable-sync
 ```
 
@@ -272,6 +279,9 @@ Current behavior:
 ```text
 +bitable-schema outputs a dry-run schema.
 +bitable-records outputs summary-oriented local records.
++bitable-check validates configured table IDs and expected fields.
++bitable-check --remote searches a sentinel unique_key to verify table access
+and the unique_key field without writing records.
 +bitable-sync previews by default.
 +bitable-sync --send searches by unique_key, updates if found, creates if missing.
 If search fails, the command falls back to create-only for that record.
@@ -317,7 +327,8 @@ Current records are summary buckets, not full row-level PR/Issue/CI records.
 Next hardening:
 
 ```text
-Add table/field validation before writes.
+`+bitable-check` now provides pre-write table ID and unique_key search
+diagnostics. Field type validation still depends on richer Feishu field metadata.
 Add row-level records for PRs, Issues, CI runs, milestones, releases, and audits.
 Add optional Bitable view planning output for Kanban, Gantt, Calendar, Gallery, Form, and Dashboard.
 Keep real view creation as a separate permissioned task.
@@ -335,6 +346,7 @@ Current commands:
 
 ```text
 +task-preview
++task-check
 +task-create
 ```
 
@@ -352,6 +364,8 @@ Current behavior:
 
 ```text
 +task-preview generates local task candidates.
++task-check validates app credentials and documents current project/section and
+dedupe limitations without creating tasks.
 +task-create previews by default and creates tasks only with --send.
 Task candidates are derived from workflow recommendations, high-risk issues,
 missing-info issues, high-risk PRs, and review-focus items.
@@ -386,7 +400,9 @@ Next hardening:
 ```text
 Confirm official Task project/section placement fields.
 Add Feishu-side dedupe or external unique_key linking when a stable API path exists.
-Add scope diagnostics through +app-check.
+`+task-check --remote` validates app credentials without creating tasks. Add
+scope diagnostics and project/section request mapping after the official fields
+are confirmed.
 ```
 
 ## i18n Validation
@@ -589,6 +605,7 @@ GitLink real data validation:
 [x] DocX create and block append APIs identified and implemented.
 [x] Bitable record search/create/update APIs identified and implemented.
 [x] Task create API identified and implemented at minimal summary/description level.
+[x] Read/check diagnostics implemented for app, DocX/Wiki, Bitable, and Task setup.
 [x] IM app bot send API identified as planned, not implemented.
 [x] Card callback/event subscription identified as future, not implemented.
 [x] User identity APIs identified as future, not implemented.

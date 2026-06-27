@@ -269,8 +269,12 @@ try {
   $helpCommands = @(
     "+owner-digest",
     "+contributor-digest",
+    "+app-check",
+    "+doc-check",
+    "+bitable-check",
     "+bitable-sync",
     "+task-preview",
+    "+task-check",
     "+task-create"
   )
   Invoke-Cmd "feishu help" @("go", "run", ".", "feishu", "--help") $true
@@ -306,7 +310,26 @@ try {
   }
 
   if ($runOpenPlatform) {
-    if (Has-Env @("FEISHU_APP_ID", "FEISHU_APP_SECRET") -and (Has-Env @("FEISHU_WIKI_URL") -or Has-Env @("FEISHU_WIKI_NODE_TOKEN") -or Has-Env @("FEISHU_FOLDER_TOKEN"))) {
+    if (Has-Env @("FEISHU_APP_ID", "FEISHU_APP_SECRET")) {
+      Invoke-Cmd "app-check remote" @("go", "run", ".", "feishu", "+app-check", "--remote", "--format", "table") $false
+      Invoke-Cmd "task-check remote" @("go", "run", ".", "feishu", "+task-check", "--remote", "--format", "table") $false
+    } else {
+      Add-Skip "app/task diagnostics" "missing FEISHU_APP_ID/FEISHU_APP_SECRET"
+    }
+
+    if (Has-Env @("FEISHU_APP_ID", "FEISHU_APP_SECRET") -and (Has-Env @("FEISHU_WIKI_URL") -or Has-Env @("FEISHU_WIKI_NODE_TOKEN") -or Has-Env @("FEISHU_FOLDER_TOKEN") -or Has-Env @("FEISHU_DOCUMENT_ID"))) {
+      Invoke-Cmd "doc-check remote" @("go", "run", ".", "feishu", "+doc-check", "--remote", "--format", "table") $false
+    } else {
+      Add-Skip "doc diagnostics" "missing FEISHU_APP_ID/FEISHU_APP_SECRET or DocX/Wiki target"
+    }
+
+    if (Has-Env @("FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_BASE_APP_TOKEN", "FEISHU_REPORT_TABLE_ID", "FEISHU_ISSUE_TABLE_ID", "FEISHU_PR_TABLE_ID")) {
+      Invoke-Cmd "bitable-check remote" @("go", "run", ".", "feishu", "+bitable-check", "--tables", "reports,issues,prs,contributors,tasks", "--remote", "--format", "table") $false
+    } else {
+      Add-Skip "bitable diagnostics" "missing Feishu app credentials, base app token, or required table IDs"
+    }
+
+    if (Has-Env @("FEISHU_APP_ID", "FEISHU_APP_SECRET") -and (Has-Env @("FEISHU_WIKI_URL") -or Has-Env @("FEISHU_WIKI_NODE_TOKEN") -or Has-Env @("FEISHU_FOLDER_TOKEN") -or Has-Env @("FEISHU_DOCUMENT_ID"))) {
       Invoke-Cmd "doc-export send" @("go", "run", ".", "feishu", "+doc-export", "--from-workflow-json", $ReportJSON, "--send", "--format", "table") $false
     } else {
       Add-Skip "doc-export send" "missing FEISHU_APP_ID/FEISHU_APP_SECRET or DocX/Wiki target"

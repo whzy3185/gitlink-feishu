@@ -25,6 +25,7 @@ Real DocX append: passed through self-built app OpenAPI.
 Real Bitable sync: passed after target table fields were created.
 Split Bitable sync: passed with five separate tables.
 Real Task create: passed; project/section placement remains unmapped.
+Read/check diagnostics: passed for app, DocX target, Bitable tables, and Task credentials.
 GitLink write operations: not implemented and not tested.
 Test enterprise permissions: intentionally broad for validation; production should use minimum scopes.
 ```
@@ -35,7 +36,7 @@ Test enterprise permissions: intentionally broad for validation; production shou
 | --- | --- | --- | --- |
 | Custom bot webhook | Complete and real-tested | `shortcuts/feishu/client.go`, `sign.go`, `card.go` | Image evidence deferred |
 | Custom bot signing | Complete and real-tested | `SignCustomBotRequest` unit test plus signed bot smoke | Keep secrets redacted |
-| tenant_access_token | Complete and real-tested | `OpenAPIClient.TenantAccessToken` | Add future `+app-check` |
+| tenant_access_token | Complete and real-tested | `OpenAPIClient.TenantAccessToken`, `+app-check --remote` | Add richer scope hints later |
 | Wiki node resolution | Complete | `OpenAPIClient.GetWikiNode` | Still depends on target Wiki node permission |
 | DocX create | Complete | `OpenAPIClient.CreateDocument` | Requires folder permission when creating new docs |
 | DocX block append | Complete and real-tested | `OpenAPIClient.CreateBlocks` | App must have target DocX edit permission |
@@ -57,6 +58,10 @@ Test enterprise permissions: intentionally broad for validation; production shou
 | `feishu +weekly-report` | Stable | Implemented | Only with `--send` | `FEISHU_WEBHOOK_URL` |
 | `feishu +owner-digest` | Stable | Implemented | Only with `--send` | `FEISHU_WEBHOOK_URL` |
 | `feishu +contributor-digest` | Stable | Implemented | Only with `--send` | `FEISHU_WEBHOOK_URL` |
+| `feishu +app-check` | Stable diagnostics | Implemented | No writes; optional read/check with `--remote` | App credentials for remote token check |
+| `feishu +doc-check` | Stable diagnostics | Implemented | No writes; optional Wiki read with `--remote` | App credentials and DocX/Wiki target |
+| `feishu +bitable-check` | Stable diagnostics | Implemented | No writes; optional Bitable search with `--remote` | Base app token, table IDs, `unique_key` |
+| `feishu +task-check` | Stable diagnostics | Implemented | No writes; optional token check with `--remote` | App credentials |
 | `feishu +bitable-schema` | Stable dry-run | Implemented | No | No |
 | `feishu +bitable-records` | Stable dry-run | Implemented | No | No |
 | `feishu +task-preview` | Stable dry-run | Implemented | No | No |
@@ -75,6 +80,7 @@ Test enterprise permissions: intentionally broad for validation; production shou
 6. User-required environment variables are documented.
 7. Resource-level permission requirements are documented.
 8. Task project/section limitation is explicitly called out.
+9. Feishu configuration diagnostics are available before running --send writes.
 ```
 
 ## What Still Needs User Action
@@ -157,6 +163,10 @@ Executed on 2026-06-26 after the API inventory update:
 | `+weekly-report --send` | Pass | Custom bot delivered weekly report |
 | `+owner-digest --send` | Pass | Custom bot delivered English/default and Chinese owner digest |
 | `+contributor-digest --send` | Pass | Custom bot delivered English/default and Chinese contributor digest |
+| `+app-check --remote` | Pass | Custom bot, app credentials, and tenant_access_token validated with redacted output |
+| `+doc-check --remote` | Pass | App credentials and DocX/folder targets checked; write permission not probed without appending |
+| `+bitable-check --remote` | Pass | Five split tables passed sentinel `unique_key` search without record writes |
+| `+task-check --remote` | Pass with warnings | Tenant token passed; project/section/dedupe remain next-stage boundaries |
 | `+bitable-sync` preview | Pass | 1 report, 5 issue, 2 PR, 1 contributor, 7 task records |
 | `+bitable-sync --send` | Pass | Search/create/update real-tested after field creation |
 | Split-table `+bitable-sync --send` | Pass | Created 1 report, 5 issue, 2 PR, 1 contributor, and 7 task records across five separate Bitable tables |

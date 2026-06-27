@@ -582,6 +582,17 @@ gitlink-cli feishu +owner-digest --from-workflow-json report.zh-CN.json --lang z
 gitlink-cli feishu +contributor-digest --from-workflow-json report.zh-CN.json --lang zh-CN --send --format table
 ```
 
+#### 配置诊断层：先检查再写入
+
+诊断命令用于降低飞书开放平台配置成本。默认只检查本地变量和目标配置；传 `--remote` 后会调用飞书只读/检查接口，例如获取 `tenant_access_token`、解析 Wiki node、搜索 Bitable sentinel `unique_key`。这些命令不会创建文档、不会写入多维表格、不会创建任务，也不会修改 GitLink。
+
+```bash
+gitlink-cli feishu +app-check --format table
+gitlink-cli feishu +doc-check --remote --format table
+gitlink-cli feishu +bitable-check --tables reports,issues,prs,tasks --remote --format table
+gitlink-cli feishu +task-check --remote --format table
+```
+
 #### 实验层：飞书开放平台写入
 
 实验层使用飞书开放平台自建应用。当前已在测试企业中验证 DocX 追加、多维表格写入和飞书任务创建，但这部分不是零配置稳定能力。真实写入仍然必须显式传 `--send`，并且要求自建应用有对应 API scope 和目标资源权限。
