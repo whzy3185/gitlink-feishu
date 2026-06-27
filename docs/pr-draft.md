@@ -137,8 +137,37 @@ go run . feishu +bitable-sync --from-workflow-json .local\report.json --send --f
 
 go test ./shortcuts/feishu
 go test ./shortcuts/workflow
+go test ./shortcuts
 go test ./...
+go build .
 go vet ./...
+```
+
+Local validation on 2026-06-27:
+
+```text
+go test ./shortcuts/feishu: pass
+go test ./shortcuts/workflow: pass
+go test ./shortcuts: pass
+go test ./...: pass
+go build .: pass
+go vet ./...: pass
+```
+
+CI note:
+
+```text
+.github/workflows/test.yml already includes the upstream i18n validation steps.
+This branch adds Feishu/workflow package tests and go vet to the workflow.
+Remote GitHub Actions status should be checked on the PR page.
+```
+
+Known separate issue:
+
+```text
+On this Windows workstation, go run ./internal/i18n/cmd/check still reports
+internal\i18n\locales\en-US.json formatting. That fix is intentionally kept in
+the separate i18n branch/PR and is not mixed into this Feishu change.
 ```
 
 ## Review and Comment Attribution Boundary
