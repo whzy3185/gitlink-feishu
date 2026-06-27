@@ -32,11 +32,14 @@ const (
 type PRSummaryInput struct {
 	Repository   string          `json:"repository"`
 	Number       int             `json:"number"`
+	IssueID      int             `json:"issue_id,omitempty"`
 	Title        string          `json:"title"`
 	Author       string          `json:"author"`
 	State        string          `json:"state"`
 	BaseBranch   string          `json:"base_branch"`
 	HeadBranch   string          `json:"head_branch"`
+	CreatedAt    time.Time       `json:"created_at,omitempty"`
+	UpdatedAt    time.Time       `json:"updated_at,omitempty"`
 	Body         string          `json:"body,omitempty"`
 	ChangedFiles []PRChangedFile `json:"changed_files"`
 	Commits      []PRCommit      `json:"commits"`
@@ -75,6 +78,7 @@ type PRSummaryResult struct {
 	CommitCount       int      `json:"commit_count"`
 	ChangeType        string   `json:"change_type"`
 	RiskLevel         string   `json:"risk_level"`
+	RiskReasons       []string `json:"risk_reasons,omitempty"`
 	ReviewFocus       []string `json:"review_focus"`
 	TestSuggestions   []string `json:"test_suggestions"`
 	MergeChecklist    []string `json:"merge_checklist"`
@@ -208,6 +212,7 @@ func AnalyzePRSummary(input PRSummaryInput, lang string) PRSummaryResult {
 		CommitCount:       len(input.Commits),
 		ChangeType:        changeType,
 		RiskLevel:         riskLevel,
+		RiskReasons:       riskReasons,
 		ReviewFocus:       reviewFocus,
 		TestSuggestions:   testSuggestions,
 		MergeChecklist:    mergeChecklist,

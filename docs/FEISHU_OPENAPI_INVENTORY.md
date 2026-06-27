@@ -16,6 +16,21 @@ Layer 3: Future callback-based GitLink action gateway
 
 No implemented command in this branch performs GitLink write operations.
 
+## GitLink Read Sources Used by Feishu Exports
+
+The Feishu commands consume `workflow +repo-report` JSON. The workflow report
+uses these GitLink read-only sources when the corresponding flags are enabled:
+
+| GitLink read source | Used by | Status | Notes |
+| --- | --- | --- | --- |
+| `GET /v1/{owner}/{repo}/issues?category=opened` | Issue analysis | Implemented | Paginates all open issues by default |
+| `GET /v1/{owner}/{repo}/pulls?status=0` | Open PR analysis | Implemented | Paginates all open PRs by default |
+| `GET /v1/{owner}/{repo}/pulls?status=1` | PR lifecycle totals | Implemented | Merged total only |
+| `GET /v1/{owner}/{repo}/pulls?status=2` | PR lifecycle totals | Implemented | Closed/rejected total only |
+| `GET /v1/{owner}/{repo}/pulls/{number}/reviews` | Optional review audit | Implemented read-only | Formal review objects are authoritative review evidence |
+| `GET /v1/{owner}/{repo}/issues/{issue_id}/journals` | Optional review audit | Implemented read-only | Counts submitter/reviewer/participant/system activity without storing raw comment text |
+| Repository member lookup | Optional role enrichment | Not implemented in this branch | Maintainer identity is not guessed when auth is unavailable |
+
 ## Source Index
 
 Official Feishu / Lark references used for this inventory:
@@ -503,6 +518,11 @@ Does not require the Feishu module to know a GitLink token.
 Provides summary-level issue, PR, contributor, recommendation, and health fields.
 ```
 
+`workflow +repo-report` paginates all open issues and pull requests by default.
+`--issue-limit` and `--pr-limit` are explicit sampling controls. Counts in
+Feishu output are labeled as analyzed counts and must not be interpreted as
+repository totals after an explicit limit is applied.
+
 Required future source expansion:
 
 ```text
@@ -531,6 +551,11 @@ milestone and release commands where available
 Audit source:
 future action gateway audit log
 ```
+
+Next-stage PR activity comparison uses the read-only PR review and associated
+Issue journal endpoints. Actor attribution and snapshot-diff rules are defined
+in `docs/FEISHU_PR_ACTIVITY_STRATEGY.md`. This remains planned; current Feishu
+commands do not crawl or copy PR conversations.
 
 Reason:
 

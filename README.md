@@ -632,6 +632,14 @@ gitlink-cli workflow +pr-summary --from shortcuts/workflow/testdata/pr_summary.j
 # Repository workflow report by read-only GitLink fetch
 gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
 
+# Optional full PR review attribution. This deep-fetches formal reviews and
+# PR-associated Issue journals for analyzed PRs, so keep it explicit.
+gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --include-pr-review-audit --format json > report.review-audit.json
+
+# Limit analysis only when an intentional sample is needed.
+# By default, repo-report paginates through all open issues and pull requests.
+gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --issue-limit 20 --pr-limit 50 --format markdown
+
 # Repository workflow report from a local JSON file
 gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format json
 ```
@@ -649,18 +657,26 @@ Safety:
 - They do not depend on LLM APIs.
 - `workflow +pr-summary` does not comment, approve, reject, or merge pull requests.
 - `workflow +repo-report` aggregates health, issue triage, and PR review summary signals without remote writes.
+- `workflow +repo-report --include-pr-review-audit` remains read-only. It treats formal review objects as authoritative review evidence and keeps submitter, reviewer, participant, and system journal activity separate.
 
 ### Feishu Collaboration Export
 
 `feishu` turns `workflow +repo-report` JSON into Feishu collaboration outputs.
 
+`workflow +repo-report` paginates through all open issues and pull requests by
+default. Feishu cards label these values as analyzed counts. Passing
+`--issue-limit` or `--pr-limit` intentionally limits the analysis and the
+resulting values must not be interpreted as repository totals.
+
 Stable usage:
 
 ```bash
 gitlink-cli workflow +repo-report --owner "$GITLINK_OWNER" --repo "$GITLINK_REPO" --format json > report.json
+gitlink-cli workflow +repo-report --owner "$GITLINK_OWNER" --repo "$GITLINK_REPO" --include-pr-review-audit --format json > report.review-audit.json
 
 gitlink-cli feishu +notify --from-workflow-json report.json --format json
 gitlink-cli feishu +notify --from-workflow-json report.json --send --format table
+gitlink-cli feishu +owner-digest --from-workflow-json report.review-audit.json --format table
 
 gitlink-cli feishu +weekly-report --from-workflow-json report.json --format markdown
 gitlink-cli feishu +owner-digest --from-workflow-json report.json --format markdown

@@ -555,12 +555,17 @@ gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --ye
 
 `feishu` 将 `workflow +repo-report` JSON 转成飞书协作内容。
 
+`workflow +repo-report` 默认分页读取并分析全部开放 Issue 和 PR。飞书卡片会把这些值明确标为“已分析数量”。只有显式传 `--issue-limit` 或 `--pr-limit` 时才会采样，此时结果不能解释为仓库总量。
+
 #### 稳定层：自定义机器人通知
 
 稳定层只依赖飞书群自定义机器人。它适合把 GitLink 项目状态、周报、Owner 摘要和贡献者摘要推送到群里。默认只预览，真实发送必须显式传 `--send`。
 
 ```bash
 gitlink-cli workflow +repo-report --owner "$GITLINK_OWNER" --repo "$GITLINK_REPO" --format json > report.json
+
+# 仅在明确需要采样时设置上限
+gitlink-cli workflow +repo-report --owner "$GITLINK_OWNER" --repo "$GITLINK_REPO" --issue-limit 20 --pr-limit 50 --format json > report.sample.json
 
 gitlink-cli feishu +notify --from-workflow-json report.json --format json
 gitlink-cli feishu +notify --from-workflow-json report.json --send --format table

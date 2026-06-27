@@ -189,6 +189,26 @@ func BuildDocBlocks(report workflow.RepoReportResult, lang string) []DocBlock {
 		textBlock(fmt.Sprintf(feishuLabel(lang, "doc_health"), healthScore, healthRisk)),
 		textBlock(fmt.Sprintf(feishuLabel(lang, "doc_issues"), report.IssueSummary.Total, report.IssueSummary.HighRisk, report.IssueSummary.MissingInfo)),
 		textBlock(fmt.Sprintf(feishuLabel(lang, "doc_prs"), report.PRSummary.Total, report.PRSummary.HighRisk)),
+		textBlock(feishuLabel(lang, "analysis_scope")),
+	}
+	if report.PRLifecycle != nil {
+		blocks = append(blocks, textBlock(fmt.Sprintf(
+			"%s=%d; %s=%d; %s=%d",
+			feishuLabel(lang, "open_prs"), report.PRLifecycle.Open,
+			feishuLabel(lang, "merged_prs"), report.PRLifecycle.Merged,
+			feishuLabel(lang, "closed_prs"), report.PRLifecycle.ClosedOrRejected,
+		)))
+	}
+	if report.PRReviewAudit != nil {
+		blocks = append(blocks, textBlock(fmt.Sprintf(
+			"%s=%d; %s=%d; %s=%d; %s=%d; %s=%d",
+			feishuLabel(lang, "review_audited"), report.PRReviewAudit.Audited,
+			feishuLabel(lang, "reviewed_prs"), report.PRReviewAudit.Reviewed,
+			feishuLabel(lang, "unreviewed_prs"), report.PRReviewAudit.Unreviewed,
+			feishuLabel(lang, "needs_re_review"), report.PRReviewAudit.NeedsReReview,
+			feishuLabel(lang, "formal_reviews"), report.PRReviewAudit.FormalReviews,
+		)))
+		blocks = append(blocks, textBlock(feishuLabel(lang, "review_actor_attribution")+":\n"+joinLines(reviewAuditActorLines(report.PRReviewAudit, lang), 6)))
 	}
 	if len(report.PRSummary.ReviewFocus) > 0 {
 		blocks = append(blocks, textBlock(feishuLabel(lang, "doc_review_focus")+":\n"+joinLines(localizeFeishuLines(report.PRSummary.ReviewFocus, lang), 6)))

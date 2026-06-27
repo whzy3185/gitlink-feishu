@@ -104,7 +104,7 @@ func apiList(data interface{}) []interface{} {
 	case []interface{}:
 		return v
 	case map[string]interface{}:
-		for _, key := range []string{"issues", "pulls", "pull_requests", "files", "commits", "releases", "builds", "items", "records", "data"} {
+		for _, key := range []string{"issues", "pulls", "pull_requests", "reviews", "journals", "comments", "notes", "files", "commits", "releases", "builds", "items", "records", "data"} {
 			if raw, ok := v[key]; ok {
 				if items := apiList(raw); len(items) > 0 {
 					return items
