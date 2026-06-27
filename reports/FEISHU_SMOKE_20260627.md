@@ -6,11 +6,12 @@ Date: 2026-06-27
 
 ```text
 branch: feat/feishu-export-clean
-base commit: d7812df1af49519f9eb84def218bd3d5a9fdf02f
+base: origin/master
+head: 5a2e054 docs(feishu): keep validation evidence text-only
 ```
 
-This smoke run included uncommitted data-correctness fixes that are documented
-below and will receive a new commit after final validation.
+The data-correctness, PR review-audit, diagnostics, and text-only evidence
+changes are committed in this branch.
 
 ## Environment
 
@@ -213,17 +214,27 @@ No maintainer-role guess when member lookup is unavailable.
 
 | Check | Result |
 | --- | --- |
-| `go test ./shortcuts/feishu` | pass |
-| `go test ./shortcuts/workflow` | pass |
-| `go test ./shortcuts` | pass |
-| `go test ./...` | pass |
-| `go build .` | pass |
-| `go vet ./...` | pass |
+| `go test ./shortcuts/feishu` | pass on 2026-06-27 |
+| `go test ./shortcuts/workflow` | pass on 2026-06-27 |
+| `go test ./shortcuts` | pass on 2026-06-27 |
+| `go test ./...` | pass on 2026-06-27 |
+| `go build .` | pass on 2026-06-27 |
+| `go vet ./...` | pass on 2026-06-27 |
 | `go run ./internal/i18n/cmd/check` | blocked by existing Windows locale line-ending issue |
 | `go run ./internal/i18n/cmd/check --scan-code` | blocked by the same formatting check |
 
 The i18n line-ending and missing-key fix remains in its independent branch/PR
 and is intentionally not duplicated into this Feishu change.
+
+## CI Status
+
+`.github/workflows/test.yml` already runs i18n validation on `origin/master`.
+This branch adds Feishu/workflow package tests and `go vet` to that workflow.
+
+The local machine does not have GitHub CLI installed, and an unauthenticated
+GitHub API query was rate-limited, so the remote GitHub Actions result was not
+confirmed from this workstation. The PR page should be used as the source of
+truth for remote CI status.
 
 ## Screenshot Status
 
