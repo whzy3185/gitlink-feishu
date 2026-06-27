@@ -159,7 +159,9 @@ CI note:
 ```text
 .github/workflows/test.yml already includes the upstream i18n validation steps.
 This branch adds Feishu/workflow package tests and go vet to the workflow.
-Remote GitHub Actions status should be checked on the PR page.
+The workflow triggers on pull_request and pushes to main/master. A feature-branch
+push alone does not create a branch workflow run, so remote CI should be checked
+after the PR is opened.
 ```
 
 Known separate issue:
@@ -168,6 +170,13 @@ Known separate issue:
 On this Windows workstation, go run ./internal/i18n/cmd/check still reports
 internal\i18n\locales\en-US.json formatting. That fix is intentionally kept in
 the separate i18n branch/PR and is not mixed into this Feishu change.
+
+The separate i18n fix is:
+fix/i18n-locale-eol
+8e24a89 fix(i18n): restore locale validation on Windows
+
+It adds .gitattributes LF handling for locale JSON and the missing
+cmd.ignore.short locale key.
 ```
 
 ## Review and Comment Attribution Boundary
