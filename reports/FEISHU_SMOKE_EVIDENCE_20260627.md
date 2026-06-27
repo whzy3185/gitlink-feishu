@@ -8,24 +8,19 @@ Branch:
 feat/feishu-export-clean
 ```
 
-Base commit:
+Head commit:
 
 ```text
-d7812df1af49519f9eb84def218bd3d5a9fdf02f
+138d886 feat(feishu): add full PR inventory and review attribution
 ```
 
-## Evidence Files
+## Evidence Policy
 
-| Evidence | Expected file | Status | Notes |
-| --- | --- | --- | --- |
-| Custom bot notify card | `reports/images/feishu-card-notify-redacted.png` | not captured | computer-use initialization failed |
-| Owner digest card | `reports/images/feishu-owner-digest-redacted.png` | not captured | corrected card was sent successfully |
-| DocX append result | `reports/images/feishu-docx-append-redacted.png` | not captured | corrected 11-block append passed |
-| Bitable sync result | `reports/images/feishu-bitable-sync-redacted.png` | not captured | real upsert passed |
-| Task create result | `reports/images/feishu-task-create-redacted.png` | not captured | historical result retained; creation was not repeated |
-| Diagnostics output | `reports/images/feishu-diagnostics-terminal-redacted.png` | not captured | local and remote checks passed |
+No screenshot or other binary evidence is committed in this branch.
 
-No placeholder or fabricated image file is committed.
+Visual validation can be attached directly to the PR description after manual
+redaction when needed. It must not be stored under repository paths such as
+`assets/validation-screenshots/`, `reports/images/`, or `docs/images/`.
 
 ## Text Evidence
 
@@ -36,6 +31,52 @@ reports/FEISHU_PERMISSION_MATRIX.md
 reports/FEISHU_API_COLLECTION_CHECKLIST_20260626.md
 docs/FEISHU_OPENAPI_INVENTORY.md
 docs/FEISHU_PR_ACTIVITY_STRATEGY.md
+```
+
+## PR Description Evidence
+
+The following text is safe to paste into the PR description instead of adding
+image files:
+
+```text
+Validation evidence is text-only in the repository. No screenshots are committed.
+
+Real Feishu custom bot delivery passed:
+- final English notify card: HTTP 200 / Feishu code 0
+- final English owner digest card: HTTP 200 / Feishu code 0
+
+Real GitLink repository data:
+- repository: Gitlink/gitlink-cli
+- open issues analyzed: 9
+- open PRs analyzed: 166
+- PR lifecycle totals: open 166, merged 65, closed/rejected 74
+
+Full PR review audit:
+- PRs audited: 166
+- reviewed PRs: 4
+- unreviewed PRs: 162
+- needs re-review: 0
+- formal reviews: 4
+- reviewer comments: 6
+- submitter comments: 0
+- participant comments: 436
+- system events: 0
+- audit errors: 0
+
+Risk source:
+- high-risk PRs from metadata rule `security-sensitive keyword`: 13
+
+Tests passed:
+- go test ./shortcuts/feishu
+- go test ./shortcuts/workflow
+- go test ./shortcuts
+- go test ./...
+- go build .
+- go vet ./...
+
+Known separate issue:
+- go run ./internal/i18n/cmd/check is blocked by an existing locale formatting
+  issue handled in a separate branch/PR.
 ```
 
 ## Redaction Checklist
@@ -50,12 +91,11 @@ docs/FEISHU_PR_ACTIVITY_STRATEGY.md
 [x] No task ID committed
 [x] No open_id / union_id committed
 [x] No personal account credential committed
-[x] No unredacted screenshot committed
+[x] No screenshot committed
 ```
 
 ## Capture Rule
 
-Screenshots may be added only after the Windows automation connection works and
-each image is reviewed for resource IDs, personal identities, and unrelated
-conversation content. Until then, this document records the missing visual
-evidence explicitly rather than presenting a fake pass.
+Screenshots may be used only outside the repository, for example pasted into the
+PR description after redaction. If a local screenshot is temporarily captured,
+keep it outside the worktree and delete it after the PR evidence is prepared.

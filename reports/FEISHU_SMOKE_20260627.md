@@ -227,15 +227,14 @@ and is intentionally not duplicated into this Feishu change.
 
 ## Screenshot Status
 
-The requested Windows computer-use connection failed twice during plugin
-initialization:
+Screenshot files are intentionally excluded from the repository. The project
+owner asked that validation images not be committed because binary screenshots
+remain in Git history and duplicate the text report evidence.
 
-```text
-failed to write kernel assets: path not found
-```
-
-No screenshot was fabricated or committed. Text evidence and API-derived
-results remain the evidence for this run. See:
+No screenshot was fabricated or committed. Visual proof, if needed, should be
+redacted and pasted directly into the PR description instead of being stored in
+the worktree. Text evidence and API-derived results remain the committed
+evidence for this run. See:
 
 ```text
 reports/FEISHU_SMOKE_EVIDENCE_20260627.md
