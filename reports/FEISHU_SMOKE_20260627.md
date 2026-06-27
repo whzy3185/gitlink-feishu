@@ -7,11 +7,15 @@ Date: 2026-06-27
 ```text
 branch: feat/feishu-export-clean
 base: origin/master
-head: 5a2e054 docs(feishu): keep validation evidence text-only
+runtime validation head: 9b82841 docs(feishu): finalize non-image PR validation notes
 ```
 
 The data-correctness, PR review-audit, diagnostics, and text-only evidence
 changes are committed in this branch.
+
+Commit `9b82841` only updates validation notes and does not change runtime
+behavior. Later documentation-only closing commits do not change the runtime
+smoke target.
 
 ## Environment
 
@@ -231,10 +235,22 @@ and is intentionally not duplicated into this Feishu change.
 `.github/workflows/test.yml` already runs i18n validation on `origin/master`.
 This branch adds Feishu/workflow package tests and `go vet` to that workflow.
 
-The local machine does not have GitHub CLI installed, and an unauthenticated
-GitHub API query was rate-limited, so the remote GitHub Actions result was not
-confirmed from this workstation. The PR page should be used as the source of
-truth for remote CI status.
+The workflow triggers on `pull_request` and pushes to `main`/`master`, so a
+push to `feat/feishu-export-clean` alone does not create a branch workflow run.
+The GitHub Actions branch filter showed zero runs for this feature branch before
+opening a PR. The PR page should be used as the source of truth after the PR is
+created.
+
+If CI reaches the i18n steps before the independent i18n fix is merged, it may
+fail because this branch intentionally does not include:
+
+```text
+fix/i18n-locale-eol
+8e24a89 fix(i18n): restore locale validation on Windows
+```
+
+That separate fix adds `.gitattributes` locale LF handling and the missing
+`cmd.ignore.short` locale key.
 
 ## Screenshot Status
 
