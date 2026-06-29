@@ -108,6 +108,7 @@
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
 | 👥 成员 | 列出、添加、移除仓库成员，调整角色，生成和接受邀请链接 |
+| 📨 邀请 | 生成邀请链接、查看邀请信息、接受邀请、加入/退出项目 |
 | 🌿 分支 | 创建、删除、保护分支 |
 | 🏷️ 发布 | 创建、编辑、更新、查看、删除 Release |
 | 🏢 组织 | 管理组织、成员、团队 |
@@ -463,6 +464,25 @@ gitlink-cli pipeline +disable --owner Gitlink --repo forgeplus --id 7 --workflow
 gitlink-cli pipeline +delete --owner Gitlink --repo forgeplus --id 7 --dry-run
 ```
 
+### 项目邀请管理
+
+```bash
+# 生成邀请链接
+gitlink-cli invite +generate --owner Gitlink --repo forgeplus --role developer --is-apply true
+
+# 查看邀请链接信息
+gitlink-cli invite +show --owner Gitlink --repo forgeplus --invite-sign abc123
+
+# 通过链接接受邀请
+gitlink-cli invite +accept --owner Gitlink --repo forgeplus --invite-sign abc123
+
+# 通过邀请码加入项目
+gitlink-cli invite +join --code ABCDEF --role developer
+
+# 退出项目
+gitlink-cli invite +quit --owner Gitlink --repo forgeplus
+```
+
 ### 忽略文件模板
 
 ```bash
@@ -592,6 +612,7 @@ git push gitlink
 | `gitlink-issue` | Issue 操作（创建、更新、关闭、批量更新/删除、评论等） |
 | `gitlink-pr` | Pull Request 操作（创建、合并、Review 等） |
 | `gitlink-member` | 仓库成员与邀请链接管理 |
+| `gitlink-invite` | 项目邀请管理（生成链接、接受邀请、加入/退出项目） |
 | `gitlink-release` | 发布管理（创建、编辑、更新、查看、删除等） |
 | `gitlink-org` | 组织管理（成员、团队等） |
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |

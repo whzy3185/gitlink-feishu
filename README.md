@@ -108,6 +108,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
 | 👥 Member | List, add, remove repository members, change roles, create and accept invite links |
+| 📨 Invite | Generate invite links, view invite info, accept invites, join/quit projects |
 | 🌿 Branch | Create, delete, list, protect, unprotect branches |
 | 🏷️ Release | Create, edit, update, view, delete releases |
 | 🏢 Org | Manage organizations, members, teams |
@@ -485,6 +486,25 @@ gitlink-cli pipeline +disable --owner Gitlink --repo forgeplus --id 7 --workflow
 gitlink-cli pipeline +delete --owner Gitlink --repo forgeplus --id 7 --dry-run
 ```
 
+### Project Invite Management
+
+```bash
+# Generate an invite link
+gitlink-cli invite +generate --owner Gitlink --repo forgeplus --role developer --is-apply true
+
+# View invite link information
+gitlink-cli invite +show --owner Gitlink --repo forgeplus --invite-sign abc123
+
+# Accept an invite via link
+gitlink-cli invite +accept --owner Gitlink --repo forgeplus --invite-sign abc123
+
+# Join a project by invite code
+gitlink-cli invite +join --code ABCDEF --role developer
+
+# Quit a project
+gitlink-cli invite +quit --owner Gitlink --repo forgeplus
+```
+
 ### Ignore File Templates
 
 ```bash
@@ -718,6 +738,7 @@ See [skills/README.md](./skills/README.md) for details.
 | `gitlink-issue` | Issue operations (create, update, close, batch update/delete, comment, etc.) |
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
 | `gitlink-member` | Repository member and invite link management |
+| `gitlink-invite` | Project invite management (generate links, accept invites, join/quit projects) |
 | `gitlink-branch` | Branch management (create, delete, list, protect, unprotect) |
 | `gitlink-release` | Release management (create, edit, update, view, delete, etc.) |
 | `gitlink-ci` | CI/CD operations (builds, logs, etc.) |
