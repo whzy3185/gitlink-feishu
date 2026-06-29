@@ -152,7 +152,7 @@ skills/
 | **gitlink-pipeline** | 流水线工作流 | `pipeline +runs`, `pipeline +run`, `pipeline +logs` |
 | **gitlink-pm** | 项目管理 | 通过 Raw API 访问 |
 | **gitlink-workflow** | AI 工作流 | Issue 分类、PR Review、Release Notes |
-| **gitlink-health** | 开源项目健康度 | 详情见SKILL.md |
+| **gitlink-health** | 项目健康度诊断 | `health diagnose` (5 维度评分：文档、许可证、社区、成熟度、CI/CD) |
 
 ---
 

@@ -463,6 +463,49 @@ gitlink-cli ci +log --owner Gitlink --repo forgeplus -i <build_id>
 gitlink-cli ci +restart --owner Gitlink --repo forgeplus -i <build_id>
 ```
 
+### Health Diagnostics
+
+`gitlink health diagnose` analyzes repository health across 5 dimensions: Documentation, License, Community, Maturity, and CI/CD.
+
+```bash
+# Basic diagnosis (text output)
+gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli
+
+# JSON output for scripts and AI Agents
+gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli --format json
+
+# Markdown output for reports
+gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli --format markdown
+
+# Verbose mode with detailed breakdown
+gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli --verbose
+
+# Custom database path for historical tracking
+gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli --db ./health.db
+```
+
+**Scoring Dimensions (100 points total):**
+
+| Dimension | Weight | Criteria |
+|-----------|--------|----------|
+| Documentation | 20 | README quality, contributing guide, code of conduct |
+| License | 15 | License presence and OSI approval |
+| Community | 25 | Contributors, activity, bus factor |
+| Maturity | 20 | Releases, version stability, age |
+| CI/CD | 20 | Build success rate, pipeline configuration |
+
+**Health Status Thresholds:**
+
+- `good` (≥70%): Healthy project with active maintenance
+- `warning` (≥40%): Needs attention in some areas
+- `critical` (<40%): Requires immediate improvement
+
+**Output Formats:**
+
+- `text` (default): Human-readable summary with suggestions
+- `json`: Structured data for scripts and AI Agents
+- `markdown`: Formatted report for documentation
+
 ### Pipeline Operations
 
 ```bash
@@ -727,7 +770,7 @@ See [skills/README.md](./skills/README.md) for details.
 | `gitlink-user` | User management (profile info, etc.) |
 | `gitlink-pm` | Project management (sprints, kanban, weekly reports, etc.) |
 | `gitlink-workflow` | AI-powered workflows (issue triage, PR review, release notes, etc.) |
-| `gitlink-health` | Project health analysis (PR/Issue metrics aggregation, health reports) |
+| `gitlink-health` | Project health diagnostics (5-dimension scoring: Documentation, License, Community, Maturity, CI/CD) |
 
 ## Project Structure
 
