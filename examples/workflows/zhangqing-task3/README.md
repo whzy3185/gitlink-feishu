@@ -30,6 +30,7 @@
 | `05-contributor-growth.md` | ⑤ 贡献者排行榜 + 徽章授予方案 |
 | `07-onboarding-nanny.md` | ⑦ 新人保姆 5 步执行报告 |
 | `release-notes-v0.2.0-beta.1.md` | ① 发布的 Release Notes 全文 |
+| `agent-dialogue-triggers.md` | **Agent 对话触发语**（PDF 首要产物：演示 Skill 驱动 Agent） |
 | `reproduce.sh` | **可复现脚本**（评委照着跑） |
 
 ---
@@ -53,6 +54,26 @@ bash examples/workflows/zhangqing-task3/reproduce.sh
 | ① | issue-triage → insight → release-auto | 4 |
 | ⑤ | git log + issue +list + pr +list → 排行榜 → label +create + issue +create | 3 |
 | ⑦ | member +invite-link → onboarding（识别 + 引导评论）→ notification +list | 5 |
+
+---
+
+## 任务二 Skill 作为设计蓝图（PDF 核心：Skill = 设计蓝图）
+
+本目录的 3 份执行报告都新增了「Skill 蓝图对照」段，**逐动作引用 SKILL.md 行号**，证明每步执行都严格按蓝图落地：
+
+| 工作流 | 蓝图 SKILL.md 行号定位 |
+|--------|----------------------|
+| ① 步骤 1 分类 | `gitlink-issue-triage/SKILL.md` 工作流 1（第 54-117 行），含分类规则表第 35-50 行 |
+| ① 步骤 2 分配（跳过）| `gitlink-issue-triage/SKILL.md` 第 125-146 行（蓝图预判个人仓库 assigners 为空）|
+| ① 步骤 3 周报 | `gitlink-insight/SKILL.md` 工作流 2（第 116-166 行）|
+| ① 步骤 4 发版 | `gitlink-release-auto/SKILL.md` 一/二/三（第 32-189 行），含预发布第 179-189 行 |
+| ⑤ 取数 | `gitlink-insight/SKILL.md` 工作流 3（第 169-203 行）|
+| ⑤ 发奖 | `gitlink-issue-triage/SKILL.md` 工作流 1 Step 5-6（第 80-117 行）|
+| ⑦ Step 2 识别 | `gitlink-onboarding/SKILL.md` 工作流 1（第 50-95 行）+ 识别标准第 31-46 行 |
+| ⑦ Step 3 引导 | `gitlink-onboarding/SKILL.md` 工作流 2（第 99-145 行）+ 个性化要求第 205 行 |
+| ⑦ Step 5 追踪 | `gitlink-insight/SKILL.md` 工作流 3（第 169-203 行）多源聚合 |
+
+**意义**：评委打开任一报告的「Skill 蓝图对照」段，可拿着 SKILL.md 行号对照检查，验证"Skill 不是摆设，是真正驱动 Agent 执行的设计蓝图"。
 
 ---
 

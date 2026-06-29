@@ -71,3 +71,49 @@ MSYS_NO_PATHCONV=1 ./gitlink-cli.exe api POST /v1/ylly/gitlink-cli/issues/<n>/jo
 2. **issue +list 与 issue +view 的 tag 字段不一致**：list 用 `issue_tags` 且可能不返回，view 用 `tags` 字段才完整
 3. **创建 issue 必须传 `done_ratio: 0`**，否则 MySQL 报 `Column 'done_ratio' cannot be null`
 4. **issue create 时 issue_tag_ids 字段不生效**（GitLink bug），需创建后用 `issue +update --label <id>` 补打
+
+---
+
+## Skill 蓝图对照（按 SKILL.md 行号）
+
+本工作流 5 个 Step 严格按 `gitlink-onboarding/SKILL.md` 蓝图执行。
+
+### Step 2 ← `gitlink-onboarding/SKILL.md` 工作流 1（good-first-issue 自动标记）
+
+| 执行动作 | SKILL.md 蓝图位置 | 蓝图要求 | 实际执行 |
+|---------|------------------|---------|---------|
+| 取开放 Issue | 第 54-58 行 Step 1 | `issue +list` | ✅ 17 个开放 Issue |
+| 按识别标准评估 | 第 31-46 行 + 第 60-62 行 Step 2 | 5 条友好信号 + 3 条排除标准 | ✅ 3 个 docs 类入选，14 个按排除标准剔除 |
+| 复用现有标签 | 第 64-74 行 Step 3 | 优先复用，无则建 | ✅ 仓库已有 good first label（id 382660），未新建 |
+| 输出标记报告 | 第 84-95 行 Step 5 | 表格汇总 | ✅ `onboarding_identify_report.md` |
+
+**关键对照**：SKILL.md 第 44-46 行排除标准（性能优化/描述模糊/CI 部署）逐条复审 14 个未入选 Issue，全部命中排除理由（测试数据 / 模糊描述 / 性能 / 新功能开发）。
+
+### Step 3 ← `gitlink-onboarding/SKILL.md` 工作流 2（引导评论生成）
+
+| 执行动作 | SKILL.md 蓝图位置 | 蓝图要求 | 实际执行 |
+|---------|------------------|---------|---------|
+| 读 Issue 详情 | 第 103-107 行 Step 1 | `issue +view` | ✅ #8/#13/#14 各取详情 |
+| 生成个性化评论 | 第 109-117 行 Step 2 | **禁止固定模板**，4 要素（任务/文件/本地准备/PR 规范） | ✅ 3 条**完全不同**的评论，每条指向具体文件 |
+| 发布评论 | 第 118-123 行 Step 3 | `issue +comment` | ✅ journals 478829/478830/478831（绕中文编码走 Raw API） |
+| 个性化要求 | 第 205 行注意事项 | "避免对所有 Issue 用同一句" | ✅ #8 指 `wiki.go` / #13 指 `Makefile` / #13 指 `wiki +list --format json` |
+
+### Step 4 ← 通用通知能力
+
+`notification +list` 自查询（受限）。`gitlink-shared/SKILL.md` 平台限制：只能查自己的通知。✅ 用 `--owner zhangqing23` 自查 13 条通知。
+
+### Step 5 ← `gitlink-insight/SKILL.md` 工作流 3（贡献者洞察）交叉验证
+
+通知 `[ProjectMemberJoined]` + `[ProjectPullRequest]` + `pr +list --state merged` 三源交叉 → 完整还原 ZxR123-Z 从入会到首次贡献全过程。该方法论对应 insight SKILL.md 第 173-203 行"贡献者列表 + PR 数据 + 用户信息"多源聚合。
+
+### Skill 串联数
+
+| 步骤 | 使用的 Skill/命令 | 角色 |
+|------|------------------|------|
+| 1 | member +invite-link | 邀请能力演示 |
+| 2 | onboarding 工作流 1（识别） | good-first 识别 |
+| 3 | onboarding 工作流 2（引导评论） | 个性化引导 |
+| 4 | notification +list | 通知系统查看 |
+| 5 | insight 工作流 3（交叉验证） | 首次贡献追踪 |
+
+**5 步串联，满足 PDF「≥3 命令/Skill 串联」要求。**
