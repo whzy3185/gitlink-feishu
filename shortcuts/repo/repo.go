@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -115,8 +116,12 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "contributors",
-			Description: "List repository contributors",
-			Run:         runContributors,
+			Description: tr.T("cmd.repo.contributors.short"),
+			Flags: []common.Flag{
+				{Name: "chart", Short: "c", Usage: tr.T("flag.contributors.chart"), Default: ""},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.contributors.limit"), Default: "10"},
+			},
+			Run: runContributors,
 		},
 		{
 			Name:        "contributor-stats",
@@ -282,7 +287,64 @@ func runContributors(ctx *common.RuntimeContext) error {
 	if err != nil {
 		return err
 	}
-	return ctx.Output(env)
+
+	// Check if chart mode is requested
+	chartType := ctx.Arg("chart")
+	if chartType == "" {
+		// Default: output as JSON/table
+		return ctx.Output(env)
+	}
+
+	// Parse the response into ContributorsResponse
+	// env.Data contains the API response
+	dataBytes, err := json.Marshal(env.Data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal response data: %w", err)
+	}
+
+	var resp ContributorsResponse
+	if err := json.Unmarshal(dataBytes, &resp); err != nil {
+		return fmt.Errorf("failed to parse contributors response: %w", err)
+	}
+
+	// Parse limit
+	limit := 10
+	if l := ctx.Arg("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+
+	// Render chart based on type
+	config := ChartConfig{
+		Width:    80,
+		MaxItems: limit,
+	}
+
+	// Apply limit to list for pie and table charts
+	limitedList := resp.List
+	if limit > 0 && len(limitedList) > limit {
+		limitedList = limitedList[:limit]
+	}
+
+	var output string
+	switch strings.ToLower(chartType) {
+	case "bar":
+		output = RenderContributorsChart(&resp, config, ctx.Tr)
+	case "pie":
+		output = RenderPieChart(limitedList, config.Width, ctx.Tr)
+	case "table":
+		output = RenderContributorsTable(limitedList, ctx.Tr)
+	case "all":
+		output = RenderContributorsChart(&resp, config, ctx.Tr) + "\n\n" +
+			RenderPieChart(limitedList, config.Width, ctx.Tr) + "\n\n" +
+			RenderContributorsTable(limitedList, ctx.Tr)
+	default:
+		return fmt.Errorf("unsupported chart type: %s (use: bar, pie, table, or all)", chartType)
+	}
+
+	fmt.Println(output)
+	return nil
 }
 
 func runContributorStats(ctx *common.RuntimeContext) error {
