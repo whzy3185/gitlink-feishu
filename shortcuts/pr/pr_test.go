@@ -226,6 +226,103 @@ func TestPRCreateNoBody(t *testing.T) {
 	}
 }
 
+// --- branches / check-can-merge ---
+
+func TestPRBranches(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/pulls/get_branches.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"branches": []interface{}{"master", "feature/search"},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "branches", nil)
+	if err != nil {
+		t.Fatalf("branches failed: %v", err)
+	}
+}
+
+func TestPRCheckCanMergeDryRunDoesNotCallAPI(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("check-can-merge dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "check-can-merge", map[string]string{
+		"head":    "feature/search",
+		"base":    "master",
+		"dry-run": "true",
+	})
+	if err != nil {
+		t.Fatalf("check-can-merge dry-run failed: %v", err)
+	}
+}
+
+func TestPRCheckCanMergeRequiresYes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("check-can-merge without --yes should not call API, got: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "check-can-merge", map[string]string{
+		"head": "feature/search",
+		"base": "master",
+	})
+	if err == nil {
+		t.Fatal("expected check-can-merge to require --yes")
+	}
+}
+
+func TestPRCheckCanMergeWithYesCallsEndpoint(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/pulls/check_can_merge.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"can_merge": true})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "check-can-merge", map[string]string{
+		"head": "feature/search",
+		"base": "master",
+		"yes":  "true",
+	})
+	if err != nil {
+		t.Fatalf("check-can-merge failed: %v", err)
+	}
+	assertEqual(t, payload["head"], "feature/search")
+	assertEqual(t, payload["base"], "master")
+}
+
+func TestPRCheckCanMergeDefaultsBaseToMaster(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"can_merge": true})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "check-can-merge", map[string]string{
+		"head": "feature/search",
+		"yes":  "true",
+	})
+	if err != nil {
+		t.Fatalf("check-can-merge failed: %v", err)
+	}
+	assertEqual(t, payload["base"], "master")
+}
+
 // --- view ---
 
 func TestPRView(t *testing.T) {
@@ -411,6 +508,36 @@ func TestPRCreateHTTPError(t *testing.T) {
 	defer server.Close()
 
 	err := runPRShortcut(t, server, "create", map[string]string{"title": "test", "head": "feature/x"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestPRBranchesHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "branches", nil)
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestPRCheckCanMergeHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "check-can-merge", map[string]string{
+		"head": "feature/search",
+		"base": "master",
+		"yes":  "true",
+	})
 	if err == nil {
 		t.Fatal("expected error for HTTP 500")
 	}

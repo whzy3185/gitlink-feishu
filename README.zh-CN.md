@@ -418,6 +418,11 @@ gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: 搜索功能" 
 # 创建 PR（从 Fork 仓库）
 gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: 新功能" --head your_username/forgeplus:feature/my-feature --base master
 
+# 列出 PR 可用分支并检查合并准备状态
+gitlink-cli pr +branches --owner Gitlink --repo forgeplus
+gitlink-cli pr +check-can-merge --owner Gitlink --repo forgeplus --head feature/search --base master --dry-run
+gitlink-cli pr +check-can-merge --owner Gitlink --repo forgeplus --head feature/search --base master --yes
+
 # 查看 PR
 gitlink-cli pr +view --owner Gitlink --repo forgeplus -i 42
 

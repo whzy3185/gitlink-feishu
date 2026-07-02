@@ -37,7 +37,7 @@ gitlink-gatekeeper 是一个**可复现的 PR 合并门禁**：团队把合并�
 | 阶段 | 操作 | AI Agent 角色 |
 |------|------|--------------|
 | ① 加载策略 | 读 `gatekeeper.yaml`，找不到则回退内置默认策略 | 解析 / 校验 / 回退 |
-| ② 采集上下文 | 拉 PR 元信息、变更文件、diff、commits、CI 状态 | 执行 CLI 命令采集数据 |
+| ② 采集上下文 | 拉 PR 元信息、分支可合并性、变更文件、diff、commits、CI 状态 | 执行 CLI 命令采集数据 |
 | ③ 产出发现 | 逐文件审查，按 severity 分级标记问题 | AI 分析，输出发现列表 |
 | ④ 逐维评分 | 五维各算 `0..weight` 得分，相加得 `total` | 确定性计算（非主观） |
 | ⑤ 硬门禁 | 逐项判定 `hard_gates`，命中即拦截 | 布尔判定 |
@@ -97,6 +97,7 @@ behavior:
 | 步骤 | 数据 | 命令 |
 |------|------|------|
 | PR 元信息 | 标题/描述/作者/关联 issue | `gitlink-cli pr +view -i <id> --format json` |
+| 合并准备状态 | 源/目标分支是否可合并 | `gitlink-cli pr +check-can-merge --head <head> --base <base> --dry-run`，确认后 `--yes` |
 | 变更文件 | 文件路径列表 | `gitlink-cli pr +files -i <id> --format json` |
 | Diff | 变更内容供 AI 审查 | `gitlink-cli pr +diff -i <id> --format json` |
 | commits | commit 列表（消息供 commit_quality） | `gitlink-cli api GET /:owner/:repo/pulls/:id/commits --format json` |
@@ -107,6 +108,7 @@ behavior:
 ```bash
 PR=42
 gitlink-cli pr +view  -i "$PR" --format json   # title / body / 关联 issue
+gitlink-cli pr +check-can-merge --head feature/pr --base master --dry-run
 gitlink-cli pr +files -i "$PR" --format json   # changed files
 gitlink-cli pr +diff  -i "$PR" --format json   # diff（供 AI 审查）
 gitlink-cli api GET /:owner/:repo/pulls/$PR/commits --format json
@@ -293,6 +295,7 @@ gitlink-cli api POST /:owner/:repo/issues/$ISSUE_ID --body '{
 # 在目标仓库目录下，对 PR #42 跑门禁，仅预览评分卡
 PR=42
 gitlink-cli pr +view  -i "$PR" --format json
+gitlink-cli pr +check-can-merge --head feature/pr --base master --dry-run
 gitlink-cli pr +files -i "$PR" --format json
 gitlink-cli pr +diff  -i "$PR" --format json
 gitlink-cli api GET /:owner/:repo/pulls/$PR/commits --format json

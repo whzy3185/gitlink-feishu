@@ -1,7 +1,7 @@
 ---
 name: gitlink-pr
-version: 1.0.0
-description: "Pull Request 管理：创建、查看、合并、关闭 PR，查看变更文件、Diff 和 patchset/version。当用户需要操作 GitLink PR 时触发。"
+version: 2.0.0
+description: "Pull Request 管理：创建、查看、合并、关闭 PR，查看变更文件、Diff、patchset/version、可用分支和合并准备状态。当用户需要操作 GitLink PR 时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -21,6 +21,8 @@ metadata:
 |----------|------|----------|
 | `pr +list` | PR 列表 | 否（公开项目） |
 | `pr +create` | 创建 PR | 是 |
+| `pr +branches` | 获取 PR 可用源分支和目标分支 | 否 |
+| `pr +check-can-merge` | 检查源/目标分支是否可合并，先 dry-run | 是 |
 | `pr +view` | PR 详情 | 否（公开项目） |
 | `pr +merge` | 合并 PR | 是 |
 | `pr +refuse` | 拒绝并关闭 PR | 是 |
@@ -44,6 +46,13 @@ gitlink-cli pr +list --owner Gitlink --repo forgeplus --state merged --keyword r
 
 # 创建 PR（源分支必须有实际代码变更）
 gitlink-cli pr +create --title "feat: 新增搜索功能" --head feature/search --base master --body "实现了全文搜索"
+
+# 获取可用分支
+gitlink-cli pr +branches --owner Gitlink --repo forgeplus
+
+# 检查源分支是否可合并到目标分支，先 dry-run 再执行
+gitlink-cli pr +check-can-merge --owner Gitlink --repo forgeplus --head feature/search --base master --dry-run
+gitlink-cli pr +check-can-merge --owner Gitlink --repo forgeplus --head feature/search --base master --yes
 
 # 查看 PR 详情（使用 pull_request_number，即网页 URL 中的序号）
 gitlink-cli pr +view --id 3
@@ -138,18 +147,12 @@ gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=file.md&ref=dev'
 # 从 entries.sha 获取 SHA，然后：
 gitlink-cli api PUT /:owner/:repo/update_file --body '{"filepath":"file.md","content":"<base64>","sha":"<sha>","branch":"dev","message":"update file"}'
 
-# 检查是否可合并
-gitlink-cli api POST /:owner/:repo/pulls/check_can_merge --body '{"head":"dev","base":"main"}'
-
 # 创建 Review
 gitlink-cli api POST /v1/:owner/:repo/pulls/:id/reviews --body '{"content":"LGTM","status":"approved"}'
 
 # 查看 Review 列表（支持 status 过滤）
 gitlink-cli api GET /v1/:owner/:repo/pulls/:id/reviews
 gitlink-cli api GET /v1/:owner/:repo/pulls/:id/reviews?status=approved
-
-# 获取可用分支
-gitlink-cli api GET /:owner/:repo/pulls/get_branches
 
 # 查看 PR patchset/version 列表（v1 API）
 gitlink-cli api GET /v1/:owner/:repo/pulls/:id/versions
@@ -162,6 +165,8 @@ gitlink-cli api GET /v1/:owner/:repo/pulls/:id/versions/:version_id/diff
 
 - ⛔ **GitLink 的 PR 操作必须用 `gitlink-cli pr`，不能用 `gh pr`。** `gh` 是 GitHub CLI，无法操作 GitLink 平台。详见 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md) 的「工具使用边界」章节。
 - GitLink 的默认分支通常是 `master`（非 `main`），创建 PR 时注意 `--base` 参数
+- 创建或检查 PR 前可用 `pr +branches` 获取可选源/目标分支
+- `pr +check-can-merge` 使用远端 POST 检查接口，Agent 应先执行 `--dry-run`，确认后再加 `--yes`
 - 合并 PR 前建议先用 `pr +view` 确认状态
 - **PR 创建要求源分支与目标分支有实际代码差异**，否则返回"分支内容相同，无需创建合并请求"
 - PR 查看/合并/关闭/重开需要使用 `pull_request_number`（即网页 URL `/pulls/N` 中的序号，从 `pr +list` 返回）
