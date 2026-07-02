@@ -494,6 +494,3 @@ gitlink-cli 使用 Windows Credential Manager 安全存储 Token。如果 Creden
 ## 许可证
 
 [MulanPSL-2.0](https://license.coscl.org.cn/MulanPSL2)
-
-<!-- 任务三-代码质量看门人演示: zxr-qa-gate-0629-1725 -->
-<!-- 自动化验证-代码质量看门人: test/code-quality-gate -->
