@@ -402,8 +402,19 @@ gitlink-cli label +create --owner Gitlink --repo forgeplus -n bug -d "功能缺�
 # 更新标签（未指定的字段会被保留）
 gitlink-cli label +update --owner Gitlink --repo forgeplus -i 42 -c "#00FF00"
 
-# 删除标签
-gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
+# 安全删除标签
+gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42 --dry-run
+gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42 --yes
+
+# 安全批量创建标签
+gitlink-cli label +batch-create --owner Gitlink --repo forgeplus \
+  --labels 'bug:#ee0701:Bug 修复;feature:#0075ca:新功能' --dry-run
+gitlink-cli label +batch-create --owner Gitlink --repo forgeplus \
+  --labels 'bug:#ee0701:Bug 修复;feature:#0075ca:新功能' --yes
+
+# 安全批量删除标签
+gitlink-cli label +batch-delete --owner Gitlink --repo forgeplus --ids 3,5,8 --dry-run
+gitlink-cli label +batch-delete --owner Gitlink --repo forgeplus --ids 3,5,8 --yes
 ```
 
 ### Pull Request

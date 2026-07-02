@@ -392,8 +392,19 @@ gitlink-cli label +create --owner Gitlink --repo forgeplus -n bug -d "Something 
 # Update a label (unspecified fields are preserved)
 gitlink-cli label +update --owner Gitlink --repo forgeplus -i 42 -c "#00FF00"
 
-# Delete a label
-gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
+# Delete a label safely
+gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42 --dry-run
+gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42 --yes
+
+# Batch create labels safely
+gitlink-cli label +batch-create --owner Gitlink --repo forgeplus \
+  --labels 'bug:#ee0701:Bug fixes;feature:#0075ca:New features' --dry-run
+gitlink-cli label +batch-create --owner Gitlink --repo forgeplus \
+  --labels 'bug:#ee0701:Bug fixes;feature:#0075ca:New features' --yes
+
+# Batch delete labels safely
+gitlink-cli label +batch-delete --owner Gitlink --repo forgeplus --ids 3,5,8 --dry-run
+gitlink-cli label +batch-delete --owner Gitlink --repo forgeplus --ids 3,5,8 --yes
 ```
 
 ### Pull Requests

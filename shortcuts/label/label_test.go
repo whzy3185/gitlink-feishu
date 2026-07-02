@@ -143,9 +143,155 @@ func TestLabelDelete(t *testing.T) {
 	})
 	defer server.Close()
 
-	if err := runLabelShortcut(t, server, "delete", map[string]string{"id": "7"}); err != nil {
+	if err := runLabelShortcut(t, server, "delete", map[string]string{"id": "7", "yes": "true"}); err != nil {
 		t.Fatalf("delete shortcut failed: %v", err)
 	}
+}
+
+func TestLabelDeleteDryRunDoesNotCallAPI(t *testing.T) {
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("delete dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	if err := runLabelShortcut(t, server, "delete", map[string]string{"id": "7", "dry-run": "true"}); err != nil {
+		t.Fatalf("delete dry-run failed: %v", err)
+	}
+}
+
+func TestLabelDeleteRequiresYes(t *testing.T) {
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("delete without --yes should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runLabelShortcut(t, server, "delete", map[string]string{"id": "7"})
+	if err == nil {
+		t.Fatal("expected delete to require --yes")
+	}
+}
+
+func TestLabelBatchCreateDryRunDoesNotCallAPI(t *testing.T) {
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("batch-create dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runLabelShortcut(t, server, "batch-create", map[string]string{
+		"labels":  "bug:#ee0701:Bug fixes;feature:#0075ca:New features",
+		"dry-run": "true",
+	})
+	if err != nil {
+		t.Fatalf("batch-create dry-run failed: %v", err)
+	}
+}
+
+func TestLabelBatchCreateDefaultsToDryRunWithoutYes(t *testing.T) {
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("batch-create without --yes should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runLabelShortcut(t, server, "batch-create", map[string]string{
+		"labels": "bug:#ee0701:Bug fixes",
+	})
+	if err != nil {
+		t.Fatalf("batch-create default dry-run failed: %v", err)
+	}
+}
+
+func TestLabelBatchCreateWithYesCallsEndpoints(t *testing.T) {
+	var payloads []map[string]interface{}
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/v1/owner/repo/issue_tags.json")
+		payloads = append(payloads, decodeJSON(t, r))
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	})
+	defer server.Close()
+
+	err := runLabelShortcut(t, server, "batch-create", map[string]string{
+		"labels": "bug:#ee0701:Bug fixes;feature:#0075ca:New features",
+		"yes":    "true",
+	})
+	if err != nil {
+		t.Fatalf("batch-create failed: %v", err)
+	}
+	if len(payloads) != 2 {
+		t.Fatalf("got %d payloads, want 2", len(payloads))
+	}
+	assertEqual(t, payloads[0]["name"], "bug")
+	assertEqual(t, payloads[0]["color"], "#ee0701")
+	assertEqual(t, payloads[0]["description"], "Bug fixes")
+	assertEqual(t, payloads[1]["name"], "feature")
+}
+
+func TestLabelBatchCreateReportsPartialFailure(t *testing.T) {
+	calls := 0
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/v1/owner/repo/issue_tags.json")
+		calls++
+		if calls == 2 {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("server error"))
+			return
+		}
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	})
+	defer server.Close()
+
+	err := runLabelShortcut(t, server, "batch-create", map[string]string{
+		"labels": "bug:#ee0701:Bug fixes;feature:#0075ca:New features",
+		"yes":    "true",
+	})
+	if err == nil {
+		t.Fatal("expected partial failure to return an error")
+	}
+	if calls != 2 {
+		t.Fatalf("got %d calls, want 2", calls)
+	}
+}
+
+func TestLabelBatchDeleteDryRunDoesNotCallAPI(t *testing.T) {
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("batch-delete dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	if err := runLabelShortcut(t, server, "batch-delete", map[string]string{"ids": "7,8", "dry-run": "true"}); err != nil {
+		t.Fatalf("batch-delete dry-run failed: %v", err)
+	}
+}
+
+func TestLabelBatchDeleteDefaultsToDryRunWithoutYes(t *testing.T) {
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("batch-delete without --yes should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	if err := runLabelShortcut(t, server, "batch-delete", map[string]string{"ids": "7,8"}); err != nil {
+		t.Fatalf("batch-delete default dry-run failed: %v", err)
+	}
+}
+
+func TestLabelBatchDeleteWithYesCallsEndpoints(t *testing.T) {
+	var paths []string
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" {
+			t.Fatalf("got method %s, want DELETE", r.Method)
+		}
+		paths = append(paths, r.URL.Path)
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	})
+	defer server.Close()
+
+	if err := runLabelShortcut(t, server, "batch-delete", map[string]string{"ids": "7,8,7", "yes": "true"}); err != nil {
+		t.Fatalf("batch-delete failed: %v", err)
+	}
+	if len(paths) != 2 {
+		t.Fatalf("got %d calls, want 2", len(paths))
+	}
+	assertEqual(t, paths[0], "/v1/owner/repo/issue_tags/7.json")
+	assertEqual(t, paths[1], "/v1/owner/repo/issue_tags/8.json")
 }
 
 func TestValidateColor(t *testing.T) {
@@ -168,6 +314,54 @@ func TestLabelIDString(t *testing.T) {
 	assertEqual(t, labelIDString("9"), "9")
 	assertEqual(t, labelIDString(json.Number("11")), "11")
 	assertEqual(t, labelIDString(nil), "")
+}
+
+func TestParseLabelSpecs(t *testing.T) {
+	specs, err := parseLabelSpecs("bug:#ee0701:Bug fixes; docs::Documentation")
+	if err != nil {
+		t.Fatalf("parseLabelSpecs failed: %v", err)
+	}
+	if len(specs) != 2 {
+		t.Fatalf("got %d specs, want 2", len(specs))
+	}
+	assertEqual(t, specs[0].Name, "bug")
+	assertEqual(t, specs[0].Color, "#ee0701")
+	assertEqual(t, specs[0].Description, "Bug fixes")
+	assertEqual(t, specs[1].Name, "docs")
+	assertEqual(t, specs[1].Color, defaultLabelColor)
+	assertEqual(t, specs[1].Description, "Documentation")
+}
+
+func TestParseLabelSpecsRejectsInvalidInput(t *testing.T) {
+	invalid := []string{"", ":#ee0701:missing name", "bug:red:bad color"}
+	for _, value := range invalid {
+		if _, err := parseLabelSpecs(value); err == nil {
+			t.Fatalf("expected %q to be invalid", value)
+		}
+	}
+}
+
+func TestParseLabelIDList(t *testing.T) {
+	ids, err := parseLabelIDList("7, 8,7, 9")
+	if err != nil {
+		t.Fatalf("parseLabelIDList failed: %v", err)
+	}
+	want := []string{"7", "8", "9"}
+	if len(ids) != len(want) {
+		t.Fatalf("got %v, want %v", ids, want)
+	}
+	for i := range want {
+		assertEqual(t, ids[i], want[i])
+	}
+}
+
+func TestParseLabelIDListRejectsInvalidInput(t *testing.T) {
+	invalid := []string{"", "0", "-1", "abc", "7,abc"}
+	for _, value := range invalid {
+		if _, err := parseLabelIDList(value); err == nil {
+			t.Fatalf("expected %q to be invalid", value)
+		}
+	}
 }
 
 func runLabelShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
