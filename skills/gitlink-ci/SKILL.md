@@ -1,7 +1,7 @@
 ---
 name: gitlink-ci
-version: 1.0.0
-description: "CI/CD 操作：查看构建列表、构建日志、重启/停止构建。当用户需要操作 GitLink CI 时触发。"
+version: 2.0.0
+description: "CI/CD 操作：查看构建列表、构建日志、重启/停止构建、启停仓库 CI、查看 CI 授权状态。当用户需要操作 GitLink CI 时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -24,6 +24,9 @@ metadata:
 | `ci +logs` | 构建日志 | 是 |
 | `ci +restart` | 重启构建 | 是 |
 | `ci +stop` | 停止构建 | 是 |
+| `ci +activate` | 激活仓库 CI，先 dry-run | 是 |
+| `ci +deactivate` | 停用仓库 CI，先 dry-run | 是 |
+| `ci +authorize` | 查看 CI 授权状态 | 是 |
 
 ## 使用示例
 
@@ -39,17 +42,21 @@ gitlink-cli ci +restart --build 42
 
 # 停止构建
 gitlink-cli ci +stop --build 42
+
+# 查看 CI 授权状态
+gitlink-cli ci +authorize --owner myuser --repo myrepo
+
+# 激活仓库 CI，先预览再执行
+gitlink-cli ci +activate --owner myuser --repo myrepo --dry-run
+gitlink-cli ci +activate --owner myuser --repo myrepo --yes
+
+# 停用仓库 CI，先预览再执行
+gitlink-cli ci +deactivate --owner myuser --repo myrepo --dry-run
+gitlink-cli ci +deactivate --owner myuser --repo myrepo --yes
 ```
 
-## Raw API 补充
+## 注意事项
 
-```bash
-# 激活 CI
-gitlink-cli api POST /:owner/:repo/activate
-
-# 停用 CI
-gitlink-cli api DELETE /:owner/:repo/deactivate
-
-# CI 授权状态
-gitlink-cli api GET /:owner/:repo/ci_authorize
-```
+- `ci +activate` 和 `ci +deactivate` 会修改仓库 CI 状态，Agent 必须先执行 `--dry-run` 并获得用户确认，再加 `--yes`。
+- `ci +authorize` 是只读查询，可直接执行。
+- 在 Agent 场景建议统一加 `--format json`，便于解析构建状态和授权结果。

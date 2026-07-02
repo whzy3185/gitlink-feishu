@@ -127,6 +127,110 @@ func TestCIStop(t *testing.T) {
 	}
 }
 
+// --- activate / deactivate / authorize ---
+
+func TestCIActivateDryRunDoesNotCallAPI(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("activate dry-run should not call remote API: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "activate", map[string]string{"dry-run": "true"})
+	if err != nil {
+		t.Fatalf("activate dry-run failed: %v", err)
+	}
+}
+
+func TestCIActivateRequiresYes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("activate without --yes should not call remote API: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "activate", nil)
+	if err == nil {
+		t.Fatal("expected activate to require --yes")
+	}
+}
+
+func TestCIActivateWithYesCallsEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/activate.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(w, map[string]interface{}{"status": 0, "message": "success"})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "activate", map[string]string{"yes": "true"})
+	if err != nil {
+		t.Fatalf("activate failed: %v", err)
+	}
+}
+
+func TestCIDeactivateDryRunDoesNotCallAPI(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("deactivate dry-run should not call remote API: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "deactivate", map[string]string{"dry-run": "true"})
+	if err != nil {
+		t.Fatalf("deactivate dry-run failed: %v", err)
+	}
+}
+
+func TestCIDeactivateRequiresYes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("deactivate without --yes should not call remote API: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "deactivate", nil)
+	if err == nil {
+		t.Fatal("expected deactivate to require --yes")
+	}
+}
+
+func TestCIDeactivateWithYesCallsEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" {
+			t.Fatalf("expected DELETE, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/deactivate.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(w, map[string]interface{}{"status": 0, "message": "success"})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "deactivate", map[string]string{"yes": "true"})
+	if err != nil {
+		t.Fatalf("deactivate failed: %v", err)
+	}
+}
+
+func TestCIAuthorizeCallsEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/ci_authorize.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(w, map[string]interface{}{"authorized": true})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "authorize", nil)
+	if err != nil {
+		t.Fatalf("authorize failed: %v", err)
+	}
+}
+
 // --- HTTP error paths ---
 
 func TestCIBuildsHTTPError(t *testing.T) {
@@ -176,6 +280,45 @@ func TestCIStopHTTPError(t *testing.T) {
 	defer server.Close()
 
 	err := runShortcut(t, server, "stop", map[string]string{"build": "7"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestCIActivateHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "activate", map[string]string{"yes": "true"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestCIDeactivateHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "deactivate", map[string]string{"yes": "true"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestCIAuthorizeHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "authorize", nil)
 	if err == nil {
 		t.Fatal("expected error for HTTP 500")
 	}

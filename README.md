@@ -477,13 +477,22 @@ gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --d
 
 ```bash
 # List builds
-gitlink-cli ci +list --owner Gitlink --repo forgeplus
+gitlink-cli ci +builds --owner Gitlink --repo forgeplus
 
 # View build log
-gitlink-cli ci +log --owner Gitlink --repo forgeplus -i <build_id>
+gitlink-cli ci +logs --owner Gitlink --repo forgeplus --build <build_id>
 
 # Restart a build
-gitlink-cli ci +restart --owner Gitlink --repo forgeplus -i <build_id>
+gitlink-cli ci +restart --owner Gitlink --repo forgeplus --build <build_id>
+
+# Stop a build
+gitlink-cli ci +stop --owner Gitlink --repo forgeplus --build <build_id>
+
+# Check CI authorization and safely toggle repository CI
+gitlink-cli ci +authorize --owner Gitlink --repo forgeplus
+gitlink-cli ci +activate --owner Gitlink --repo forgeplus --dry-run
+gitlink-cli ci +activate --owner Gitlink --repo forgeplus --yes
+gitlink-cli ci +deactivate --owner Gitlink --repo forgeplus --dry-run
 ```
 
 ### Pipeline Operations
