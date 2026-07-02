@@ -298,6 +298,18 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "journals",
+			Description: tr.T("cmd.issue.journals.short"),
+			Flags:       issueJournalFlags(tr),
+			Run:         runIssueJournals,
+		},
+		{
+			Name:        "activity",
+			Description: tr.T("cmd.issue.activity.short"),
+			Flags:       issueJournalFlags(tr),
+			Run:         runIssueJournals,
+		},
+		{
 			Name:        "assigners",
 			Description: "List issue assigners",
 			Flags: []common.Flag{
@@ -435,6 +447,14 @@ func appendIssueNumberFlags(flags ...common.Flag) []common.Flag {
 	return append(issueNumberFlags(), flags...)
 }
 
+func issueJournalFlags(tr *i18n.Translator) []common.Flag {
+	return appendIssueNumberFlags(
+		common.Flag{Name: "category", Short: "c", Usage: tr.T("flag.issue.journal_category")},
+		common.Flag{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+		common.Flag{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "50"},
+	)
+}
+
 func issueNumberArg(ctx *common.RuntimeContext) (string, error) {
 	if number := strings.TrimSpace(ctx.Arg("number")); number != "" {
 		return number, nil
@@ -443,6 +463,25 @@ func issueNumberArg(ctx *common.RuntimeContext) (string, error) {
 		return id, nil
 	}
 	return "", fmt.Errorf("required flag --number is missing (or use --id as a compatibility alias)")
+}
+
+func runIssueJournals(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	number, err := issueNumberArg(ctx)
+	if err != nil {
+		return err
+	}
+	q := url.Values{}
+	setIssueQueryIfPresent(q, "category", ctx.Arg("category"))
+	setIssueQueryIfPresent(q, "page", ctx.Arg("page"))
+	setIssueQueryIfPresent(q, "limit", ctx.Arg("limit"))
+	env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number), q)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
 }
 
 // normalizeIssueListIDs adds "number" (project_issues_index) and renames
@@ -649,4 +688,10 @@ func parseIssueID(value, flagName string) (int, error) {
 		return 0, fmt.Errorf("--%s must contain positive numeric IDs", flagName)
 	}
 	return id, nil
+}
+
+func setIssueQueryIfPresent(q url.Values, key, value string) {
+	if value := strings.TrimSpace(value); value != "" {
+		q.Set(key, value)
+	}
 }

@@ -729,6 +729,74 @@ func TestIssueCommentMissingBody(t *testing.T) {
 	}
 }
 
+// --- journals / activity ---
+
+func TestIssueJournals(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		assertEqual(t, r.URL.Query().Get("category"), "comment")
+		assertEqual(t, r.URL.Query().Get("page"), "2")
+		assertEqual(t, r.URL.Query().Get("limit"), "50")
+		writeJSON(t, w, map[string]interface{}{
+			"journals": []interface{}{
+				map[string]interface{}{"id": float64(1), "notes": "hello"},
+			},
+		})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "journals", map[string]string{
+		"number":   "42",
+		"category": "comment",
+		"page":     "2",
+		"limit":    "50",
+	})
+	if err != nil {
+		t.Fatalf("journals failed: %v", err)
+	}
+}
+
+func TestIssueActivityUsesSameJournalEndpoint(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.URL.Query().Get("category"); got != "" {
+			t.Fatalf("category should be omitted when not passed, got %q", got)
+		}
+		assertEqual(t, r.URL.Query().Get("page"), "1")
+		assertEqual(t, r.URL.Query().Get("limit"), "20")
+		writeJSON(t, w, map[string]interface{}{"journals": []interface{}{}})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "activity", map[string]string{
+		"id":    "42",
+		"page":  "1",
+		"limit": "20",
+	})
+	if err != nil {
+		t.Fatalf("activity failed: %v", err)
+	}
+}
+
+func TestIssueJournalsMissingNumber(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "journals", map[string]string{"category": "comment"})
+	if err == nil {
+		t.Fatal("expected error for missing number")
+	}
+}
+
 func TestIssueNumberOrIDIsRequired(t *testing.T) {
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -743,6 +811,8 @@ func TestIssueNumberOrIDIsRequired(t *testing.T) {
 		{name: "close", args: map[string]string{}},
 		{name: "update", args: map[string]string{"title": "New title"}},
 		{name: "comment", args: map[string]string{"body": "Fixed"}},
+		{name: "journals", args: map[string]string{}},
+		{name: "activity", args: map[string]string{}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1035,6 +1105,18 @@ func TestIssueUpdateHTTPError(t *testing.T) {
 	err := runShortcut(t, server, "update", map[string]string{"number": "42", "title": "new"})
 	if err == nil {
 		t.Fatal("expected error for PATCH HTTP 500")
+	}
+}
+
+func TestIssueJournalsHTTPError(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeText(t, w, http.StatusInternalServerError, "server error")
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "journals", map[string]string{"number": "42"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
 	}
 }
 

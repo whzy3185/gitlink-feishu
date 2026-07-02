@@ -1,7 +1,7 @@
 ---
 name: gitlink-issue
-version: 2.0.0
-description: "Issue 管理：创建、查看、更新、关闭/批量关闭/批量更新/批量删除 Issue，添加评论。当用户需要操作 GitLink Issue 时触发。"
+version: 3.0.0
+description: "Issue 管理：创建、查看、更新、关闭/批量关闭/批量更新/批量删除 Issue，添加评论，查看动态记录和活动。当用户需要操作 GitLink Issue 时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -29,6 +29,8 @@ metadata:
 | `issue +batch-update` | 按 API issue id 批量更新状态、优先级、里程碑、标签、负责人 | 是（dry-run 不写入） |
 | `issue +batch-delete` | 按 API issue id 批量删除 Issue；真实删除必须 `--yes` | 是（dry-run 不写入） |
 | `issue +comment` | 添加评论 | 是 |
+| `issue +journals` | 查询 Issue 动态记录，支持分类和分页 | 否（公开项目） |
+| `issue +activity` | 查询 Issue 活动事件，复用 journals 端点 | 否（公开项目） |
 | `issue +assigners` | 查询 Issue 负责人列表 | 否（公开项目） |
 | `issue +authors` | 查询 Issue 发布人列表 | 否（公开项目） |
 | `issue +statuses` | 查询 Issue 状态列表 | 否（公开项目） |
@@ -72,6 +74,10 @@ gitlink-cli issue +batch-delete --owner myuser --repo myrepo --ids 101,102 --yes
 # 添加评论
 gitlink-cli issue +comment --number 4 --body "已修复，请验证"
 
+# 查询 Issue 评论和活动记录
+gitlink-cli issue +journals --number 4 --category comment --page 1 --limit 50
+gitlink-cli issue +activity --number 4 --page 1 --limit 50
+
 # 查询 Issue 负责人
 gitlink-cli issue +assigners --owner Gitlink --repo forgeplus --keyword alice
 
@@ -90,9 +96,6 @@ gitlink-cli issue +authors --owner Gitlink --repo forgeplus --keyword bob
 ## Raw API 补充
 
 ```bash
-# 获取 Issue 评论列表（使用 v1 API，按 issue number 查询）
-gitlink-cli api GET /v1/:owner/:repo/issues/:number/journals
-
 # 批量更新 Issue（仍使用旧版 API，需传数据库 ID）
 gitlink-cli api POST /:owner/:repo/issues/series_update --body '{"ids":[1,2,3],"status_id":"closed"}'
 ```
