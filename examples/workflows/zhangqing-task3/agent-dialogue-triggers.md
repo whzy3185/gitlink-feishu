@@ -117,13 +117,3 @@ gitlink-cli.exe 在 C:/Users/Lenovo/Desktop/gitlink-cli/ 目录下，已 auth lo
 3. **命令调用**：Agent 调 gitlink-cli 的命令行（带参数）
 4. **真实写入回执**：服务器返回的 `ok:true` / `id` / `version_id` 等
 5. **网页验证**：复制返回的 URL 到浏览器打开看到真实效果
-
----
-
-## 与 reproduce.sh 的关系
-
-| 产物 | 角色 | 适合谁看 |
-|------|------|---------|
-| **Agent 对话记录**（本文档触发的） | 首要产物，演示"Skill 驱动 Agent" | 评委看过程 |
-| `reproduce.sh` | 辅助产物，纯命令复现 | 评委验结果 |
-| 3 份执行报告 | 落地证据，含 Skill 蓝图对照 | 评委查细节 |

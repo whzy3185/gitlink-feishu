@@ -1,7 +1,0 @@
-{
-  "tag_name": "v0.2.0-beta.2",
-  "name": "v0.2.0 Beta 2 - 任务三交付补强（预发布）",
-  "body": "> 本版本为 **v0.2.0-beta.1 的补强预发布**。在 beta.1 基础上补充「Skill 蓝图对照」与「Agent 对话触发语」两类交付物，验证 PDF「Skill 作为设计蓝图、Agent 对话作为首要产物」的要求。\n>\n> 正式版 v0.2.0 将在任务三 7 个工作流全部完工后由整合者发布。\n\n## v0.2.0 Beta 2 — 任务三交付补强版（预发布）\n\n本版本是 beta.1 的迭代补强，重点回答 PDF「正确做法」对任务三的核心要求：**Skill 不是摆设，是真正驱动 Agent 执行的设计蓝图；Agent 对话记录是首要产物，脚本是辅助。**\n\n### 📚 文档 · Skill 蓝图对照补强\n\n- docs(workflows): zhangqing 任务三 ①⑤⑦ 三份执行报告各新增「Skill 蓝图对照」段，**逐动作引用 SKILL.md 行号**，证明每步执行都严格按蓝图落地\n- docs(workflows): README 新增「Skill 作为设计蓝图」总览表，集中展示 9 个执行动作到 SKILL.md 行号的映射\n- docs(workflows): 新增 `agent-dialogue-triggers.md` — 给评委的 Agent 对话触发语，含 ①⑤⑦ 三个工作流的单条/分步触发语，演示 Skill 自动加载\n\n### 🎯 覆盖的 Skill 蓝图行号映射\n\n| 工作流 | SKILL.md 蓝图位置 |\n|--------|------------------|\n| ① 步骤 1 分类 | `gitlink-issue-triage/SKILL.md` 工作流 1（第 54-117 行）|\n| ① 步骤 3 周报 | `gitlink-insight/SKILL.md` 工作流 2（第 116-166 行）|\n| ① 步骤 4 发版 | `gitlink-release-auto/SKILL.md` 一/二/三（第 32-189 行）|\n| ⑤ 取数 + 发奖 | `gitlink-insight/SKILL.md` 工作流 3（第 169-203 行）+ `gitlink-issue-triage` 工作流 1（第 80-117 行）|\n| ⑦ 识别 + 引导 | `gitlink-onboarding/SKILL.md` 工作流 1（第 50-95 行）+ 工作流 2（第 99-145 行）|\n\n### 🤝 贡献者\n\n感谢以下贡献者参与本版本开发：@zhangqing\n",
-  "target_commitish": "master",
-  "prerelease": true
-}

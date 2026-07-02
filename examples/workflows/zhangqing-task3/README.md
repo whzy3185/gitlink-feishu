@@ -31,19 +31,12 @@
 | `07-onboarding-nanny.md` | ⑦ 新人保姆 5 步执行报告 |
 | `release-notes-v0.2.0-beta.1.md` | ① 发布的 Release Notes 全文 |
 | `agent-dialogue-triggers.md` | **Agent 对话触发语**（PDF 首要产物：演示 Skill 驱动 Agent） |
-| `reproduce.sh` | **可复现脚本**（评委照着跑） |
 
 ---
 
 ## 怎么复现
 
-```bash
-cd <gitlink-cli 仓库根目录>
-# 前置：已构建 gitlink-cli.exe、已 auth login、对 ylly/gitlink-cli 有写权限
-bash examples/workflows/zhangqing-task3/reproduce.sh
-```
-
-脚本标注了 `[READ]`（只读）和 `[WRITE]`（写入）段，评委可选择只跑只读段验证流程。
+复现方式见 [`agent-dialogue-triggers.md`](agent-dialogue-triggers.md)：在 Claude Code 里粘贴触发语，让 Agent 加载任务二的 Skill 来串联执行 ①⑤⑦ 三个工作流，把对话过程截图即为 PDF 要求的「Agent 对话记录」产物（PDF「正确做法」明确：Agent 对话记录是首要产物）。
 
 ---
 
