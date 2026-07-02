@@ -223,7 +223,7 @@ def decide(total, hard_gate_failed, thresholds):
 | PR 元信息 | 标题/描述/作者/关联 | `gitlink-cli pr +view -i <id> --format json` | `+view`，`-i`/`--id` |
 | 变更文件 | 文件路径列表 | `gitlink-cli pr +files -i <id> --format json` | `+files` |
 | Diff | 变更内容供 AI 审查 | `gitlink-cli pr +diff -i <id> --format json` | `+diff`；当前实现与 `+files` 命中同一 `/pulls/:id/files` 端点 |
-| commits | commit 列表 | `gitlink-cli api GET /:owner/:repo/pulls/:id/commits --format json` | Raw API（无对应 shortcut） |
+| commits | commit 列表 | `gitlink-cli pr +commits -i <id> --format json` | `+commits` |
 | CI 状态 | 构建结果 | `gitlink-cli ci +builds --format json` | `+builds`（`-p`/`-l` 分页） |
 | 回写评论 | 评分卡 | `gitlink-cli pr +comment -i <id> -b "<scorecard>"` | `+comment` 底层走 issue journals（评论流）；评审记录形式用 `pr +review -i <id> -s common -c "..."`（走 reviews 端点，payload 字段是 `content`/`status`，status 取 `common`/`approved`/`rejected`）。评分卡作为建议性回写，二者均用 `common` |
 | 创建标签 | 裁决标签 | `gitlink-cli label +create -n "<name>" -c "#RRGGBB"` | `+create`（本作品子题一新增；`label +list/+update/+delete` 同组） |

@@ -227,6 +227,17 @@ gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
 
+# Search repository files and inspect commit history
+gitlink-cli repo +files --owner Gitlink --repo forgeplus --search README --ref master
+gitlink-cli repo +commits --owner Gitlink --repo forgeplus --ref master --limit 20
+gitlink-cli repo +commit-files --owner Gitlink --repo forgeplus --sha <commit_sha>
+gitlink-cli repo +commit-diff --owner Gitlink --repo forgeplus --sha <commit_sha>
+
+# Inspect repository tags
+gitlink-cli repo +tags --owner Gitlink --repo forgeplus --name v1 --only-name true
+gitlink-cli repo +tag --owner Gitlink --repo forgeplus --name v1.0.0
+gitlink-cli repo +delete-tag --owner Gitlink --repo forgeplus --name v1.0.0 --dry-run
+
 # Show language breakdown
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 
@@ -249,6 +260,16 @@ gitlink-cli repo +follow --owner Gitlink --repo forgeplus
 gitlink-cli repo +unfollow --owner Gitlink --repo forgeplus --project-id 123
 gitlink-cli repo +like --owner Gitlink --repo forgeplus
 gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
+
+# Preview and apply a multi-file commit
+gitlink-cli repo +batch-commit --owner me --repo proj \
+  --branch master --message "docs: update guide" \
+  --files 'update:README.md:# Updated;create:docs/demo.md:# Demo' \
+  --dry-run
+gitlink-cli repo +batch-commit --owner me --repo proj \
+  --branch master --message "docs: update guide" \
+  --files 'update:README.md:# Updated;delete:old.md' \
+  --yes
 
 # Create a repository
 gitlink-cli repo +create -n my-project -d "Project description"
@@ -419,6 +440,9 @@ gitlink-cli pr +reopen --owner Gitlink --repo forgeplus -i 42
 
 # View changed files
 gitlink-cli pr +files --owner Gitlink --repo forgeplus -i 42
+
+# View commits included in a PR
+gitlink-cli pr +commits --owner Gitlink --repo forgeplus -i 42
 
 # List PR patchset versions
 gitlink-cli pr +versions --owner Gitlink --repo forgeplus -i 42

@@ -24,6 +24,12 @@ metadata:
 | `repo +info` | 仓库详情 | 否（公开项目） |
 | `repo +readme` | README 内容 | 否（公开项目） |
 | `repo +tree` | 仓库文件树 | 否（公开项目） |
+| `repo +files` | 搜索仓库文件 | 否（公开项目） |
+| `repo +commits` | 提交历史列表 | 否（公开项目） |
+| `repo +commit-files` | 单个提交的变更文件 | 否（公开项目） |
+| `repo +commit-diff` | 单个提交的 diff | 否（公开项目） |
+| `repo +tags` | 仓库标签列表 | 否（公开项目） |
+| `repo +tag` | 仓库标签详情 | 否（公开项目） |
 | `repo +languages` | 仓库语言统计 | 否（公开项目） |
 | `repo +contributors` | 仓库贡献者列表 | 否（公开项目） |
 | `repo +contributor-stats` | 贡献者代码行统计 | 否（公开项目） |
@@ -34,6 +40,8 @@ metadata:
 | `repo +unfollow` | 取消关注仓库 | 是 |
 | `repo +like` | 点赞仓库 | 是 |
 | `repo +unlike` | 取消点赞仓库 | 是 |
+| `repo +delete-tag` | 删除仓库标签，默认建议先 dry-run | 是 |
+| `repo +batch-commit` | 多文件批量提交，默认建议先 dry-run | 是 |
 | `repo +create` | 创建仓库 | 是 |
 | `repo +fork` | Fork 仓库 | 是 |
 | `repo +delete` | 删除仓库 | 是 |
@@ -57,6 +65,18 @@ gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 gitlink-cli repo +contributors --owner Gitlink --repo forgeplus
 
+# 搜索文件和分析提交历史
+gitlink-cli repo +files --owner Gitlink --repo forgeplus --search README --ref master
+gitlink-cli repo +commits --owner Gitlink --repo forgeplus --ref master --limit 20
+gitlink-cli repo +commit-files --owner Gitlink --repo forgeplus --sha <commit_sha>
+gitlink-cli repo +commit-files --owner Gitlink --repo forgeplus --sha <commit_sha> --file src/main.go
+gitlink-cli repo +commit-diff --owner Gitlink --repo forgeplus --sha <commit_sha>
+
+# 查看标签和标签详情
+gitlink-cli repo +tags --owner Gitlink --repo forgeplus --name v1 --only-name true
+gitlink-cli repo +tag --owner Gitlink --repo forgeplus --name v1.0.0
+gitlink-cli repo +delete-tag --owner Gitlink --repo forgeplus --name v1.0.0 --dry-run
+
 # 查看代码统计
 gitlink-cli repo +contributor-stats --owner Gitlink --repo forgeplus --ref master --pass-year 1
 gitlink-cli repo +code-stats --owner Gitlink --repo forgeplus --ref master
@@ -71,6 +91,16 @@ gitlink-cli repo +follow --owner Gitlink --repo forgeplus
 gitlink-cli repo +unfollow --owner Gitlink --repo forgeplus --project-id 123
 gitlink-cli repo +like --owner Gitlink --repo forgeplus
 gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
+
+# 预览多文件提交；真实写入前必须确认用户意图
+gitlink-cli repo +batch-commit --owner me --repo proj \
+  --branch master --message "docs: update guide" \
+  --files 'update:README.md:# Updated;create:docs/demo.md:# Demo' \
+  --dry-run
+gitlink-cli repo +batch-commit --owner me --repo proj \
+  --branch master --message "docs: update guide" \
+  --files 'update:README.md:# Updated;delete:old.md' \
+  --yes
 
 # 创建仓库
 gitlink-cli repo +create --name my-project --description "项目描述"
@@ -87,9 +117,6 @@ gitlink-cli repo +delete --owner myuser --repo old-project
 Shortcuts 未覆盖的仓库操作可用 Raw API：
 
 ```bash
-# 获取提交列表
-gitlink-cli api GET /:owner/:repo/commits --query 'page=1&limit=20'
-
 # 获取标签列表
 gitlink-cli api GET /:owner/:repo/tags
 
@@ -101,3 +128,13 @@ gitlink-cli api GET /:owner/:repo/raw/main/README.md
 
 - `repo +delete` 是不可逆操作，执行前必须确认用户意图
 - 创建仓库默认为公开，使用 `--private true` 创建私有仓库
+- `repo +delete-tag` 会删除远端标签，Agent 必须先运行 `--dry-run` 并获得用户明确确认，再加 `--yes`
+- `repo +batch-commit` 会修改仓库内容，Agent 必须先运行 `--dry-run` 并向用户展示 payload，再在用户明确确认后加 `--yes`
+- `repo +batch-commit --files` 使用 `action:path[:content]`，多个操作用英文分号分隔；`delete` 不需要 content，`create/update` 需要 content
+
+## 参考文档
+
+- [`references/gitlink-repo-tree.md`](references/gitlink-repo-tree.md)
+- [`references/gitlink-repo-code-history.md`](references/gitlink-repo-code-history.md)
+- [`references/gitlink-repo-tags.md`](references/gitlink-repo-tags.md)
+- [`references/gitlink-repo-batch-commit.md`](references/gitlink-repo-batch-commit.md)

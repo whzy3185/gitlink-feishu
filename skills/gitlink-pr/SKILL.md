@@ -27,6 +27,7 @@ metadata:
 | `pr +reopen` | 重开已关闭的 PR | 是 |
 | `pr +files` | 变更文件列表 | 否 |
 | `pr +diff` | 查看变更文件和 diff 内容 | 否 |
+| `pr +commits` | 查看 PR 包含的提交列表 | 否 |
 | `pr +versions` | 查看 PR patchset/version 列表 | 否 |
 | `pr +version-diff` | 查看指定 patchset/version diff | 否 |
 | `pr +reviews` | 查看 PR 审查记录，支持状态过滤 | 否 |
@@ -60,6 +61,9 @@ gitlink-cli pr +reopen --id 3
 
 # 查看变更文件（含 diff 内容）
 gitlink-cli pr +files --id 3
+
+# 查看 PR 包含的提交列表
+gitlink-cli pr +commits --id 3
 
 # 查看 PR patchset/version 列表
 gitlink-cli pr +versions --id 3
@@ -172,3 +176,10 @@ gitlink-cli api GET /v1/:owner/:repo/pulls/:id/versions/:version_id/diff
 - `pr +list` 的 `--state` 参数会映射为 GitLink API 的 `status` 筛选；需要查看所有 PR 时传 `--state all`
 - PR 状态值：`pull_request_status` 0=open, 1=merged, 2=closed
 - 关联已有 Issue 时，把 Issue 编号或 URL 写入 PR `--body`，或使用 `issue +comment` 留痕；不要用 Raw API 对 Issue 做不完整更新，否则可能清空 Issue 描述
+
+## 参考文档
+
+- [`references/gitlink-pr-commits.md`](references/gitlink-pr-commits.md)
+- [`references/gitlink-pr-files.md`](references/gitlink-pr-files.md)
+- [`references/gitlink-pr-review.md`](references/gitlink-pr-review.md)
+- [`references/gitlink-pr-version-diff.md`](references/gitlink-pr-version-diff.md)

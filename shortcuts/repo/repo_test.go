@@ -57,6 +57,15 @@ func writeText(t *testing.T, w http.ResponseWriter, code int, text string) {
 	}
 }
 
+func decodeRepoJSON(t *testing.T, r *http.Request) map[string]interface{} {
+	t.Helper()
+	var payload map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode request body: %v", err)
+	}
+	return payload
+}
+
 // --- list ---
 
 func TestRepoListDefault(t *testing.T) {
@@ -270,6 +279,250 @@ func TestRepoCodeStatsUsesRefQuery(t *testing.T) {
 
 	if err := runShortcut(t, server, "code-stats", map[string]string{"ref": "release/v1"}); err != nil {
 		t.Fatalf("code-stats shortcut failed: %v", err)
+	}
+}
+
+func TestRepoFilesBuildsSearchAndRefQuery(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/files.json")
+		assertEqual(t, r.URL.Query().Get("search"), "README")
+		assertEqual(t, r.URL.Query().Get("ref"), "main")
+		writeJSON(t, w, []interface{}{map[string]interface{}{"path": "README.md"}})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "files", map[string]string{"search": "README", "ref": "main"}); err != nil {
+		t.Fatalf("files shortcut failed: %v", err)
+	}
+}
+
+func TestRepoCommitsBuildsRefPaginationQuery(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/v1/owner/repo/commits.json")
+		assertEqual(t, r.URL.Query().Get("sha"), "main")
+		assertEqual(t, r.URL.Query().Get("page"), "2")
+		assertEqual(t, r.URL.Query().Get("limit"), "50")
+		writeJSON(t, w, map[string]interface{}{"total_count": 1, "commits": []interface{}{}})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "commits", map[string]string{"ref": "main", "page": "2", "limit": "50"})
+	if err != nil {
+		t.Fatalf("commits shortcut failed: %v", err)
+	}
+}
+
+func TestRepoCommitFilesUsesPaginationWhenNoFileFilter(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/v1/owner/repo/commits/abc123/files.json")
+		assertEqual(t, r.URL.Query().Get("page"), "3")
+		assertEqual(t, r.URL.Query().Get("limit"), "10")
+		if got := r.URL.Query().Get("filepath"); got != "" {
+			t.Fatalf("did not expect filepath query, got %q", got)
+		}
+		writeJSON(t, w, map[string]interface{}{"files": []interface{}{}})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "commit-files", map[string]string{"sha": "abc123", "page": "3", "limit": "10"})
+	if err != nil {
+		t.Fatalf("commit-files shortcut failed: %v", err)
+	}
+}
+
+func TestRepoCommitFilesUsesFileFilterWithoutPagination(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/v1/owner/repo/commits/abc123/files.json")
+		assertEqual(t, r.URL.Query().Get("filepath"), "src/main.go")
+		if got := r.URL.Query().Get("page"); got != "" {
+			t.Fatalf("did not expect page query with filepath filter, got %q", got)
+		}
+		writeJSON(t, w, map[string]interface{}{"files": []interface{}{}})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "commit-files", map[string]string{"sha": "abc123", "file": "src/main.go"})
+	if err != nil {
+		t.Fatalf("commit-files shortcut failed: %v", err)
+	}
+}
+
+func TestRepoCommitDiffUsesCommitDiffEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/v1/owner/repo/commits/abc123/diff.json")
+		writeJSON(t, w, map[string]interface{}{"diff": "@@ -1 +1 @@"})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "commit-diff", map[string]string{"sha": "abc123"}); err != nil {
+		t.Fatalf("commit-diff shortcut failed: %v", err)
+	}
+}
+
+func TestRepoTagsBuildsPaginationQuery(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/v1/owner/repo/tags.json")
+		assertEqual(t, r.URL.Query().Get("page"), "2")
+		assertEqual(t, r.URL.Query().Get("limit"), "30")
+		writeJSON(t, w, map[string]interface{}{"total_count": 1, "tags": []interface{}{}})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "tags", map[string]string{"page": "2", "limit": "30"})
+	if err != nil {
+		t.Fatalf("tags shortcut failed: %v", err)
+	}
+}
+
+func TestRepoTagsUsesSearchEndpointForNameFilter(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/tags.json")
+		assertEqual(t, r.URL.Query().Get("name"), "v1")
+		assertEqual(t, r.URL.Query().Get("only_name"), "true")
+		writeJSON(t, w, map[string]interface{}{"total_count": 1, "tags": []interface{}{map[string]interface{}{"name": "v1.0.0"}}})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "tags", map[string]string{"name": "v1", "only-name": "true"})
+	if err != nil {
+		t.Fatalf("tags shortcut with name filter failed: %v", err)
+	}
+}
+
+func TestRepoTagUsesTagDetailEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/v1/owner/repo/tags/v1.0.0.json")
+		writeJSON(t, w, map[string]interface{}{"name": "v1.0.0"})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "tag", map[string]string{"name": "v1.0.0"}); err != nil {
+		t.Fatalf("tag shortcut failed: %v", err)
+	}
+}
+
+func TestRepoDeleteTagDryRunDoesNotCallAPI(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("delete-tag dry-run should not call remote API: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "delete-tag", map[string]string{"name": "v1.0.0", "dry-run": "true"})
+	if err != nil {
+		t.Fatalf("delete-tag dry-run failed: %v", err)
+	}
+}
+
+func TestRepoDeleteTagRequiresYesForRemoteDelete(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("delete-tag without --yes should not call remote API: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "delete-tag", map[string]string{"name": "v1.0.0"})
+	if err == nil {
+		t.Fatal("expected error when delete-tag is missing --yes")
+	}
+}
+
+func TestRepoDeleteTagWithYesCallsDeleteEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "DELETE", "/v1/owner/repo/tags/v1.0.0.json")
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "delete-tag", map[string]string{"name": "v1.0.0", "yes": "true"})
+	if err != nil {
+		t.Fatalf("delete-tag failed: %v", err)
+	}
+}
+
+func TestRepoBatchCommitDryRunDoesNotCallAPI(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call remote API: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "batch-commit", map[string]string{
+		"branch":     "master",
+		"message":    "docs: update",
+		"files":      "update:README.md:# hello;delete:old.txt",
+		"new-branch": "docs/update-readme",
+		"dry-run":    "true",
+	})
+	if err != nil {
+		t.Fatalf("batch-commit dry-run failed: %v", err)
+	}
+}
+
+func TestRepoBatchCommitRequiresYesForRemoteWrite(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("batch-commit without --yes should not call remote API: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "batch-commit", map[string]string{
+		"branch":  "master",
+		"message": "docs: update",
+		"files":   "update:README.md:# hello",
+	})
+	if err == nil {
+		t.Fatal("expected error when batch-commit is missing --yes")
+	}
+}
+
+func TestRepoBatchCommitPostsPayloadWithYes(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/v1/owner/repo/contents/batch.json")
+		payload = decodeRepoJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"commit": map[string]interface{}{"sha": "abc123"}})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "batch-commit", map[string]string{
+		"branch":          "master",
+		"message":         "docs: update",
+		"files":           "create:docs/new.md:# new;update:README.md:# hello;delete:old.txt",
+		"encoding":        "text",
+		"author-name":     "Alice",
+		"author-email":    "alice@example.com",
+		"committer-name":  "Bot",
+		"committer-email": "bot@example.com",
+		"yes":             "true",
+	})
+	if err != nil {
+		t.Fatalf("batch-commit failed: %v", err)
+	}
+	assertEqual(t, payload["branch"], "master")
+	assertEqual(t, payload["message"], "docs: update")
+	assertEqual(t, payload["author_name"], "Alice")
+	files, ok := payload["files"].([]interface{})
+	if !ok || len(files) != 3 {
+		t.Fatalf("expected three file operations, got %#v", payload["files"])
+	}
+	first, _ := files[0].(map[string]interface{})
+	assertEqual(t, first["action_type"], "create")
+	assertEqual(t, first["file_path"], "docs/new.md")
+	assertEqual(t, first["content"], "# new")
+	assertEqual(t, first["encoding"], "text")
+}
+
+func TestRepoBatchCommitRejectsInvalidFileSpec(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("invalid file spec should fail before calling remote API")
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "batch-commit", map[string]string{
+		"branch":  "master",
+		"message": "docs: update",
+		"files":   "move:README.md:# hello",
+		"dry-run": "true",
+	})
+	if err == nil {
+		t.Fatal("expected invalid file action error")
 	}
 }
 
