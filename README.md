@@ -626,3 +626,5 @@ See [skills/gitlink-shared/REFERENCE.md](skills/gitlink-shared/REFERENCE.md).
 <!-- 代码质量看门人自动化工作流：添加此注释用于测试 PR 审查流程 -->
 
 <!-- 代码质量看门人测试注释 -->
+
+<!-- 质量门禁检查测试 - 2026-07-02 -->
