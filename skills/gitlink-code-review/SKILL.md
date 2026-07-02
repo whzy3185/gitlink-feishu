@@ -164,14 +164,14 @@ gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{
 gitlink-cli repo +info --owner <owner> --repo <repo> --format json
 
 # 2. 获取仓库文件列表（遍历关键目录）
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=src&ref=master'
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=tests&ref=master'
+gitlink-cli repo +tree --owner <owner> --repo <repo> --path src --ref master --format json
+gitlink-cli repo +tree --owner <owner> --repo <repo> --path tests --ref master --format json
 
 # 3. 获取关键文件内容
-gitlink-cli api GET /:owner/:repo/raw/master/README.md
-gitlink-cli api GET /:owner/:repo/raw/master/.gitignore
-gitlink-cli api GET /:owner/:repo/raw/master/.eslintrc.js  # 或类似配置
-gitlink-cli api GET /:owner/:repo/raw/master/package.json  # 或 go.mod, Cargo.toml
+gitlink-cli repo +raw --owner <owner> --repo <repo> --path README.md --ref master --format json
+gitlink-cli repo +raw --owner <owner> --repo <repo> --path .gitignore --ref master --format json
+gitlink-cli repo +raw --owner <owner> --repo <repo> --path .eslintrc.js --ref master --format json
+gitlink-cli repo +manifest --owner <owner> --repo <repo> --kind node --ref master --format json
 
 # 4. 获取语言统计和贡献者
 gitlink-cli api GET /:owner/:repo/languages
@@ -273,7 +273,7 @@ gitlink-cli api GET /:owner/:repo/pulls/:id/diff --format json
 gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{"body":"...","event":"COMMENT"}'
 
 # 获取仓库文件列表
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=<path>&ref=<branch>'
+gitlink-cli repo +tree --owner <owner> --repo <repo> --path <path> --ref <branch> --format json
 
 # 获取仓库语言统计
 gitlink-cli api GET /:owner/:repo/languages --format json

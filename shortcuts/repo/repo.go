@@ -109,6 +109,33 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "raw",
+			Description: tr.T("cmd.repo.raw.short"),
+			Flags: []common.Flag{
+				{Name: "path", Short: "p", Usage: tr.T("flag.repo.raw.path"), Required: true},
+				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.raw.ref"), Default: "master"},
+			},
+			Run: runRawFile,
+		},
+		{
+			Name:        "file-exists",
+			Description: tr.T("cmd.repo.file_exists.short"),
+			Flags: []common.Flag{
+				{Name: "path", Short: "p", Usage: tr.T("flag.repo.file_exists.path"), Required: true},
+				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.raw.ref"), Default: "master"},
+			},
+			Run: runFileExists,
+		},
+		{
+			Name:        "manifest",
+			Description: tr.T("cmd.repo.manifest.short"),
+			Flags: []common.Flag{
+				{Name: "kind", Short: "k", Usage: tr.T("flag.repo.manifest.kind"), Required: true},
+				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.raw.ref"), Default: "master"},
+			},
+			Run: runManifest,
+		},
+		{
 			Name:        "languages",
 			Description: "Show repository language statistics",
 			Run:         runLanguages,
@@ -256,11 +283,92 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	}
 }
 
+var manifestPathsByKind = map[string][]string{
+	"go":     {"go.mod"},
+	"node":   {"package.json"},
+	"python": {"requirements.txt", "pyproject.toml", "Pipfile", "setup.py"},
+	"rust":   {"Cargo.toml"},
+	"java":   {"pom.xml", "build.gradle", "build.gradle.kts"},
+}
+
 func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
 	if len(translators) > 0 && translators[0] != nil {
 		return translators[0]
 	}
 	return i18n.Default()
+}
+
+func runRawFile(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	path, err := requireRepoPathArg(ctx, "path")
+	if err != nil {
+		return err
+	}
+	ref := repoRef(ctx.Arg("ref"))
+	env, err := ctx.CallAPI("GET", rawFilePath(ctx, ref, path), nil)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runFileExists(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	path, err := requireRepoPathArg(ctx, "path")
+	if err != nil {
+		return err
+	}
+	ref := repoRef(ctx.Arg("ref"))
+	exists, entry, err := repoFileExists(ctx, path, ref)
+	if err != nil {
+		return err
+	}
+	return ctx.OutputData(map[string]interface{}{
+		"repository": fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+		"ref":        ref,
+		"path":       path,
+		"exists":     exists,
+		"entry":      entry,
+	})
+}
+
+func runManifest(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	kind := strings.ToLower(strings.TrimSpace(ctx.Arg("kind")))
+	paths, ok := manifestPathsByKind[kind]
+	if !ok {
+		return fmt.Errorf("invalid --kind %q: use go, node, python, rust, or java", ctx.Arg("kind"))
+	}
+	ref := repoRef(ctx.Arg("ref"))
+	checked := make([]string, 0, len(paths))
+	for _, path := range paths {
+		checked = append(checked, path)
+		exists, _, err := repoFileExists(ctx, path, ref)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+		env, err := ctx.CallAPI("GET", rawFilePath(ctx, ref, path), nil)
+		if err != nil {
+			return err
+		}
+		return ctx.Output(env)
+	}
+	return ctx.OutputData(map[string]interface{}{
+		"repository": fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+		"ref":        ref,
+		"kind":       kind,
+		"found":      false,
+		"checked":    checked,
+	})
 }
 
 func runLanguages(ctx *common.RuntimeContext) error {
@@ -480,6 +588,116 @@ func setRepoQueryIfPresent(q url.Values, key, value string) {
 	if value := strings.TrimSpace(value); value != "" {
 		q.Set(key, value)
 	}
+}
+
+func repoRef(ref string) string {
+	if ref := strings.TrimSpace(ref); ref != "" {
+		return ref
+	}
+	return "master"
+}
+
+func requireRepoPathArg(ctx *common.RuntimeContext, name string) (string, error) {
+	path, err := ctx.RequireArg(name)
+	if err != nil {
+		return "", err
+	}
+	path = cleanRepoFilePath(path)
+	if path == "" {
+		return "", fmt.Errorf("--%s must not be empty", name)
+	}
+	if hasParentPathSegment(path) {
+		return "", fmt.Errorf("--%s must not contain '..'", name)
+	}
+	return path, nil
+}
+
+func cleanRepoFilePath(path string) string {
+	path = strings.TrimSpace(path)
+	path = strings.TrimPrefix(path, "/")
+	return strings.Trim(path, "/")
+}
+
+func rawFilePath(ctx *common.RuntimeContext, ref, path string) string {
+	parts := []string{ctx.RepoPath(), "raw", url.PathEscape(ref)}
+	for _, part := range strings.Split(cleanRepoFilePath(path), "/") {
+		if part == "" {
+			continue
+		}
+		parts = append(parts, url.PathEscape(part))
+	}
+	return strings.Join(parts, "/")
+}
+
+func hasParentPathSegment(path string) bool {
+	for _, part := range strings.Split(cleanRepoFilePath(path), "/") {
+		if part == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+func repoFileExists(ctx *common.RuntimeContext, path, ref string) (bool, map[string]interface{}, error) {
+	q := url.Values{}
+	q.Set("filepath", path)
+	q.Set("ref", ref)
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
+	if err != nil {
+		return false, nil, err
+	}
+	entry := findRepoSubEntry(env.Data, path)
+	return entry != nil, entry, nil
+}
+
+func findRepoSubEntry(data interface{}, path string) map[string]interface{} {
+	target := lastRepoPathPart(path)
+	if entry, ok := data.(map[string]interface{}); ok {
+		if matchesRepoEntry(entry, target, path) {
+			return entry
+		}
+		for _, key := range []string{"entries", "sub_entries", "files", "data"} {
+			if found := findRepoSubEntryList(entry[key], target, path); found != nil {
+				return found
+			}
+		}
+	}
+	return findRepoSubEntryList(data, target, path)
+}
+
+func findRepoSubEntryList(data interface{}, target, path string) map[string]interface{} {
+	entries, ok := data.([]interface{})
+	if !ok {
+		return nil
+	}
+	for _, raw := range entries {
+		entry, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if matchesRepoEntry(entry, target, path) {
+			return entry
+		}
+	}
+	return nil
+}
+
+func matchesRepoEntry(entry map[string]interface{}, target, path string) bool {
+	for _, key := range []string{"name", "filename", "path", "filepath"} {
+		value, _ := entry[key].(string)
+		if value == target || cleanRepoFilePath(value) == path {
+			return true
+		}
+	}
+	return false
+}
+
+func lastRepoPathPart(path string) string {
+	parts := strings.Split(cleanRepoFilePath(path), "/")
+	if len(parts) == 0 {
+		return ""
+	}
+	return parts[len(parts)-1]
 }
 
 func parseOptionalRepoNonNegativeInt(value, name string) (int, bool, error) {

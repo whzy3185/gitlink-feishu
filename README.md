@@ -227,6 +227,11 @@ gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
 
+# Read raw files and common dependency manifests
+gitlink-cli repo +raw --owner Gitlink --repo forgeplus --path LICENSE --ref master
+gitlink-cli repo +file-exists --owner Gitlink --repo forgeplus --path package.json --ref master
+gitlink-cli repo +manifest --owner Gitlink --repo forgeplus --kind go --ref master
+
 # Show language breakdown
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 

@@ -1,7 +1,7 @@
 ---
 name: gitlink-repo
-version: 1.0.0
-description: "仓库管理：创建、查看、Fork、删除仓库，查看 README、语言统计、贡献者、关注者，并执行关注/点赞等互动操作。当用户需要操作或分析 GitLink 仓库时触发。"
+version: 2.0.0
+description: "仓库管理：创建、查看、Fork、删除仓库，查看 README、文件树、原始文件、依赖清单、语言统计、贡献者、关注者，并执行关注/点赞等互动操作。当用户需要操作或分析 GitLink 仓库时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -24,6 +24,9 @@ metadata:
 | `repo +info` | 仓库详情 | 否（公开项目） |
 | `repo +readme` | README 内容 | 否（公开项目） |
 | `repo +tree` | 仓库文件树 | 否（公开项目） |
+| `repo +raw` | 读取原始文件内容 | 否（公开项目） |
+| `repo +file-exists` | 检查文件是否存在 | 否（公开项目） |
+| `repo +manifest` | 读取常见依赖清单 | 否（公开项目） |
 | `repo +languages` | 仓库语言统计 | 否（公开项目） |
 | `repo +contributors` | 仓库贡献者列表 | 否（公开项目） |
 | `repo +contributor-stats` | 贡献者代码行统计 | 否（公开项目） |
@@ -54,6 +57,9 @@ gitlink-cli repo +list --user zhangsan
 # 查看文件树、语言占比和贡献者
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
+gitlink-cli repo +raw --owner Gitlink --repo forgeplus --path LICENSE --ref master
+gitlink-cli repo +file-exists --owner Gitlink --repo forgeplus --path package.json --ref master
+gitlink-cli repo +manifest --owner Gitlink --repo forgeplus --kind go --ref master
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 gitlink-cli repo +contributors --owner Gitlink --repo forgeplus
 
@@ -93,11 +99,11 @@ gitlink-cli api GET /:owner/:repo/commits --query 'page=1&limit=20'
 # 获取标签列表
 gitlink-cli api GET /:owner/:repo/tags
 
-# 获取文件内容
-gitlink-cli api GET /:owner/:repo/raw/main/README.md
 ```
 
 ## 注意事项
 
 - `repo +delete` 是不可逆操作，执行前必须确认用户意图
 - 创建仓库默认为公开，使用 `--private true` 创建私有仓库
+- `repo +raw` 会读取指定 `--ref` 下的文件内容，默认 `master`
+- `repo +manifest --kind` 支持 `go`、`node`、`python`、`rust`、`java`

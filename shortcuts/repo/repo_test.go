@@ -218,6 +218,143 @@ func TestRepoTreeShortcutRegistersHelpFlags(t *testing.T) {
 	}
 }
 
+func TestRepoRawUsesRefAndEscapedPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		assertEqual(t, r.URL.EscapedPath(), "/owner/repo/raw/release%2Fv1/docs/My%20File.md")
+		writeText(t, w, http.StatusOK, "# title\n")
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "raw", map[string]string{
+		"ref":  "release/v1",
+		"path": "/docs/My File.md",
+	})
+	if err != nil {
+		t.Fatalf("raw shortcut failed: %v", err)
+	}
+}
+
+func TestRepoRawDefaultsRefToMaster(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/raw/master/LICENSE")
+		writeText(t, w, http.StatusOK, "MIT License\n")
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "raw", map[string]string{"path": "LICENSE"}); err != nil {
+		t.Fatalf("raw shortcut failed: %v", err)
+	}
+}
+
+func TestRepoFileExistsFindsEntryByName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+		assertEqual(t, r.URL.Query().Get("filepath"), "src/main.go")
+		assertEqual(t, r.URL.Query().Get("ref"), "main")
+		writeJSON(t, w, map[string]interface{}{
+			"entries": []interface{}{
+				map[string]interface{}{"name": "main.go", "type": "file"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "file-exists", map[string]string{
+		"path": "src/main.go",
+		"ref":  "main",
+	})
+	if err != nil {
+		t.Fatalf("file-exists shortcut failed: %v", err)
+	}
+}
+
+func TestRepoFileExistsReportsMissing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+		writeJSON(t, w, map[string]interface{}{"entries": []interface{}{}})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "file-exists", map[string]string{"path": "missing.txt"}); err != nil {
+		t.Fatalf("file-exists missing shortcut failed: %v", err)
+	}
+}
+
+func TestRepoManifestGoReadsGoMod(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		switch requests {
+		case 1:
+			assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+			assertEqual(t, r.URL.Query().Get("filepath"), "go.mod")
+			assertEqual(t, r.URL.Query().Get("ref"), "master")
+			writeJSON(t, w, map[string]interface{}{
+				"entries": []interface{}{map[string]interface{}{"name": "go.mod", "type": "file"}},
+			})
+		case 2:
+			assertRequest(t, r, "GET", "/owner/repo/raw/master/go.mod")
+			writeText(t, w, http.StatusOK, "module example.com/repo\n")
+		default:
+			t.Fatalf("unexpected extra request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "manifest", map[string]string{"kind": "go"}); err != nil {
+		t.Fatalf("manifest go shortcut failed: %v", err)
+	}
+	assertEqual(t, requests, 2)
+}
+
+func TestRepoManifestPythonFallsBackToPyproject(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		switch requests {
+		case 1:
+			assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+			assertEqual(t, r.URL.Query().Get("filepath"), "requirements.txt")
+			writeJSON(t, w, map[string]interface{}{"entries": []interface{}{}})
+		case 2:
+			assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+			assertEqual(t, r.URL.Query().Get("filepath"), "pyproject.toml")
+			writeJSON(t, w, map[string]interface{}{
+				"entries": []interface{}{map[string]interface{}{"path": "pyproject.toml", "type": "file"}},
+			})
+		case 3:
+			assertRequest(t, r, "GET", "/owner/repo/raw/master/pyproject.toml")
+			writeText(t, w, http.StatusOK, "[project]\n")
+		default:
+			t.Fatalf("unexpected extra request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "manifest", map[string]string{"kind": "python"}); err != nil {
+		t.Fatalf("manifest python shortcut failed: %v", err)
+	}
+	assertEqual(t, requests, 3)
+}
+
+func TestRepoManifestReportsNotFound(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
+		writeJSON(t, w, map[string]interface{}{"entries": []interface{}{}})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "manifest", map[string]string{"kind": "java"}); err != nil {
+		t.Fatalf("manifest missing shortcut failed: %v", err)
+	}
+	assertEqual(t, requests, 3)
+}
+
 func TestRepoLanguagesUsesLanguagesEndpoint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assertRequest(t, r, "GET", "/owner/repo/languages.json")
@@ -526,6 +663,21 @@ func TestRepoInsightValidation(t *testing.T) {
 			shortcut: "unlike",
 			args:     map[string]string{"project-id": "-1"},
 		},
+		{
+			name:     "raw parent path",
+			shortcut: "raw",
+			args:     map[string]string{"path": "../LICENSE"},
+		},
+		{
+			name:     "file exists parent path",
+			shortcut: "file-exists",
+			args:     map[string]string{"path": "src/../LICENSE"},
+		},
+		{
+			name:     "unknown manifest kind",
+			shortcut: "manifest",
+			args:     map[string]string{"kind": "ruby"},
+		},
 	}
 
 	for _, tc := range cases {
@@ -568,6 +720,30 @@ func TestRepoInfoHTTPError(t *testing.T) {
 	defer server.Close()
 
 	err := runShortcut(t, server, "info", nil)
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestRepoRawHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeText(t, w, http.StatusInternalServerError, "server error")
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "raw", map[string]string{"path": "README.md"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestRepoFileExistsHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeText(t, w, http.StatusInternalServerError, "server error")
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "file-exists", map[string]string{"path": "README.md"})
 	if err == nil {
 		t.Fatal("expected error for HTTP 500")
 	}

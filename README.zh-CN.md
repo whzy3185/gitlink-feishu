@@ -238,6 +238,11 @@ gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
 
+# 读取原始文件和常见依赖清单
+gitlink-cli repo +raw --owner Gitlink --repo forgeplus --path LICENSE --ref master
+gitlink-cli repo +file-exists --owner Gitlink --repo forgeplus --path package.json --ref master
+gitlink-cli repo +manifest --owner Gitlink --repo forgeplus --kind go --ref master
+
 # 查看语言占比
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 
