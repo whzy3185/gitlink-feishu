@@ -114,6 +114,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔧 CI | View builds, logs, CI/CD operations |
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
+| 🔔 Notification | List messages, mark read, delete messages, send @ mentions |
 | 📖 Wiki | List, view, create, update, and delete wiki pages |
 | 🔍 Search | Search repositories, users |
 | 📊 Dataset | Query research datasets by project |
@@ -272,6 +273,30 @@ gitlink-cli webhook +test --owner Gitlink --repo forgeplus --id 68
 
 # View webhook delivery tasks
 gitlink-cli webhook +tasks --owner Gitlink --repo forgeplus --id 68
+```
+
+### Notification Management
+
+```bash
+# List unread notifications for the authenticated user
+gitlink-cli notification +list --status unread --limit 20
+
+# List @ mention messages for a specific user
+gitlink-cli notification +list --user zhangsan --type atme --status unread
+
+# Preview and mark selected messages as read
+gitlink-cli notification +read --ids 740214,740213 --dry-run
+gitlink-cli notification +read --ids 740214,740213 --yes
+
+# Preview and mark all unread system notifications as read
+gitlink-cli notification +read --type notification --all-unread --dry-run
+
+# Preview and delete selected messages
+gitlink-cli notification +delete --ids 740214,740213 --dry-run
+
+# Send an @ mention message for an Issue, PR, or Journal target
+gitlink-cli notification +send-atme --receivers alice,bob \
+  --atmeable-type Issue --atmeable-id 123 --dry-run
 ```
 
 ### Wiki Management

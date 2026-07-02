@@ -4,21 +4,17 @@
 
 **日期**：2026-06-03
 **用户**：lindiwen23
-**CLI 版本**：gitlink-cli 0.1.18
+**CLI 版本**：支持 `notification` shortcut 的 gitlink-cli
 
 ### 执行流程
 
 ```bash
-# Step 1: 获取用户名
-gitlink-cli auth status
-# → Logged in as lindiwen23
-
 # Step 2: 获取未读通知（status=1）
-gitlink-cli api GET "users/lindiwen23/messages.json" --query "status=1&limit=20" --format json
+gitlink-cli notification +list --status unread --limit 20 --format json
 # → 7 条未读，unread_notification=7, unread_atme=0
 
 # Step 3: 获取已读通知（用于趋势分析和回顾）
-gitlink-cli api GET "users/lindiwen23/messages.json" --query "status=2&limit=20" --format json
+gitlink-cli notification +list --status read --limit 20 --format json
 # → 21 条已读
 
 # Step 4: 分类统计、生成摘要报告
@@ -31,9 +27,8 @@ gitlink-cli api GET "users/lindiwen23/messages.json" --query "status=2&limit=20"
 | 未读通知 | 7 条 |
 | @我未读 | 0 条 |
 | 总通知 | 28 条（7 未读 + 21 已读） |
-| 不存在命令 | `gitlink-cli notification`（整个子命令不存在） |
-| 实际 API | `GET /api/users/{owner}/messages.json` |
-| CLI Bug | `api` 路径以 `/` 开头会被解析为本地文件路径 |
+| 推荐命令 | `gitlink-cli notification +list` |
+| 标记已读 | `gitlink-cli notification +read --ids ... --dry-run/--yes` |
 
 ### 原始 API 返回（未读 7 条）
 
@@ -176,12 +171,11 @@ gitlink-cli api GET "users/lindiwen23/messages.json" --query "status=2&limit=20"
 
 ### 经验总结
 
-1. **`gitlink-cli notification` 命令不存在**：GitLink CLI 没有内置 notification 子命令，所有操作需通过 `gitlink-cli api` 调用 Raw API
-2. **API 端点是 `messages` 不是 `notifications`**：GitLink 用「消息」术语
-3. **CLI 路径 Bug**：`gitlink-cli api` 的 PATH 参数以 `/` 开头会被解析为本地文件路径，必须去掉前导 `/`
-4. **响应字段 `unread_notification` 和 `unread_atme`**：顶层统计字段可直接用于分类计数，无需遍历全部消息
-5. **没有批量已读 API**：标记已读需逐条调用 `POST users/{owner}/messages/{id}/read`
-6. **`source` 字段 `PullReuqestAtme`**：官方 API 存在拼写错误（应为 PullRequestAtme），匹配时注意
+1. **优先使用 `notification` shortcut**：列表、标记已读、删除和发送 @ 消息均已有封装
+2. **API 端点是 `messages` 不是 `notifications`**：GitLink 用「消息」术语，shortcut 已屏蔽路径细节
+3. **响应字段 `unread_notification` 和 `unread_atme`**：顶层统计字段可直接用于分类计数，无需遍历全部消息
+4. **标记已读是写操作**：必须先 `--dry-run`，用户确认后再 `--yes`
+5. **`source` 字段 `PullReuqestAtme`**：官方 API 存在拼写错误（应为 PullRequestAtme），匹配时注意
 
 ---
 
@@ -194,22 +188,17 @@ gitlink-cli api GET "users/lindiwen23/messages.json" --query "status=2&limit=20"
 
 ```
 工具调用 1: Read  → ../gitlink-shared/SKILL.md              ← 遵循 Skill 前置条件
-工具调用 2: Bash  → gitlink-cli auth status                  ← 获取用户名
-工具调用 3: Bash  → gitlink-cli api GET "users/lindiwen23/messages.json"
-                      --query "status=1&limit=20" --format json   ← 获取未读
-工具调用 4: Bash  → gitlink-cli api GET "users/lindiwen23/messages.json"
-                      --query "status=2&limit=20" --format json   ← 获取已读（趋势分析）
-工具调用 5: Bash  → gitlink-cli api GET "users/lindiwen23/messages.json"
-                      --query "limit=20" --format json            ← 获取全部（总计统计）
+工具调用 2: Bash  → gitlink-cli notification +list --status unread --limit 20 --format json
+工具调用 3: Bash  → gitlink-cli notification +list --status read --limit 20 --format json
+工具调用 4: Bash  → gitlink-cli notification +list --limit 20 --format json
 ```
 
 ### Agent 决策过程
 
-Agent **正确遵循了 skill v2.0.0 的工作流**：
+Agent **正确遵循了 skill v3.0.0 的工作流**：
 
 1. 先读取 `gitlink-shared/SKILL.md` 了解认证和全局参数
-2. 用 `auth status` 获取当前用户 `lindiwen23`
-3. 使用 Raw API（路径无前导 `/`）获取未读、已读、全部三类数据
+2. 使用 `notification +list` 获取未读、已读、全部三类数据
 4. 按 `source` 字段分类：`ProjectPullRequest` → P2，`ProjectPraised`/`ProjectMemberJoined` → P3
 5. 按输出模板生成结构化报告，含所有七个章节
 6. 主动询问是否需要标记 P3 通知为已读
@@ -268,9 +257,9 @@ Agent **正确遵循了 skill v2.0.0 的工作流**：
 
 ### 验证结论
 
-✅ skill v2.0.0 验证通过：
-- Agent 正确使用了 `gitlink-cli api` 而非不存在的 `gitlink-cli notification`
-- Agent 路径没有以 `/` 开头，避开了 CLI 路径解析 Bug
+✅ skill v3.0.0 验证通过：
+- Agent 正确使用了 `gitlink-cli notification +list` 获取消息列表
+- Agent 正确使用了 `gitlink-cli notification +read --dry-run` 预览标记已读操作
 - Agent 按 `source` 枚举值正确分类，识别出 `PullReuqestAtme` 拼写异常
 - Agent 正确区分了 P0/P1/P2/P3 优先级
 - Agent 使用 `unread_notification`/`unread_atme` 顶层字段快速统计
@@ -283,22 +272,22 @@ Agent **正确遵循了 skill v2.0.0 的工作流**：
 
 | 场景 | 检测方式 | 处理 |
 |------|----------|------|
-| `notification +list` 命令不存在 | 运行 `gitlink-cli notification` 报错 | 改用 `gitlink-cli api GET "users/{owner}/messages.json"` |
-| API 返回 HTML 而非 JSON | 响应以 `<!doctype html>` 开头 | 去掉路径前导 `/` 重试 |
-| 未读通知 > 返回条数 | `total_count` > `messages.length` | 追加 `--query "page=2"` |
-| 用户名不确定 | `auth status` 输出 | 从输出中提取 login 字段 |
+| `notification +list` 失败 | 查看错误信息 | 先确认已登录，再运行 `gitlink-cli notification +list --format json` |
+| 未读通知 > 返回条数 | `total_count` > `messages.length` | 追加 `--page 2` |
+| 用户名不确定 | shortcut 自动解析当前用户失败 | 先执行 `gitlink-cli auth status` |
 | 无未读通知 | `unread_notification == 0` | 输出 "🎉 所有通知已处理完毕" |
 
 ---
 
 ## 版本兼容性说明
 
-本 skill v2.0.0 基于 `gitlink-cli 0.1.18` 编写。关键变更：
+本 skill v3.0.0 基于新增的 `notification` shortcut 编写。关键变更：
 
 | 版本 | `notification` 子命令 | 实际 API | 标记已读 |
 |------|----------------------|----------|----------|
 | v1.0.0 | `notification +list`（虚构） | 不存在 | `notification +read-all`（虚构） |
 | v2.0.0 | 无此子命令 | `GET /api/users/{owner}/messages.json` | `POST /api/users/{owner}/messages/{id}/read` |
+| v3.0.0 | `notification +list` | 由 shortcut 封装 messages API | `notification +read --ids ... --dry-run/--yes` |
 
 当 CLI 版本更新后，重新验证可用命令：
 ```bash

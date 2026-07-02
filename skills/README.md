@@ -94,6 +94,8 @@ skills/
 ├── gitlink-user/                      # 用户管理
 │   ├── SKILL.md                       # 用户操作指南
 │   └── references/                    # 用户命令参考文档
+├── gitlink-notification/              # 通知与消息管理
+│   └── SKILL.md                       # 消息查看、标记已读、删除和 @ 提及
 ├── gitlink-org/                       # 组织管理
 │   ├── SKILL.md                       # 组织操作指南
 │   └── references/                    # 组织命令参考文档
@@ -140,6 +142,7 @@ skills/
 |-------|------|----------|
 | **gitlink-search** | 搜索功能 | `search +repos`, `search +users` |
 | **gitlink-user** | 用户管理 | `user +me`, `user +info` |
+| **gitlink-notification** | 通知与消息管理 | `notification +list`, `notification +read`, `notification +delete` |
 | **gitlink-org** | 组织管理 | `org +list`, `org +info`, `org +members` |
 | **gitlink-ci** | CI/CD | `ci +builds`, `ci +logs` |
 | **gitlink-pipeline** | 流水线工作流 | `pipeline +runs`, `pipeline +run`, `pipeline +logs` |

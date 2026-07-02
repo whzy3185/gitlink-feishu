@@ -113,6 +113,7 @@
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
+| 🔔 通知 | 列出消息、标记已读、删除消息、发送 @ 提及 |
 | 📖 Wiki | 列出、查看、创建、更新、删除 Wiki 页面 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 📊 数据集 | 按项目查询科研数据集 |
@@ -283,6 +284,30 @@ gitlink-cli webhook +test --owner Gitlink --repo forgeplus --id 68
 
 # 查看 webhook 投递任务
 gitlink-cli webhook +tasks --owner Gitlink --repo forgeplus --id 68
+```
+
+### 通知管理
+
+```bash
+# 列出当前认证用户的未读通知
+gitlink-cli notification +list --status unread --limit 20
+
+# 列出指定用户的 @ 我消息
+gitlink-cli notification +list --user zhangsan --type atme --status unread
+
+# 预览并将指定消息标记为已读
+gitlink-cli notification +read --ids 740214,740213 --dry-run
+gitlink-cli notification +read --ids 740214,740213 --yes
+
+# 预览将全部未读系统通知标记为已读
+gitlink-cli notification +read --type notification --all-unread --dry-run
+
+# 预览删除指定消息
+gitlink-cli notification +delete --ids 740214,740213 --dry-run
+
+# 为 Issue、PR 或 Journal 目标发送 @ 提及消息
+gitlink-cli notification +send-atme --receivers alice,bob \
+  --atmeable-type Issue --atmeable-id 123 --dry-run
 ```
 
 ### Wiki 管理
