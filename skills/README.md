@@ -144,7 +144,7 @@ skills/
 | **gitlink-ci** | CI/CD | `ci +builds`, `ci +logs` |
 | **gitlink-pipeline** | 流水线工作流 | `pipeline +runs`, `pipeline +run`, `pipeline +logs` |
 | **gitlink-wiki** | Wiki 页面管理 | `wiki +list`, `wiki +view`, `wiki +create`, `wiki +update`, `wiki +delete` |
-| **gitlink-pm** | 项目管理 | 通过 Raw API 访问 |
+| **gitlink-pm** | 项目管理 | `pm +dashboards`, `pm +sprint-issues`, `pm +weekly-issues`, `pm +action-runs` |
 | **gitlink-workflow** | AI 工作流 | Issue 分类、PR Review、Release Notes |
 | **gitlink-health** | 开源项目健康度 | 详情见SKILL.md |
 

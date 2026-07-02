@@ -508,6 +508,26 @@ gitlink-cli pipeline +disable --owner Gitlink --repo forgeplus --id 7 --workflow
 gitlink-cli pipeline +delete --owner Gitlink --repo forgeplus --id 7 --dry-run
 ```
 
+### Project Management
+
+`pm` surfaces GitLink project-management data for dashboards, sprints, weekly
+issues, labels, pipelines, and action runs. PM commands require the numeric
+GitLink project ID.
+
+```bash
+# Query PM dashboards and sprint issues
+gitlink-cli pm +dashboards --project-id 123 --limit 20
+gitlink-cli pm +sprint-issues --project-id 123 --page 1 --limit 20
+
+# Query weekly issues and PM issue tags
+gitlink-cli pm +weekly-issues --project-id 123
+gitlink-cli pm +issue-tags --project-id 123
+
+# Query PM pipelines and action runs
+gitlink-cli pm +pipelines --project-id 123
+gitlink-cli pm +action-runs --project-id 123
+```
+
 ### Ignore File Templates
 
 ```bash
@@ -779,6 +799,7 @@ gitlink-cli/
 │   ├── org/                  # Organization shortcuts
 │   ├── ci/                   # CI shortcuts
 │   ├── pipeline/             # Pipeline shortcuts
+│   ├── pm/                   # Project management shortcuts
 │   ├── search/               # Search shortcuts
 │   ├── user/                 # User shortcuts
 │   └── register.go           # Registration entry point
