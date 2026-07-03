@@ -44,13 +44,10 @@ gitlink-cli api POST /:owner/:repo/issues/:id --body '{"issue_tag_ids":[<tag_id>
 # 1. 获取 PR 详情
 gitlink-cli pr +view --id <pr_id> --format json
 
-# 2. 获取变更文件列表
-gitlink-cli pr +files --id <pr_id> --format json
+# 2. 获取完整审查上下文（仓库、PR、变更文件、Review、Issue、标签）
+gitlink-cli workflow +review-context --number <pr_id> --format json
 
-# 3. 获取 PR 提交列表
-gitlink-cli pr +diff --id <pr_id> --format json
-
-# 4. 添加 Review 评论
+# 3. 添加 Review 评论（写操作前需确认用户意图）
 gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{"body":"代码审查意见...","event":"COMMENT"}'
 ```
 
@@ -97,8 +94,8 @@ gitlink-cli issue +list --state closed --format json
 gitlink-cli pr +list --state open --format json
 gitlink-cli pr +list --state merged --format json
 
-# 3. 获取项目动态
-gitlink-cli api GET /:owner/:repo/activity --format json
+# 3. 获取仓库工作流报告
+gitlink-cli workflow +repo-report --format json
 ```
 
 ## Workflow: PR Summary (Read-only)
@@ -118,6 +115,28 @@ Rules:
 - Prefer `--format markdown` when a human maintainer needs a report.
 - This command is read-only: it does not comment, approve, reject, merge, label, or close pull requests.
 - Do not use LLM APIs for this workflow; it is rule-based and explainable.
+
+## Workflow: Review Context (Read-only)
+
+Use `workflow +review-context` when an Agent needs one deterministic JSON bundle for PR review or gatekeeping. It aggregates shortcut-backed read-only fetches for repository info, PR details, changed files, existing reviews, open issues, and labels.
+
+```bash
+gitlink-cli workflow +review-context --owner Gitlink --repo gitlink-cli --number 1 --format json
+
+# Trim context for large repositories
+gitlink-cli workflow +review-context --owner Gitlink --repo gitlink-cli --number 1 \
+  --issue-limit 10 --label-limit 30 --format json
+
+# Only fetch PR and changed files
+gitlink-cli workflow +review-context --owner Gitlink --repo gitlink-cli --number 1 \
+  --include-repo=false --include-reviews=false --include-issues=false --include-labels=false \
+  --format json
+```
+
+Rules:
+- This command is read-only and never comments, approves, rejects, merges, labels, or closes resources.
+- Prefer it before `workflow +pr-summary` when a review agent needs raw context plus existing review state.
+- The command records partial fetch failures in `notes` so Agents can proceed with available context.
 
 ## Workflow: Repo Report (Read-only)
 

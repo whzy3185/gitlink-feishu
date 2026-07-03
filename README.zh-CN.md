@@ -444,6 +444,21 @@ gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved 
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
 ```
 
+### 工作流 Agent 命令
+
+```bash
+# 只读获取 PR 审查上下文包（仓库、PR、文件、Review、Issue、标签）
+gitlink-cli workflow +review-context --owner Gitlink --repo forgeplus --number 42 --format json
+
+# 生成 PR 审查摘要
+gitlink-cli workflow +pr-summary --owner Gitlink --repo forgeplus --number 42 --format markdown
+
+# 生成仓库工作流报告
+gitlink-cli workflow +repo-report --owner Gitlink --repo forgeplus --format markdown
+```
+
+> `workflow +review-context` 只读取 GitLink 数据，不会评论、审批、拒绝、合并或修改标签。
+
 ### 发布管理
 
 ```bash
