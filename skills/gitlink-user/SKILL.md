@@ -1,7 +1,7 @@
 ---
 name: gitlink-user
 version: 1.0.0
-description: "用户操作：查看当前用户、用户详情。当用户需要查看 GitLink 用户信息时触发。"
+description: "用户操作：查看当前用户、用户详情、贡献热力图、统计和项目趋势。当用户需要查看 GitLink 用户信息时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -22,6 +22,11 @@ metadata:
 |----------|------|----------|
 | `user +me` | 当前登录用户 | 是 |
 | `user +info` | 查看用户详情 | 否 |
+| `user +heatmap` | 用户贡献热力图 | 省略 `--user` 时需要 |
+| `user +statistics` | 用户聚合统计 | 省略 `--user` 时需要 |
+| `user +stats` | `user +statistics` 的短别名 | 省略 `--user` 时需要 |
+| `user +project-trends` | 用户项目趋势 | 省略 `--user` 时需要 |
+| `user +trends` | `user +project-trends` 的短别名 | 省略 `--user` 时需要 |
 
 ## 使用示例
 
@@ -31,17 +36,19 @@ gitlink-cli user +me
 
 # 查看其他用户
 gitlink-cli user +info --login zhangsan
-```
 
-## Raw API 补充
-
-```bash
 # 用户贡献热力图
-gitlink-cli api GET /users/:user_id/headmaps
+gitlink-cli user +heatmap --user zhangsan --year 2026
 
 # 用户统计
-gitlink-cli api GET /users/:user_id/statistics
+gitlink-cli user +statistics --user zhangsan --start-time 1704067200 --end-time 1735689600
 
 # 用户项目动态
-gitlink-cli api GET /users/:user_id/project_trends
+gitlink-cli user +project-trends --user zhangsan
 ```
+
+## 注意事项
+
+- `user +heatmap`、`user +statistics`、`user +project-trends` 都是只读命令。
+- 省略 `--user` 时会先调用 `user +me` 等价的 `/users/me` 解析当前登录用户，因此需要已登录。
+- `user +stats` 和 `user +trends` 是为贡献者分析工作流保留的短别名。

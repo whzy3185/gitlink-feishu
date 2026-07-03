@@ -510,8 +510,19 @@ gitlink-cli search +users -k "zhangsan"
 
 `profile` 暴露 GitLink 原生的用户画像统计（开发能力、角色定位、专业定位、近期活动、贡献热力图）。
 省略 `--user` 时默认使用当前认证用户。
+`user` 同时提供面向贡献者分析的热力图、聚合统计和项目趋势快捷入口。
 
 ```bash
+# 当前认证用户
+gitlink-cli user +me
+
+# 用户贡献热力图和聚合统计
+gitlink-cli user +heatmap --user zhangsan --year 2026
+gitlink-cli user +statistics --user zhangsan --start-time 1704067200 --end-time 1735689600
+
+# 项目趋势数据（短别名：user +trends）
+gitlink-cli user +project-trends --user zhangsan
+
 # 开发能力评分 + 语言分布
 gitlink-cli profile +ability --user zhangsan
 
@@ -620,7 +631,7 @@ git push gitlink
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |
 | `gitlink-pipeline` | 流水线工作流操作（运行、日志、启停、删除等） |
 | `gitlink-search` | 搜索功能（仓库、用户等） |
-| `gitlink-user` | 用户管理（个人信息等） |
+| `gitlink-user` | 用户管理（个人信息、热力图、统计、项目趋势等） |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |
 | `gitlink-workflow` | AI 自动化工作流（Issue 分类、PR Review、Release Notes 等） |
 

@@ -271,7 +271,7 @@ gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=&ref=master'
 gitlink-cli api GET /users/:user_id --format json
 
 # 用户贡献热力图
-gitlink-cli api GET /users/:user_id/headmaps --format json
+gitlink-cli user +heatmap --user <user_login> --format json
 ```
 
 ## 注意事项

@@ -31,7 +31,9 @@ gitlink-cli issue +list --owner jiangtx --repo gitlink-cli --format json
 # → 0 个 Issue
 ```
 
-### 不可用命令确认
+### 不可用命令确认（gitlink-cli 0.1.18 历史记录）
+
+> 当前版本已新增 `user +heatmap`、`user +stats`、`user +trends`。下表仅记录本样例在 0.1.18 上的历史执行结果。
 
 | 命令 | 结果 |
 |------|------|
@@ -129,8 +131,8 @@ gitlink-cli issue +list --owner jiangtx --repo gitlink-cli --format json
 | 贡献者数量 | repo +info | ✅ 可靠 |
 | PR 贡献数据 | pr +list 全量 | ✅ 可靠 |
 | 用户信息 | user +info | ✅ 可靠 |
-| 贡献热力图 | 不可用（命令未实现） | ❌ 缺失 |
-| 统计信息 | 不可用（命令未实现） | ❌ 缺失 |
+| 贡献热力图 | 0.1.18 未实现，当前版本可用 `user +heatmap` | 版本相关 |
+| 统计信息 | 0.1.18 未实现，当前版本可用 `user +stats` | 版本相关 |
 | 趋势数据 | PR 时间序列推算 | ⚠️ 推算 |
 ```
 
@@ -163,10 +165,10 @@ gitlink-cli issue +list --owner jiangtx --repo gitlink-cli --format json
 
 ### Agent 决策过程
 
-Agent 读取 skill 后，**正确遵循了更新后的工作流**：
+Agent 读取 skill 后，**正确遵循了当时版本的工作流**：
 
 1. **未尝试 `repo +contributors`**：skill 的"命令可用性声明"表标注该命令不可用
-2. **未尝试 `user +heatmap/+stats/+trends`**：skill 标注不可用，直接从 PR 列表推算
+2. **未尝试 `user +heatmap/+stats/+trends`**：0.1.18 中这些命令不可用，直接从 PR 列表推算
 3. **未尝试 Raw API**：skill 不推荐此路径，全程使用 Shortcut 命令
 4. **正确应用"年轻项目"规则**：识别项目仅 3 天，放宽分级标准，2 人均标记为 🔥 核心
 5. **自主增强分析**：Agent 额外分析了工作时段偏好、PR 类型统计、新老比例
@@ -197,9 +199,9 @@ Agent 生成了完整的五段式报告（团队概览 → 排行榜 → 个人�
 ✅ skill v1.1.0 验证通过：
 - Agent 正确遵循了"命令可用性声明"，未尝试不可用命令
 - Agent 正确从 `pr +list` 提取贡献者数据（替代不存在的 `repo +contributors`）
-- Agent 正确从 PR 时间戳推算活跃天数（替代不存在的 `user +heatmap`）
-- Agent 正确从 PR 聚合获得产出量（替代不存在的 `user +stats`）
-- Agent 正确从 PR 时间分布判断趋势（替代不存在的 `user +trends`）
+- Agent 正确从 PR 时间戳推算活跃天数（0.1.18 中 `user +heatmap` 不可用）
+- Agent 正确从 PR 聚合获得产出量（0.1.18 中 `user +stats` 不可用）
+- Agent 正确从 PR 时间分布判断趋势（0.1.18 中 `user +trends` 不可用）
 - Agent 正确应用"年轻项目放宽标准"规则
 - Agent 正确标注数据来源局限性
 - Agent 未使用 `gh` 或其他平台工具
@@ -212,9 +214,9 @@ Agent 生成了完整的五段式报告（团队概览 → 排行榜 → 个人�
 | 场景 | 检测方式 | 数据表现 | 处理 |
 |------|----------|----------|------|
 | `repo +contributors` 不可用 | 命令返回帮助文本 | 无 `+contributors` 子命令 | 从 `pr +list` 提取 `author_login` |
-| `user +heatmap` 不可用 | 命令不存在 | user 仅 `+info`/`+me` | 从 PR 时间戳推算活跃天数 |
-| `user +stats` 不可用 | 命令不存在 | 同上 | 从 `pr +list` 聚合 PR/Issue 数 |
-| `user +trends` 不可用 | 命令不存在 | 同上 | 从 PR 按日聚合判断趋势 |
+| `user +heatmap` 返回空或权限不足 | 无热力图数据 | API 响应为空或无权限 | 从 PR 时间戳推算活跃天数 |
+| `user +stats` 返回空或权限不足 | 无统计数据 | API 响应为空或无权限 | 从 `pr +list` 聚合 PR/Issue 数 |
+| `user +trends` 返回空或权限不足 | 无趋势数据 | API 响应为空或无权限 | 从 PR 按日聚合判断趋势 |
 | Raw API 返回 HTML | `api GET` 返回 HTML | 非 JSON 响应 | 仅使用 Shortcut 命令 |
 | 项目 < 30 天 | PR 时间跨度 < 30 天 | 全部 PR 在近期 | 放宽分级标准，标注"早期阶段" |
 | 贡献者 ≤ 2 人 | `contributor_users_count` ≤ 2 | Bus Factor 极低 | 报告标注风险 + 提供吸引新人建议 |
@@ -230,7 +232,7 @@ Agent 生成了完整的五段式报告（团队概览 → 排行榜 → 个人�
 | CLI 版本 | 贡献者分析可用命令 | 缺失命令 |
 |----------|-------------------|----------|
 | 0.1.18 | `repo +info`, `pr +list`, `issue +list`, `user +info` | `repo +contributors`, `user +heatmap`, `user +stats`, `user +trends` |
-| 未来版本 | 可能新增 `user +heatmap` 等 | — |
+| 当前版本 | `repo +info`, `pr +list`, `issue +list`, `user +info`, `user +heatmap`, `user +stats`, `user +trends` | `repo +contributors` |
 
 当 CLI 版本更新后，重新验证可用命令：
 ```bash

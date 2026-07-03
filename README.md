@@ -532,8 +532,20 @@ gitlink-cli search +users -k "zhangsan"
 
 `profile` surfaces GitLink's native user statistics (ability, role, major, activity,
 contribution). When `--user` is omitted it defaults to the authenticated user.
+`user` also provides contributor-oriented shortcuts for heatmaps, aggregate
+statistics, and project trends.
 
 ```bash
+# Current authenticated user
+gitlink-cli user +me
+
+# User contribution heatmap and aggregate statistics
+gitlink-cli user +heatmap --user zhangsan --year 2026
+gitlink-cli user +statistics --user zhangsan --start-time 1704067200 --end-time 1735689600
+
+# Project trend data (short alias: user +trends)
+gitlink-cli user +project-trends --user zhangsan
+
 # Development ability scores + language breakdown
 gitlink-cli profile +ability --user zhangsan
 
@@ -747,7 +759,7 @@ See [skills/README.md](./skills/README.md) for details.
 | `gitlink-pipeline` | Pipeline workflow operations (runs, logs, enable, disable, delete, etc.) |
 | `gitlink-search` | Search (repositories, users, etc.) |
 | `gitlink-org` | Organization management (members, teams, etc.) |
-| `gitlink-user` | User management (profile info, etc.) |
+| `gitlink-user` | User management (profile info, heatmaps, statistics, project trends, etc.) |
 | `gitlink-pm` | Project management (sprints, kanban, weekly reports, etc.) |
 | `gitlink-workflow` | AI-powered workflows (issue triage, PR review, release notes, etc.) |
 | `gitlink-health` | Project health analysis (PR/Issue metrics aggregation, health reports) |
