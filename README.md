@@ -617,14 +617,3 @@ See [skills/gitlink-shared/REFERENCE.md](skills/gitlink-shared/REFERENCE.md).
 ## License
 
 [MulanPSL-2.0](https://license.coscl.org.cn/MulanPSL2)
-#   p i p e l i n e   t e s t  
- 
-## ZxR 测试PR
-
-> GitLink智能运营平台——代码质量看门人工作流演示。
-
-<!-- 代码质量看门人自动化工作流：添加此注释用于测试 PR 审查流程 -->
-
-<!-- 代码质量看门人测试注释 -->
-
-<!-- 质量门禁检查测试 - 2026-07-02 -->
