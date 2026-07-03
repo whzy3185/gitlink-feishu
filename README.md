@@ -110,7 +110,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 👥 Member | List, add, remove repository members, change roles, create and accept invite links |
 | 🌿 Branch | Create, delete, list, protect, unprotect branches |
 | 🏷️ Release | Create, edit, update, view, delete releases |
-| 🏢 Org | Manage organizations, members, teams |
+| 🏢 Org | Manage organizations, list members, and inspect teams |
 | 🔧 CI | View builds, logs, CI/CD operations |
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
@@ -316,6 +316,22 @@ gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role D
 
 # Create an invite link
 gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
+```
+
+### Organization Management
+
+```bash
+# List organizations
+gitlink-cli org +list
+
+# View organization details
+gitlink-cli org +info --id Gitlink
+
+# List organization members
+gitlink-cli org +members --id Gitlink --page 1 --limit 20
+
+# List organization teams
+gitlink-cli org +teams --id Gitlink --page 1 --limit 20
 ```
 
 ### Issue Management

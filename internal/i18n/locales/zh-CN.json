@@ -52,6 +52,7 @@
   "cmd.org.list.short": "列出组织",
   "cmd.org.members.short": "列出组织成员",
   "cmd.org.short": "组织操作",
+  "cmd.org.teams.short": "列出组织团队",
   "cmd.pr.close.short": "关闭拉取请求",
   "cmd.pr.comment.short": "给拉取请求添加评论",
   "cmd.pr.create.short": "创建拉取请求",

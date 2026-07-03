@@ -1,7 +1,7 @@
 ---
 name: gitlink-org
 version: 1.0.0
-description: "组织管理：查看组织列表、详情、成员，创建组织。当用户需要操作 GitLink 组织时触发。"
+description: "组织管理：查看组织列表、详情、成员、团队，创建组织。当用户需要操作 GitLink 组织时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -23,6 +23,7 @@ metadata:
 | `org +list` | 组织列表 |
 | `org +info` | 组织详情 |
 | `org +members` | 成员列表 |
+| `org +teams` | 团队列表 |
 | `org +create` | 创建组织 |
 
 ## 使用示例
@@ -31,14 +32,14 @@ metadata:
 gitlink-cli org +list
 gitlink-cli org +info --id Gitlink
 gitlink-cli org +members --id Gitlink
+gitlink-cli org +teams --id Gitlink --page 1 --limit 20
 gitlink-cli org +create --name my-org --description "我的组织"
 ```
 
 ## Raw API 补充
 
 ```bash
-# 组织团队管理
-gitlink-cli api GET /organizations/:id/teams
+# 创建组织团队
 gitlink-cli api POST /organizations/:id/teams --body '{"name":"dev-team"}'
 
 # 移除成员

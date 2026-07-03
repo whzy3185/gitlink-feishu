@@ -76,6 +76,18 @@ func TestOrgInfo(t *testing.T) {
 	}
 }
 
+func TestOrgInfoRequiresID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected API request: %s %s", r.Method, r.URL.String())
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "info", map[string]string{})
+	if err == nil {
+		t.Fatal("expected error for missing organization id")
+	}
+}
+
 // --- members ---
 
 func TestOrgMembers(t *testing.T) {
@@ -92,6 +104,55 @@ func TestOrgMembers(t *testing.T) {
 	err := runShortcut(t, server, "members", map[string]string{"id": "myorg", "page": "1", "limit": "20"})
 	if err != nil {
 		t.Fatalf("members failed: %v", err)
+	}
+}
+
+func TestOrgMembersRequiresID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected API request: %s %s", r.Method, r.URL.String())
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "members", map[string]string{"page": "1", "limit": "20"})
+	if err == nil {
+		t.Fatal("expected error for missing organization id")
+	}
+}
+
+// --- teams ---
+
+func TestOrgTeams(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/organizations/myorg/teams.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("page"); got != "2" {
+			t.Fatalf("page query = %q, want 2", got)
+		}
+		if got := r.URL.Query().Get("limit"); got != "50" {
+			t.Fatalf("limit query = %q, want 50", got)
+		}
+		writeJSON(w, []interface{}{
+			map[string]interface{}{"id": 1, "name": "maintainers"},
+		})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "teams", map[string]string{"id": "myorg", "page": "2", "limit": "50"})
+	if err != nil {
+		t.Fatalf("teams failed: %v", err)
+	}
+}
+
+func TestOrgTeamsRequiresID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected API request: %s %s", r.Method, r.URL.String())
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "teams", map[string]string{"page": "1", "limit": "20"})
+	if err == nil {
+		t.Fatal("expected error for missing organization id")
 	}
 }
 
@@ -124,6 +185,18 @@ func TestOrgCreateNoDescription(t *testing.T) {
 	err := runShortcut(t, server, "create", map[string]string{"name": "neworg"})
 	if err != nil {
 		t.Fatalf("create failed: %v", err)
+	}
+}
+
+func TestOrgCreateRequiresName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected API request: %s %s", r.Method, r.URL.String())
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "create", map[string]string{})
+	if err == nil {
+		t.Fatal("expected error for missing organization name")
 	}
 }
 
@@ -163,6 +236,19 @@ func TestOrgMembersHTTPError(t *testing.T) {
 	defer server.Close()
 
 	err := runShortcut(t, server, "members", map[string]string{"id": "myorg", "page": "1", "limit": "20"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestOrgTeamsHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "teams", map[string]string{"id": "myorg", "page": "1", "limit": "20"})
 	if err == nil {
 		t.Fatal("expected error for HTTP 500")
 	}
