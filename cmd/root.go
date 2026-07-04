@@ -33,6 +33,7 @@ func init() {
 	rootCmd.AddCommand(apiCmd.NewAPICmd())
 	rootCmd.AddCommand(configCmd.NewConfigCmd())
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(newDoCmd())
 
 	shortcuts.RegisterAll(rootCmd)
 }

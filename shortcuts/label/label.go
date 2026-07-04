@@ -2,6 +2,7 @@ package label
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
@@ -100,6 +101,49 @@ func Shortcuts() []*common.Shortcut {
 					return err
 				}
 				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "batch-create",
+			Description: "Create multiple labels at once (names/colors comma-separated)",
+			Flags: []common.Flag{
+				{Name: "names", Short: "n", Usage: "Label names (comma-separated, e.g. bug,feature,docs)", Required: true},
+				{Name: "colors", Short: "c", Usage: "Colors (comma-separated, e.g. #ee0701,#84b6eb,#0075ca). If fewer than names, repeats last.", Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				namesRaw, _ := ctx.RequireArg("names")
+				colorsRaw, _ := ctx.RequireArg("colors")
+				names := strings.Split(namesRaw, ",")
+				colors := strings.Split(colorsRaw, ",")
+				results := []map[string]interface{}{}
+				for i, name := range names {
+					name = strings.TrimSpace(name)
+					if name == "" {
+						continue
+					}
+					color := "#cccccc"
+					if i < len(colors) {
+						color = strings.TrimSpace(colors[i])
+					} else if len(colors) > 0 {
+						color = strings.TrimSpace(colors[len(colors)-1])
+					}
+					env, err := ctx.CallAPI("POST", labelPath(ctx), map[string]interface{}{
+						"name":  name,
+						"color": color,
+					})
+					if err != nil {
+						results = append(results, map[string]interface{}{"name": name, "ok": false, "error": err.Error()})
+					} else {
+						results = append(results, map[string]interface{}{"name": name, "ok": env.OK, "color": color})
+					}
+				}
+				return ctx.OutputData(map[string]interface{}{
+					"created": len(results),
+					"results": results,
+				})
 			},
 		},
 	}

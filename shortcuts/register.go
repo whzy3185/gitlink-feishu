@@ -17,6 +17,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/release"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/repo"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/search"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/snippet"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/user"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/webhook"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/wiki"
@@ -43,6 +44,7 @@ func RegisterAll(root *cobra.Command) {
 		"wiki":     wiki.Shortcuts(),
 		"label":    label.Shortcuts(),
 		"notification": notification.Shortcuts(),
+		"snippet":      snippet.Shortcuts(),
 	}
 
 	descriptions := map[string]string{
@@ -63,6 +65,7 @@ func RegisterAll(root *cobra.Command) {
 		"wiki":     "Wiki page operations",
 		"label":    "Label operations",
 		"notification": "Notification operations",
+		"snippet":      "Code snippet operations",
 	}
 
 	for name, shortcuts := range groups {
