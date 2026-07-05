@@ -26,11 +26,26 @@ func Shortcuts() []*common.Shortcut {
 		{
 			Name:        "list",
 			Description: "List repository members",
+			Flags: []common.Flag{
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
+			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("GET", collaboratorsPath(ctx), nil)
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(collaboratorsV1Path(ctx), q, "collaborators")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("collaborators", items))
+				}
+				env, err := ctx.CallAPIWithQuery("GET", collaboratorsV1Path(ctx), q)
 				if err != nil {
 					return err
 				}
@@ -252,6 +267,12 @@ func runBatchAdd(ctx *common.RuntimeContext) error {
 
 func collaboratorsPath(ctx *common.RuntimeContext) string {
 	return fmt.Sprintf("/%s/%s/collaborators", ctx.Owner, ctx.Repo)
+}
+
+// collaboratorsV1Path is the v1 read endpoint, which supports pagination and
+// does not require admin permission (the legacy path rejects non-admins).
+func collaboratorsV1Path(ctx *common.RuntimeContext) string {
+	return fmt.Sprintf("/v1/%s/%s/collaborators", ctx.Owner, ctx.Repo)
 }
 
 func collaboratorsRemovePath(ctx *common.RuntimeContext) string {

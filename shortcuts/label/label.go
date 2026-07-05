@@ -32,16 +32,28 @@ func Shortcuts() []*common.Shortcut {
 				{Name: "only-name", Usage: "Return only label id and name: true or false"},
 				{Name: "sort-by", Usage: "Sort field: updated_on, created_on, issues_count"},
 				{Name: "sort-direction", Usage: "Sort direction: asc or desc"},
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
 				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
 				setQueryIfPresent(q, "keyword", ctx.Arg("keyword"))
 				setQueryIfPresent(q, "only_name", ctx.Arg("only-name"))
 				setQueryIfPresent(q, "order_by", ctx.Arg("sort-by"))
 				setQueryIfPresent(q, "order_direction", ctx.Arg("sort-direction"))
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(labelPath(ctx), q, "issue_tags")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("issue_tags", items))
+				}
 				env, err := ctx.CallAPIWithQuery("GET", labelPath(ctx), q)
 				if err != nil {
 					return err

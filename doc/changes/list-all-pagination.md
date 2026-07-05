@@ -16,15 +16,24 @@
   - 遵循 `total_count`：达到总数即停止；另设最大页数护栏，防止
     忽略 `page` 参数的端点造成死循环。
   - `PaginateAll` 保持原签名，委托给 `PaginateAllKey`。
-- 九个分页 list 命令新增 `--all` 布尔参数（默认 false）：
+- 十一个分页 list 命令新增 `--all` 布尔参数（默认 false）：
   - `issue +list --all`（合并结果同样应用 number/database_id 规范化）
   - `pr +list --all`、`branch +list --all`、`release +list --all`
   - `milestone +list --all`、`org +list --all`、`repo +list --all`
   - `search +repos --all`、`search +users --all`
+  - `label +list --all`、`member +list --all`
   - 对应资源键：`issues`/`pulls`/`branches`/`releases`/`milestones`/
-    `organizations`/`projects`/`users`（均生产实测确认）
+    `organizations`/`projects`/`users`/`issue_tags`/`collaborators`
+    （均生产实测确认）
   - 输出与单页响应同构：`{"total_count": N, "<资源名>": [...]}`。
 - 总数字段兼容 `total_count` 与 `count`（如 `/users/:login/projects`）。
+- 修复两个既有分页语义缺口（均生产实测确认端点本身分页）：
+  - `label +list` 完全没有 `--page/--limit`（端点实际返回 `total_count`），现已补齐；
+  - `member +list` 既无分页又走遗留路径（非管理员直接 403），现改走
+    `/v1/:owner/:repo/collaborators`（支持分页且普通成员可读）。
+- 未加 `--all` 的 list 端点均经生产验证为非分页或未部署：
+  `licenses`/`ignores` 返回全量数组；`pm/pipelines` 404 未部署；
+  `pipeline +runs` 用 `total_data` 非标准包裹；dataset 端点未部署（平台 issue #144255）。
 - 中英文 i18n 新增 `flag.all` 文案。
 
 ## 命令示例
