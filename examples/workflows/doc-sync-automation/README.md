@@ -6,6 +6,41 @@
 
 与仓库内已有能力的关系：`file` 命令组（文件读写）→ `gitlink-doc-sync` Skill（AI 语义比对与翻译同步知识）→ **本工作流（确定性可复现闭环）**，三层互为支撑而非重复：Skill 负责需要语义理解的翻译同步，本工作流负责可进 CI 的确定性漂移检测。
 
+## 架构图
+
+```mermaid
+flowchart LR
+    A["repo +tree<br/>仓库结构采集"] --> B["文档对自动发现<br/>README.md ⇄ README.zh-CN.md<br/>docs/*.md ⇄ docs/*.zh-CN.md"]
+    B --> C["file +view --raw ×2<br/>拉取双语版本内容"]
+    C --> D["确定性结构比对<br/>章节大纲 / 代码块 / 表格 / 版本号"]
+    D --> E["分级漂移报告<br/>🔴严重 / 🟡中等 / 🟢轻微"]
+    E -->|"dry-run（默认）"| F["Markdown 报告落盘<br/>退出码 0/2 → CI 门禁"]
+    E -->|"--apply"| G["issue +create<br/>回写 tracking issue"]
+    G -.->|"人工确认后"| H["gitlink-doc-sync Skill<br/>AI 语义翻译同步 → file +update → pr +create"]
+```
+
+## CI 门禁集成示例
+
+利用退出码语义（`0` 无严重漂移 / `2` 存在严重漂移）可直接作为发布门禁。GitLink 引擎（`.gitea/workflows`）示例：
+
+```yaml
+name: doc-sync-gate
+on:
+  pull_request:
+    paths: ["README.md", "README.zh-CN.md", "docs/**"]
+jobs:
+  doc-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install -g @gitlink-ai/cli
+      - env:
+          GITLINK_TOKEN: ${{ secrets.GITLINK_TOKEN }}
+        run: |
+          python3 examples/workflows/doc-sync-automation/scripts/doc_sync_workflow.py \
+            --owner ${{ github.repository_owner }} --repo ${{ github.event.repository.name }}
+```
+
 ## 交付物
 
 - `scripts/doc_sync_workflow.py`：文档对发现 + 漂移检测 + 报告 + tracking issue 回写（纯标准库，Python ≥3.9，零第三方依赖）
