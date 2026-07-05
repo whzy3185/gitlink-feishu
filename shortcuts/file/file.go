@@ -6,32 +6,41 @@ import (
 	"net/url"
 	"os"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
 // Shortcuts returns all file shortcuts.
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
-		viewShortcut(),
-		searchShortcut(),
-		writeShortcut("create", "Create a new file in the repository"),
-		writeShortcut("update", "Update an existing file in the repository"),
-		deleteShortcut(),
+		viewShortcut(tr),
+		searchShortcut(tr),
+		writeShortcut(tr, "create"),
+		writeShortcut(tr, "update"),
+		deleteShortcut(tr),
 	}
 }
 
-func refFlag() common.Flag {
-	return common.Flag{Name: "ref", Usage: "Branch, tag, or commit SHA (defaults to the default branch)"}
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }
 
-func viewShortcut() *common.Shortcut {
+func refFlag(tr *i18n.Translator) common.Flag {
+	return common.Flag{Name: "ref", Usage: tr.T("flag.file.ref")}
+}
+
+func viewShortcut(tr *i18n.Translator) *common.Shortcut {
 	return &common.Shortcut{
 		Name:        "view",
-		Description: "View the contents of a file",
+		Description: tr.T("cmd.file.view.short"),
 		Flags: []common.Flag{
-			{Name: "path", Short: "p", Usage: "File path", Required: true},
-			refFlag(),
-			{Name: "raw", Usage: "Print only the decoded file content", Bool: true},
+			{Name: "path", Short: "p", Usage: tr.T("flag.file.path"), Required: true},
+			refFlag(tr),
+			{Name: "raw", Usage: tr.T("flag.file.raw"), Bool: true},
 		},
 		Run: func(ctx *common.RuntimeContext) error {
 			if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -58,13 +67,13 @@ func viewShortcut() *common.Shortcut {
 	}
 }
 
-func searchShortcut() *common.Shortcut {
+func searchShortcut(tr *i18n.Translator) *common.Shortcut {
 	return &common.Shortcut{
 		Name:        "search",
-		Description: "Search files in the repository by name",
+		Description: tr.T("cmd.file.search.short"),
 		Flags: []common.Flag{
-			{Name: "keyword", Short: "k", Usage: "Search keyword", Required: true},
-			refFlag(),
+			{Name: "keyword", Short: "k", Usage: tr.T("flag.search.keyword"), Required: true},
+			refFlag(tr),
 		},
 		Run: func(ctx *common.RuntimeContext) error {
 			if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -88,17 +97,17 @@ func searchShortcut() *common.Shortcut {
 	}
 }
 
-func writeShortcut(action, description string) *common.Shortcut {
+func writeShortcut(tr *i18n.Translator, action string) *common.Shortcut {
 	return &common.Shortcut{
 		Name:        action,
-		Description: description,
+		Description: tr.T("cmd.file." + action + ".short"),
 		Flags: []common.Flag{
-			{Name: "path", Short: "p", Usage: "File path", Required: true},
-			{Name: "content", Short: "c", Usage: "File content"},
-			{Name: "content-file", Usage: "Read file content from a local file"},
-			{Name: "branch", Short: "b", Usage: "Branch to commit to", Required: true},
-			{Name: "new-branch", Usage: "Create a new branch from --branch for the commit"},
-			{Name: "message", Short: "m", Usage: "Commit message"},
+			{Name: "path", Short: "p", Usage: tr.T("flag.file.path"), Required: true},
+			{Name: "content", Short: "c", Usage: tr.T("flag.file.content")},
+			{Name: "content-file", Usage: tr.T("flag.file.content_file")},
+			{Name: "branch", Short: "b", Usage: tr.T("flag.file.branch"), Required: true},
+			{Name: "new-branch", Usage: tr.T("flag.file.new_branch")},
+			{Name: "message", Short: "m", Usage: tr.T("flag.file.message")},
 		},
 		Run: func(ctx *common.RuntimeContext) error {
 			if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -144,15 +153,15 @@ func writeShortcut(action, description string) *common.Shortcut {
 	}
 }
 
-func deleteShortcut() *common.Shortcut {
+func deleteShortcut(tr *i18n.Translator) *common.Shortcut {
 	return &common.Shortcut{
 		Name:        "delete",
-		Description: "Delete a file from the repository",
+		Description: tr.T("cmd.file.delete.short"),
 		Flags: []common.Flag{
-			{Name: "path", Short: "p", Usage: "File path", Required: true},
-			{Name: "branch", Short: "b", Usage: "Branch to commit to", Required: true},
-			{Name: "new-branch", Usage: "Create a new branch from --branch for the commit"},
-			{Name: "message", Short: "m", Usage: "Commit message"},
+			{Name: "path", Short: "p", Usage: tr.T("flag.file.path"), Required: true},
+			{Name: "branch", Short: "b", Usage: tr.T("flag.file.branch"), Required: true},
+			{Name: "new-branch", Usage: tr.T("flag.file.new_branch")},
+			{Name: "message", Short: "m", Usage: tr.T("flag.file.message")},
 		},
 		Run: func(ctx *common.RuntimeContext) error {
 			if err := ctx.ResolveOwnerRepo(); err != nil {
