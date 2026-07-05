@@ -164,40 +164,89 @@ def render_report(owner, repo, ref, results):
     return "\n".join(lines), total
 
 
+def audit_repo(owner, repo, ref, out_dir, cli, apply_issue=False, echo=True):
+    """审计单个仓库，落盘报告，返回总分。"""
+    entries = list_entries(owner, repo, ref, cli=cli)
+    names = [n for n, t in entries if t != "dir"]
+    dirs = [n for n, t in entries if t == "dir"]
+    _, readme_text = fetch_readme(owner, repo, ref, names, cli=cli)
+    releases = count_releases(owner, repo, cli=cli)
+
+    results = audit(names, dirs, readme_text, releases)
+    report, total = render_report(owner, repo, ref, results)
+
+    path = out_dir / f"repro-audit-{owner}-{repo}.md"
+    path.write_text(report, encoding="utf-8")
+    if echo:
+        print(report)
+    print(f"\n报告已保存：{path}", file=sys.stderr)
+
+    if apply_issue:
+        run_cli([
+            "issue", "+create", "--owner", owner, "--repo", repo,
+            "--title", f"[repro-audit] 复现性审计报告（{total}/100）",
+            "--body", report, "--format", "json",
+        ], cli=cli)
+        print("已创建 tracking issue。", file=sys.stderr)
+    return total
+
+
+def read_repos_file(path):
+    """读取批量仓库清单：每行 owner/repo，# 开头为注释。"""
+    repos = []
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        owner, _, repo = line.partition("/")
+        if not owner or not repo:
+            raise ValueError(f"无效的仓库行（应为 owner/repo）：{line}")
+        repos.append((owner, repo))
+    return repos
+
+
+def render_summary(rows):
+    """批量审计汇总表（确定性：按得分降序、同分按名称）。"""
+    rows = sorted(rows, key=lambda r: (-r[1], r[0]))
+    lines = ["# 批量复现性审计汇总", "", "| 仓库 | 得分 | 等级 |", "|------|------|------|"]
+    for name, total in rows:
+        grade = next(g for t, g in GRADE if total >= t)
+        lines.append(f"| {name} | {total}/100 | {grade} |")
+    return "\n".join(lines) + "\n"
+
+
 def main():
     parser = argparse.ArgumentParser(description="科研项目复现性审计")
-    parser.add_argument("--owner", required=True)
-    parser.add_argument("--repo", required=True)
+    parser.add_argument("--owner")
+    parser.add_argument("--repo")
+    parser.add_argument("--repos-file", help="批量审计清单文件（每行 owner/repo，# 注释）")
     parser.add_argument("--ref", default="")
     parser.add_argument("--apply", action="store_true", help="把报告作为 tracking issue 回写（默认 dry-run）")
     parser.add_argument("--output-dir", default="outputs")
     parser.add_argument("--cli", default="gitlink-cli")
     args = parser.parse_args()
 
-    entries = list_entries(args.owner, args.repo, args.ref, cli=args.cli)
-    names = [n for n, t in entries if t != "dir"]
-    dirs = [n for n, t in entries if t == "dir"]
-    _, readme_text = fetch_readme(args.owner, args.repo, args.ref, names, cli=args.cli)
-    releases = count_releases(args.owner, args.repo, cli=args.cli)
-
-    results = audit(names, dirs, readme_text, releases)
-    report, total = render_report(args.owner, args.repo, args.ref, results)
+    if not args.repos_file and not (args.owner and args.repo):
+        parser.error("需要 --owner 与 --repo，或 --repos-file")
 
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"repro-audit-{args.owner}-{args.repo}.md"
-    path.write_text(report, encoding="utf-8")
-    print(report)
-    print(f"\n报告已保存：{path}", file=sys.stderr)
 
-    if args.apply:
-        run_cli([
-            "issue", "+create", "--owner", args.owner, "--repo", args.repo,
-            "--title", f"[repro-audit] 复现性审计报告（{total}/100）",
-            "--body", report, "--format", "json",
-        ], cli=args.cli)
-        print("已创建 tracking issue。", file=sys.stderr)
+    if args.repos_file:
+        rows = []
+        for owner, repo in read_repos_file(args.repos_file):
+            total = audit_repo(owner, repo, args.ref, out_dir, args.cli,
+                               apply_issue=args.apply, echo=False)
+            rows.append((f"{owner}/{repo}", total))
+        summary = render_summary(rows)
+        summary_path = out_dir / "repro-audit-summary.md"
+        summary_path.write_text(summary, encoding="utf-8")
+        print(summary)
+        print(f"汇总已保存：{summary_path}", file=sys.stderr)
+        return 0 if all(t >= 70 for _, t in rows) else 2
 
+    total = audit_repo(args.owner, args.repo, args.ref, out_dir, args.cli,
+                       apply_issue=args.apply)
     return 0 if total >= 70 else 2
 
 

@@ -37,6 +37,10 @@ gitlink-cli auth login
 
 python3 scripts/repro_audit.py --owner <owner> --repo <repo> --output-dir outputs
 # 回写改进 tracking issue（请先确认报告内容）：加 --apply
+
+# 批量审计（实验室/课题组场景）：清单每行 owner/repo，# 为注释
+python3 scripts/repro_audit.py --repos-file repos.txt --output-dir outputs
+# 输出逐仓库报告 + repro-audit-summary.md 汇总排名（得分降序，退出码 2 表示存在 <70 分仓库）
 ```
 
 ## 已在真实科研仓库验证

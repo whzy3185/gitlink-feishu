@@ -1,12 +1,13 @@
 """确定性回归护栏：同输入 → 同分 → 同等级。"""
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from repro_audit import audit, render_report  # noqa: E402
+from repro_audit import audit, read_repos_file, render_report, render_summary  # noqa: E402
 
 GOOD_README = """# Project
 
@@ -67,6 +68,26 @@ class AuditTest(unittest.TestCase):
         results = audit([], [], "", 0)
         for r in results:
             self.assertTrue(r.advice, f"{r.name} 应给出修复建议")
+
+    def test_read_repos_file(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as f:
+            f.write("# 注释\n\nowner1/repo1\n  owner2/repo2  \n")
+            path = f.name
+        self.assertEqual(read_repos_file(path), [("owner1", "repo1"), ("owner2", "repo2")])
+
+    def test_read_repos_file_invalid_line(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as f:
+            f.write("not-a-repo-line\n")
+            path = f.name
+        with self.assertRaises(ValueError):
+            read_repos_file(path)
+
+    def test_render_summary_sorted(self):
+        summary = render_summary([("o/low", 8), ("o/high", 92), ("o/mid", 58)])
+        rows = [line for line in summary.splitlines() if line.startswith("| o/")]
+        self.assertEqual([r.split(" | ")[0] for r in rows], ["| o/high", "| o/mid", "| o/low"])
+        self.assertIn("A（可复现性良好）", rows[0])
+        self.assertIn("D（复现困难）", rows[2])
 
 
 if __name__ == "__main__":
