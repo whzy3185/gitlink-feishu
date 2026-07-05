@@ -81,12 +81,23 @@ func TestBranchCreate(t *testing.T) {
 }
 
 func TestBranchCreateDefaultFrom(t *testing.T) {
-	// When 'from' is not set, it defaults to "master"
+	// When 'from' is not set, it falls back to the repository default branch.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/owner/repo/branches.json" {
+		switch r.URL.Path {
+		case "/owner/repo.json":
+			writeJSON(w, map[string]interface{}{"default_branch": "main"})
+		case "/v1/owner/repo/branches.json":
+			var payload map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode payload: %v", err)
+			}
+			if payload["old_branch_name"] != "main" {
+				t.Fatalf("expected old_branch_name to be default branch main, got %v", payload["old_branch_name"])
+			}
+			writeJSON(w, map[string]interface{}{"name": "feature-y"})
+		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		writeJSON(w, map[string]interface{}{"name": "feature-y"})
 	}))
 	defer server.Close()
 

@@ -16,3 +16,10 @@
 
 - `go test ./shortcuts/repo/`（默认 ref 断言改为「不携带 ref 参数」）
 - 生产 gitlink.org.cn 实测：默认分支为 `main` 与 `master` 的仓库均正常列出根目录。
+
+## 追加：branch/pr/release 同类问题一并修复
+
+- 新增 `RuntimeContext.DefaultBranch()`：读取仓库详情的 `default_branch`（缺失时回退 master）
+- `branch +create --from` / `pr +create --base` 未指定时回退到仓库默认分支（不再硬编码 master）
+- `release +create --target` 未指定时省略 `target_commitish`（平台自动落默认分支）
+- 生产实测（默认分支为 main 的仓库）：`repo +tree` / `branch +create` / `release +create` 均成功
