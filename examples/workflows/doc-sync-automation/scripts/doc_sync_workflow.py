@@ -19,12 +19,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# 文档对命名约定：主文档 -> 可能的翻译文档
-PAIR_PATTERNS = [
-    ("README.md", ["README.zh-CN.md", "README_zh.md", "README.zh.md", "README-zh.md"]),
-    ("CONTRIBUTING.md", ["CONTRIBUTING.zh-CN.md", "CONTRIBUTING_zh.md"]),
-    ("CHANGELOG.md", ["CHANGELOG.zh-CN.md"]),
-]
+# 翻译文档命名约定：主文档 X.md -> X{后缀}
+TRANSLATION_SUFFIXES = [".zh-CN.md", "_zh.md", ".zh.md", "-zh.md"]
 
 SEVERITY_ORDER = {"严重": 0, "中等": 1, "轻微": 2}
 SEVERITY_ICON = {"严重": "🔴", "中等": "🟡", "轻微": "🟢"}
@@ -66,10 +62,12 @@ def fetch_file(owner, repo, path, ref, cli="gitlink-cli"):
     return run_cli(args, cli=cli)
 
 
-def list_root_entries(owner, repo, ref, cli="gitlink-cli"):
+def list_entries(owner, repo, ref, path="", cli="gitlink-cli"):
     args = ["repo", "+tree", "--owner", owner, "--repo", repo, "--format", "json"]
     if ref:
         args += ["--ref", ref]
+    if path:
+        args += ["--path", path]
     out = run_cli(args, cli=cli)
     payload = json.loads(out)
     data = payload.get("data", payload)
@@ -85,15 +83,17 @@ def list_root_entries(owner, repo, ref, cli="gitlink-cli"):
 
 
 def discover_pairs(names):
-    """按命名约定从文件名列表中发现文档对。"""
+    """按命名约定从文件名（可含路径前缀）列表中发现文档对。"""
     nameset = set(names)
     pairs = []
-    for base, translations in PAIR_PATTERNS:
-        if base not in nameset:
+    for name in sorted(nameset):
+        if not name.endswith(".md") or any(name.endswith(s) for s in TRANSLATION_SUFFIXES):
             continue
-        for t in translations:
-            if t in nameset:
-                pairs.append((base, t))
+        stem = name[: -len(".md")]
+        for suffix in TRANSLATION_SUFFIXES:
+            translation = stem + suffix
+            if translation in nameset:
+                pairs.append((name, translation))
                 break
     return pairs
 
@@ -223,7 +223,12 @@ def main():
     if args.pair:
         pairs = [tuple(p.split(":", 1)) for p in args.pair]
     else:
-        names = list_root_entries(args.owner, args.repo, args.ref, cli=args.cli)
+        names = list_entries(args.owner, args.repo, args.ref, cli=args.cli)
+        if "docs" in names:
+            names += [
+                f"docs/{n}"
+                for n in list_entries(args.owner, args.repo, args.ref, path="docs", cli=args.cli)
+            ]
         pairs = discover_pairs(names)
         if not pairs:
             print("未发现双语文档对（可用 --pair 手动指定）", file=sys.stderr)

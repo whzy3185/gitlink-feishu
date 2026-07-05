@@ -71,7 +71,7 @@ python3 scripts/doc_sync_workflow.py --owner <owner> --repo <repo> --output-dir 
 | 文档对自动发现 | 生产 gitlink.org.cn 真实仓库 | ✅ 自动识别 README.md ⇄ README.zh-CN.md |
 | 漂移检测 | 本仓库 README 双语版本 | ✅ 检出真实漂移：代码块 32 vs 29、表格 43 vs 40 行 |
 | `--apply` 真实回写 | 自有 fork | ✅ tracking issue 创建成功（issue #1，API 回执确认） |
-| 单测 | `tests/test_drift.py` | ✅ 9/9 全绿 |
+| 单测 | `tests/test_drift.py` | ✅ 11/11 全绿 |
 
 ## 设计要点
 

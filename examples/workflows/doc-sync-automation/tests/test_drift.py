@@ -102,6 +102,16 @@ class DiscoverTest(unittest.TestCase):
     def test_no_pair(self):
         self.assertEqual(discover_pairs(["README.md", "LICENSE"]), [])
 
+    def test_discover_generic_and_nested(self):
+        names = ["docs/guide.md", "docs/guide.zh-CN.md", "USAGE.md", "USAGE_zh.md", "NOTES.zh.md"]
+        self.assertEqual(
+            discover_pairs(names),
+            [("USAGE.md", "USAGE_zh.md"), ("docs/guide.md", "docs/guide.zh-CN.md")],
+        )
+
+    def test_translation_file_not_treated_as_base(self):
+        self.assertEqual(discover_pairs(["README.zh-CN.md", "README_zh.md"]), [])
+
 
 class ReportTest(unittest.TestCase):
     def test_report_contains_findings(self):
