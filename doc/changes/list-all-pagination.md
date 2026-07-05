@@ -39,6 +39,9 @@
   issue 讨论上下文；现接 `/v1/:owner/:repo/issues/:number/journals`
   （资源键 `journals`，生产实测分页 + --all 合并通过），
   复用 --number/--id 语义。
+- 新增 `pr +comments` 子命令：读 PR 评论流
+  （`/v1/:owner/:repo/pulls/:number/journals`）。生产实测该端点
+  忽略 page/limit 始终返回全量，故不暴露分页 flag（避免假分页语义）。
 - 未加 `--all` 的 list 端点均经生产验证为非分页或未部署：
   `licenses`/`ignores` 返回全量数组；`pm/pipelines` 404 未部署；
   `pipeline +runs` 用 `total_data` 非标准包裹；dataset 端点未部署（平台 issue #144255）。

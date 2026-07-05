@@ -55,6 +55,7 @@
   "cmd.org.short": "Organization operations",
   "cmd.pr.close.short": "Close a pull request",
   "cmd.pr.comment.short": "Add a comment to a pull request",
+  "cmd.pr.comments.short": "List comments on a pull request",
   "cmd.pr.create.short": "Create a pull request",
   "cmd.pr.diff.short": "Show diff for a pull request",
   "cmd.pr.files.short": "List changed files in a pull request",

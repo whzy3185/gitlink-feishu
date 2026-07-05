@@ -55,6 +55,7 @@
   "cmd.org.short": "组织操作",
   "cmd.pr.close.short": "关闭拉取请求",
   "cmd.pr.comment.short": "给拉取请求添加评论",
+  "cmd.pr.comments.short": "列出 PR 的评论",
   "cmd.pr.create.short": "创建拉取请求",
   "cmd.pr.diff.short": "显示拉取请求 diff",
   "cmd.pr.files.short": "列出拉取请求中的变更文件",
