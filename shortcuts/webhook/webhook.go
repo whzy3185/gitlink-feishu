@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
@@ -29,11 +30,26 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		{
 			Name:        "list",
 			Description: tr.T("cmd.webhook.list.short"),
+			Flags: []common.Flag{
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
+			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("GET", webhookPath(ctx), nil)
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(webhookPath(ctx), q, "webhooks")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("webhooks", items))
+				}
+				env, err := ctx.CallAPIWithQuery("GET", webhookPath(ctx), q)
 				if err != nil {
 					return err
 				}

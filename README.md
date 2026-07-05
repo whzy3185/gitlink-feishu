@@ -325,7 +325,7 @@ gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role develope
 gitlink-cli issue +list --owner Gitlink --repo forgeplus
 
 # Fetch all pages automatically (works on all paginated list commands:
-# issue/pr/branch/release/milestone/org/repo/label/member +list, search +repos/+users)
+# issue/pr/branch/release/milestone/org/repo/label/member/webhook +list, search +repos/+users)
 gitlink-cli issue +list --owner Gitlink --repo forgeplus --all
 
 # Create an issue
