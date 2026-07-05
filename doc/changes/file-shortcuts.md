@@ -49,6 +49,11 @@ propagation, and raw content extraction from entries/README-shaped responses.
   `--new-branch` 提交到新分支。
 - 更新 README 与 README.zh-CN 的功能表和使用示例。
 
+### 国际化
+
+命令与全部 flag 文案已接入 i18n（`cmd.file.*` / `flag.file.*`，含 en-US 与
+zh-CN 两套 locale），`GITLINK_LANG=zh-CN` 下 `file --help` 输出中文帮助。
+
 ### 验证
 
 - `go test ./...`
