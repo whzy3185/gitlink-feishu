@@ -117,6 +117,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 📖 Wiki | List, view, create, update, and delete wiki pages |
 | 🔍 Search | Search repositories, users |
 | 📊 Dataset | Query research datasets by project |
+| 📄 File | View, search, create, update, and delete repository files without cloning |
 | 👤 User | View user profiles and info |
 | 📊 Profile | User ability, role, major, activity, and contribution statistics |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
@@ -675,6 +676,31 @@ gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --ye
 > gitlink.org.cn. The per-repo `+view`/`+create`/`+update` routes follow the
 > published OpenAPI contract but are not yet deployed on production (they return
 > 404 there); they will work once the platform enables them.
+
+### File Operations
+
+`file` reads and writes repository file contents without cloning — ideal for
+AI agents that need to read or patch a single file. For directory listings and
+README viewing, see `repo +tree` and `repo +readme`.
+
+```bash
+# View a file (--raw prints only the decoded content, for piping)
+gitlink-cli file +view --owner Gitlink --repo forgeplus --path README.md
+gitlink-cli file +view --owner Gitlink --repo forgeplus --path README.md --raw > README.md
+
+# Search files by name
+gitlink-cli file +search --owner Gitlink --repo forgeplus --keyword controller
+
+# Create / update a file (content inline or from a local file)
+gitlink-cli file +create --owner me --repo proj --path docs/note.md -c "# Note" -b master -m "add note"
+gitlink-cli file +update --owner me --repo proj --path docs/note.md --content-file note.md -b master
+
+# Commit to a new branch created from --branch
+gitlink-cli file +update --owner me --repo proj --path docs/note.md -c "..." -b master --new-branch feature/docs
+
+# Delete a file
+gitlink-cli file +delete --owner me --repo proj --path docs/note.md -b master -m "remove note"
+```
 
 ### Raw API
 
