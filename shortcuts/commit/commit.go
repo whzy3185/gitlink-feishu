@@ -48,5 +48,26 @@ func Shortcuts() []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "view",
+			Description: "View a single commit",
+			Flags: []common.Flag{
+				{Name: "sha", Short: "s", Usage: "Commit SHA", Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				sha, err := ctx.RequireArg("sha")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/commits/%s", ctx.RepoPath(), sha), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
 	}
 }

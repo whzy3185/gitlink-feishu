@@ -336,8 +336,16 @@ gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role develope
 gitlink-cli issue +list --owner Gitlink --repo forgeplus
 
 # 自动翻页拉取全部（适用于所有可分页 list 命令：
-# issue/pr/branch/release/milestone/org/repo/label/member/webhook +list、search +repos/+users）
+# issue/pr/branch/release/milestone/org/repo/label/member/webhook/tag/commit +list、
+# issue +comments、repo +watchers/+stargazers/+forks、search +repos/+users）
 gitlink-cli issue +list --owner Gitlink --repo forgeplus --all
+
+# 提交历史与单个提交详情
+gitlink-cli commit +list --owner Gitlink --repo forgeplus --ref develop --all
+gitlink-cli commit +view --owner Gitlink --repo forgeplus --sha <sha>
+
+# Git 标签
+gitlink-cli tag +list --owner Gitlink --repo forgeplus --all
 
 # 创建 Issue
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: 登录失败" -b "复现步骤..."

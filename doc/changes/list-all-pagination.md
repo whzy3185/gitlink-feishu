@@ -43,7 +43,9 @@
   生产实测 forgeplus 16 个 tag 分页与 --all 合并均通过。
 - 新增 `commit +list` 命令组：分页的 `/v1/:owner/:repo/commits`
   端点此前只能通过裸 api 命令访问；支持 `--ref` 指定分支/tag/SHA
-  （映射 sha 参数，生产实测 forgeplus 6762 commits、develop 5346）。
+  （映射 sha 参数，生产实测 forgeplus 6762 commits、develop 5346）；
+  另新增 `commit +view --sha` 单提交详情（v1 无此端点，走遗留
+  `/api/:owner/:repo/commits/:sha`，生产实测含 diff 统计与文件列表）。
 - 新增 `repo +forks`：分页的 forks 列表（总数键 `count`，
   生产实测 forgeplus 77 个 fork 全量合并）；此前只有 fork 创建命令。
 - 修复翻页助手服务端封顶 limit 丢数据 bug：当端点把请求的 limit
