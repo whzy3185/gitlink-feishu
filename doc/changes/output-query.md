@@ -1,4 +1,4 @@
-# 全局 `--query`/`-q` 输出字段提取
+# 全局 `--jq` 输出字段提取
 
 ## 动机
 
@@ -9,9 +9,9 @@
 
 ## 行为
 
-- 新增全局持久 flag `--query` / `-q`，对所有命令生效。
+- 新增全局持久 flag `--jq`，对所有命令生效（不占用 `--query`，与 api 子命令的查询参数 flag 无冲突）。
 - 路径语法：点分段；段为对象键，或非负整数作为数组下标。
-  例：`-q data.commits.0.sha`、`-q data.total_issues_count`。
+  例：`--jq data.commits.0.sha`、`--jq data.total_issues_count`。
 - 标量（字符串/数字/布尔/null）输出裸值，方便 shell 管道直接消费；
   对象与数组输出缩进 JSON。
 - 错误信息可操作：键不存在时列出该层全部可用键（排序后）；
@@ -19,9 +19,9 @@
 
 ## 生产实测
 
-- `issue +list --limit 2 -q data.issues.0.subject` → 裸标题字符串
-- `issue +list -q data.total_issues_count` → `4197`
-- 误键 `-q data.issues.0.name` → 报错并列出 29 个可用键（含 `subject`）
+- `issue +list --limit 2 --jq data.issues.0.subject` → 裸标题字符串
+- `issue +list --jq data.total_issues_count` → `4197`
+- 误键 `--jq data.issues.0.name` → 报错并列出 29 个可用键（含 `subject`）
 
 ## 测试
 
