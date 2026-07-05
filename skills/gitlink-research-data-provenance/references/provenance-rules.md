@@ -1,0 +1,12 @@
+# Data provenance rules
+
+| 检查项 | 风险等级 | 判定线索 | 建议 |
+|---|---|---|---|
+| 数据来源说明缺失 | 高 | 存在 data/datasets/benchmark 目录，但 README 或目录下无来源说明 | 补充数据集名称、下载地址、版本、引用论文和访问日期 |
+| 数据许可证缺失 | 高 | 存在数据文件或下载脚本，但无 license/citation/terms | 补充数据许可证、使用条款和引用格式 |
+| 隐私数据线索 | 高 | 文件名或目录包含 patient、student、email、phone、idcard、address、face、medical 等 | 进行脱敏和伦理审查，避免公开原始个人数据 |
+| 大文件或压缩包 | 中 | 文件名包含 .zip、.tar、.h5、.npy、.parquet 等 | 说明文件来源、校验和、下载方式，不建议直接托管大数据 |
+| 数据下载脚本无校验 | 中 | 有 download/get_data 脚本但无 checksum/version | 补充 checksum、版本号和失败处理 |
+| 引用链不完整 | 中 | README 未说明数据、论文、代码之间的关系 | 补充数据引用、论文引用和实验脚本映射 |
+| 未发现数据痕迹 | 低 | 未见数据目录、下载脚本或数据扩展名 | 在报告中标注未发现，建议说明数据是否需另行申请 |
+
