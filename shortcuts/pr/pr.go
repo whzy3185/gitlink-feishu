@@ -440,6 +440,26 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "commits",
+			Description: tr.T("cmd.pr.commits.short"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, _ := ctx.RequireArg("id")
+				// The pulls commits endpoint ignores page/limit and always
+				// returns the full list, so no pagination flags are exposed.
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s/commits", ctx.RepoPath(), id), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "comments",
 			Description: tr.T("cmd.pr.comments.short"),
 			Flags: []common.Flag{

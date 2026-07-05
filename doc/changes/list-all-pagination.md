@@ -55,6 +55,8 @@
   issue 讨论上下文；现接 `/v1/:owner/:repo/issues/:number/journals`
   （资源键 `journals`，生产实测分页 + --all 合并通过），
   复用 --number/--id 语义。
+- 新增 `pr +commits` 子命令：读 PR 的提交列表（commits 端点）；
+  生产实测该端点同样忽略 page/limit 始终全量，故不暴露分页 flag。
 - 新增 `pr +comments` 子命令：读 PR 评论流
   （`/v1/:owner/:repo/pulls/:number/journals`）。生产实测该端点
   忽略 page/limit 始终返回全量，故不暴露分页 flag（避免假分页语义）。
