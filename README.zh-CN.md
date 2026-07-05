@@ -579,6 +579,8 @@ gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
 | `--repo` | 仓库名称 | `--repo forgeplus` |
 | `--format` | 输出格式（json/table/yaml） | `--format json` |
 | `--debug` | 启用调试输出 | `--debug` |
+| `--lang` | 界面语言（en/zh） | `--lang zh` |
+| `--jq` | 按点分路径从输出中提取字段 | `--jq data.issues.0.subject` |
 
 **自动上下文解析**：在 git 仓库目录下，`--owner` 和 `--repo` 会自动从 `git remote origin` 解析。
 

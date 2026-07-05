@@ -705,6 +705,8 @@ gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
 | `--repo` | Repository name | `--repo forgeplus` |
 | `--format` | Output format (json/table/yaml; workflow also supports markdown) | `--format json` |
 | `--debug` | Enable debug output | `--debug` |
+| `--lang` | Interface language (en/zh) | `--lang zh` |
+| `--jq` | Extract a value from the output by dot-separated path | `--jq data.issues.0.subject` |
 
 **Automatic context resolution:** When running inside a git repository, `--owner` and `--repo` are automatically resolved from `git remote origin`.
 
