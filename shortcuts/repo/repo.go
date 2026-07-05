@@ -21,6 +21,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "category", Short: "c", Usage: tr.T("flag.repo.category"), Default: "manage"},
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+				{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				user := ctx.Arg("user")
@@ -34,6 +35,13 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				path := "/projects"
 				if user != "" {
 					path = fmt.Sprintf("/users/%s/projects", user)
+				}
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(path, q, "projects")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("projects", items))
 				}
 				env, err := ctx.CallAPIWithQuery("GET", path, q)
 				if err != nil {

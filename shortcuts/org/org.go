@@ -17,11 +17,19 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Flags: []common.Flag{
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+				{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey("/organizations", q, "organizations")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("organizations", items))
+				}
 				env, err := ctx.CallAPIWithQuery("GET", "/organizations", q)
 				if err != nil {
 					return err

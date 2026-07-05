@@ -21,6 +21,7 @@ func Shortcuts() []*common.Shortcut {
 				{Name: "sort-direction", Usage: "Sort direction: asc or desc"},
 				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
 				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -34,6 +35,13 @@ func Shortcuts() []*common.Shortcut {
 				setQueryIfPresent(q, "only_name", ctx.Arg("only-name"))
 				setQueryIfPresent(q, "sort_by", ctx.Arg("sort-by"))
 				setQueryIfPresent(q, "sort_direction", ctx.Arg("sort-direction"))
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(milestonePath(ctx), q, "milestones")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("milestones", items))
+				}
 				env, err := ctx.CallAPIWithQuery("GET", milestonePath(ctx), q)
 				if err != nil {
 					return err

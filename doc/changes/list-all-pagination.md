@@ -16,10 +16,15 @@
   - 遵循 `total_count`：达到总数即停止；另设最大页数护栏，防止
     忽略 `page` 参数的端点造成死循环。
   - `PaginateAll` 保持原签名，委托给 `PaginateAllKey`。
-- 四个 list 命令新增 `--all` 布尔参数（默认 false）：
+- 九个分页 list 命令新增 `--all` 布尔参数（默认 false）：
   - `issue +list --all`（合并结果同样应用 number/database_id 规范化）
   - `pr +list --all`、`branch +list --all`、`release +list --all`
+  - `milestone +list --all`、`org +list --all`、`repo +list --all`
+  - `search +repos --all`、`search +users --all`
+  - 对应资源键：`issues`/`pulls`/`branches`/`releases`/`milestones`/
+    `organizations`/`projects`/`users`（均生产实测确认）
   - 输出与单页响应同构：`{"total_count": N, "<资源名>": [...]}`。
+- 总数字段兼容 `total_count` 与 `count`（如 `/users/:login/projects`）。
 - 中英文 i18n 新增 `flag.all` 文案。
 
 ## 命令示例
@@ -28,10 +33,16 @@
 # 拉取仓库全部 open issue（自动翻页合并）
 gitlink-cli issue +list --state open --all --format json
 
-# 全部分支 / 全部 PR / 全部 release
+# 全部分支 / 全部 PR / 全部 release / 全部里程碑
 gitlink-cli branch +list --all
 gitlink-cli pr +list --state all --all
 gitlink-cli release +list --all
+gitlink-cli milestone +list --all
+
+# 全部组织 / 某用户全部仓库 / 搜索结果全量
+gitlink-cli org +list --all
+gitlink-cli repo +list --user Taoyouce --all
+gitlink-cli search +repos --keyword gitlink --all
 ```
 
 ## 测试

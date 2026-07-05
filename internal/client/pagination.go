@@ -84,6 +84,9 @@ func extractListItems(data interface{}, listKey string) ([]json.RawMessage, int,
 		total := -1
 		if tc, ok := v["total_count"].(float64); ok {
 			total = int(tc)
+		} else if tc, ok := v["count"].(float64); ok {
+			// Some endpoints (e.g. /users/:login/projects) report "count".
+			total = int(tc)
 		}
 		if listKey != "" {
 			if slice, ok := v[listKey].([]interface{}); ok {
