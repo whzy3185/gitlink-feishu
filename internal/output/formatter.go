@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -71,6 +72,11 @@ func printTable(w io.Writer, envelope *Envelope) error {
 	case []interface{}:
 		return printSliceTable(w, data)
 	case map[string]interface{}:
+		// Resource-wrapped list responses ({"total_count": N, "<resource>": [...]})
+		// render the wrapped array as a table with the scalar fields as a summary.
+		if items, ok := unwrapListMap(w, data); ok {
+			return printSliceTable(w, items)
+		}
 		// For maps with nested structures, prefer JSON
 		if hasComplexValues(data) {
 			return printJSON(w, envelope)
@@ -80,6 +86,47 @@ func printTable(w io.Writer, envelope *Envelope) error {
 		// Fallback to JSON
 		return printJSON(w, envelope)
 	}
+}
+
+// unwrapListMap detects a map containing exactly one array value while every
+// other value is a scalar (the shape of the platform's paginated list
+// responses). It prints the scalar fields as a summary line and returns the
+// wrapped array for table rendering.
+func unwrapListMap(w io.Writer, m map[string]interface{}) ([]interface{}, bool) {
+	var items []interface{}
+	arrays := 0
+	for _, v := range m {
+		switch value := v.(type) {
+		case []interface{}:
+			arrays++
+			items = value
+		case map[string]interface{}:
+			return nil, false
+		}
+	}
+	if arrays != 1 {
+		return nil, false
+	}
+	scalars := make([]string, 0, len(m))
+	for _, k := range sortedKeys(m) {
+		if _, ok := m[k].([]interface{}); ok {
+			continue
+		}
+		scalars = append(scalars, fmt.Sprintf("%s: %s", k, formatValue(m[k])))
+	}
+	if len(scalars) > 0 {
+		fmt.Fprintln(w, strings.Join(scalars, "  "))
+	}
+	return items, true
+}
+
+func sortedKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func hasComplexValues(m map[string]interface{}) bool {
