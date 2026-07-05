@@ -127,13 +127,17 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "view",
 			Description: tr.T("cmd.pr.view.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "number", Short: "n", Usage: tr.T("flag.pr.number")},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, _ := ctx.RequireArg("id")
+				id, err := prNumberArg(ctx)
+				if err != nil {
+					return err
+				}
 				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
 				if err != nil {
 					return err
@@ -148,14 +152,18 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "merge",
 			Description: tr.T("cmd.pr.merge.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "number", Short: "n", Usage: tr.T("flag.pr.number")},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id")},
 				{Name: "method", Short: "m", Usage: tr.T("flag.pr.merge_method"), Default: "merge"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, _ := ctx.RequireArg("id")
+				id, err := prNumberArg(ctx)
+				if err != nil {
+					return err
+				}
 				method := ctx.Arg("method")
 				if method == "" {
 					method = "merge"
@@ -174,13 +182,17 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "refuse",
 			Description: "Refuse and close a pull request",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "number", Short: "n", Usage: tr.T("flag.pr.number")},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, _ := ctx.RequireArg("id")
+				id, err := prNumberArg(ctx)
+				if err != nil {
+					return err
+				}
 				env, err := ctx.CallAPI("POST", fmt.Sprintf("%s/pulls/%s/refuse_merge", ctx.RepoPath(), id), nil)
 				if err != nil {
 					return err
@@ -192,13 +204,14 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "reopen",
 			Description: "Reopen a closed pull request",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "number", Short: "n", Usage: tr.T("flag.pr.number")},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, err := ctx.RequireArg("id")
+				id, err := prNumberArg(ctx)
 				if err != nil {
 					return err
 				}
@@ -213,13 +226,17 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "files",
 			Description: tr.T("cmd.pr.files.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "number", Short: "n", Usage: tr.T("flag.pr.number")},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, _ := ctx.RequireArg("id")
+				id, err := prNumberArg(ctx)
+				if err != nil {
+					return err
+				}
 				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s/files", ctx.RepoPath(), id), nil)
 				if err != nil {
 					return err
@@ -231,13 +248,17 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "diff",
 			Description: tr.T("cmd.pr.diff.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "number", Short: "n", Usage: tr.T("flag.pr.number")},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, _ := ctx.RequireArg("id")
+				id, err := prNumberArg(ctx)
+				if err != nil {
+					return err
+				}
 				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s/files", ctx.RepoPath(), id), nil)
 				if err != nil {
 					return err
@@ -249,13 +270,14 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "versions",
 			Description: tr.T("cmd.pr.versions.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "number", Short: "n", Usage: tr.T("flag.pr.number")},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, err := ctx.RequireArg("id")
+				id, err := prNumberArg(ctx)
 				if err != nil {
 					return err
 				}
@@ -270,7 +292,8 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "version-diff",
 			Description: tr.T("cmd.pr.version_diff.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "number", Short: "n", Usage: tr.T("flag.pr.number")},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id")},
 				{Name: "version-id", Short: "v", Usage: tr.T("flag.pr.version_id"), Required: true},
 				{Name: "file", Short: "f", Usage: tr.T("flag.pr.file")},
 			},
@@ -278,7 +301,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, err := ctx.RequireArg("id")
+				id, err := prNumberArg(ctx)
 				if err != nil {
 					return err
 				}
@@ -307,14 +330,15 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "reviews",
 			Description: tr.T("cmd.pr.reviews.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "number", Short: "n", Usage: tr.T("flag.pr.number")},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id")},
 				{Name: "status", Short: "s", Usage: tr.T("flag.pr.review_status_filter")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, err := ctx.RequireArg("id")
+				id, err := prNumberArg(ctx)
 				if err != nil {
 					return err
 				}
@@ -336,7 +360,8 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "review",
 			Description: tr.T("cmd.pr.review.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "number", Short: "n", Usage: tr.T("flag.pr.number")},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id")},
 				{Name: "status", Short: "s", Usage: tr.T("flag.pr.review_status"), Default: "common"},
 				{Name: "content", Short: "c", Usage: tr.T("flag.pr.review_content"), Required: true},
 				{Name: "commit", Short: "m", Usage: tr.T("flag.pr.review_commit")},
@@ -346,7 +371,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, err := ctx.RequireArg("id")
+				id, err := prNumberArg(ctx)
 				if err != nil {
 					return err
 				}
@@ -402,14 +427,18 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "comment",
 			Description: tr.T("cmd.pr.comment.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "number", Short: "n", Usage: tr.T("flag.pr.number")},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id")},
 				{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, _ := ctx.RequireArg("id")
+				id, err := prNumberArg(ctx)
+				if err != nil {
+					return err
+				}
 				body, _ := ctx.RequireArg("body")
 
 				prEnv, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
@@ -558,4 +587,14 @@ func numberField(m map[string]interface{}, key string) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func prNumberArg(ctx *common.RuntimeContext) (string, error) {
+	if number := strings.TrimSpace(ctx.Arg("number")); number != "" {
+		return number, nil
+	}
+	if id := strings.TrimSpace(ctx.Arg("id")); id != "" {
+		return id, nil
+	}
+	return "", fmt.Errorf("required flag --number is missing (or use --id as a compatibility alias)")
 }
