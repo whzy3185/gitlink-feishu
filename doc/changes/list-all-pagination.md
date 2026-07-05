@@ -16,14 +16,15 @@
   - 遵循 `total_count`：达到总数即停止；另设最大页数护栏，防止
     忽略 `page` 参数的端点造成死循环。
   - `PaginateAll` 保持原签名，委托给 `PaginateAllKey`。
-- 十五个分页 list 命令新增 `--all` 布尔参数（默认 false）：
+- 十七个分页 list 命令新增 `--all` 布尔参数（默认 false）：
   - `issue +list --all`（合并结果同样应用 number/database_id 规范化）
   - `pr +list --all`、`branch +list --all`、`release +list --all`
   - `milestone +list --all`、`org +list --all`、`repo +list --all`
   - `search +repos --all`、`search +users --all`
   - `label +list --all`、`member +list --all`、`webhook +list --all`
   - `issue +comments --all`（新增子命令，见下）
-  - `tag +list --all`（新增命令组，见下）、`repo +watchers/+stargazers --all`
+  - `tag +list --all`、`commit +list --all`（新增命令组，见下）
+  - `repo +watchers/+stargazers/+forks --all`
   - 对应资源键：`issues`/`pulls`/`branches`/`releases`/`milestones`/
     `organizations`/`projects`/`users`/`issue_tags`/`collaborators`/`webhooks`
     （均生产实测确认）
@@ -40,6 +41,11 @@
 - 新增 `tag +list` 命令组：平台暴露分页的 `/v1/:owner/:repo/tags`
   端点（轻量 tag 与 release 不同），但 CLI 此前完全没有 tag 命令；
   生产实测 forgeplus 16 个 tag 分页与 --all 合并均通过。
+- 新增 `commit +list` 命令组：分页的 `/v1/:owner/:repo/commits`
+  端点此前只能通过裸 api 命令访问；支持 `--ref` 指定分支/tag/SHA
+  （映射 sha 参数，生产实测 forgeplus 6762 commits、develop 5346）。
+- 新增 `repo +forks`：分页的 forks 列表（总数键 `count`，
+  生产实测 forgeplus 77 个 fork 全量合并）；此前只有 fork 创建命令。
 - 修复翻页助手服务端封顶 limit 丢数据 bug：当端点把请求的 limit
   封顶（如请求 100 每页只返 20）时，旧逻辑因「页内条数 < limit」提前
   终止只拿到首页；现已知 total 时以 total 为准（watchers 264 条全量

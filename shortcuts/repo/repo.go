@@ -160,6 +160,35 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "forks",
+			Description: "List repository forks",
+			Flags: []common.Flag{
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(ctx.RepoPath()+"/forks", q, "users")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("users", items))
+				}
+				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/forks", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "follow",
 			Description: "Follow a repository",
 			Flags:       repoInteractionFlags(),
