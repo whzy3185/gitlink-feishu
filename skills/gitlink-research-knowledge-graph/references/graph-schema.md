@@ -1,27 +1,27 @@
-# Research knowledge graph schema
+# 科研知识图谱结构
 
-Node types:
+节点类型：
 
-| Type | Required fields | Description |
+| 类型 | 必填字段 | 说明 |
 |---|---|---|
-| `repo` | `id`, `owner`, `repo`, `label` | GitLink repository |
-| `language` | `id`, `name` | Programming language |
-| `contributor` | `id`, `login` | Public contributor identity |
-| `topic` | `id`, `name` | Keyword or inferred research topic |
-| `issue` | `id`, `title`, `state` | Representative Issue |
-| `pr` | `id`, `title`, `state` | Representative PR |
+| `repo` | `id`, `owner`, `repo`, `label` | GitLink 仓库 |
+| `language` | `id`, `name` | 编程语言 |
+| `contributor` | `id`, `login` | 公开贡献者身份 |
+| `topic` | `id`, `name` | 关键词或推断出的研究主题 |
+| `issue` | `id`, `title`, `state` | 代表性 Issue |
+| `pr` | `id`, `title`, `state` | 代表性 PR |
 
-Edge types:
+边类型：
 
-| Type | From | To | Evidence |
+| 类型 | 起点 | 终点 | 证据 |
 |---|---|---|---|
 | `uses_language` | repo | language | `repo +languages` |
 | `contributed_by` | contributor | repo | `repo +contributors` |
-| `matches_topic` | repo | topic | search keyword or description |
+| `matches_topic` | repo | topic | 搜索关键词或描述 |
 | `has_issue` | repo | issue | `issue +list` |
 | `has_pr` | repo | pr | `pr +list` |
 
-Example:
+示例：
 
 ```json
 {
@@ -34,4 +34,3 @@ Example:
   ]
 }
 ```
-

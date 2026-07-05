@@ -1,4 +1,4 @@
-# Reproducibility checklist
+# 复现性检查清单
 
 | 项目 | 分值 | 通过条件 | 缺失时建议 |
 |---|---:|---|---|
@@ -9,4 +9,3 @@
 | CI 配置 | 10 | 存在 CI 配置目录或文件 | 增加基础 lint/test CI |
 | 示例或文档 | 10 | 存在 docs/examples/demo | 补充复现实验步骤或示例输入输出 |
 | 数据或实验说明 | 10 | 存在 data/datasets/experiments/notebooks 或 README 中明确说明 | 写明数据来源、下载方式、实验配置 |
-

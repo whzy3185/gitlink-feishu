@@ -1,4 +1,4 @@
-# Research artifact handbook template
+# 科研成果沉淀手册模板
 
 ```markdown
 # 科研成果沉淀手册：<owner>/<repo>
@@ -56,4 +56,3 @@
 - [ ] 实验命令可运行
 - [ ] Release 或归档版本可引用
 ```
-

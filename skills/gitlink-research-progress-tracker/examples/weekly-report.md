@@ -1,12 +1,12 @@
-# Research weekly report example
+# 科研周报示例
 
-User request:
+用户请求：
 
 ```text
 请给 songhui18/ICCV2021 生成一份科研项目进度周报和风险预警。
 ```
 
-Agent steps:
+Agent 步骤：
 
 ```bash
 gitlink-cli repo +info --owner songhui18 --repo ICCV2021 --format json
@@ -17,9 +17,8 @@ gitlink-cli pr +list --owner songhui18 --repo ICCV2021 --state merged --format j
 gitlink-cli release +list --owner songhui18 --repo ICCV2021 --format json
 ```
 
-Expected answer:
+预期回答：
 
-- Provide a concise weekly report.
-- Identify the top 3 risks with evidence.
-- Do not write comments back unless explicitly requested.
-
+- 提供简洁的科研项目周报。
+- 识别前三个风险并给出证据。
+- 除非用户明确要求，不写回评论。

@@ -1,4 +1,4 @@
-# Compliance risk rules
+# 合规风险规则
 
 | 风险 | 等级 | 判定 | 建议 |
 |---|---|---|---|
@@ -8,4 +8,3 @@
 | 缺少依赖声明 | 中 | 无常见依赖清单 | 补充依赖文件，便于许可证和漏洞审计 |
 | 缺少 SECURITY | 中 | 无 `SECURITY.md` | 补充漏洞披露流程 |
 | 缺少 CONTRIBUTING | 低 | 无 `CONTRIBUTING.md` | 补充贡献流程和代码规范 |
-

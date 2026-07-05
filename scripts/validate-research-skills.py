@@ -61,20 +61,20 @@ def read(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        fail(f"missing file: {path}")
+        fail(f"缺少文件：{path}")
 
 
 def parse_frontmatter(text: str, path: Path) -> dict[str, str]:
     if not text.startswith("---\n"):
-        fail(f"{path} does not start with YAML frontmatter")
+        fail(f"{path} 未以 YAML frontmatter 开头")
     try:
         _, frontmatter, _ = text.split("---", 2)
     except ValueError:
-        fail(f"{path} has incomplete YAML frontmatter")
+        fail(f"{path} 的 YAML frontmatter 不完整")
     parsed: dict[str, str] = {}
     for line in frontmatter.strip().splitlines():
         if ":" not in line:
-            fail(f"{path} frontmatter line has no colon: {line}")
+            fail(f"{path} 的 frontmatter 行缺少冒号：{line}")
         key, value = line.split(":", 1)
         parsed[key.strip()] = value.strip().strip('"')
     return parsed
@@ -82,12 +82,12 @@ def parse_frontmatter(text: str, path: Path) -> dict[str, str]:
 
 def assert_contains(text: str, needle: str, path: Path) -> None:
     if needle not in text:
-        fail(f"{path} is missing required text: {needle}")
+        fail(f"{path} 缺少必需文本：{needle}")
 
 
 def assert_regex(text: str, pattern: str, path: Path) -> None:
     if not re.search(pattern, text, flags=re.MULTILINE):
-        fail(f"{path} does not match required pattern: {pattern}")
+        fail(f"{path} 未匹配必需模式：{pattern}")
 
 
 def validate_skill(root: Path, name: str, spec: dict[str, list[str]]) -> None:
@@ -97,13 +97,13 @@ def validate_skill(root: Path, name: str, spec: dict[str, list[str]]) -> None:
     frontmatter = parse_frontmatter(text, skill_md)
 
     if frontmatter.get("name") != name:
-        fail(f"{skill_md} has wrong name: {frontmatter.get('name')}")
+        fail(f"{skill_md} 的 name 字段错误：{frontmatter.get('name')}")
     description = frontmatter.get("description", "")
     if len(description) < 30:
-        fail(f"{skill_md} description is too short")
+        fail(f"{skill_md} 的 description 过短")
     for keyword in spec["keywords"]:
         if keyword not in text and keyword not in description:
-            fail(f"{skill_md} is missing scenario keyword: {keyword}")
+            fail(f"{skill_md} 缺少场景关键词：{keyword}")
 
     assert_contains(text, "gitlink-shared", skill_md)
     assert_contains(text, "gitlink-cli", skill_md)
@@ -118,14 +118,14 @@ def validate_skill(root: Path, name: str, spec: dict[str, list[str]]) -> None:
         path = skill_dir / "references" / filename
         ref_text = read(path)
         if len(ref_text.strip().splitlines()) < 5:
-            fail(f"{path} is too small to be useful")
+            fail(f"{path} 内容过少，无法作为有效参考")
 
     for filename in spec["examples"]:
         path = skill_dir / "examples" / filename
         example_text = read(path)
-        assert_contains(example_text, "User request", path)
-        assert_contains(example_text, "Agent steps", path)
-        assert_contains(example_text, "Expected answer", path)
+        assert_contains(example_text, "用户请求", path)
+        assert_contains(example_text, "Agent 步骤", path)
+        assert_contains(example_text, "预期回答", path)
         assert_contains(example_text, "gitlink-cli", path)
 
 
@@ -142,7 +142,7 @@ def validate_change_note(root: Path) -> None:
     for name in RESEARCH_SKILLS:
         assert_contains(text, name, note)
     if "scripts/validate-research-skills.py" not in text and "make validate-research-skills" not in text:
-        fail(f"{note} is missing the research Skills validation command")
+        fail(f"{note} 缺少科研 Skills 验证命令")
 
 
 def main() -> int:
