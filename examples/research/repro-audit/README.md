@@ -10,6 +10,18 @@
 - **学术规范检查**：许可证、引用信息（CITATION.cff/BibTeX）、数据可得性一次性核验
 - **可进 CI**：退出码 `2` 表示存在明显复现缺口，可作为科研仓库的发布门禁
 
+## 架构图
+
+```mermaid
+flowchart LR
+    A["repo +tree<br/>仓库顶层结构"] --> D["八维确定性评估<br/>文档/许可证/引用/依赖<br/>入口/数据说明/测试/版本固化"]
+    B["file +view --raw<br/>README 内容"] --> D
+    C["release +list<br/>版本发布信息"] --> D
+    D --> E["0-100 评分卡<br/>A/B/C/D 等级 + 逐项证据与建议"]
+    E -->|"dry-run（默认）"| F["报告落盘<br/>退出码 0/2 → 发布门禁"]
+    E -->|"--apply"| G["issue +create<br/>回写改进 tracking issue"]
+```
+
 ## 交付物
 
 - `scripts/repro_audit.py`：完整审计闭环（纯标准库，Python ≥3.9，零第三方依赖）
