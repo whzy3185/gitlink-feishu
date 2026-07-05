@@ -42,6 +42,7 @@
   "cmd.issue.batch_list.short": "列出议题批量维护候选项，不修改远端数据",
   "cmd.issue.close.short": "关闭议题",
   "cmd.issue.comment.short": "给议题添加评论",
+  "cmd.issue.comments.short": "列出 Issue 的评论",
   "cmd.issue.create.short": "创建新议题",
   "cmd.issue.list.short": "列出议题",
   "cmd.issue.short": "议题操作",

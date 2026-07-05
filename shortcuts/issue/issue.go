@@ -308,6 +308,40 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "comments",
+			Description: tr.T("cmd.issue.comments.short"),
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				common.Flag{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+				common.Flag{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
+			),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				number, err := issueNumberArg(ctx)
+				if err != nil {
+					return err
+				}
+				path := fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number)
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(path, q, "journals")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("journals", items))
+				}
+				env, err := ctx.CallAPIWithQuery("GET", path, q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "assigners",
 			Description: "List issue assigners",
 			Flags: []common.Flag{

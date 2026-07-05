@@ -42,6 +42,7 @@
   "cmd.issue.batch_list.short": "List issue batch maintenance candidates without changing remote data",
   "cmd.issue.close.short": "Close an issue",
   "cmd.issue.comment.short": "Add a comment to an issue",
+  "cmd.issue.comments.short": "List comments on an issue",
   "cmd.issue.create.short": "Create a new issue",
   "cmd.issue.list.short": "List issues",
   "cmd.issue.short": "Issue operations",
