@@ -324,6 +324,10 @@ gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role develope
 # List issues
 gitlink-cli issue +list --owner Gitlink --repo forgeplus
 
+# Fetch all pages automatically (works on all paginated list commands:
+# issue/pr/branch/release/milestone/org/repo/label/member +list, search +repos/+users)
+gitlink-cli issue +list --owner Gitlink --repo forgeplus --all
+
 # Create an issue
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: Login failed" -b "Steps to reproduce..."
 
