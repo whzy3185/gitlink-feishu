@@ -33,7 +33,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Flags: []common.Flag{
 				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
 				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
-				{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
+				{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
