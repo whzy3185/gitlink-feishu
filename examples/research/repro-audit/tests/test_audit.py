@@ -89,6 +89,11 @@ class AuditTest(unittest.TestCase):
         self.assertIn("A（可复现性良好）", rows[0])
         self.assertIn("D（复现困难）", rows[2])
 
+    def test_render_summary_lists_failures(self):
+        summary = render_summary([("o/ok", 80)], failures=[("o/broken", "仓库树读取失败")])
+        self.assertIn("## 无法审计的仓库", summary)
+        self.assertIn("- o/broken：仓库树读取失败", summary)
+
 
 if __name__ == "__main__":
     unittest.main()

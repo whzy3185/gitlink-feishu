@@ -1,0 +1,6 @@
+# 真实科研相关仓库批量复现性审计清单
+GengzhaoWang/UAV-Paper
+momomym/paper-summarizer
+zhaoyihan/paper-data-redundancy
+steph1/Awesome-Paper-Crawler
+datawhalechina/paper-chart-tutorial

@@ -205,13 +205,16 @@ def read_repos_file(path):
     return repos
 
 
-def render_summary(rows):
-    """批量审计汇总表（确定性：按得分降序、同分按名称）。"""
+def render_summary(rows, failures=()):
+    """批量审计汇总表（确定性：按得分降序、同分按名称；失败仓库单独列出）。"""
     rows = sorted(rows, key=lambda r: (-r[1], r[0]))
     lines = ["# 批量复现性审计汇总", "", "| 仓库 | 得分 | 等级 |", "|------|------|------|"]
     for name, total in rows:
         grade = next(g for t, g in GRADE if total >= t)
         lines.append(f"| {name} | {total}/100 | {grade} |")
+    if failures:
+        lines += ["", "## 无法审计的仓库", ""]
+        lines += [f"- {name}：{reason}" for name, reason in sorted(failures)]
     return "\n".join(lines) + "\n"
 
 
@@ -233,17 +236,22 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.repos_file:
-        rows = []
+        rows, failures = [], []
         for owner, repo in read_repos_file(args.repos_file):
-            total = audit_repo(owner, repo, args.ref, out_dir, args.cli,
-                               apply_issue=args.apply, echo=False)
-            rows.append((f"{owner}/{repo}", total))
-        summary = render_summary(rows)
+            name = f"{owner}/{repo}"
+            try:
+                total = audit_repo(owner, repo, args.ref, out_dir, args.cli,
+                                   apply_issue=args.apply, echo=False)
+                rows.append((name, total))
+            except RuntimeError as exc:
+                print(f"跳过 {name}：{exc}", file=sys.stderr)
+                failures.append((name, str(exc)))
+        summary = render_summary(rows, failures)
         summary_path = out_dir / "repro-audit-summary.md"
         summary_path.write_text(summary, encoding="utf-8")
         print(summary)
         print(f"汇总已保存：{summary_path}", file=sys.stderr)
-        return 0 if all(t >= 70 for _, t in rows) else 2
+        return 0 if not failures and all(t >= 70 for _, t in rows) else 2
 
     total = audit_repo(args.owner, args.repo, args.ref, out_dir, args.cli,
                        apply_issue=args.apply)
