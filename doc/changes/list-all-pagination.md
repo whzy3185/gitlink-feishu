@@ -16,7 +16,7 @@
   - 遵循 `total_count`：达到总数即停止；另设最大页数护栏，防止
     忽略 `page` 参数的端点造成死循环。
   - `PaginateAll` 保持原签名，委托给 `PaginateAllKey`。
-- 十七个分页 list 命令新增 `--all` 布尔参数（默认 false）：
+- 十八个分页 list 命令新增 `--all` 布尔参数（默认 false）：
   - `issue +list --all`（合并结果同样应用 number/database_id 规范化）
   - `pr +list --all`、`branch +list --all`、`release +list --all`
   - `milestone +list --all`、`org +list --all`、`repo +list --all`
@@ -24,7 +24,8 @@
   - `label +list --all`、`member +list --all`、`webhook +list --all`
   - `issue +comments --all`（新增子命令，见下）
   - `tag +list --all`、`commit +list --all`（新增命令组，见下）
-  - `repo +watchers/+stargazers/+forks --all`
+  - `repo +watchers/+stargazers/+forks --all`、`org +members --all`
+    （资源键 `organization_users`，生产实测 gitlink 组织 71 名成员全量合并）
   - 对应资源键：`issues`/`pulls`/`branches`/`releases`/`milestones`/
     `organizations`/`projects`/`users`/`issue_tags`/`collaborators`/`webhooks`
     （均生产实测确认）
