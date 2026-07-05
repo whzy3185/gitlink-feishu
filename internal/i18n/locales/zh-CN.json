@@ -114,6 +114,7 @@
   "error.missing_required_flag": "缺少必需参数 --{name}",
   "error.profile.user_required": "无法确定目标用户；请通过 --user 指定，或先运行 gitlink-cli auth login 登录",
   "error.unsupported_language": "不支持的语言：{lang}",
+  "flag.all": "自动获取全部分页（忽略 --page）",
   "flag.api.batch_continue_on_error": "批处理请求失败后继续执行后续请求",
   "flag.api.batch_dry_run": "预览批处理请求，不发送远端请求",
   "flag.api.batch_file": "从 JSON 文件读取 API 批处理计划",

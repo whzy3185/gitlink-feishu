@@ -114,6 +114,7 @@
   "error.missing_required_flag": "required flag --{name} is missing",
   "error.profile.user_required": "could not determine target user; pass --user or run gitlink-cli auth login",
   "error.unsupported_language": "unsupported language: {lang}",
+  "flag.all": "Fetch all pages automatically (ignores --page)",
   "flag.api.batch_continue_on_error": "Continue running remaining batch requests after a failure",
   "flag.api.batch_dry_run": "Preview batch requests without sending remote requests",
   "flag.api.batch_file": "Read an API batch plan from a JSON file",

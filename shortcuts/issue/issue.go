@@ -63,6 +63,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "sort-direction", Usage: tr.T("flag.sort_direction")},
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+				{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -100,6 +101,15 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}
 				if sortDirection := ctx.Arg("sort-direction"); sortDirection != "" {
 					q.Set("sort_direction", sortDirection)
+				}
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(v1RepoPath(ctx)+"/issues", q, "issues")
+					if err != nil {
+						return err
+					}
+					env := common.NewListEnvelope("issues", items)
+					normalizeIssueListIDs(env)
+					return ctx.Output(env)
 				}
 				env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx)+"/issues", q)
 				if err != nil {

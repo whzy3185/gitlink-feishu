@@ -7,8 +7,23 @@ import (
 	"strconv"
 )
 
+// maxPaginationPages caps auto-pagination as a safety guard against
+// endpoints that ignore the page parameter and keep returning data.
+const maxPaginationPages = 1000
+
 // PaginateAll fetches all pages and returns combined results.
+// The list array is auto-detected inside the response body.
 func (c *Client) PaginateAll(path string, params url.Values) ([]json.RawMessage, error) {
+	return c.PaginateAllKey(path, params, "")
+}
+
+// PaginateAllKey fetches all pages, extracting the list array from the
+// response field named listKey (e.g. "issues", "pulls", "branches").
+// When listKey is empty the array is auto-detected: top-level arrays,
+// the conventional "data" wrapper, or a unique array-valued field.
+// Pagination stops when a page returns fewer items than the limit, when
+// total_count (if reported) is reached, or at the safety page cap.
+func (c *Client) PaginateAllKey(path string, params url.Values, listKey string) ([]json.RawMessage, error) {
 	if params == nil {
 		params = url.Values{}
 	}
@@ -17,57 +32,91 @@ func (c *Client) PaginateAll(path string, params url.Values) ([]json.RawMessage,
 	}
 
 	var all []json.RawMessage
-	page := 1
+	totalCount := -1
 
-	for {
+	for page := 1; page <= maxPaginationPages; page++ {
 		params.Set("page", strconv.Itoa(page))
 		env, err := c.Get(path, params)
 		if err != nil {
 			return nil, err
 		}
-
 		if !env.OK {
 			return nil, fmt.Errorf("API error on page %d", page)
 		}
 
-		// Try to extract array from data
-		var items []json.RawMessage
-		switch data := env.Data.(type) {
-		case []interface{}:
-			for _, item := range data {
-				raw, _ := json.Marshal(item)
-				items = append(items, raw)
-			}
-		case map[string]interface{}:
-			// Some endpoints wrap in {"data": [...], "total_count": N}
-			if arr, ok := data["data"]; ok {
-				if slice, ok := arr.([]interface{}); ok {
-					for _, item := range slice {
-						raw, _ := json.Marshal(item)
-						items = append(items, raw)
-					}
-				}
-			} else {
-				// Single object, not paginated
-				raw, _ := json.Marshal(data)
+		items, pageTotal, isList := extractListItems(env.Data, listKey)
+		if !isList {
+			if page == 1 {
+				raw, _ := json.Marshal(env.Data)
 				return []json.RawMessage{raw}, nil
 			}
+			break
+		}
+		if pageTotal >= 0 {
+			totalCount = pageTotal
 		}
 
 		if len(items) == 0 {
 			break
 		}
-
 		all = append(all, items...)
 
-		// Check if we got fewer items than limit
+		if totalCount >= 0 && len(all) >= totalCount {
+			break
+		}
 		limit, _ := strconv.Atoi(params.Get("limit"))
 		if len(items) < limit {
 			break
 		}
-
-		page++
 	}
 
 	return all, nil
+}
+
+// extractListItems locates the list array inside a decoded response body.
+// It returns the items, the reported total_count (-1 when absent) and
+// whether a list array was found at all.
+func extractListItems(data interface{}, listKey string) ([]json.RawMessage, int, bool) {
+	switch v := data.(type) {
+	case []interface{}:
+		return marshalItems(v), -1, true
+	case map[string]interface{}:
+		total := -1
+		if tc, ok := v["total_count"].(float64); ok {
+			total = int(tc)
+		}
+		if listKey != "" {
+			if slice, ok := v[listKey].([]interface{}); ok {
+				return marshalItems(slice), total, true
+			}
+			return nil, total, false
+		}
+		if slice, ok := v["data"].([]interface{}); ok {
+			return marshalItems(slice), total, true
+		}
+		// Auto-detect: GitLink v1 list endpoints wrap the array in a
+		// resource-named field ({"total_count":N,"issues":[...]}).
+		var found []interface{}
+		arrays := 0
+		for _, val := range v {
+			if slice, ok := val.([]interface{}); ok {
+				arrays++
+				found = slice
+			}
+		}
+		if arrays == 1 {
+			return marshalItems(found), total, true
+		}
+		return nil, total, false
+	}
+	return nil, -1, false
+}
+
+func marshalItems(items []interface{}) []json.RawMessage {
+	out := make([]json.RawMessage, 0, len(items))
+	for _, item := range items {
+		raw, _ := json.Marshal(item)
+		out = append(out, raw)
+	}
+	return out
 }
