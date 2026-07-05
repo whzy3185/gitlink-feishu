@@ -64,8 +64,11 @@ func (c *Client) PaginateAllKey(path string, params url.Values, listKey string) 
 		if totalCount >= 0 && len(all) >= totalCount {
 			break
 		}
+		// A short page only signals the end when the endpoint does not
+		// report a total: servers may cap the requested limit (e.g. ask
+		// for 100, get 20 per page), so with a known total we rely on it.
 		limit, _ := strconv.Atoi(params.Get("limit"))
-		if len(items) < limit {
+		if totalCount < 0 && len(items) < limit {
 			break
 		}
 	}

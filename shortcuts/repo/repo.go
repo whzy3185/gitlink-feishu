@@ -334,6 +334,15 @@ func runCommunityList(ctx *common.RuntimeContext, path string) error {
 	if err != nil {
 		return err
 	}
+	q.Set("page", ctx.Arg("page"))
+	q.Set("limit", ctx.Arg("limit"))
+	if ctx.Arg("all") == "true" {
+		items, err := ctx.PaginateAllKey(ctx.RepoPath()+"/"+path, q, "users")
+		if err != nil {
+			return err
+		}
+		return ctx.Output(common.NewListEnvelope("users", items))
+	}
 	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/"+path, q)
 	if err != nil {
 		return err
@@ -345,6 +354,9 @@ func communityListFlags() []common.Flag {
 	return []common.Flag{
 		{Name: "start-at", Usage: "Start timestamp"},
 		{Name: "end-at", Usage: "End timestamp"},
+		{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+		{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+		{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
 	}
 }
 

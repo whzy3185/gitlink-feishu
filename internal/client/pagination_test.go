@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -150,5 +151,32 @@ func TestPaginateAllKeyMissingKeyNotList(t *testing.T) {
 	}
 	if len(items) != 1 {
 		t.Fatalf("len(items) = %d, want 1 (single-object fallback)", len(items))
+	}
+}
+
+func TestPaginateAllKeyServerCappedLimit(t *testing.T) {
+	// The server caps every page at 2 items regardless of the requested
+	// limit; with total_count reported, all 5 items must still be fetched.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		start := (page - 1) * 2
+		var items []string
+		for i := start; i < start+2 && i < 5; i++ {
+			items = append(items, fmt.Sprintf(`{"id":%d}`, i))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"count":5,"users":[%s]}`, strings.Join(items, ","))
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
+	params := url.Values{}
+	params.Set("limit", "100")
+	items, err := c.PaginateAllKey("/thing", params, "users")
+	if err != nil {
+		t.Fatalf("PaginateAllKey: %v", err)
+	}
+	if len(items) != 5 {
+		t.Fatalf("len(items) = %d, want 5", len(items))
 	}
 }

@@ -16,13 +16,14 @@
   - 遵循 `total_count`：达到总数即停止；另设最大页数护栏，防止
     忽略 `page` 参数的端点造成死循环。
   - `PaginateAll` 保持原签名，委托给 `PaginateAllKey`。
-- 十二个分页 list 命令新增 `--all` 布尔参数（默认 false）：
+- 十五个分页 list 命令新增 `--all` 布尔参数（默认 false）：
   - `issue +list --all`（合并结果同样应用 number/database_id 规范化）
   - `pr +list --all`、`branch +list --all`、`release +list --all`
   - `milestone +list --all`、`org +list --all`、`repo +list --all`
   - `search +repos --all`、`search +users --all`
   - `label +list --all`、`member +list --all`、`webhook +list --all`
   - `issue +comments --all`（新增子命令，见下）
+  - `tag +list --all`（新增命令组，见下）、`repo +watchers/+stargazers --all`
   - 对应资源键：`issues`/`pulls`/`branches`/`releases`/`milestones`/
     `organizations`/`projects`/`users`/`issue_tags`/`collaborators`/`webhooks`
     （均生产实测确认）
@@ -33,7 +34,16 @@
   - `member +list` 既无分页又走遗留路径（非管理员直接 403），现改走
     `/v1/:owner/:repo/collaborators`（支持分页且普通成员可读）；
   - `webhook +list` 完全没有 `--page/--limit`（探针实测：建 3 个 webhook 后
-    `page=2&limit=1` 返回第二条，确认端点分页），现已补齐。
+    `page=2&limit=1` 返回第二条，确认端点分页），现已补齐；
+  - `repo +watchers/+stargazers` 完全没有分页 flag（端点实测分页，
+    总数键 `count`，forgeplus watchers 264 / stargazers 577），现已补齐。
+- 新增 `tag +list` 命令组：平台暴露分页的 `/v1/:owner/:repo/tags`
+  端点（轻量 tag 与 release 不同），但 CLI 此前完全没有 tag 命令；
+  生产实测 forgeplus 16 个 tag 分页与 --all 合并均通过。
+- 修复翻页助手服务端封顶 limit 丢数据 bug：当端点把请求的 limit
+  封顶（如请求 100 每页只返 20）时，旧逻辑因「页内条数 < limit」提前
+  终止只拿到首页；现已知 total 时以 total 为准（watchers 264 条全量
+  合并生产实测），新增回归单测。
 - 新增 `issue +comments` 子命令（对标 `gh issue view --comments`）：
   此前 CLI 只能发评论（`issue +comment`）无法读评论流，Agent 无法获取
   issue 讨论上下文；现接 `/v1/:owner/:repo/issues/:number/journals`
