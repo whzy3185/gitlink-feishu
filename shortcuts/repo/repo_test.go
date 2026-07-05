@@ -158,7 +158,9 @@ func TestRepoTreeListsRootOnDefaultRef(t *testing.T) {
 		if _, ok := r.URL.Query()["filepath"]; ok {
 			t.Fatalf("did not expect filepath query for repository root, got %q", r.URL.Query().Get("filepath"))
 		}
-		assertEqual(t, r.URL.Query().Get("ref"), "master")
+		if _, ok := r.URL.Query()["ref"]; ok {
+			t.Fatalf("did not expect ref query for default ref, got %q", r.URL.Query().Get("ref"))
+		}
 		writeJSON(t, w, map[string]interface{}{
 			"entries": []map[string]interface{}{
 				{"name": "README.md", "type": "file"},
@@ -213,7 +215,7 @@ func TestRepoTreeShortcutRegistersHelpFlags(t *testing.T) {
 	if !ok {
 		t.Fatal("tree shortcut missing ref flag")
 	}
-	if refFlag.Short != "r" || refFlag.Default != "master" || refFlag.Usage == "" {
+	if refFlag.Short != "r" || refFlag.Default != "" || refFlag.Usage == "" {
 		t.Fatalf("unexpected ref flag: %+v", refFlag)
 	}
 }
