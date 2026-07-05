@@ -81,6 +81,35 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "repos",
+			Description: tr.T("cmd.org.repos.short"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.org.id"), Required: true},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+				{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				id, _ := ctx.RequireArg("id")
+				path := fmt.Sprintf("/organizations/%s/projects", id)
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(path, q, "projects")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("projects", items))
+				}
+				env, err := ctx.CallAPIWithQuery("GET", path, q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "create",
 			Description: tr.T("cmd.org.create.short"),
 			Flags: []common.Flag{
