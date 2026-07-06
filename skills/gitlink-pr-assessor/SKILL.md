@@ -118,8 +118,8 @@ gitlink-cli pr +list --owner <owner> --repo <repo> --state open --page 1 --limit
 对每条 open PR 补拉 review 信息：
 
 ```bash
-gitlink-cli pr +reviews --owner <owner> --repo <repo> --id <pr_number> --format json
-gitlink-cli pr +view --owner <owner> --repo <repo> --id <pr_number> --format json
+gitlink-cli pr +reviews --owner <owner> --repo <repo> --id <pull_request_id> --format json
+gitlink-cli pr +view --owner <owner> --repo <repo> --id <pull_request_id> --format json
 ```
 
 然后判断：
@@ -133,14 +133,17 @@ gitlink-cli pr +view --owner <owner> --repo <repo> --id <pr_number> --format jso
 ### Step 3：为每条 PR 采集评估上下文
 
 ```bash
-gitlink-cli pr +view --id <pr_id> --format json
-gitlink-cli pr +files --id <pr_id> --format json
-gitlink-cli pr +diff --id <pr_id> --format json
-gitlink-cli pr +reviews --id <pr_id> --format json
+gitlink-cli pr +view --id <pull_request_id> --format json
+gitlink-cli pr +files --id <pull_request_id> --format json
+gitlink-cli pr +diff --id <pull_request_id> --format json
+gitlink-cli pr +reviews --id <pull_request_id> --format json
 gitlink-cli api GET /:owner/:repo/pulls/:id/commits --format json
 gitlink-cli repo +info --owner <owner> --repo <repo> --format json
 gitlink-cli ci +builds --owner <owner> --repo <repo> --format json
 ```
+
+`pr +view`、`pr +files`、`pr +diff`、`pr +reviews` 在这里统一使用 `pull_request_id`。
+`pull_request_number` 只保留给维护者看的报告标题、队列表格和网页链接。
 
 至少提取：
 

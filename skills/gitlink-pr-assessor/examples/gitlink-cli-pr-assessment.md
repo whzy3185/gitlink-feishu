@@ -12,6 +12,11 @@
 
 ## 推荐流程
 
+这里统一约定：
+
+- `pull_request_id` 用来执行 `pr +view`、`pr +files`、`pr +diff`、`pr +reviews`
+- `pull_request_number` 只用于人类阅读的报告标题、列表展示和网页链接
+
 ### 1. 拉 open PR 列表
 
 ```bash
@@ -26,8 +31,8 @@ gitlink-cli pr +list --owner Gitlink --repo gitlink-cli --state open --page 1 --
 ### 2. 对每条 PR 判断是否进入待评估队列
 
 ```bash
-gitlink-cli pr +view --owner Gitlink --repo gitlink-cli --id <pr_number> --format json
-gitlink-cli pr +reviews --owner Gitlink --repo gitlink-cli --id <pr_number> --format json
+gitlink-cli pr +view --owner Gitlink --repo gitlink-cli --id <pull_request_id> --format json
+gitlink-cli pr +reviews --owner Gitlink --repo gitlink-cli --id <pull_request_id> --format json
 ```
 
 建议跳过：
@@ -39,9 +44,9 @@ gitlink-cli pr +reviews --owner Gitlink --repo gitlink-cli --id <pr_number> --fo
 ### 3. 对纳入队列的 PR 拉上下文
 
 ```bash
-gitlink-cli pr +files --id <pr_number> --format json
-gitlink-cli pr +diff --id <pr_number> --format json
-gitlink-cli api GET /Gitlink/gitlink-cli/pulls/<pr_number>/commits --format json
+gitlink-cli pr +files --id <pull_request_id> --format json
+gitlink-cli pr +diff --id <pull_request_id> --format json
+gitlink-cli api GET /Gitlink/gitlink-cli/pulls/<pull_request_id>/commits --format json
 gitlink-cli repo +info --owner Gitlink --repo gitlink-cli --format json
 gitlink-cli ci +builds --owner Gitlink --repo gitlink-cli --format json
 ```

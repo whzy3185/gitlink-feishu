@@ -1,6 +1,6 @@
 # Codex 验证记录：扫描前 40 条 open PR
 
-这个示例记录了 `gitlink-pr-assessor` 在 Codex 中的一次实际验证，用来证明该 skill 可以在真实仓库上完成 open PR 队列扫描、逐条评估和报告生成。
+这个示例记录了 `gitlink-pr-assessor` 在 Codex 中的一次实际验证，用来证明这个 skill 可以在真实仓库上完成 open PR 队列扫描、逐条评估和维护者报告整理。
 
 ## 验证环境
 
@@ -17,12 +17,9 @@ $gitlink-pr-assessor 扫描 Gitlink/gitlink-cli 仓库当前前 40 条 open PR�
 
 ## 产出结果
 
-- 队列总览与逐条评估报告：[`codex-first40-validation-report.md`](./codex-first40-validation-report.md)
-- 效果截图：
-  - [`执行结果图.png`](../assets/validation-screenshots/执行结果图.png)
-  - [`输出报告部分截图.png`](../assets/validation-screenshots/输出报告部分截图.png)
-  - [`输出报告部分截图2.png`](../assets/validation-screenshots/输出报告部分截图2.png)
-  - [`输出报告部分截图3.png`](../assets/validation-screenshots/输出报告部分截图3.png)
+- 这次验证已经成功生成队列总览和逐条评估结果，证明 skill 可以在真实 open PR 队列上完成批量筛查。
+- 为避免把一次性运行日志和截图长期提交进仓库，详细报告与界面截图不再作为仓库内容保留；如需展示，可在 PR 描述、评审回复或单独的演示材料中引用。
+- 仓库内保留这份验证说明，作为“已在真实项目执行过”的复核依据。
 
 ## 验证结论
 
@@ -36,4 +33,4 @@ $gitlink-pr-assessor 扫描 Gitlink/gitlink-cli 仓库当前前 40 条 open PR�
 - 纳入评估：39 条
 - 跳过：1 条
 - `origin/master` 基线上的 `go build ./...` 与 `go test ./...` 均通过
-- 扫描结果能区分可继续推进、需补测试、需拆分、建议拒绝等不同结论
+- 扫描结果能够区分可继续推进、需补测试、需拆分、建议拒绝等不同结论

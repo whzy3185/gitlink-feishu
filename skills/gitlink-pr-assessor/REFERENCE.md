@@ -30,8 +30,8 @@ gitlink-cli pr +list --owner <owner> --repo <repo> --state open --page 1 --limit
 ### 1.2 单条 PR 元数据
 
 ```bash
-gitlink-cli pr +view --id <pr_id> --format json
-gitlink-cli pr +reviews --id <pr_id> --format json
+gitlink-cli pr +view --id <pull_request_id> --format json
+gitlink-cli pr +reviews --id <pull_request_id> --format json
 gitlink-cli api GET /:owner/:repo/pulls/:id/commits --format json
 ```
 
@@ -45,8 +45,8 @@ gitlink-cli api GET /:owner/:repo/pulls/:id/commits --format json
 ### 1.3 变更内容
 
 ```bash
-gitlink-cli pr +files --id <pr_id> --format json
-gitlink-cli pr +diff --id <pr_id> --format json
+gitlink-cli pr +files --id <pull_request_id> --format json
+gitlink-cli pr +diff --id <pull_request_id> --format json
 ```
 
 重点分析：
@@ -61,10 +61,15 @@ gitlink-cli pr +diff --id <pr_id> --format json
 ```bash
 gitlink-cli repo +info --owner <owner> --repo <repo> --format json
 gitlink-cli ci +builds --owner <owner> --repo <repo> --format json
-gitlink-cli api GET /:owner/:repo/raw/master/README.md
-gitlink-cli api GET /:owner/:repo/raw/master/Makefile
-gitlink-cli api GET /:owner/:repo/raw/master/go.mod
+gitlink-cli api GET /:owner/:repo/sub_entries --query "filepath=README.md&ref=master"
+gitlink-cli api GET /:owner/:repo/sub_entries --query "filepath=Makefile&ref=master"
+gitlink-cli api GET /:owner/:repo/sub_entries --query "filepath=go.mod&ref=master"
 ```
+
+说明：
+
+- 这里统一使用 `pull_request_id` 作为 `--id` 的输入值。
+- `raw/master/...` 在 GitLink 上实测可能返回 `403`，读取仓库约束文件时改用 `sub_entries` 更稳妥。
 
 从仓库中判断：
 
