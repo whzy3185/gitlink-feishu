@@ -3,36 +3,59 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 // NLCommand 自然语言命令路由
-// 用法: gitlink-cli do "列出我的issue"
-// AI/关键词匹配 → 推荐或执行对应命令
+// 用法: gitlink-cli do "列出issue"
+// 关键词匹配 → 推荐命令 + 自动显示参数说明
 
 func newDoCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   `do "自然语言描述"`,
-		Short: "Natural language command (e.g. do \"list my issues\")",
-		Long:  `用自然语言描述你想做的事，自动匹配对应命令。例如: gitlink-cli do "列出issue"`,
+		Short: "Natural language command helper (e.g. do \"list my issues\")",
+		Long:  `用自然语言描述你想做的事，自动匹配命令并显示参数。例如: gitlink-cli do "列出issue"`,
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			input := strings.ToLower(strings.Join(args, " "))
 			matched := matchNL(input)
 			if matched == "" {
-				fmt.Println("未识别的命令。试试这些关键词：")
-				fmt.Println("  issue/pr/label/wiki/release/repo/auth/snippet/notification")
-				fmt.Println("  list/create/view/delete/merge/close")
-				fmt.Println("示例: gitlink-cli do \"列出issue\"")
+				fmt.Println("❌ 未识别的命令。试试这些关键词：")
+				fmt.Println("  issue / pr / label / wiki / release / repo")
+				fmt.Println("  snippet / notification / member / branch / search")
+				fmt.Println("  list / create / view / merge / close / 登录")
+				fmt.Println("\n示例: gitlink-cli do \"列出issue\"")
 				os.Exit(1)
 			}
-			fmt.Printf("💡 匹配到命令: %s\n", matched)
-			fmt.Printf("执行: gitlink-cli %s\n", matched)
-			// 提示用户直接执行
-			fmt.Println("\n请运行上述命令（或加上参数）：")
-			fmt.Printf("  gitlink-cli %s\n", matched)
+
+			// 拆分出 group 和 subcommand
+			parts := strings.Fields(matched)
+			fmt.Printf("✅ 匹配到命令: %s\n\n", matched)
+
+			// 自动显示该命令的 --help（让用户看到所有参数）
+			if len(parts) >= 2 {
+				group := parts[0]
+				sub := parts[1]
+				fmt.Println("📋 命令参数说明：")
+				fmt.Println(strings.Repeat("-", 50))
+
+				// 调用 gitlink-cli <group> <sub> --help
+				helpArgs := []string{group, sub, "--help"}
+				exePath, _ := os.Executable()
+				helpCmd := exec.Command(exePath, helpArgs...)
+				helpCmd.Stdout = os.Stdout
+				helpCmd.Stderr = os.Stderr
+				helpCmd.Run()
+
+				fmt.Println(strings.Repeat("-", 50))
+				fmt.Printf("\n💡 完整命令示例：\n")
+				fmt.Printf("  .\\gitlink-cli.exe %s --owner ylly --repo gitlink-cli --format json\n", matched)
+			} else {
+				fmt.Printf("💡 运行：.\\gitlink-cli.exe %s\n", matched)
+			}
 		},
 	}
 }
@@ -77,14 +100,12 @@ func matchNL(input string) string {
 				score++
 			}
 		}
-		// 至少匹配2个关键词（避免误匹配）
 		if score >= 2 && score > bestScore {
 			bestScore = score
 			bestMatch = r.cmd
 		}
 	}
 
-	// 降级：只匹配1个但有动作词
 	if bestMatch == "" {
 		for _, r := range rules {
 			for _, kw := range r.keywords {
