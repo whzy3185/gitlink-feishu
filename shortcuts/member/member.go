@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -21,11 +22,12 @@ var roleAliases = map[string]string{
 }
 
 // Shortcuts returns repository member management shortcuts.
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List repository members",
+			Description: tr.T("cmd.member.list.short"),
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
@@ -39,9 +41,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "add",
-			Description: "Add a repository member by user ID",
+			Description: tr.T("cmd.member.add.short"),
 			Flags: []common.Flag{
-				{Name: "user-id", Short: "u", Usage: "GitLink user ID to add", Required: true},
+				{Name: "user-id", Short: "u", Usage: tr.T("flag.member.user_id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -60,19 +62,19 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "batch-add",
-			Description: "Add multiple repository members by user IDs or a CSV file",
+			Description: tr.T("cmd.member.batch-add.short"),
 			Flags: []common.Flag{
-				{Name: "user-ids", Short: "u", Usage: "Comma-separated GitLink user IDs, for example: 101,102"},
-				{Name: "from", Usage: "Read user IDs from a CSV file. Supports a user_id/id column or first column without header"},
-				{Name: "dry-run", Usage: "Preview members that would be added without changing them", Bool: true, Default: "false"},
+				{Name: "user-ids", Short: "u", Usage: tr.T("flag.member.user_ids")},
+				{Name: "from", Usage: tr.T("flag.member.from")},
+				{Name: "dry-run", Usage: tr.T("flag.member.dry_run"), Bool: true, Default: "false"},
 			},
 			Run: runBatchAdd,
 		},
 		{
 			Name:        "remove",
-			Description: "Remove a repository member by user ID",
+			Description: tr.T("cmd.member.remove.short"),
 			Flags: []common.Flag{
-				{Name: "user-id", Short: "u", Usage: "GitLink user ID to remove", Required: true},
+				{Name: "user-id", Short: "u", Usage: tr.T("flag.member.user_id_2"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -91,10 +93,10 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "role",
-			Description: "Change a repository member role",
+			Description: tr.T("cmd.member.role.short"),
 			Flags: []common.Flag{
-				{Name: "user-id", Short: "u", Usage: "GitLink user ID to update", Required: true},
-				{Name: "role", Short: "r", Usage: "Member role: Manager, Developer, or Reporter", Required: true},
+				{Name: "user-id", Short: "u", Usage: tr.T("flag.member.user_id_2"), Required: true},
+				{Name: "role", Short: "r", Usage: tr.T("flag.member.role"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -120,10 +122,10 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "invite-link",
-			Description: "Get or create a repository invite link",
+			Description: tr.T("cmd.member.invite-link.short"),
 			Flags: []common.Flag{
-				{Name: "role", Short: "r", Usage: "Invite role: manager, developer, or reporter", Default: "developer"},
-				{Name: "apply", Usage: "Whether joining by invite requires approval: true or false", Default: "true"},
+				{Name: "role", Short: "r", Usage: tr.T("flag.member.role_2"), Default: "developer"},
+				{Name: "apply", Usage: tr.T("flag.member.apply"), Default: "true"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -149,9 +151,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "invite-info",
-			Description: "Show repository invite link information",
+			Description: tr.T("cmd.member.invite-info.short"),
 			Flags: []common.Flag{
-				{Name: "sign", Short: "s", Usage: "Invite link sign", Required: true},
+				{Name: "sign", Short: "s", Usage: tr.T("flag.member.sign"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -172,9 +174,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "accept-invite",
-			Description: "Accept a repository invite link",
+			Description: tr.T("cmd.member.accept-invite.short"),
 			Flags: []common.Flag{
-				{Name: "sign", Short: "s", Usage: "Invite link sign", Required: true},
+				{Name: "sign", Short: "s", Usage: tr.T("flag.member.sign"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -389,4 +391,11 @@ func userIDColumn(header []string) int {
 		}
 	}
 	return -1
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

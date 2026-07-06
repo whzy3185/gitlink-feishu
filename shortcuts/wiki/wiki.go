@@ -6,6 +6,7 @@ import (
 	"net/url"
 
 	"github.com/gitlink-org/gitlink-cli/internal/config"
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -23,19 +24,20 @@ func switchToGateway(ctx *common.RuntimeContext) error {
 }
 
 // gatewayFlag returns the common --gateway flag definition.
-func gatewayFlag() common.Flag {
-	return common.Flag{Name: "gateway", Short: "g", Usage: "Use gateway API endpoint", Bool: true}
+func gatewayFlag(tr *i18n.Translator) common.Flag {
+	return common.Flag{Name: "gateway", Short: "g", Usage: tr.T("flag.wiki.gateway"), Bool: true}
 }
 
 // Shortcuts returns all wiki shortcuts.
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List wiki pages",
+			Description: tr.T("cmd.wiki.list.short"),
 			Flags: []common.Flag{
-				{Name: "project-id", Usage: "GitLink project ID", Required: true},
-				gatewayFlag(),
+				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
+				gatewayFlag(tr),
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if ctx.Arg("gateway") == "true" {
@@ -59,11 +61,11 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "view",
-			Description: "View a wiki page by page name",
+			Description: tr.T("cmd.wiki.view.short"),
 			Flags: []common.Flag{
-				{Name: "project-id", Usage: "GitLink project ID", Required: true},
-				{Name: "page-name", Short: "n", Usage: "Wiki page name (slug)", Required: true},
-				gatewayFlag(),
+				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
+				{Name: "page-name", Short: "n", Usage: tr.T("flag.wiki.page_name"), Required: true},
+				gatewayFlag(tr),
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if ctx.Arg("gateway") == "true" {
@@ -88,14 +90,14 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: "Create a new wiki page",
+			Description: tr.T("cmd.wiki.create.short"),
 			Flags: []common.Flag{
-				{Name: "project-id", Usage: "GitLink project ID", Required: true},
-				{Name: "page-name", Short: "n", Usage: "Wiki page name (slug)", Required: true},
-				{Name: "title", Short: "t", Usage: "Wiki page title", Required: true},
-				{Name: "content", Short: "c", Usage: "Wiki page content (markdown)", Required: true},
-				{Name: "message", Short: "m", Usage: "Commit message"},
-				gatewayFlag(),
+				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
+				{Name: "page-name", Short: "n", Usage: tr.T("flag.wiki.page_name"), Required: true},
+				{Name: "title", Short: "t", Usage: tr.T("flag.wiki.title"), Required: true},
+				{Name: "content", Short: "c", Usage: tr.T("flag.wiki.content"), Required: true},
+				{Name: "message", Short: "m", Usage: tr.T("flag.wiki.message")},
+				gatewayFlag(tr),
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if ctx.Arg("gateway") == "true" {
@@ -125,14 +127,14 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "update",
-			Description: "Update an existing wiki page",
+			Description: tr.T("cmd.wiki.update.short"),
 			Flags: []common.Flag{
-				{Name: "project-id", Usage: "GitLink project ID", Required: true},
-				{Name: "page-name", Short: "n", Usage: "Wiki page name (slug)", Required: true},
-				{Name: "title", Short: "t", Usage: "Wiki page title", Required: true},
-				{Name: "content", Short: "c", Usage: "Wiki page content (markdown)"},
-				{Name: "message", Short: "m", Usage: "Commit message"},
-				gatewayFlag(),
+				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
+				{Name: "page-name", Short: "n", Usage: tr.T("flag.wiki.page_name"), Required: true},
+				{Name: "title", Short: "t", Usage: tr.T("flag.wiki.title"), Required: true},
+				{Name: "content", Short: "c", Usage: tr.T("flag.wiki.content")},
+				{Name: "message", Short: "m", Usage: tr.T("flag.wiki.message")},
+				gatewayFlag(tr),
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if ctx.Arg("gateway") == "true" {
@@ -168,11 +170,11 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "delete",
-			Description: "Delete a wiki page",
+			Description: tr.T("cmd.wiki.delete.short"),
 			Flags: []common.Flag{
-				{Name: "project-id", Usage: "GitLink project ID", Required: true},
-				{Name: "page-name", Short: "n", Usage: "Wiki page name (slug)", Required: true},
-				gatewayFlag(),
+				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
+				{Name: "page-name", Short: "n", Usage: tr.T("flag.wiki.page_name"), Required: true},
+				gatewayFlag(tr),
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if ctx.Arg("gateway") == "true" {
@@ -197,4 +199,11 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

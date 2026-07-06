@@ -5,17 +5,19 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "view",
-			Description: "Compare two branches, tags, or commits",
+			Description: tr.T("cmd.compare.view.short"),
 			Flags: []common.Flag{
-				{Name: "head", Usage: "Source branch, tag, or commit", Required: true},
-				{Name: "base", Usage: "Target branch, tag, or commit", Required: true},
+				{Name: "head", Usage: tr.T("flag.compare.head"), Required: true},
+				{Name: "base", Usage: tr.T("flag.compare.base"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -38,13 +40,13 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "files",
-			Description: "List changed files between two refs",
+			Description: tr.T("cmd.compare.files.short"),
 			Flags: []common.Flag{
-				{Name: "head", Usage: "Source branch, tag, or commit", Required: true},
-				{Name: "base", Usage: "Target branch, tag, or commit", Required: true},
-				{Name: "file", Short: "f", Usage: "Filter by file path"},
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "head", Usage: tr.T("flag.compare.head"), Required: true},
+				{Name: "base", Usage: tr.T("flag.compare.base"), Required: true},
+				{Name: "file", Short: "f", Usage: tr.T("flag.compare.file")},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -80,4 +82,11 @@ func comparePath(ctx *common.RuntimeContext, head, base string) string {
 
 func encodeRef(ref string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(ref))
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

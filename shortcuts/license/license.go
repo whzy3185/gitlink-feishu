@@ -3,6 +3,7 @@ package license
 import (
 	"net/url"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -10,13 +11,14 @@ import (
 //
 // These shortcuts provide access to the GitLink license registry,
 // which lists all available open-source licenses supported by the platform.
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List available licenses",
+			Description: tr.T("cmd.license.list.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Filter licenses by name"},
+				{Name: "name", Short: "n", Usage: tr.T("flag.license.name")},
 			},
 			Run: runList,
 		},
@@ -33,4 +35,11 @@ func runList(ctx *common.RuntimeContext) error {
 		return err
 	}
 	return ctx.Output(env)
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

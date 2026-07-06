@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -22,16 +23,17 @@ var hexColorPattern = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
 // Issue labels back the issue triage and PR gatekeeping workflows: until now
 // they could only be managed through the raw API (issue_tags), so these
 // shortcuts close that gap with first-class create/list/update/delete commands.
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List issue labels",
+			Description: tr.T("cmd.label.list.short"),
 			Flags: []common.Flag{
-				{Name: "keyword", Short: "k", Usage: "Filter labels by keyword"},
-				{Name: "only-name", Usage: "Return only label id and name: true or false"},
-				{Name: "sort-by", Usage: "Sort field: updated_on, created_on, issues_count"},
-				{Name: "sort-direction", Usage: "Sort direction: asc or desc"},
+				{Name: "keyword", Short: "k", Usage: tr.T("flag.label.keyword")},
+				{Name: "only-name", Usage: tr.T("flag.label.only_name")},
+				{Name: "sort-by", Usage: tr.T("flag.label.sort_by")},
+				{Name: "sort-direction", Usage: tr.T("flag.label.sort_direction")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -51,30 +53,30 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: "Create an issue label",
+			Description: tr.T("cmd.label.create.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Label name", Required: true},
-				{Name: "description", Short: "d", Usage: "Label description"},
-				{Name: "color", Short: "c", Usage: "Label color in hex, for example: #1E90FF", Default: defaultLabelColor},
+				{Name: "name", Short: "n", Usage: tr.T("flag.label.name"), Required: true},
+				{Name: "description", Short: "d", Usage: tr.T("flag.label.description")},
+				{Name: "color", Short: "c", Usage: tr.T("flag.label.color"), Default: defaultLabelColor},
 			},
 			Run: runCreate,
 		},
 		{
 			Name:        "update",
-			Description: "Update an issue label while preserving unspecified fields",
+			Description: tr.T("cmd.label.update.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Label ID", Required: true},
-				{Name: "name", Short: "n", Usage: "Label name"},
-				{Name: "description", Short: "d", Usage: "Label description"},
-				{Name: "color", Short: "c", Usage: "Label color in hex, for example: #1E90FF"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.label.id"), Required: true},
+				{Name: "name", Short: "n", Usage: tr.T("flag.label.name")},
+				{Name: "description", Short: "d", Usage: tr.T("flag.label.description")},
+				{Name: "color", Short: "c", Usage: tr.T("flag.label.color")},
 			},
 			Run: runUpdate,
 		},
 		{
 			Name:        "delete",
-			Description: "Delete an issue label",
+			Description: tr.T("cmd.label.delete.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Label ID", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.label.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -241,4 +243,11 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }
