@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -35,7 +37,7 @@ func TestNewAuthCmd(t *testing.T) {
 	}
 
 	expectedSubs := map[string]bool{
-		"login": false, "logout": false, "status": false,
+		"login": false, "logout": false, "status": false, "token": false,
 	}
 	for _, sub := range cmd.Commands() {
 		if _, ok := expectedSubs[sub.Use]; !ok {
@@ -127,6 +129,98 @@ func TestStatusCmdStoredTokenButLoadFails(t *testing.T) {
 	cmd := findSub(NewAuthCmd(), "status")
 	if err := cmd.RunE(cmd, nil); err != nil {
 		t.Fatalf("status error: %v", err)
+	}
+}
+
+func TestTokenCmdEnvToken(t *testing.T) {
+	keyring.MockInitWithError(errors.New("keychain unavailable"))
+	tempConfigDir(t)
+	t.Setenv("GITLINK_TOKEN", "env-token-123")
+	_ = internalAuth.DeleteToken()
+
+	cmd := findSub(NewAuthCmd(), "token")
+	if cmd == nil {
+		t.Fatal("token subcommand not found")
+	}
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("token error: %v", err)
+	}
+	if got := strings.TrimSpace(buf.String()); got != "env-token-123" {
+		t.Fatalf("token output = %q, want env-token-123", got)
+	}
+}
+
+func TestTokenCmdStoredToken(t *testing.T) {
+	keyring.MockInitWithError(errors.New("keychain unavailable"))
+	dir := tempConfigDir(t)
+	t.Setenv("GITLINK_TOKEN", "")
+
+	os.MkdirAll(dir, 0700)
+	os.WriteFile(filepath.Join(dir, "credentials"), []byte("stored-token-456"), 0600)
+
+	cmd := findSub(NewAuthCmd(), "token")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("token error: %v", err)
+	}
+	if got := strings.TrimSpace(buf.String()); got != "stored-token-456" {
+		t.Fatalf("token output = %q, want stored-token-456", got)
+	}
+}
+
+func TestTokenCmdNoToken(t *testing.T) {
+	keyring.MockInitWithError(errors.New("keychain unavailable"))
+	tempConfigDir(t)
+	t.Setenv("GITLINK_TOKEN", "")
+	_ = internalAuth.DeleteToken()
+
+	cmd := findSub(NewAuthCmd(), "token")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	if err := cmd.RunE(cmd, nil); err == nil {
+		t.Fatal("expected error when no token is available")
+	}
+}
+
+func TestStatusCmdShowToken(t *testing.T) {
+	keyring.MockInitWithError(errors.New("keychain unavailable"))
+	dir := tempConfigDir(t)
+	t.Setenv("GITLINK_TOKEN", "")
+
+	os.MkdirAll(dir, 0700)
+	os.WriteFile(filepath.Join(dir, "credentials"), []byte("stored-token-789"), 0600)
+
+	cmd := findSub(NewAuthCmd(), "status")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.Flags().Set("show-token", "true")
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("status error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "stored-token-789") {
+		t.Fatalf("status --show-token output missing token: %q", buf.String())
+	}
+}
+
+func TestStatusCmdHidesTokenByDefault(t *testing.T) {
+	keyring.MockInitWithError(errors.New("keychain unavailable"))
+	dir := tempConfigDir(t)
+	t.Setenv("GITLINK_TOKEN", "")
+
+	os.MkdirAll(dir, 0700)
+	os.WriteFile(filepath.Join(dir, "credentials"), []byte("stored-token-789"), 0600)
+
+	cmd := findSub(NewAuthCmd(), "status")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("status error: %v", err)
+	}
+	if strings.Contains(buf.String(), "stored-token-789") {
+		t.Fatalf("status leaked token without --show-token: %q", buf.String())
 	}
 }
 

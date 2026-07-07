@@ -34,6 +34,7 @@ func NewAuthCmd(translators ...*i18n.Translator) *cobra.Command {
 	cmd.AddCommand(newLoginCmd(tr))
 	cmd.AddCommand(newLogoutCmd(tr))
 	cmd.AddCommand(newStatusCmd(tr))
+	cmd.AddCommand(newTokenCmd(tr))
 	return cmd
 }
 
@@ -132,7 +133,9 @@ func newLogoutCmd(tr *i18n.Translator) *cobra.Command {
 }
 
 func newStatusCmd(tr *i18n.Translator) *cobra.Command {
-	return &cobra.Command{
+	var showToken bool
+
+	cmd := &cobra.Command{
 		Use:   "status",
 		Short: tr.T("cmd.auth.status.short"),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -142,9 +145,19 @@ func newStatusCmd(tr *i18n.Translator) *cobra.Command {
 				if _, err := fmt.Fprintln(out, tr.Tf("success.auth.logged_in_via_env", i18n.Args{"env": envTokenVar})); err != nil {
 					return err
 				}
+				if showToken {
+					if _, err := fmt.Fprintln(out, tr.Tf("output.auth.token_value", i18n.Args{"token": envToken})); err != nil {
+						return err
+					}
+				}
 			}
 
 			token, err := loadToken()
+			if err == nil && token != "" && showToken {
+				if _, err := fmt.Fprintln(out, tr.Tf("output.auth.token_value", i18n.Args{"token": token})); err != nil {
+					return err
+				}
+			}
 			if err != nil || token == "" {
 				if os.Getenv(envTokenVar) == "" {
 					if _, err := fmt.Fprintln(out, tr.T("warning.auth.not_logged_in")); err != nil {
@@ -177,6 +190,31 @@ func newStatusCmd(tr *i18n.Translator) *cobra.Command {
 				return err
 			}
 			_, err = fmt.Fprintln(out, tr.T("warning.auth.user_unavailable"))
+			return err
+		},
+	}
+	cmd.Flags().BoolVar(&showToken, "show-token", false, tr.T("flag.auth.show_token"))
+	return cmd
+}
+
+// newTokenCmd prints the active token to stdout for scripting, mirroring
+// `gh auth token`. Resolution order matches API calls: GITLINK_TOKEN env
+// var first, then the stored keyring/file token.
+func newTokenCmd(tr *i18n.Translator) *cobra.Command {
+	return &cobra.Command{
+		Use:   "token",
+		Short: tr.T("cmd.auth.token.short"),
+		Long:  tr.T("cmd.auth.token.long"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			token := os.Getenv(envTokenVar)
+			if token == "" {
+				stored, err := loadToken()
+				if err != nil || stored == "" {
+					return errors.New(tr.T("error.auth.no_token"))
+				}
+				token = stored
+			}
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), token)
 			return err
 		},
 	}
