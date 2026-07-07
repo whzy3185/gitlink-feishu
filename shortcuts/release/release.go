@@ -173,7 +173,11 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/releases/%s", ctx.RepoPath(), id), nil)
+				versionID, err := resolveVersionID(ctx, id)
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/releases/%s", ctx.RepoPath(), versionID), nil)
 				if err != nil {
 					return err
 				}

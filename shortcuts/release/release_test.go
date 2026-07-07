@@ -90,8 +90,18 @@ func TestReleaseEdit(t *testing.T) {
 
 func TestReleaseView(t *testing.T) {
 	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertReleaseRequest(t, r, "GET", "/owner/repo/releases/v1.0.json")
-		writeReleaseJSON(t, w, map[string]interface{}{"tag_name": "v1.0", "name": "Version 1.0"})
+		switch r.URL.Path {
+		case "/owner/repo/releases.json":
+			writeReleaseJSON(t, w, map[string]interface{}{
+				"releases": []map[string]interface{}{
+					{"tag_name": "v1.0", "id": "900001", "version_id": 7},
+				},
+			})
+		case "/owner/repo/releases/7.json":
+			writeReleaseJSON(t, w, map[string]interface{}{"tag_name": "v1.0", "name": "Version 1.0"})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	})
 	defer server.Close()
 
