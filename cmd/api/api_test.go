@@ -131,6 +131,63 @@ func TestRunAPIBadQuery(t *testing.T) {
 	}
 }
 
+func TestRunAPIPaginate(t *testing.T) {
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		page := r.URL.Query().Get("page")
+		w.Header().Set("Content-Type", "application/json")
+		switch page {
+		case "1":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"total_count": 3,
+				"issues": []interface{}{
+					map[string]interface{}{"id": 1},
+					map[string]interface{}{"id": 2},
+				},
+			})
+		default:
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"total_count": 3,
+				"issues": []interface{}{
+					map[string]interface{}{"id": 3},
+				},
+			})
+		}
+	})
+	cmdutil.Format = "json"
+
+	cmd := NewAPICmd()
+	cmd.SetArgs([]string{"GET", "/owner/repo/issues", "--paginate", "--query", "limit=2"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("runAPI paginate error: %v", err)
+	}
+}
+
+func TestRunAPIPaginateRejectsNonGET(t *testing.T) {
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("server should not be reached")
+	})
+	cmdutil.Format = "json"
+
+	cmd := NewAPICmd()
+	cmd.SetArgs([]string{"POST", "/owner/repo/issues", "--paginate"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected error for --paginate with POST")
+	}
+}
+
+func TestRunAPIPaginateRejectsBatchFile(t *testing.T) {
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("server should not be reached")
+	})
+	cmdutil.Format = "json"
+
+	cmd := NewAPICmd()
+	cmd.SetArgs([]string{"--batch-file", "plan.json", "--paginate"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected error for --paginate with --batch-file")
+	}
+}
+
 func TestRunAPIHTTPError(t *testing.T) {
 	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

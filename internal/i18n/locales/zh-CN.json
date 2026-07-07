@@ -127,6 +127,7 @@
   "flag.api.body_file": "从文件读取 JSON 请求体",
   "flag.api.body_stdin": "从标准输入读取 JSON 请求体",
   "flag.api.header": "附加请求头（key:value）",
+  "flag.api.paginate": "自动获取 GET 列表接口的全部分页并合并结果",
   "flag.api.query": "查询参数（key=val&key2=val2）",
   "flag.auth.token": "通过粘贴已有 Token 登录",
   "flag.branch.from": "源分支或 Commit",

@@ -28,6 +28,7 @@ func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
 		Long:  tr.T("cmd.api.long"),
 		Example: `  gitlink-cli api GET /users/me
   gitlink-cli api GET /projects --query 'page=1&limit=10'
+  gitlink-cli api GET /:owner/:repo/issues --paginate
   gitlink-cli api POST /:owner/:repo/issues --body '{"subject":"Bug","description":"..."}'
   gitlink-cli api POST /:owner/:repo/issues --body-file issue.json
   gitlink-cli api --batch-file plan.json --dry-run
@@ -40,6 +41,7 @@ func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
 	apiCmd.Flags().String("body-file", "", tr.T("flag.api.body_file"))
 	apiCmd.Flags().Bool("body-stdin", false, tr.T("flag.api.body_stdin"))
 	apiCmd.Flags().String("query", "", tr.T("flag.api.query"))
+	apiCmd.Flags().Bool("paginate", false, tr.T("flag.api.paginate"))
 	apiCmd.Flags().StringSlice("header", nil, tr.T("flag.api.header"))
 	apiCmd.Flags().String("batch-file", "", tr.T("flag.api.batch_file"))
 	apiCmd.Flags().Bool("dry-run", false, tr.T("flag.api.batch_dry_run"))
@@ -62,7 +64,11 @@ func validateAPIArgs(c *cobra.Command, args []string) error {
 
 func runAPI(c *cobra.Command, args []string) error {
 	batchFile, _ := c.Flags().GetString("batch-file")
+	paginate, _ := c.Flags().GetBool("paginate")
 	if batchFile != "" {
+		if paginate {
+			return fmt.Errorf("--paginate cannot be used with --batch-file")
+		}
 		return runAPIBatch(c, batchFile)
 	}
 
@@ -94,6 +100,25 @@ func runAPI(c *cobra.Command, args []string) error {
 		}
 	}
 
+	if paginate {
+		if method != "GET" {
+			return fmt.Errorf("--paginate only supports GET requests, got %s", method)
+		}
+		if body != nil {
+			return fmt.Errorf("--paginate cannot be used with a request body")
+		}
+		items, err := cli.PaginateAll(path, query)
+		if err != nil {
+			var apiErr *client.APIError
+			if errors.As(err, &apiErr) {
+				errEnv := output.ErrorEnvelope(apiErr.Code, apiErr.Message, "")
+				return output.Print(errEnv, resolveFormat())
+			}
+			return err
+		}
+		return output.Print(paginatedEnvelope(items), resolveFormat())
+	}
+
 	env, err := cli.Do(method, path, body, query)
 	if err != nil {
 		var apiErr *client.APIError
@@ -105,6 +130,23 @@ func runAPI(c *cobra.Command, args []string) error {
 	}
 
 	return output.Print(env, resolveFormat())
+}
+
+// paginatedEnvelope wraps merged pages in the same shape as a single-page
+// list response: {"total_count": N, "items": [...]}.
+func paginatedEnvelope(items []json.RawMessage) *output.Envelope {
+	decoded := make([]interface{}, 0, len(items))
+	for _, item := range items {
+		var v interface{}
+		if err := json.Unmarshal(item, &v); err == nil {
+			decoded = append(decoded, v)
+		}
+	}
+	data := map[string]interface{}{
+		"total_count": len(decoded),
+		"items":       decoded,
+	}
+	return output.SuccessEnvelope(data, &output.Meta{TotalCount: len(decoded)})
 }
 
 func readJSONBody(c *cobra.Command) (interface{}, error) {
