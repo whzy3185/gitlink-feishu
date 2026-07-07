@@ -128,6 +128,7 @@
   "flag.api.query": "查询参数（key=val&key2=val2）",
   "flag.auth.show_token": "在状态输出中显示原始 token",
   "flag.auth.token": "通过粘贴已有 Token 登录",
+  "flag.auth.with_token": "从标准输入读取令牌（非交互，适合脚本/CI）",
   "flag.branch.from": "源分支或 Commit",
   "flag.branch.name": "分支名称",
   "flag.ci.build": "构建编号",

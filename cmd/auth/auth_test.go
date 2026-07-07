@@ -335,3 +335,43 @@ func findSub(cmd *cobra.Command, name string) *cobra.Command {
 	}
 	return nil
 }
+
+func TestLoginWithTokenStdin(t *testing.T) {
+	keyring.MockInit()
+	tempConfigDir(t)
+	t.Setenv("GITLINK_TOKEN", "")
+	_ = internalAuth.DeleteToken()
+
+	cmd := findSub(NewAuthCmd(), "login")
+	if cmd == nil {
+		t.Fatal("login subcommand not found")
+	}
+	if err := cmd.Flags().Set("with-token", "true"); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	cmd.SetIn(strings.NewReader("stdin-token-456\n"))
+	cmd.SetOut(&buf)
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("login --with-token error: %v", err)
+	}
+	stored, err := internalAuth.LoadToken()
+	if err != nil || stored != "stdin-token-456" {
+		t.Fatalf("stored token = %q (err %v), want stdin-token-456", stored, err)
+	}
+}
+
+func TestLoginWithTokenStdinEmpty(t *testing.T) {
+	keyring.MockInit()
+	tempConfigDir(t)
+
+	cmd := findSub(NewAuthCmd(), "login")
+	if err := cmd.Flags().Set("with-token", "true"); err != nil {
+		t.Fatal(err)
+	}
+	cmd.SetIn(strings.NewReader("\n"))
+	cmd.SetOut(&bytes.Buffer{})
+	if err := cmd.RunE(cmd, nil); err == nil {
+		t.Fatal("expected error for empty stdin token")
+	}
+}

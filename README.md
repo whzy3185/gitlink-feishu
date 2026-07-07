@@ -852,6 +852,7 @@ To reuse the active token in scripts (e.g. raw `curl` calls against endpoints th
 ```bash
 curl -H "Authorization: Bearer $(gitlink-cli auth token)" https://www.gitlink.org.cn/api/v1/...
 gitlink-cli auth status --show-token   # Inspect the raw token (hidden by default)
+echo $MY_TOKEN | gitlink-cli auth login --with-token   # Non-interactive login (CI, scripts)
 ```
 
 Priority: `GITLINK_TOKEN` env var > keyring/file stored token. When the env var is not set, the original interactive login flow works as before.

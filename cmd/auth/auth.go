@@ -40,11 +40,15 @@ func NewAuthCmd(translators ...*i18n.Translator) *cobra.Command {
 
 func newLoginCmd(tr *i18n.Translator) *cobra.Command {
 	var tokenMode bool
+	var withToken bool
 
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: tr.T("cmd.auth.login.short"),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if withToken {
+				return loginWithTokenStdin(cmd.InOrStdin(), cmd.OutOrStdout(), tr)
+			}
 			if tokenMode {
 				return loginWithToken(cmd.InOrStdin(), cmd.OutOrStdout(), tr)
 			}
@@ -52,6 +56,7 @@ func newLoginCmd(tr *i18n.Translator) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&tokenMode, "token", false, tr.T("flag.auth.token"))
+	cmd.Flags().BoolVar(&withToken, "with-token", false, tr.T("flag.auth.with_token"))
 	return cmd
 }
 
@@ -115,6 +120,26 @@ func loginWithToken(in io.Reader, out io.Writer, tr *i18n.Translator) error {
 	}
 
 	_, err := fmt.Fprintln(out, tr.T("success.auth.token_saved"))
+	return err
+}
+
+// loginWithTokenStdin reads a token from stdin without prompting, mirroring
+// `gh auth login --with-token` for non-interactive use (CI, scripts):
+//
+//	echo $TOKEN | gitlink-cli auth login --with-token
+func loginWithTokenStdin(in io.Reader, out io.Writer, tr *i18n.Translator) error {
+	data, err := io.ReadAll(io.LimitReader(in, 4096))
+	if err != nil {
+		return err
+	}
+	token := strings.TrimSpace(string(data))
+	if token == "" {
+		return errors.New(tr.T("error.auth.token_empty"))
+	}
+	if err := storeToken(token); err != nil {
+		return errors.New(tr.Tf("error.auth.store_token_failed", i18n.Args{"message": err.Error()}))
+	}
+	_, err = fmt.Fprintln(out, tr.T("success.auth.token_saved"))
 	return err
 }
 

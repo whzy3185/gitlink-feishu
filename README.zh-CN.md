@@ -724,6 +724,7 @@ gitlink-cli auth status   # 显示 "✓ Logged in via GITLINK_TOKEN environment 
 ```bash
 curl -H "Authorization: Bearer $(gitlink-cli auth token)" https://www.gitlink.org.cn/api/v1/...
 gitlink-cli auth status --show-token   # 查看原始 token（默认隐藏）
+echo $MY_TOKEN | gitlink-cli auth login --with-token   # 非交互登录（CI/脚本）
 ```
 
 Token 优先级：`GITLINK_TOKEN` 环境变量 > keyring/文件存储的 token。不设置环境变量时完全兼容原有交互式登录。
