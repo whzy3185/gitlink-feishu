@@ -5,6 +5,7 @@ import (
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/branch"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/browse"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/ci"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/compare"
@@ -47,6 +48,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"profile":   profile.Shortcuts(tr),
 		"release":   release.Shortcuts(tr),
 		"branch":    branch.Shortcuts(tr),
+		"browse":    browse.Shortcuts(),
 		"org":       org.Shortcuts(tr),
 		"user":      user.Shortcuts(tr),
 		"search":    search.Shortcuts(tr),
@@ -72,6 +74,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"profile":   tr.T("cmd.profile.short"),
 		"release":   tr.T("cmd.release.short"),
 		"branch":    tr.T("cmd.branch.short"),
+		"browse":    "Open repository pages in a browser",
 		"org":       tr.T("cmd.org.short"),
 		"user":      tr.T("cmd.user.short"),
 		"search":    tr.T("cmd.search.short"),
