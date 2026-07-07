@@ -82,5 +82,24 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				})
 			},
 		},
+		{
+			Name:        "delete",
+			Description: tr.T("cmd.attachment.delete.short"),
+			Long:        tr.T("cmd.attachment.delete.long"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.attachment.id"), Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.Client.Delete("/attachments/"+id, nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
 	}
 }

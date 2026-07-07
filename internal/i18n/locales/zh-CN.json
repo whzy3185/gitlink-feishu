@@ -1,6 +1,8 @@
 {
   "cmd.api.long": "向 GitLink API 发送任意 HTTP 请求。认证信息会自动注入。",
   "cmd.api.short": "向 GitLink 发起原始 API 请求",
+  "cmd.attachment.delete.long": "按 id 或 uuid 删除平台附件。仅附件所有者可删除。",
+  "cmd.attachment.delete.short": "按 id 删除附件",
   "cmd.attachment.download.long": "按 id 下载平台附件并流式写入本地文件。",
   "cmd.attachment.download.short": "下载附件到本地文件",
   "cmd.attachment.short": "附件上传与下载",

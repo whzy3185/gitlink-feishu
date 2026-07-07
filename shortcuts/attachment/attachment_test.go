@@ -16,8 +16,8 @@ import (
 
 func TestShortcutsRegistered(t *testing.T) {
 	shortcuts := Shortcuts()
-	if len(shortcuts) != 2 {
-		t.Fatalf("expected 2 shortcuts, got %d", len(shortcuts))
+	if len(shortcuts) != 3 {
+		t.Fatalf("expected 3 shortcuts, got %d", len(shortcuts))
 	}
 	names := map[string]bool{}
 	for _, s := range shortcuts {
@@ -26,7 +26,7 @@ func TestShortcutsRegistered(t *testing.T) {
 			t.Fatalf("shortcut %q has empty description", s.Name)
 		}
 	}
-	for _, want := range []string{"upload", "download"} {
+	for _, want := range []string{"upload", "download", "delete"} {
 		if !names[want] {
 			t.Fatalf("missing shortcut %q", want)
 		}
@@ -188,5 +188,26 @@ func TestDownloadHTTPError(t *testing.T) {
 	}
 	if _, err := os.Stat(dest); err == nil {
 		t.Fatal("output file should not be created on HTTP error")
+	}
+}
+
+func TestDeleteAttachment(t *testing.T) {
+	var gotMethod, gotPath string
+	ctx := newTestContext(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": 0, "message": "删除成功"})
+	}, map[string]string{"id": "abc-uuid"})
+	ctx.Tr = i18n.Default()
+
+	if err := findShortcut(t, "delete").Run(ctx); err != nil {
+		t.Fatalf("delete error: %v", err)
+	}
+	if gotMethod != http.MethodDelete {
+		t.Fatalf("method = %q, want DELETE", gotMethod)
+	}
+	if gotPath != "/attachments/abc-uuid.json" {
+		t.Fatalf("path = %q, want /attachments/abc-uuid.json", gotPath)
 	}
 }

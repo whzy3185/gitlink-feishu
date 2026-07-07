@@ -1,6 +1,8 @@
 {
   "cmd.api.long": "Send arbitrary HTTP requests to the GitLink API. Authentication is injected automatically.",
   "cmd.api.short": "Make raw API requests to GitLink",
+  "cmd.attachment.delete.long": "Delete a platform attachment by id or uuid. Only the attachment owner can delete it.",
+  "cmd.attachment.delete.short": "Delete an attachment by id",
   "cmd.attachment.download.long": "Download a platform attachment by id and stream it to a local file.",
   "cmd.attachment.download.short": "Download an attachment to a local file",
   "cmd.attachment.short": "Attachment upload and download",

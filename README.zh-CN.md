@@ -474,6 +474,9 @@ gitlink-cli attachment +upload -f ./dist/app-v1.0.0.tar.gz -d "v1.0.0 发布产�
 
 # 按 id 下载附件到本地文件
 gitlink-cli attachment +download -i <attachment_id> -o ./app-v1.0.0.tar.gz
+
+# 按 id 删除附件
+gitlink-cli attachment +delete -i <attachment_id>
 ```
 
 ### 流水线管理

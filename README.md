@@ -483,6 +483,9 @@ gitlink-cli attachment +upload -f ./dist/app-v1.0.0.tar.gz -d "v1.0.0 release as
 
 # Download an attachment by id to a local file
 gitlink-cli attachment +download -i <attachment_id> -o ./app-v1.0.0.tar.gz
+
+# Delete an attachment by id
+gitlink-cli attachment +delete -i <attachment_id>
 ```
 
 ### CI/CD Operations
