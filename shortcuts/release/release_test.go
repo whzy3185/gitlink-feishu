@@ -331,7 +331,7 @@ func TestReleaseShortcutNames(t *testing.T) {
 	for _, shortcut := range Shortcuts() {
 		got[shortcut.Name] = true
 	}
-	want := []string{"list", "create", "edit", "view", "update", "delete"}
+	want := []string{"list", "create", "edit", "view", "download", "update", "delete"}
 	for _, name := range want {
 		if !got[name] {
 			t.Fatalf("missing shortcut %q in %v", name, got)
@@ -452,6 +452,7 @@ func ExampleShortcuts() {
 	// create
 	// edit
 	// view
+	// download
 	// update
 	// delete
 }
@@ -508,5 +509,77 @@ func TestReleaseCreateAttachmentFilesMissing(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for missing attachment file")
+	}
+}
+
+func TestReleaseDownloadAllAttachments(t *testing.T) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/owner/repo/releases.json":
+			if r.URL.Query().Get("page") != "1" {
+				writeReleaseJSON(t, w, map[string]interface{}{"releases": []interface{}{}})
+				return
+			}
+			writeReleaseJSON(t, w, map[string]interface{}{
+				"releases": []map[string]interface{}{
+					{"tag_name": "v1.0.0", "id": "900001", "version_id": 7},
+				},
+			})
+		case "/owner/repo/releases/7.json":
+			writeReleaseJSON(t, w, map[string]interface{}{
+				"tag_name": "v1.0.0",
+				"attachments": []map[string]interface{}{
+					{"id": 12, "title": "a.bin"},
+					{"id": "uuid-34", "title": "b.txt"},
+				},
+			})
+		case "/attachments/12", "/attachments/12.json":
+			fmt.Fprint(w, "content-a")
+		case "/attachments/uuid-34", "/attachments/uuid-34.json":
+			fmt.Fprint(w, "content-b")
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	outDir := t.TempDir()
+	if err := runReleaseShortcut(t, server, "download", map[string]string{
+		"id":         "v1.0.0",
+		"output-dir": outDir,
+	}); err != nil {
+		t.Fatalf("release download failed: %v", err)
+	}
+	for name, want := range map[string]string{"a.bin": "content-a", "b.txt": "content-b"} {
+		got, err := os.ReadFile(filepath.Join(outDir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if string(got) != want {
+			t.Fatalf("%s content = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestReleaseDownloadNoAttachments(t *testing.T) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/owner/repo/releases.json" {
+			if r.URL.Query().Get("page") != "1" {
+				writeReleaseJSON(t, w, map[string]interface{}{"releases": []interface{}{}})
+				return
+			}
+			writeReleaseJSON(t, w, map[string]interface{}{
+				"releases": []map[string]interface{}{
+					{"tag_name": "v1.0.0", "id": "900001", "version_id": 7},
+				},
+			})
+			return
+		}
+		writeReleaseJSON(t, w, map[string]interface{}{"tag_name": "v1.0.0"})
+	})
+	defer server.Close()
+
+	if err := runReleaseShortcut(t, server, "download", map[string]string{"id": "v1.0.0"}); err == nil {
+		t.Fatal("expected error when release has no attachments")
 	}
 }

@@ -1,9 +1,11 @@
 package release
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -11,6 +13,37 @@ import (
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
+
+// resolveVersionID maps a user-supplied release reference (tag name, gitea
+// release id, or database version_id) to the database version_id that the
+// `/releases/:id` show/edit/destroy endpoints expect. The list endpoint is
+// the only one exposing both identifiers, so we page through it and match.
+func resolveVersionID(ctx *common.RuntimeContext, ref string) (string, error) {
+	for page := 1; page <= 100; page++ {
+		q := url.Values{}
+		q.Set("page", strconv.Itoa(page))
+		q.Set("limit", "50")
+		env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/releases", q)
+		if err != nil {
+			return "", err
+		}
+		data, _ := env.Data.(map[string]interface{})
+		releases, _ := data["releases"].([]interface{})
+		if len(releases) == 0 {
+			break
+		}
+		for _, r := range releases {
+			rel, _ := r.(map[string]interface{})
+			tag, _ := rel["tag_name"].(string)
+			gid := fmt.Sprintf("%v", rel["id"])
+			versionID := fmt.Sprintf("%v", rel["version_id"])
+			if ref == tag || ref == gid || ref == versionID {
+				return versionID, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("release %q not found", ref)
+}
 
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
@@ -145,6 +178,63 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					return err
 				}
 				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "download",
+			Description: tr.T("cmd.release.download.short"),
+			Long:        tr.T("cmd.release.download.long"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.release.id_or_tag"), Required: true},
+				{Name: "output-dir", Short: "o", Usage: tr.T("flag.release.output_dir"), Default: "."},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				versionID, err := resolveVersionID(ctx, id)
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/releases/%s", ctx.RepoPath(), versionID), nil)
+				if err != nil {
+					return err
+				}
+				data, _ := env.Data.(map[string]interface{})
+				attachments, _ := data["attachments"].([]interface{})
+				if len(attachments) == 0 {
+					return errors.New(tr.T("error.release.no_attachments"))
+				}
+				outDir := ctx.Arg("output-dir")
+				if err := os.MkdirAll(outDir, 0o755); err != nil {
+					return fmt.Errorf("create output dir %q: %w", outDir, err)
+				}
+				var downloaded []map[string]interface{}
+				for _, a := range attachments {
+					att, _ := a.(map[string]interface{})
+					title, _ := att["title"].(string)
+					attID := fmt.Sprintf("%v", att["id"])
+					if title == "" || attID == "" || att["id"] == nil {
+						continue
+					}
+					dest := filepath.Join(outDir, filepath.Base(title))
+					n, err := ctx.Client.DownloadFile("/attachments/"+attID, dest)
+					if err != nil {
+						return fmt.Errorf("download %q failed: %w", title, err)
+					}
+					downloaded = append(downloaded, map[string]interface{}{
+						"file":  dest,
+						"bytes": n,
+					})
+				}
+				return ctx.OutputData(map[string]interface{}{
+					"release": id,
+					"files":   downloaded,
+				})
 			},
 		},
 		{

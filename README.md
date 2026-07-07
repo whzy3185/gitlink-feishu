@@ -487,6 +487,9 @@ gitlink-cli attachment +upload -f ./dist/app.tar.gz,./dist/app.sha256,./dist/CHA
 # Download an attachment by id to a local file
 gitlink-cli attachment +download -i <attachment_id> -o ./app-v1.0.0.tar.gz
 
+# Download all attachments of a release by tag (mirrors `gh release download`)
+gitlink-cli release +download -i v1.0.0 -o ./assets
+
 # Delete an attachment by id
 gitlink-cli attachment +delete -i <attachment_id>
 

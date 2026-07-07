@@ -478,6 +478,9 @@ gitlink-cli attachment +upload -f ./dist/app.tar.gz,./dist/app.sha256,./dist/CHA
 # 按 id 下载附件到本地文件
 gitlink-cli attachment +download -i <attachment_id> -o ./app-v1.0.0.tar.gz
 
+# 按 tag 一步下载发行版全部附件（对标 `gh release download`）
+gitlink-cli release +download -i v1.0.0 -o ./assets
+
 # 按 id 删除附件
 gitlink-cli attachment +delete -i <attachment_id>
 
