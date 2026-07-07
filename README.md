@@ -486,6 +486,9 @@ gitlink-cli attachment +download -i <attachment_id> -o ./app-v1.0.0.tar.gz
 
 # Delete an attachment by id
 gitlink-cli attachment +delete -i <attachment_id>
+
+# Or do it in one step: upload local files and attach them to a new release
+gitlink-cli release +create -t v1.0.0 -n "v1.0.0" --attachment-files ./dist/app.tar.gz,./dist/app.sha256
 ```
 
 ### CI/CD Operations

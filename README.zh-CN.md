@@ -477,6 +477,9 @@ gitlink-cli attachment +download -i <attachment_id> -o ./app-v1.0.0.tar.gz
 
 # 按 id 删除附件
 gitlink-cli attachment +delete -i <attachment_id>
+
+# 一步到位：上传本地文件并附加到新发行版
+gitlink-cli release +create -t v1.0.0 -n "v1.0.0" --attachment-files ./dist/app.tar.gz,./dist/app.sha256
 ```
 
 ### 流水线管理
