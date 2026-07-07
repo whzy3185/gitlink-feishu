@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -632,5 +635,49 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	t.Helper()
 	if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", want) {
 		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
+	}
+}
+
+// --- clone ---
+
+func TestRepoCloneRunsGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	src := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q", "--initial-branch=master", src},
+		{"-C", src, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"},
+	} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v (%s)", args, err, out)
+		}
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/owner/repo.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"identifier": "repo", "clone_url": src})
+	}))
+	defer server.Close()
+
+	dest := filepath.Join(t.TempDir(), "cloned-repo")
+	if err := runShortcut(t, server, "clone", map[string]string{"dir": dest}); err != nil {
+		t.Fatalf("clone shortcut failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, ".git")); err != nil {
+		t.Fatalf("expected cloned repo at %s: %v", dest, err)
+	}
+}
+
+func TestRepoCloneMissingCloneURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, map[string]interface{}{"identifier": "repo"})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "clone", map[string]string{}); err == nil {
+		t.Fatal("expected error when clone_url missing")
 	}
 }

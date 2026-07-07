@@ -1,12 +1,16 @@
 package repo
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
+	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -40,6 +44,51 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					return err
 				}
 				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "clone",
+			Description: tr.T("cmd.repo.clone.short"),
+			Long:        tr.T("cmd.repo.clone.long"),
+			Flags: []common.Flag{
+				{Name: "dir", Short: "d", Usage: tr.T("flag.repo.clone_dir")},
+				{Name: "branch", Short: "b", Usage: tr.T("flag.repo.clone_branch")},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath(), nil)
+				if err != nil {
+					return err
+				}
+				data, _ := env.Data.(map[string]interface{})
+				cloneURL, _ := data["clone_url"].(string)
+				if cloneURL == "" {
+					return errors.New(tr.T("error.repo.clone_url_missing"))
+				}
+				args := []string{"clone", cloneURL}
+				if branch := ctx.Arg("branch"); branch != "" {
+					args = append(args, "--branch", branch)
+				}
+				if dir := ctx.Arg("dir"); dir != "" {
+					args = append(args, dir)
+				}
+				gitCmd := exec.Command("git", args...)
+				gitCmd.Stdout = os.Stderr
+				gitCmd.Stderr = os.Stderr
+				if err := gitCmd.Run(); err != nil {
+					return fmt.Errorf("git clone failed: %w", err)
+				}
+				dest := ctx.Arg("dir")
+				if dest == "" {
+					dest = strings.TrimSuffix(cloneURL[strings.LastIndex(cloneURL, "/")+1:], ".git")
+				}
+				return ctx.Output(output.SuccessEnvelope(map[string]interface{}{
+					"message":   "cloned",
+					"clone_url": cloneURL,
+					"dir":       dest,
+				}, nil))
 			},
 		},
 		{
