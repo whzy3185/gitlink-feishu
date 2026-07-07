@@ -142,13 +142,17 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "edit",
 			Description: "Get release edit data",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Release version ID", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.release.id_or_tag"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
 				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				id, err = resolveVersionID(ctx, id)
 				if err != nil {
 					return err
 				}
@@ -261,7 +265,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "delete",
 			Description: tr.T("cmd.release.delete.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.release.id"), Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.release.id_or_tag"), Required: true},
 				{Name: "dry-run", Usage: "Preview the delete request without changing release state", Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
@@ -269,6 +273,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					return err
 				}
 				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				id, err = resolveVersionID(ctx, id)
 				if err != nil {
 					return err
 				}
@@ -323,6 +331,10 @@ func runUpdate(ctx *common.RuntimeContext) error {
 		return fmt.Errorf("at least one of --tag, --name, --body, --target, --draft, --prerelease, or --attachment-ids is required")
 	}
 	if err := validateReleaseUpdateArgs(ctx); err != nil {
+		return err
+	}
+	id, err = resolveVersionID(ctx, id)
+	if err != nil {
 		return err
 	}
 	current, err := fetchReleaseEdit(ctx, id)
