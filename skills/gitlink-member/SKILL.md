@@ -1,7 +1,10 @@
 ---
 name: gitlink-member
-description: "仓库成员管理：列出、添加、批量添加、移除成员，调整成员角色，生成、查看和接受项目邀请链接。"
+version: 1.0.0
+description: "仓库成员管理：列出、添加、批量添加、移除成员，调整成员角色，生成、查看和接受项目邀请链接。当用户需要管理 GitLink 仓库成员、成员角色或邀请链接时触发。"
 metadata:
+  requires:
+    bins: ["gitlink-cli"]
   cliHelp: "gitlink-cli member --help"
 ---
 

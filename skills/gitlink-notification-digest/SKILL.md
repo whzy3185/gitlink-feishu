@@ -5,6 +5,7 @@ description: "通知摘要：汇总 GitLink 通知并按类型分类，生成通
 metadata:
   requires:
     bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli api --help"
 ---
 
 # gitlink-notification-digest（通知摘要）
