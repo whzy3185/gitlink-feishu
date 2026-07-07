@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +13,63 @@ import (
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 )
 
+// progressThreshold is the minimum file size for which upload progress is
+// reported on stderr.
+const progressThreshold = 1 << 20 // 1 MiB
+
+// progressReporter prints upload progress to stderr at 10% steps for files
+// larger than progressThreshold. It implements io.Writer so it can sit on
+// the tee side of the upload stream.
+type progressReporter struct {
+	name     string
+	total    int64
+	done     int64
+	lastPct  int64
+	lastLine int
+	out      io.Writer
+}
+
+func newProgressReporter(name string, total int64) *progressReporter {
+	return &progressReporter{name: name, total: total, lastPct: -1, out: os.Stderr}
+}
+
+func newProgressReporterTo(name string, total int64, out io.Writer) *progressReporter {
+	return &progressReporter{name: name, total: total, lastPct: -1, out: out}
+}
+
+func (p *progressReporter) Write(b []byte) (int, error) {
+	p.done += int64(len(b))
+	if p.total >= progressThreshold {
+		pct := p.done * 100 / p.total
+		if pct/10 > p.lastPct/10 || (pct == 100 && p.lastPct != 100) {
+			line := fmt.Sprintf("uploading %s: %d%% (%s / %s)", p.name, pct, formatBytes(p.done), formatBytes(p.total))
+			if pad := p.lastLine - len(line); pad > 0 {
+				line += strings.Repeat(" ", pad)
+			}
+			fmt.Fprintf(p.out, "\r%s", line)
+			p.lastLine = len(line)
+			if pct >= 100 {
+				fmt.Fprintln(p.out)
+			}
+			p.lastPct = pct
+		}
+	}
+	return len(b), nil
+}
+
+func formatBytes(n int64) string {
+	switch {
+	case n >= 1<<30:
+		return fmt.Sprintf("%.1f GiB", float64(n)/(1<<30))
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KiB", float64(n)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
+}
+
 // PostMultipartFile uploads a local file as a multipart/form-data request.
 // fileField is the form field name for the file (GitLink expects "file");
 // extra fields (e.g. description) are added as plain form values.
@@ -24,28 +80,39 @@ func (c *Client) PostMultipartFile(path, filePath, fileField string, fields map[
 	}
 	defer f.Close()
 
-	var buf bytes.Buffer
-	writer := multipart.NewWriter(&buf)
-	part, err := writer.CreateFormFile(fileField, filepath.Base(filePath))
+	info, err := f.Stat()
 	if err != nil {
-		return nil, err
-	}
-	if _, err := io.Copy(part, f); err != nil {
-		return nil, fmt.Errorf("read upload file: %w", err)
-	}
-	for k, v := range fields {
-		if v != "" {
-			if err := writer.WriteField(k, v); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if err := writer.Close(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("stat upload file: %w", err)
 	}
 
+	// Stream the multipart body through a pipe so arbitrarily large files
+	// are never buffered in memory.
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
+	progress := newProgressReporter(filepath.Base(filePath), info.Size())
+	go func() {
+		part, err := writer.CreateFormFile(fileField, filepath.Base(filePath))
+		if err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+		if _, err := io.Copy(part, io.TeeReader(f, progress)); err != nil {
+			pw.CloseWithError(fmt.Errorf("read upload file: %w", err))
+			return
+		}
+		for k, v := range fields {
+			if v != "" {
+				if err := writer.WriteField(k, v); err != nil {
+					pw.CloseWithError(err)
+					return
+				}
+			}
+		}
+		pw.CloseWithError(writer.Close())
+	}()
+
 	fullURL := c.BaseURL + normalizeAPIPath(c.BaseURL, path)
-	req, err := http.NewRequest("POST", fullURL, &buf)
+	req, err := http.NewRequest("POST", fullURL, pr)
 	if err != nil {
 		return nil, err
 	}
