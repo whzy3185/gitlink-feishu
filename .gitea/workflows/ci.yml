@@ -20,6 +20,11 @@ jobs:
       - name: Build
         run: go build ./...
 
+      - name: Validate i18n and skill metadata
+        run: |
+          go run ./internal/i18n/cmd/check
+          go run ./internal/skillmeta/cmd/check
+
       - name: Lint
         run: make lint
 

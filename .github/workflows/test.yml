@@ -26,5 +26,8 @@ jobs:
       - name: Scan i18n key references
         run: go run ./internal/i18n/cmd/check --scan-code
 
+      - name: Validate skill metadata
+        run: go run ./internal/skillmeta/cmd/check
+
       - name: Run Go tests
         run: go test ./...
