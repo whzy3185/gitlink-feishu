@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -529,5 +533,62 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	t.Helper()
 	if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", want) {
 		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
+	}
+}
+
+func TestPRCheckoutFetchesHeadBranch(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	// Upstream repo with a PR head branch.
+	upstream := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v (%s)", args, err, out)
+		}
+	}
+	run("init", "-q", "--initial-branch=master", upstream)
+	run("-C", upstream, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init")
+	run("-C", upstream, "branch", "feat/x")
+
+	// Local clone where checkout happens.
+	local := filepath.Join(t.TempDir(), "local")
+	run("clone", "-q", upstream, local)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/owner/repo/pulls/42.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"head": "feat/x", "base": "master"})
+	}))
+	defer server.Close()
+
+	cwd, _ := os.Getwd()
+	if err := os.Chdir(local); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(cwd)
+
+	if err := runPRShortcut(t, server, "checkout", map[string]string{"id": "42"}); err != nil {
+		t.Fatalf("checkout shortcut failed: %v", err)
+	}
+	out, err := exec.Command("git", "-C", local, "branch", "--show-current").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(out)); got != "feat/x" {
+		t.Fatalf("current branch = %q, want feat/x", got)
+	}
+}
+
+func TestPRCheckoutMissingHead(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, map[string]interface{}{"base": "master"})
+	}))
+	defer server.Close()
+
+	if err := runPRShortcut(t, server, "checkout", map[string]string{"id": "42"}); err == nil {
+		t.Fatal("expected error when head missing")
 	}
 }

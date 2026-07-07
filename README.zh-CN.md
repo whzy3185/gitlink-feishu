@@ -421,6 +421,10 @@ gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: 新功能" --h
 # 查看 PR
 gitlink-cli pr +view --owner Gitlink --repo forgeplus -i 42
 
+# 在本地检出 PR 分支（对标 `gh pr checkout`；需在 git 克隆目录内执行）
+gitlink-cli pr +checkout --owner Gitlink --repo forgeplus -i 42
+gitlink-cli pr +checkout --owner Gitlink --repo forgeplus -i 42 -b review-42
+
 # 合并 PR
 gitlink-cli pr +merge --owner Gitlink --repo forgeplus -i 42
 

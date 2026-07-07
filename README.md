@@ -411,6 +411,10 @@ gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: New feature" -
 # View a PR
 gitlink-cli pr +view --owner Gitlink --repo forgeplus -i 42
 
+# Check out a pull request branch locally (mirrors `gh pr checkout`; run inside a git clone)
+gitlink-cli pr +checkout --owner Gitlink --repo forgeplus -i 42
+gitlink-cli pr +checkout --owner Gitlink --repo forgeplus -i 42 -b review-42
+
 # Merge a PR
 gitlink-cli pr +merge --owner Gitlink --repo forgeplus -i 42
 

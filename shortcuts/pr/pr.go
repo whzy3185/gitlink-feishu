@@ -1,8 +1,11 @@
 package pr
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
@@ -142,6 +145,59 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					return err
 				}
 				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "checkout",
+			Description: tr.T("cmd.pr.checkout.short"),
+			Long:        tr.T("cmd.pr.checkout.long"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "branch", Short: "b", Usage: tr.T("flag.pr.checkout_branch")},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, _ := ctx.RequireArg("id")
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", v1RepoPath(ctx), id), nil)
+				if err != nil {
+					return err
+				}
+				data, _ := env.Data.(map[string]interface{})
+				head, _ := data["head"].(string)
+				if head == "" {
+					return errors.New(tr.T("error.pr.checkout_head_missing"))
+				}
+				local := ctx.Arg("branch")
+				if local == "" {
+					local = head
+				}
+				remote := "origin"
+				if fork, ok := data["fork_project"].(map[string]interface{}); ok {
+					login, _ := fork["login"].(string)
+					identifier, _ := fork["identifier"].(string)
+					if login != "" && identifier != "" && login != ctx.Owner {
+						remote = fmt.Sprintf("https://gitlink.org.cn/%s/%s.git", login, identifier)
+					}
+				}
+				for _, args := range [][]string{
+					{"fetch", remote, fmt.Sprintf("%s:%s", head, local)},
+					{"checkout", local},
+				} {
+					gitCmd := exec.Command("git", args...)
+					gitCmd.Stdout = os.Stderr
+					gitCmd.Stderr = os.Stderr
+					if err := gitCmd.Run(); err != nil {
+						return fmt.Errorf("git %s failed: %w", strings.Join(args, " "), err)
+					}
+				}
+				return ctx.Output(output.SuccessEnvelope(map[string]interface{}{
+					"message": "checked out",
+					"pull":    id,
+					"branch":  local,
+					"remote":  remote,
+				}, nil))
 			},
 		},
 		{
