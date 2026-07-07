@@ -9,7 +9,7 @@ import (
 func TestProgressReporterLargeFile(t *testing.T) {
 	var buf bytes.Buffer
 	total := int64(4 << 20)
-	p := newProgressReporterTo("big.bin", total, &buf)
+	p := newProgressReporterTo("uploading", "big.bin", total, &buf)
 
 	chunk := make([]byte, 1<<20)
 	for i := 0; i < 4; i++ {
@@ -31,12 +31,43 @@ func TestProgressReporterLargeFile(t *testing.T) {
 
 func TestProgressReporterSmallFileSilent(t *testing.T) {
 	var buf bytes.Buffer
-	p := newProgressReporterTo("small.txt", 1024, &buf)
+	p := newProgressReporterTo("uploading", "small.txt", 1024, &buf)
 	if _, err := p.Write(make([]byte, 1024)); err != nil {
 		t.Fatal(err)
 	}
 	if buf.Len() != 0 {
 		t.Fatalf("expected no progress output for small file, got %q", buf.String())
+	}
+}
+
+func TestProgressReporterUnknownTotal(t *testing.T) {
+	var buf bytes.Buffer
+	p := newProgressReporterTo("downloading", "chunked.bin", -1, &buf)
+	chunk := make([]byte, 1<<20)
+	for i := 0; i < 3; i++ {
+		if _, err := p.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p.Close()
+	out := buf.String()
+	if !strings.Contains(out, "downloading chunked.bin") {
+		t.Fatalf("missing progress prefix: %q", out)
+	}
+	if !strings.Contains(out, "3.0 MiB") {
+		t.Fatalf("missing final byte count: %q", out)
+	}
+}
+
+func TestProgressReporterUnknownTotalSmallSilent(t *testing.T) {
+	var buf bytes.Buffer
+	p := newProgressReporterTo("downloading", "small.bin", -1, &buf)
+	if _, err := p.Write(make([]byte, 1024)); err != nil {
+		t.Fatal(err)
+	}
+	p.Close()
+	if buf.Len() != 0 {
+		t.Fatalf("expected no progress output for small unknown-total transfer, got %q", buf.String())
 	}
 }
 

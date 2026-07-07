@@ -17,10 +17,11 @@ import (
 // reported on stderr.
 const progressThreshold = 1 << 20 // 1 MiB
 
-// progressReporter prints upload progress to stderr at 10% steps for files
+// progressReporter prints transfer progress to stderr at 10% steps for files
 // larger than progressThreshold. It implements io.Writer so it can sit on
-// the tee side of the upload stream.
+// the tee side of the transfer stream.
 type progressReporter struct {
+	verb     string
 	name     string
 	total    int64
 	done     int64
@@ -29,32 +30,52 @@ type progressReporter struct {
 	out      io.Writer
 }
 
-func newProgressReporter(name string, total int64) *progressReporter {
-	return &progressReporter{name: name, total: total, lastPct: -1, out: os.Stderr}
+func newProgressReporter(verb, name string, total int64) *progressReporter {
+	return &progressReporter{verb: verb, name: name, total: total, lastPct: -1, out: os.Stderr}
 }
 
-func newProgressReporterTo(name string, total int64, out io.Writer) *progressReporter {
-	return &progressReporter{name: name, total: total, lastPct: -1, out: out}
+func newProgressReporterTo(verb, name string, total int64, out io.Writer) *progressReporter {
+	return &progressReporter{verb: verb, name: name, total: total, lastPct: -1, out: out}
 }
 
 func (p *progressReporter) Write(b []byte) (int, error) {
 	p.done += int64(len(b))
-	if p.total >= progressThreshold {
+	switch {
+	case p.total >= progressThreshold:
 		pct := p.done * 100 / p.total
 		if pct/10 > p.lastPct/10 || (pct == 100 && p.lastPct != 100) {
-			line := fmt.Sprintf("uploading %s: %d%% (%s / %s)", p.name, pct, formatBytes(p.done), formatBytes(p.total))
-			if pad := p.lastLine - len(line); pad > 0 {
-				line += strings.Repeat(" ", pad)
-			}
-			fmt.Fprintf(p.out, "\r%s", line)
-			p.lastLine = len(line)
+			p.print(fmt.Sprintf("%s %s: %d%% (%s / %s)", p.verb, p.name, pct, formatBytes(p.done), formatBytes(p.total)))
 			if pct >= 100 {
 				fmt.Fprintln(p.out)
 			}
 			p.lastPct = pct
 		}
+	case p.total <= 0:
+		// Unknown total (e.g. chunked downloads without Content-Length):
+		// report transferred bytes at every MiB boundary.
+		if step := p.done / progressThreshold; step > 0 && step > p.lastPct {
+			p.print(fmt.Sprintf("%s %s: %s", p.verb, p.name, formatBytes(p.done)))
+			p.lastPct = step
+		}
 	}
 	return len(b), nil
+}
+
+// Close finishes an unknown-total progress line with the final byte count.
+func (p *progressReporter) Close() error {
+	if p.total <= 0 && p.done >= progressThreshold {
+		p.print(fmt.Sprintf("%s %s: %s", p.verb, p.name, formatBytes(p.done)))
+		fmt.Fprintln(p.out)
+	}
+	return nil
+}
+
+func (p *progressReporter) print(line string) {
+	if pad := p.lastLine - len(line); pad > 0 {
+		line += strings.Repeat(" ", pad)
+	}
+	fmt.Fprintf(p.out, "\r%s", line)
+	p.lastLine = len(line)
 }
 
 func formatBytes(n int64) string {
@@ -89,7 +110,7 @@ func (c *Client) PostMultipartFile(path, filePath, fileField string, fields map[
 	// are never buffered in memory.
 	pr, pw := io.Pipe()
 	writer := multipart.NewWriter(pw)
-	progress := newProgressReporter(filepath.Base(filePath), info.Size())
+	progress := newProgressReporter("uploading", filepath.Base(filePath), info.Size())
 	go func() {
 		part, err := writer.CreateFormFile(fileField, filepath.Base(filePath))
 		if err != nil {
@@ -222,7 +243,9 @@ func (c *Client) DownloadFile(path, destPath string) (int64, error) {
 	}
 	defer out.Close()
 
-	n, err := io.Copy(out, resp.Body)
+	progress := newProgressReporter("downloading", filepath.Base(destPath), resp.ContentLength)
+	n, err := io.Copy(out, io.TeeReader(resp.Body, progress))
+	progress.Close()
 	if err != nil {
 		return n, fmt.Errorf("write output file: %w", err)
 	}
