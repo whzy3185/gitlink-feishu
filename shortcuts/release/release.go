@@ -3,6 +3,7 @@ package release
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 
@@ -46,6 +47,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "prerelease", Usage: tr.T("flag.release.prerelease"), Default: "false"},
 				{Name: "draft", Usage: "Mark as draft (true/false)", Default: "false"},
 				{Name: "attachment-ids", Usage: "Comma-separated attachment IDs"},
+				{Name: "attachment-files", Usage: tr.T("flag.release.attachment_files")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -79,11 +81,21 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if t := ctx.Arg("target"); t != "" {
 					payload["target_commitish"] = t
 				}
+				var ids []string
 				if attachmentIDs := ctx.Arg("attachment-ids"); attachmentIDs != "" {
-					ids, err := parseReleaseAttachmentIDs(attachmentIDs)
+					ids, err = parseReleaseAttachmentIDs(attachmentIDs)
 					if err != nil {
 						return err
 					}
+				}
+				if files := ctx.Arg("attachment-files"); files != "" {
+					uploaded, err := uploadReleaseAttachments(ctx, files)
+					if err != nil {
+						return err
+					}
+					ids = append(ids, uploaded...)
+				}
+				if len(ids) > 0 {
 					payload["attachment_ids"] = ids
 				}
 				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/releases", payload)
@@ -423,4 +435,42 @@ func firstReleaseValue(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// uploadReleaseAttachments uploads local files given as a comma-separated
+// list and returns their attachment ids for use in attachment_ids.
+func uploadReleaseAttachments(ctx *common.RuntimeContext, files string) ([]string, error) {
+	var ids []string
+	for _, part := range strings.Split(files, ",") {
+		file := strings.TrimSpace(part)
+		if file == "" {
+			continue
+		}
+		info, err := os.Stat(file)
+		if err != nil {
+			return nil, fmt.Errorf("cannot access file %q: %w", file, err)
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("%q is a directory, expected a file", file)
+		}
+		env, err := ctx.Client.PostMultipartFile("/attachments", file, "file", nil)
+		if err != nil {
+			return nil, fmt.Errorf("upload %q failed: %w", file, err)
+		}
+		data, _ := env.Data.(map[string]interface{})
+		id, _ := data["id"].(string)
+		if id == "" {
+			if num, ok := data["id"].(float64); ok {
+				id = strconv.FormatFloat(num, 'f', -1, 64)
+			}
+		}
+		if id == "" {
+			return nil, fmt.Errorf("upload %q succeeded but no attachment id was returned", file)
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("--attachment-files must include at least one file")
+	}
+	return ids, nil
 }

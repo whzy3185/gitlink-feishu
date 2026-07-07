@@ -211,6 +211,7 @@
   "flag.profile.start_time": "开始时间（Unix 时间戳）",
   "flag.profile.user": "目标用户登录名（默认为当前认证用户）",
   "flag.profile.year": "贡献热力图的年份（如 2025）",
+  "flag.release.attachment_files": "以逗号分隔的本地文件路径，自动上传并附加到发行版",
   "flag.release.body": "发布说明",
   "flag.release.id": "发布 ID",
   "flag.release.id_or_tag": "发布 ID 或标签",

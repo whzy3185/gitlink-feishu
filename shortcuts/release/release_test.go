@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -452,4 +454,59 @@ func ExampleShortcuts() {
 	// view
 	// update
 	// delete
+}
+
+func TestReleaseCreateWithAttachmentFiles(t *testing.T) {
+	dir := t.TempDir()
+	asset := filepath.Join(dir, "asset.bin")
+	if err := os.WriteFile(asset, []byte("release asset data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var payload map[string]interface{}
+	var uploads int
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/attachments" || r.URL.Path == "/attachments.json" {
+			uploads++
+			if err := r.ParseMultipartForm(1 << 20); err != nil {
+				t.Fatalf("parse multipart: %v", err)
+			}
+			writeReleaseJSON(t, w, map[string]interface{}{"id": "uuid-from-upload", "title": "asset.bin"})
+			return
+		}
+		assertReleaseRequest(t, r, "POST", "/owner/repo/releases.json")
+		payload = decodeReleaseJSON(t, r)
+		writeReleaseJSON(t, w, map[string]interface{}{"status": 0, "message": "created"})
+	})
+	defer server.Close()
+
+	err := runReleaseShortcut(t, server, "create", map[string]string{
+		"tag":              "v1.0.0",
+		"name":             "v1.0.0",
+		"attachment-ids":   "12",
+		"attachment-files": asset,
+	})
+	if err != nil {
+		t.Fatalf("create shortcut failed: %v", err)
+	}
+	if uploads != 1 {
+		t.Fatalf("uploads = %d, want 1", uploads)
+	}
+	assertReleaseStringSlice(t, payload["attachment_ids"], []string{"12", "uuid-from-upload"})
+}
+
+func TestReleaseCreateAttachmentFilesMissing(t *testing.T) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runReleaseShortcut(t, server, "create", map[string]string{
+		"tag":              "v1.0.0",
+		"name":             "v1.0.0",
+		"attachment-files": "/nonexistent/path.bin",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing attachment file")
+	}
 }
