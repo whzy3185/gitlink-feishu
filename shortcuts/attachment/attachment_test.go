@@ -2,11 +2,14 @@ package attachment
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -209,5 +212,59 @@ func TestDeleteAttachment(t *testing.T) {
 	}
 	if gotPath != "/attachments/abc-uuid.json" {
 		t.Fatalf("path = %q, want /attachments/abc-uuid.json", gotPath)
+	}
+}
+
+func TestSplitFiles(t *testing.T) {
+	got := splitFiles(" a.txt, b.bin ,,c ")
+	want := []string{"a.txt", "b.bin", "c"}
+	if len(got) != len(want) {
+		t.Fatalf("splitFiles = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("splitFiles[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestUploadMultipleFilesConcurrently(t *testing.T) {
+	dir := t.TempDir()
+	var files []string
+	for _, name := range []string{"one.txt", "two.txt", "three.txt"} {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("data-"+name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, p)
+	}
+
+	var mu sync.Mutex
+	seen := map[string]bool{}
+	ctx := newTestContext(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/attachments" && r.URL.Path != "/attachments.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			t.Fatalf("parse multipart: %v", err)
+		}
+		_, hdr, err := r.FormFile("file")
+		if err != nil {
+			t.Fatalf("form file: %v", err)
+		}
+		mu.Lock()
+		seen[hdr.Filename] = true
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"id":%q,"msg":"success"}`, hdr.Filename)
+	}, map[string]string{
+		"file":        strings.Join(files, ","),
+		"concurrency": "2",
+	})
+	if err := findShortcut(t, "upload").Run(ctx); err != nil {
+		t.Fatalf("multi-file upload failed: %v", err)
+	}
+	if len(seen) != 3 {
+		t.Fatalf("uploaded %d files, want 3: %v", len(seen), seen)
 	}
 }

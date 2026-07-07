@@ -481,6 +481,9 @@ gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --d
 # Upload a local file as a platform attachment (returns the attachment id)
 gitlink-cli attachment +upload -f ./dist/app-v1.0.0.tar.gz -d "v1.0.0 release asset"
 
+# Upload several files concurrently (comma-separated; -c sets the worker count, default 3)
+gitlink-cli attachment +upload -f ./dist/app.tar.gz,./dist/app.sha256,./dist/CHANGELOG.md -c 3
+
 # Download an attachment by id to a local file
 gitlink-cli attachment +download -i <attachment_id> -o ./app-v1.0.0.tar.gz
 

@@ -130,6 +130,7 @@
   "flag.api.body_stdin": "Read request body JSON from stdin",
   "flag.api.header": "Additional headers (key:value)",
   "flag.api.query": "Query parameters (key=val&key2=val2)",
+  "flag.attachment.concurrency": "Concurrent uploads when passing multiple comma-separated files (default 3)",
   "flag.attachment.description": "Attachment description",
   "flag.attachment.file": "Path of the local file to upload",
   "flag.attachment.id": "Attachment ID",

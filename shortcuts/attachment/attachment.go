@@ -12,10 +12,69 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
+	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
+
+// splitFiles parses a comma-separated file list, trimming blanks.
+func splitFiles(arg string) []string {
+	var files []string
+	for _, f := range strings.Split(arg, ",") {
+		if f = strings.TrimSpace(f); f != "" {
+			files = append(files, f)
+		}
+	}
+	return files
+}
+
+// uploadConcurrently uploads several files with a bounded worker pool.
+// Per-byte progress is suppressed (interleaved lines would garble); instead
+// one line per completed file goes to stderr. Results keep input order.
+func uploadConcurrently(ctx *common.RuntimeContext, files []string, fields map[string]string, concurrency int) ([]interface{}, error) {
+	quiet := *ctx.Client
+	quiet.NoProgress = true
+
+	type result struct {
+		env *output.Envelope
+		err error
+	}
+	results := make([]result, len(files))
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	for i, file := range files {
+		wg.Add(1)
+		go func(i int, file string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			env, err := quiet.PostMultipartFile("/attachments", file, "file", fields)
+			results[i] = result{env: env, err: err}
+			mu.Lock()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "uploaded %s: error: %v\n", filepath.Base(file), err)
+			} else {
+				fmt.Fprintf(os.Stderr, "uploaded %s\n", filepath.Base(file))
+			}
+			mu.Unlock()
+		}(i, file)
+	}
+	wg.Wait()
+
+	out := make([]interface{}, 0, len(files))
+	for i, r := range results {
+		if r.err != nil {
+			return nil, fmt.Errorf("upload %q failed: %w", files[i], r.err)
+		}
+		out = append(out, map[string]interface{}{"file": files[i], "result": r.env.Data})
+	}
+	return out, nil
+}
 
 // Shortcuts returns attachment upload/download shortcuts.
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
@@ -32,27 +91,42 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Flags: []common.Flag{
 				{Name: "file", Short: "f", Usage: tr.T("flag.attachment.file"), Required: true},
 				{Name: "description", Short: "d", Usage: tr.T("flag.attachment.description")},
+				{Name: "concurrency", Short: "c", Usage: tr.T("flag.attachment.concurrency"), Default: "3"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
-				file, err := ctx.RequireArg("file")
+				fileArg, err := ctx.RequireArg("file")
 				if err != nil {
 					return err
 				}
-				info, err := os.Stat(file)
-				if err != nil {
-					return fmt.Errorf("cannot access file %q: %w", file, err)
-				}
-				if info.IsDir() {
-					return fmt.Errorf("%q is a directory, expected a file", file)
+				files := splitFiles(fileArg)
+				for _, file := range files {
+					info, err := os.Stat(file)
+					if err != nil {
+						return fmt.Errorf("cannot access file %q: %w", file, err)
+					}
+					if info.IsDir() {
+						return fmt.Errorf("%q is a directory, expected a file", file)
+					}
 				}
 				fields := map[string]string{
 					"description": ctx.Arg("description"),
 				}
-				env, err := ctx.Client.PostMultipartFile("/attachments", file, "file", fields)
+				if len(files) == 1 {
+					env, err := ctx.Client.PostMultipartFile("/attachments", files[0], "file", fields)
+					if err != nil {
+						return err
+					}
+					return ctx.Output(env)
+				}
+				concurrency, err := strconv.Atoi(ctx.Arg("concurrency"))
+				if err != nil || concurrency < 1 {
+					concurrency = 3
+				}
+				results, err := uploadConcurrently(ctx, files, fields, concurrency)
 				if err != nil {
 					return err
 				}
-				return ctx.Output(env)
+				return ctx.OutputData(results)
 			},
 		},
 		{

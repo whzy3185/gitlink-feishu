@@ -472,6 +472,9 @@ gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --d
 # 上传本地文件为平台附件（返回附件 id）
 gitlink-cli attachment +upload -f ./dist/app-v1.0.0.tar.gz -d "v1.0.0 发布产物"
 
+# 多文件并发上传（逗号分隔；-c 指定并发数，默认 3）
+gitlink-cli attachment +upload -f ./dist/app.tar.gz,./dist/app.sha256,./dist/CHANGELOG.md -c 3
+
 # 按 id 下载附件到本地文件
 gitlink-cli attachment +download -i <attachment_id> -o ./app-v1.0.0.tar.gz
 

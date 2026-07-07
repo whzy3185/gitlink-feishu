@@ -130,6 +130,7 @@
   "flag.api.body_stdin": "从标准输入读取 JSON 请求体",
   "flag.api.header": "附加请求头（key:value）",
   "flag.api.query": "查询参数（key=val&key2=val2）",
+  "flag.attachment.concurrency": "多文件（逗号分隔）上传时的并发数（默认 3）",
   "flag.attachment.description": "附件描述",
   "flag.attachment.file": "要上传的本地文件路径",
   "flag.attachment.id": "附件 ID",

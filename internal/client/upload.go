@@ -30,6 +30,14 @@ type progressReporter struct {
 	out      io.Writer
 }
 
+// transferProgress builds a progress reporter honoring Client.NoProgress.
+func (c *Client) transferProgress(verb, name string, total int64) *progressReporter {
+	if c.NoProgress {
+		return newProgressReporterTo(verb, name, total, io.Discard)
+	}
+	return newProgressReporter(verb, name, total)
+}
+
 func newProgressReporter(verb, name string, total int64) *progressReporter {
 	return &progressReporter{verb: verb, name: name, total: total, lastPct: -1, out: os.Stderr}
 }
@@ -110,7 +118,7 @@ func (c *Client) PostMultipartFile(path, filePath, fileField string, fields map[
 	// are never buffered in memory.
 	pr, pw := io.Pipe()
 	writer := multipart.NewWriter(pw)
-	progress := newProgressReporter("uploading", filepath.Base(filePath), info.Size())
+	progress := c.transferProgress("uploading", filepath.Base(filePath), info.Size())
 	go func() {
 		part, err := writer.CreateFormFile(fileField, filepath.Base(filePath))
 		if err != nil {
@@ -243,7 +251,7 @@ func (c *Client) DownloadFile(path, destPath string) (int64, error) {
 	}
 	defer out.Close()
 
-	progress := newProgressReporter("downloading", filepath.Base(destPath), resp.ContentLength)
+	progress := c.transferProgress("downloading", filepath.Base(destPath), resp.ContentLength)
 	n, err := io.Copy(out, io.TeeReader(resp.Body, progress))
 	progress.Close()
 	if err != nil {
