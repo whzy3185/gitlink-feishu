@@ -473,6 +473,18 @@ gitlink-cli release +update --owner Gitlink --repo forgeplus -i <version_id> -b 
 gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --dry-run
 ```
 
+### Attachment Upload & Download
+
+`attachment` gives a scriptable path for large-file transfer instead of the web UI. The uploaded attachment id can be fed to `release +create --attachment-ids`.
+
+```bash
+# Upload a local file as a platform attachment (returns the attachment id)
+gitlink-cli attachment +upload -f ./dist/app-v1.0.0.tar.gz -d "v1.0.0 release asset"
+
+# Download an attachment by id to a local file
+gitlink-cli attachment +download -i <attachment_id> -o ./app-v1.0.0.tar.gz
+```
+
 ### CI/CD Operations
 
 ```bash
