@@ -152,6 +152,28 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "forks",
+			Description: tr.T("cmd.repo.forks.short"),
+			Flags:       communityListFlags(),
+			Run: func(ctx *common.RuntimeContext) error {
+				return runCommunityList(ctx, "forks")
+			},
+		},
+		{
+			Name:        "top-counts",
+			Description: tr.T("cmd.repo.top_counts.short"),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/top_counts", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "follow",
 			Description: "Follow a repository",
 			Flags:       repoInteractionFlags(),

@@ -634,3 +634,31 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
 	}
 }
+
+func TestRepoForksListsForkUsers(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/owner/repo/forks.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"count": 0, "users": []interface{}{}})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "forks", map[string]string{}); err != nil {
+		t.Fatalf("forks failed: %v", err)
+	}
+}
+
+func TestRepoTopCountsUsesTopCountsEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/owner/repo/top_counts.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"tags_count": float64(1)})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "top-counts", map[string]string{}); err != nil {
+		t.Fatalf("top-counts failed: %v", err)
+	}
+}
