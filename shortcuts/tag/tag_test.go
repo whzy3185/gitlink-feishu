@@ -65,3 +65,38 @@ func runTagShortcut(t *testing.T, server *httptest.Server, name string, args map
 	t.Fatalf("shortcut %q not found", name)
 	return nil
 }
+
+func TestTagViewDirectShow(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/owner/repo/tags/v1.0.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"name":"v1.0"}`))
+	}))
+	defer server.Close()
+
+	if err := runTagShortcut(t, server, "view", map[string]string{"name": "v1.0"}); err != nil {
+		t.Fatalf("view failed: %v", err)
+	}
+}
+
+func TestTagViewFallsBackToListScan(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/v1/owner/repo/tags/mytag.json" {
+			w.Write([]byte(`{"status":-1,"message":"标签不存在！"}`))
+			return
+		}
+		if r.URL.Path == "/v1/owner/repo/tags.json" {
+			w.Write([]byte(`{"total_count":1,"tags":[{"name":"mytag","id":"abc"}]}`))
+			return
+		}
+		t.Fatalf("unexpected path: %s", r.URL.Path)
+	}))
+	defer server.Close()
+
+	if err := runTagShortcut(t, server, "view", map[string]string{"name": "mytag"}); err != nil {
+		t.Fatalf("view fallback failed: %v", err)
+	}
+}

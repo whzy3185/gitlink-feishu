@@ -1,6 +1,7 @@
 package tag
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 
@@ -42,6 +43,43 @@ func Shortcuts() []*common.Shortcut {
 					return err
 				}
 				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "view",
+			Description: "Show a git tag by name",
+			Flags: []common.Flag{
+				{Name: "name", Short: "n", Usage: "Tag name", Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				name, err := ctx.RequireArg("name")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("/v1/%s/%s/tags/%s", ctx.Owner, ctx.Repo, url.PathEscape(name)), nil)
+				if err == nil {
+					return ctx.Output(env)
+				}
+				// The show endpoint's tag-existence precheck is unreliable in
+				// production (rejects tags that the paginated list returns),
+				// so fall back to scanning the list for the requested name.
+				q := url.Values{}
+				q.Set("page", "1")
+				q.Set("limit", "20")
+				items, listErr := ctx.PaginateAllKey(fmt.Sprintf("/v1/%s/%s/tags", ctx.Owner, ctx.Repo), q, "tags")
+				if listErr != nil {
+					return err
+				}
+				for _, item := range items {
+					var tag map[string]interface{}
+					if json.Unmarshal(item, &tag) == nil && tag["name"] == name {
+						return ctx.OutputData(tag)
+					}
+				}
+				return err
 			},
 		},
 	}

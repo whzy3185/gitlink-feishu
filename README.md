@@ -336,6 +336,10 @@ gitlink-cli commit +view --owner Gitlink --repo forgeplus --sha <sha>
 # Git tags
 gitlink-cli tag +list --owner Gitlink --repo forgeplus --all
 
+# Show a single tag by name (falls back to a list scan when the
+# show endpoint's existence precheck misfires)
+gitlink-cli tag +view --owner Gitlink --repo forgeplus -n v4.0.0
+
 # Create an issue
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: Login failed" -b "Steps to reproduce..."
 
