@@ -62,6 +62,8 @@
   "cmd.pr.review.short": "Create a pull request review",
   "cmd.pr.reviews.short": "List pull request reviews",
   "cmd.pr.short": "Pull request operations",
+  "cmd.pr.status.long": "Show open pull requests in this repository that are relevant to the current authenticated user, grouped into ones you created and ones requesting your review.",
+  "cmd.pr.status.short": "Show pull requests relevant to you",
   "cmd.pr.version_diff.short": "Show diff for a pull request patchset version",
   "cmd.pr.versions.short": "List pull request patchset versions",
   "cmd.pr.view.short": "View pull request details",

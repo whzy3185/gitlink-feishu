@@ -3,6 +3,7 @@ package pr
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
@@ -87,6 +88,21 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					return err
 				}
 				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "status",
+			Description: tr.T("cmd.pr.status.short"),
+			Long:        tr.T("cmd.pr.status.long"),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				result, err := collectPullStatus(ctx)
+				if err != nil {
+					return err
+				}
+				return ctx.OutputData(result)
 			},
 		},
 		{
@@ -443,6 +459,101 @@ func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
 
 func prV1Path(ctx *common.RuntimeContext, id string) string {
 	return fmt.Sprintf("/v1/%s/%s/pulls/%s", ctx.Owner, ctx.Repo, id)
+}
+
+// collectPullStatus groups the current user's relevant open pull requests into
+// those they authored and those requesting their review. The pulls list
+// endpoint (api_ref "获取合并请求列表") exposes a reviewer_id filter but no author
+// filter, so review requests are narrowed server-side by the numeric user id
+// while authorship is matched client-side on the author login.
+func collectPullStatus(ctx *common.RuntimeContext) (map[string]interface{}, error) {
+	login, userID, err := currentUserIdentity(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	openQuery := url.Values{}
+	openQuery.Set("status", "0")
+	openPulls, err := fetchPulls(ctx, openQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	reviewQuery := url.Values{}
+	reviewQuery.Set("status", "0")
+	reviewQuery.Set("reviewer_id", userID)
+	reviewRequested, err := fetchPulls(ctx, reviewQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"login":            login,
+		"created":          filterPullsByAuthorLogin(openPulls, login),
+		"review_requested": reviewRequested,
+	}, nil
+}
+
+func currentUserIdentity(ctx *common.RuntimeContext) (login string, id string, err error) {
+	env, err := ctx.CallAPI("GET", "/users/me", nil)
+	if err != nil {
+		return "", "", err
+	}
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return "", "", fmt.Errorf("unexpected /users/me response format")
+	}
+	login = stringField(data, "login")
+	if login == "" {
+		return "", "", fmt.Errorf("/users/me response missing login")
+	}
+	idNum, ok := numberField(data, "id")
+	if !ok {
+		return "", "", fmt.Errorf("/users/me response missing id")
+	}
+	return login, strconv.FormatInt(int64(idNum), 10), nil
+}
+
+func fetchPulls(ctx *common.RuntimeContext, query url.Values) ([]interface{}, error) {
+	env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx)+"/pulls", query)
+	if err != nil {
+		return nil, err
+	}
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return []interface{}{}, nil
+	}
+	pulls, ok := data["pulls"].([]interface{})
+	if !ok {
+		return []interface{}{}, nil
+	}
+	return pulls, nil
+}
+
+func filterPullsByAuthorLogin(pulls []interface{}, login string) []interface{} {
+	matched := make([]interface{}, 0, len(pulls))
+	for _, raw := range pulls {
+		pull, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if pullAuthorLogin(pull) == login {
+			matched = append(matched, raw)
+		}
+	}
+	return matched
+}
+
+func pullAuthorLogin(pull map[string]interface{}) string {
+	issue, ok := pull["issue"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	author, ok := issue["author"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	return stringField(author, "login")
 }
 
 func validatePRReviewStatus(status string) error {
