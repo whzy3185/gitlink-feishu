@@ -1,6 +1,7 @@
 package shortcuts
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -59,6 +60,9 @@ func TestRegisterAllGroupDescriptions(t *testing.T) {
 		t.Run(cmd.Use, func(t *testing.T) {
 			if cmd.Short == "" {
 				t.Fatal("Short description is empty")
+			}
+			if strings.HasPrefix(cmd.Short, "cmd.") && strings.HasSuffix(cmd.Short, ".short") {
+				t.Fatalf("Short description is an unresolved i18n key: %q", cmd.Short)
 			}
 		})
 	}

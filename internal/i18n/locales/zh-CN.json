@@ -34,6 +34,7 @@
   "cmd.dataset.view.short": "查看仓库数据集",
   "cmd.doctor.long": "诊断 gitlink-cli 的配置、认证、仓库上下文和 API 连通性问题。",
   "cmd.doctor.short": "诊断 gitlink-cli 环境问题",
+  "cmd.ignore.short": "Gitignore 模板操作",
   "cmd.issue.batch_close.long": "批量关闭筛选后的议题。\n\n该命令默认处于 dry-run 模式，只打印匹配的议题。\n传入 --yes 后执行远端关闭操作。请使用严格筛选条件和较小 limit。\n\n示例：\n  gitlink-cli issue +batch-close --owner Gitlink --repo gitlink-cli --older-than-days 60 --limit 20\n  gitlink-cli issue +batch-close --owner Gitlink --repo gitlink-cli --older-than-days 60 --limit 20 --yes",
   "cmd.issue.batch_close.short": "批量关闭筛选后的议题。默认 dry-run；传入 --yes 后执行。",
   "cmd.issue.batch_label.long": "给筛选后的议题批量添加标签。\n\n该命令默认处于 dry-run 模式，只打印匹配的议题。\n传入 --yes 后执行远端标签操作。当前实现不会在 API 端点不可用时伪造写入结果。\n\n示例：\n  gitlink-cli issue +batch-label --owner Gitlink --repo gitlink-cli --add-label stale --older-than-days 30 --limit 50\n  gitlink-cli issue +batch-label --owner Gitlink --repo gitlink-cli --add-label stale --older-than-days 30 --limit 50 --yes",
