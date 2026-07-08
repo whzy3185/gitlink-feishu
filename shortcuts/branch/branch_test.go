@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -214,5 +215,40 @@ func TestBranchUnprotectHTTPError(t *testing.T) {
 	err := runShortcut(t, server, "unprotect", map[string]string{"name": "master"})
 	if err == nil {
 		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+func TestBranchListPassesKeyword(t *testing.T) {
+	var query string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/owner/repo/branches.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		query = r.URL.RawQuery
+		writeJSON(w, map[string]interface{}{"total_count": 1, "branches": []interface{}{}})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "list", map[string]string{"page": "1", "limit": "20", "keyword": "feat"})
+	if err != nil {
+		t.Fatalf("list failed: %v", err)
+	}
+	if !strings.Contains(query, "keyword=feat") {
+		t.Fatalf("expected keyword in query, got %q", query)
+	}
+}
+
+func TestBranchAllUsesAllEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/branches/all.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(w, []interface{}{map[string]interface{}{"name": "master"}})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "all", map[string]string{})
+	if err != nil {
+		t.Fatalf("all failed: %v", err)
 	}
 }
