@@ -219,3 +219,45 @@ func writeJSON(t *testing.T, w http.ResponseWriter, payload interface{}) {
 		t.Fatalf("failed to write response: %v", err)
 	}
 }
+
+func TestFileBatchPostsAllOperations(t *testing.T) {
+	dir := t.TempDir()
+	spec := filepath.Join(dir, "spec.json")
+	os.WriteFile(spec, []byte(`[
+  {"action_type": "create", "file_path": "a.txt", "content": "A"},
+  {"action_type": "delete", "file_path": "b.txt"}
+]`), 0600)
+
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/contents/batch.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		json.NewDecoder(r.Body).Decode(&payload)
+		writeJSON(t, w, map[string]interface{}{"commit": map[string]interface{}{"sha": "abc"}})
+	}))
+	defer server.Close()
+
+	err := runFileShortcut(t, server, "batch", map[string]string{
+		"spec": spec, "branch": "master", "message": "batch ops",
+	})
+	if err != nil {
+		t.Fatalf("batch shortcut failed: %v", err)
+	}
+	files := payload["files"].([]interface{})
+	if len(files) != 2 {
+		t.Fatalf("expected 2 files, got %d", len(files))
+	}
+	del := files[1].(map[string]interface{})
+	if del["action_type"] != "delete" || del["content"] != "" || del["encoding"] != "text" {
+		t.Fatalf("delete entry not normalized: %v", del)
+	}
+
+	bad := filepath.Join(dir, "bad.json")
+	os.WriteFile(bad, []byte(`[{"action_type": "rename", "file_path": "x"}]`), 0600)
+	if err := runFileShortcut(t, server, "batch", map[string]string{
+		"spec": bad, "branch": "master", "message": "m",
+	}); err == nil {
+		t.Fatal("expected error for invalid action_type")
+	}
+}

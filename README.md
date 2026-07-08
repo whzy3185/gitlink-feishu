@@ -700,6 +700,11 @@ gitlink-cli file +update --owner me --repo proj --path docs/note.md -c "..." -b 
 
 # Delete a file
 gitlink-cli file +delete --owner me --repo proj --path docs/note.md -b master -m "remove note"
+
+# Multiple file operations in a single commit (JSON spec)
+# spec.json: [{"action_type":"create","file_path":"a.txt","content":"A"},
+#             {"action_type":"delete","file_path":"old.txt"}]
+gitlink-cli file +batch --owner me --repo proj -s spec.json -b master -m "batch ops"
 ```
 
 ### Raw API

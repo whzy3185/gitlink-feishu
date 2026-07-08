@@ -2,6 +2,7 @@ package file
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -19,6 +20,78 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		writeShortcut(tr, "create"),
 		writeShortcut(tr, "update"),
 		deleteShortcut(tr),
+		batchShortcut(tr),
+	}
+}
+
+func batchShortcut(tr *i18n.Translator) *common.Shortcut {
+	return &common.Shortcut{
+		Name:        "batch",
+		Description: tr.T("cmd.file.batch.short"),
+		Flags: []common.Flag{
+			{Name: "spec", Short: "s", Usage: tr.T("flag.file.batch_spec"), Required: true},
+			{Name: "branch", Short: "b", Usage: tr.T("flag.file.branch"), Required: true},
+			{Name: "new-branch", Usage: tr.T("flag.file.new_branch")},
+			{Name: "message", Short: "m", Usage: tr.T("flag.file.message"), Required: true},
+		},
+		Run: func(ctx *common.RuntimeContext) error {
+			if err := ctx.ResolveOwnerRepo(); err != nil {
+				return err
+			}
+			specPath, err := ctx.RequireArg("spec")
+			if err != nil {
+				return err
+			}
+			branch, err := ctx.RequireArg("branch")
+			if err != nil {
+				return err
+			}
+			message, err := ctx.RequireArg("message")
+			if err != nil {
+				return err
+			}
+			data, err := os.ReadFile(specPath)
+			if err != nil {
+				return fmt.Errorf("read spec file: %w", err)
+			}
+			var files []map[string]interface{}
+			if err := json.Unmarshal(data, &files); err != nil {
+				return fmt.Errorf("spec must be a JSON array of file operations: %w", err)
+			}
+			if len(files) == 0 {
+				return fmt.Errorf("spec contains no file operations")
+			}
+			for i, f := range files {
+				action, _ := f["action_type"].(string)
+				switch action {
+				case "create", "update", "delete":
+				default:
+					return fmt.Errorf("files[%d]: action_type must be create, update, or delete; got %q", i, action)
+				}
+				if path, _ := f["file_path"].(string); path == "" {
+					return fmt.Errorf("files[%d]: file_path is required", i)
+				}
+				if _, ok := f["content"]; !ok {
+					f["content"] = ""
+				}
+				if _, ok := f["encoding"]; !ok {
+					f["encoding"] = "text"
+				}
+			}
+			payload := map[string]interface{}{
+				"files":   files,
+				"branch":  branch,
+				"message": message,
+			}
+			if nb := ctx.Arg("new-branch"); nb != "" {
+				payload["new_branch"] = nb
+			}
+			env, err := ctx.CallAPI("POST", "/v1"+ctx.RepoPath()+"/contents/batch", payload)
+			if err != nil {
+				return err
+			}
+			return ctx.Output(env)
+		},
 	}
 }
 
