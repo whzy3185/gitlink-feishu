@@ -20,6 +20,8 @@ type Config struct {
 	Editor     string `yaml:"editor,omitempty"`
 	Pager      string `yaml:"pager,omitempty"`
 	Lang       string `yaml:"lang,omitempty"`
+	// Aliases maps a user-defined shortcut name to the command line it expands to.
+	Aliases map[string]string `yaml:"aliases,omitempty"`
 }
 
 func DefaultConfig() *Config {

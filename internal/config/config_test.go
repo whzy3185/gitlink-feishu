@@ -85,6 +85,35 @@ func TestLoadAndSave(t *testing.T) {
 	}
 }
 
+func TestLoadAndSaveAliases(t *testing.T) {
+	tempConfigDir(t)
+
+	want := map[string]string{
+		"co":    "pr +view",
+		"bugs":  "issue +list --label bug",
+		"quote": "pr +view --title \"needs review\"",
+	}
+
+	cfg := DefaultConfig()
+	cfg.Aliases = want
+	if err := Save(cfg); err != nil {
+		t.Fatalf("Save error: %v", err)
+	}
+
+	loaded, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if len(loaded.Aliases) != len(want) {
+		t.Fatalf("Aliases len = %d, want %d", len(loaded.Aliases), len(want))
+	}
+	for name, expansion := range want {
+		if loaded.Aliases[name] != expansion {
+			t.Fatalf("Aliases[%q] = %q, want %q", name, loaded.Aliases[name], expansion)
+		}
+	}
+}
+
 func TestLoadDefaultsWhenFileMissing(t *testing.T) {
 	tempConfigDir(t)
 	// No config file exists
