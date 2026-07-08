@@ -216,3 +216,38 @@ func TestBranchUnprotectHTTPError(t *testing.T) {
 		t.Fatal("expected error for HTTP 500")
 	}
 }
+
+func TestBranchAllUsesAllEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/branches/all.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(w, []interface{}{map[string]interface{}{"name": "master"}})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "all", nil); err != nil {
+		t.Fatalf("all failed: %v", err)
+	}
+}
+
+func TestBranchSetDefaultPatchesName(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/branches/update_default_branch.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		writeJSON(w, map[string]interface{}{"status": float64(0), "message": "success"})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "set-default", map[string]string{"name": "develop"}); err != nil {
+		t.Fatalf("set-default failed: %v", err)
+	}
+	if payload["name"] != "develop" {
+		t.Fatalf("expected name=develop, got %v", payload["name"])
+	}
+}

@@ -81,6 +81,42 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "all",
+			Description: tr.T("cmd.branch.all.short"),
+			Flags:       []common.Flag{},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", "/v1"+ctx.RepoPath()+"/branches/all", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "set-default",
+			Description: tr.T("cmd.branch.set_default.short"),
+			Flags: []common.Flag{
+				{Name: "name", Short: "n", Usage: tr.T("flag.branch.name"), Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				name, err := ctx.RequireArg("name")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("PATCH", "/v1"+ctx.RepoPath()+"/branches/update_default_branch", map[string]interface{}{"name": name})
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "protect",
 			Description: tr.T("cmd.branch.protect.short"),
 			Flags: []common.Flag{
