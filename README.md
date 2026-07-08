@@ -486,6 +486,27 @@ gitlink-cli ci +log --owner Gitlink --repo forgeplus -i <build_id>
 gitlink-cli ci +restart --owner Gitlink --repo forgeplus -i <build_id>
 ```
 
+### Gitea Actions
+
+```bash
+# List workflow files (.gitea/workflows)
+gitlink-cli action +list --owner Gitlink --repo forgeplus
+
+# List runs of a workflow
+gitlink-cli action +runs --owner Gitlink --repo forgeplus -w ci.yml
+
+# Trigger a workflow run on a branch
+gitlink-cli action +run --owner Gitlink --repo forgeplus -w ci.yml -r master
+
+# Rerun a whole run, or a single job
+gitlink-cli action +rerun --owner Gitlink --repo forgeplus -i 6
+gitlink-cli action +job-rerun --owner Gitlink --repo forgeplus -i 6 -j build
+
+# Enable or disable a workflow
+gitlink-cli action +disable --owner Gitlink --repo forgeplus -w ci.yml
+gitlink-cli action +enable --owner Gitlink --repo forgeplus -w ci.yml
+```
+
 ### Pipeline Operations
 
 ```bash
