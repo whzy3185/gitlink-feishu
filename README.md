@@ -227,6 +227,9 @@ gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
 
+# Line-by-line blame for a file
+gitlink-cli repo +blame --owner Gitlink --repo forgeplus -p README.md --ref master
+
 # Show language breakdown
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 
