@@ -1127,3 +1127,86 @@ func TestNormalizeIssueStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestIssueCommentsListsJournalsWithQuery(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		q := r.URL.Query()
+		assertEqual(t, q.Get("page"), "2")
+		assertEqual(t, q.Get("limit"), "5")
+		assertEqual(t, q.Get("category"), "comment")
+		assertEqual(t, q.Get("keyword"), "hello")
+		writeJSON(t, w, map[string]interface{}{"total_count": float64(0), "journals": []interface{}{}})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comments", map[string]string{
+		"number": "42", "page": "2", "limit": "5", "category": "comment", "keyword": "hello",
+	})
+	if err != nil {
+		t.Fatalf("comments failed: %v", err)
+	}
+}
+
+func TestIssueCommentEditPatchesJournal(t *testing.T) {
+	var payload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/issues/42/journals/99.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"id": float64(99)})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-edit", map[string]string{
+		"number": "42", "comment-id": "99", "body": "updated",
+	})
+	if err != nil {
+		t.Fatalf("comment-edit failed: %v", err)
+	}
+	assertEqual(t, payload["notes"], "updated")
+}
+
+func TestIssueCommentDeleteUsesJournalPath(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/issues/42/journals/99.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"status": float64(0)})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-delete", map[string]string{"number": "42", "comment-id": "99"})
+	if err != nil {
+		t.Fatalf("comment-delete failed: %v", err)
+	}
+}
+
+func TestIssueCommentEditRejectsNonIntegerCommentID(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-edit", map[string]string{
+		"number": "42", "comment-id": "abc", "body": "x",
+	})
+	if err == nil {
+		t.Fatal("expected error for non-integer --comment-id")
+	}
+}
+
+func TestIssueCommentDeleteRequiresCommentID(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-delete", map[string]string{"number": "42"})
+	if err == nil {
+		t.Fatal("expected error when --comment-id is missing")
+	}
+}
