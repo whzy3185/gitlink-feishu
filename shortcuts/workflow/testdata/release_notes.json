@@ -1,0 +1,26 @@
+{
+  "repository": "owner/repo",
+  "version": "v1.2.0",
+  "from_ref": "v1.1.0",
+  "to_ref": "master",
+  "pull_requests": [
+    {
+      "number": 10,
+      "title": "feat: add workflow release notes",
+      "author": "alice"
+    }
+  ],
+  "commits": [
+    {
+      "sha": "abc123456789",
+      "message": "fix: normalize compare response",
+      "author": "bob"
+    },
+    {
+      "sha": "def456789012",
+      "message": "docs: update workflow guide",
+      "author": "carol"
+    }
+  ],
+  "source": "local-json"
+}

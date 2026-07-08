@@ -56,18 +56,30 @@ gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{"body":"代码审�
 
 ## 工作流 3：Release Notes 生成
 
-**场景**：从提交历史自动生成版本发布说明。
+**场景**：从提交历史和 PR 信号自动生成版本发布说明，适合维护者发版前检查、Agent 生成 changelog 草稿、竞赛材料展示等场景。
 
 ```bash
-# 1. 获取两个版本之间的提交
-gitlink-cli api GET /:owner/:repo/compare/:base...:head --format json
+# 只读远程模式：从 GitLink compare 数据生成 Markdown
+gitlink-cli workflow +release-notes \
+  --owner Gitlink \
+  --repo gitlink-cli \
+  --from-ref v1.1.0 \
+  --to-ref master \
+  --version v1.2.0 \
+  --format markdown
 
-# 2. 获取已关闭的 Issue
-gitlink-cli issue +list --state closed --format json
-
-# 3. 生成 Release Notes 并创建发布
-gitlink-cli release +create --tag v1.2.0 --name "v1.2.0" --body "## What's Changed\n- feat: 新功能 (#123)\n- fix: 修复问题 (#456)"
+# 本地 JSON 模式：供 Agent 流水线、测试夹具或离线复现使用
+gitlink-cli workflow +release-notes \
+  --from shortcuts/workflow/testdata/release_notes.json \
+  --format json
 ```
+
+规则：
+- 优先使用 `workflow +release-notes` 生成草稿，再由维护者决定是否创建 Release。
+- 使用 `--format json` 作为 Agent 间传递格式；使用 `--format markdown` 作为人类可读发布说明。
+- 远程模式只读取 compare 数据，不创建 Release，不评论、不打标签、不合并。
+- `--include-prs` 默认开启；当 compare 响应包含 PR 信号时会一起分类。
+- 分类规则是确定性的，不依赖 LLM API，便于审计和复现。
 
 ## 工作流 4：Repo Setup（仓库初始化）
 

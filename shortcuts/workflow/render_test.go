@@ -607,6 +607,49 @@ func TestRenderHealthResultJSON(t *testing.T) {
 	}
 }
 
+func TestRenderReleaseNotesMarkdown(t *testing.T) {
+	result := AnalyzeReleaseNotes(sampleReleaseNotesInput(), "en")
+	rendered, err := RenderReleaseNotes(result, "markdown", "en")
+	if err != nil {
+		t.Fatalf("RenderReleaseNotes returned error: %v", err)
+	}
+	for _, want := range []string{"Release Notes", "Features", "Bug Fixes", "Contributors"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("markdown output missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestRenderReleaseNotesJSON(t *testing.T) {
+	result := AnalyzeReleaseNotes(sampleReleaseNotesInput(), "en")
+	rendered, err := RenderReleaseNotes(result, "json", "en")
+	if err != nil {
+		t.Fatalf("RenderReleaseNotes returned error: %v", err)
+	}
+	var parsed ReleaseNotesResult
+	if err := json.Unmarshal([]byte(rendered), &parsed); err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v\noutput=%s", err, rendered)
+	}
+}
+
+func TestRenderReleaseNotesTable(t *testing.T) {
+	result := AnalyzeReleaseNotes(sampleReleaseNotesInput(), "en")
+	rendered, err := RenderReleaseNotes(result, "table", "en")
+	if err != nil {
+		t.Fatalf("RenderReleaseNotes returned error: %v", err)
+	}
+	if !strings.Contains(rendered, "SECTION") || !strings.Contains(rendered, "COUNT") {
+		t.Fatalf("table output = %q, want headers", rendered)
+	}
+}
+
+func TestRenderReleaseNotesUnknownFormat(t *testing.T) {
+	_, err := RenderReleaseNotes(AnalyzeReleaseNotes(sampleReleaseNotesInput(), "en"), "xml", "en")
+	if err == nil {
+		t.Fatal("RenderReleaseNotes returned nil error for unknown format")
+	}
+}
+
 func samplePRSummaryResult() PRSummaryResult {
 	return PRSummaryResult{
 		Repository:        "owner/repo",
