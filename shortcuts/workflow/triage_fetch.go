@@ -29,7 +29,7 @@ func FetchIssuesForTriage(ctx *common.RuntimeContext, opts TriageFetchOptions) (
 	}
 
 	query := url.Values{}
-	query.Set("state", state)
+	query.Set("category", normalizeIssueListCategory(state))
 	query.Set("limit", fmt.Sprintf("%d", limit))
 	query.Set("page", fmt.Sprintf("%d", page))
 	if len(opts.Labels) > 0 {

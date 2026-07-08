@@ -146,6 +146,12 @@ func TestFetchRepoReportInputPRListMetadata(t *testing.T) {
 		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/pulls.json" {
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
+		if got := r.URL.Query().Get("status"); got != "0" {
+			t.Fatalf("PR status query = %q, want 0", got)
+		}
+		if got := r.URL.Query().Get("state"); got != "" {
+			t.Fatalf("PR report list must not send state, got %q", got)
+		}
 		if got := r.URL.Query().Get("limit"); got != "1" {
 			t.Fatalf("PR limit = %q, want 1", got)
 		}

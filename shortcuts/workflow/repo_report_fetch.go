@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
@@ -104,8 +103,7 @@ func fetchPRListForReport(ctx *common.RuntimeContext, owner, repo string, limit 
 	if limit <= 0 {
 		limit = 10
 	}
-	query := url.Values{}
-	query.Set("state", "open")
+	query := pullListQuery("open")
 	query.Set("page", "1")
 	query.Set("limit", fmt.Sprintf("%d", limit))
 
