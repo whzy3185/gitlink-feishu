@@ -12,31 +12,17 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func TestPRCommentPostsToCorrectIssueJournal(t *testing.T) {
+func TestPRCommentPostsToPullJournals(t *testing.T) {
 	var journalPayload map[string]interface{}
-	var journalPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == "GET" && r.URL.Path == "/owner/repo/pulls/13.json":
-			writeJSON(t, w, map[string]interface{}{
-				"issue": map[string]interface{}{
-					"id":      float64(142301),
-					"subject": "test PR",
-				},
-				"pull_request": map[string]interface{}{
-					"id": float64(14791),
-				},
-			})
-		case r.Method == "POST" && r.URL.Path == "/v1/owner/repo/issues/142301/journals.json":
-			journalPath = r.URL.Path
-			journalPayload = decodeJSON(t, r)
-			writeJSON(t, w, map[string]interface{}{
-				"id":      float64(12345),
-				"message": "评论成功",
-			})
-		default:
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/pulls/13/journals.json" {
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
+		journalPayload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{
+			"id":   float64(12345),
+			"note": "LGTM, looks good!",
+		})
 	}))
 	defer server.Close()
 
@@ -47,11 +33,7 @@ func TestPRCommentPostsToCorrectIssueJournal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("comment shortcut failed: %v", err)
 	}
-
-	if journalPath == "" {
-		t.Fatal("journal endpoint was not called")
-	}
-	assertEqual(t, journalPayload["notes"], "LGTM, looks good!")
+	assertEqual(t, journalPayload["note"], "LGTM, looks good!")
 }
 
 func TestPRCommentFailsWhenPRNotFound(t *testing.T) {
@@ -70,25 +52,6 @@ func TestPRCommentFailsWhenPRNotFound(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for non-existent PR, got nil")
-	}
-}
-
-func TestPRCommentFailsWhenIssueFieldMissing(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, map[string]interface{}{
-			"pull_request": map[string]interface{}{
-				"id": float64(14791),
-			},
-		})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "comment", map[string]string{
-		"id":   "13",
-		"body": "test",
-	})
-	if err == nil {
-		t.Fatal("expected error when issue field is missing, got nil")
 	}
 }
 

@@ -383,17 +383,12 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}
 
 				// Also post a journal comment so the review is visible in the PR conversation.
-				prEnv, journalErr := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
-				if journalErr == nil {
-					if issueID, extractErr := extractIssueID(prEnv); extractErr == nil {
-						statusLabel := map[string]string{
-							"approved": "approved", "rejected": "rejected", "common": "commented",
-						}[status]
-						summary := fmt.Sprintf("## Review: %s\n\n%s", statusLabel, content)
-						ctx.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, issueID),
-							map[string]interface{}{"notes": summary})
-					}
-				}
+				statusLabel := map[string]string{
+					"approved": "approved", "rejected": "rejected", "common": "commented",
+				}[status]
+				summary := fmt.Sprintf("## Review: %s\n\n%s", statusLabel, content)
+				ctx.CallAPI("POST", fmt.Sprintf("%s/pulls/%s/journals", v1RepoPath(ctx), id),
+					map[string]interface{}{"note": summary})
 
 				return ctx.Output(env)
 			},
@@ -412,19 +407,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				id, _ := ctx.RequireArg("id")
 				body, _ := ctx.RequireArg("body")
 
-				prEnv, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
-				if err != nil {
-					return fmt.Errorf("fetch PR: %w", err)
-				}
-				issueID, err := extractIssueID(prEnv)
-				if err != nil {
-					return err
-				}
-
 				payload := map[string]interface{}{
-					"notes": body,
+					"note": body,
 				}
-				env, err := ctx.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, issueID), payload)
+				env, err := ctx.CallAPI("POST", fmt.Sprintf("%s/pulls/%s/journals", v1RepoPath(ctx), id), payload)
 				if err != nil {
 					return err
 				}
