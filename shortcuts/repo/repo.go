@@ -109,6 +109,89 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "topics",
+			Description: tr.T("cmd.repo.topics.short"),
+			Flags: []common.Flag{
+				{Name: "keyword", Short: "k", Usage: tr.T("flag.repo.topics.keyword")},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				if keyword := ctx.Arg("keyword"); keyword != "" {
+					q.Set("keyword", keyword)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", "/v1/project_topics", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "topic-add",
+			Description: tr.T("cmd.repo.topic_add.short"),
+			Flags: []common.Flag{
+				{Name: "name", Short: "n", Usage: tr.T("flag.repo.topic.name"), Required: true},
+				{Name: "project-id", Usage: tr.T("flag.repo.project_id")},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				name, err := ctx.RequireArg("name")
+				if err != nil {
+					return err
+				}
+				projectID, err := resolveRepoProjectID(ctx)
+				if err != nil {
+					return err
+				}
+				payload := map[string]interface{}{
+					"name":       name,
+					"project_id": projectID,
+				}
+				env, err := ctx.CallAPI("POST", "/v1/project_topics", payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "topic-remove",
+			Description: tr.T("cmd.repo.topic_remove.short"),
+			Flags: []common.Flag{
+				{Name: "topic-id", Short: "t", Usage: tr.T("flag.repo.topic.id"), Required: true},
+				{Name: "project-id", Usage: tr.T("flag.repo.project_id")},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				topicID, err := ctx.RequireArg("topic-id")
+				if err != nil {
+					return err
+				}
+				if _, err := strconv.Atoi(topicID); err != nil {
+					return fmt.Errorf("--topic-id must be an integer, got %q", topicID)
+				}
+				projectID, err := resolveRepoProjectID(ctx)
+				if err != nil {
+					return err
+				}
+				q := url.Values{}
+				q.Set("project_id", projectID)
+				env, err := ctx.CallAPIWithQuery("DELETE", "/v1/project_topics/"+topicID, q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "languages",
 			Description: "Show repository language statistics",
 			Run:         runLanguages,

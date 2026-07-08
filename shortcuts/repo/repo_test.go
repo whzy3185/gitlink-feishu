@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -39,6 +40,15 @@ func findShortcut(t *testing.T, name string) *common.Shortcut {
 	}
 	t.Fatalf("shortcut %q not found", name)
 	return nil
+}
+
+func decodeJSON(t *testing.T, r *http.Request) map[string]interface{} {
+	t.Helper()
+	var payload map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode request body: %v", err)
+	}
+	return payload
 }
 
 func writeJSON(t *testing.T, w http.ResponseWriter, v interface{}) {
@@ -632,5 +642,61 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	t.Helper()
 	if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", want) {
 		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
+	}
+}
+
+func TestRepoTopicsListsWithKeyword(t *testing.T) {
+	var query string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/project_topics.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		query = r.URL.RawQuery
+		writeJSON(t, w, map[string]interface{}{"total_count": 1, "project_topics": []interface{}{}})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "topics", map[string]string{"page": "1", "limit": "20", "keyword": "go"})
+	if err != nil {
+		t.Fatalf("topics failed: %v", err)
+	}
+	if !strings.Contains(query, "keyword=go") {
+		t.Fatalf("expected keyword in query, got %q", query)
+	}
+}
+
+func TestRepoTopicAddResolvesProjectID(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{"id": float64(42)})
+		case r.Method == "POST" && r.URL.Path == "/v1/project_topics.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"status": float64(0)})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "topic-add", map[string]string{"name": "golang"})
+	if err != nil {
+		t.Fatalf("topic-add failed: %v", err)
+	}
+	if payload["name"] != "golang" || payload["project_id"] != "42" {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
+
+func TestRepoTopicRemoveRejectsNonIntegerID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "topic-remove", map[string]string{"topic-id": "abc"})
+	if err == nil {
+		t.Fatal("expected error for non-integer --topic-id")
 	}
 }
