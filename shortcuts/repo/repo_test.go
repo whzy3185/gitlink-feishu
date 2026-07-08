@@ -634,3 +634,133 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
 	}
 }
+
+// --- edit ---
+
+func TestRepoEditRequiresAtLeastOneField(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "edit", nil)
+	if err == nil {
+		t.Fatal("expected error when no fields are given")
+	}
+}
+
+func TestRepoEditValidatesPrivate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "edit", map[string]string{"private": "yes"})
+	if err == nil {
+		t.Fatal("expected error for invalid --private value")
+	}
+}
+
+func TestRepoEditValidatesCategoryID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "edit", map[string]string{"category-id": "abc"})
+	if err == nil {
+		t.Fatal("expected error for non-integer --category-id")
+	}
+}
+
+func TestRepoEditSendsMetadataWithNameAndIdentifier(t *testing.T) {
+	var patches []map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/owner/repo.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		switch r.Method {
+		case "GET":
+			writeJSON(t, w, map[string]interface{}{"name": "repo", "identifier": "repo"})
+		case "PATCH":
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			patches = append(patches, body)
+			writeJSON(t, w, map[string]interface{}{"id": 1})
+		default:
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "edit", map[string]string{"description": "new desc", "private": "true"})
+	if err != nil {
+		t.Fatalf("edit failed: %v", err)
+	}
+	if len(patches) != 1 {
+		t.Fatalf("expected 1 PATCH, got %d", len(patches))
+	}
+	body := patches[0]
+	assertEqual(t, body["name"], "repo")
+	assertEqual(t, body["identifier"], "repo")
+	assertEqual(t, body["description"], "new desc")
+	assertEqual(t, body["private"], true)
+}
+
+func TestRepoEditSplitsWebsiteAndDefaultBranchRequests(t *testing.T) {
+	var patches []map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/owner/repo.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		switch r.Method {
+		case "GET":
+			writeJSON(t, w, map[string]interface{}{"name": "repo", "identifier": "repo"})
+		case "PATCH":
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			patches = append(patches, body)
+			writeJSON(t, w, map[string]interface{}{"id": 1})
+		default:
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "edit", map[string]string{
+		"website":        "https://example.org",
+		"default-branch": "main",
+		"description":    "d",
+	})
+	if err != nil {
+		t.Fatalf("edit failed: %v", err)
+	}
+	if len(patches) != 3 {
+		t.Fatalf("expected 3 PATCH requests (default-branch, website, metadata), got %d", len(patches))
+	}
+	assertEqual(t, patches[0]["default_branch"], "main")
+	if _, ok := patches[0]["website"]; ok {
+		t.Fatal("default-branch request must not carry website")
+	}
+	assertEqual(t, patches[1]["website"], "https://example.org")
+	if _, ok := patches[1]["default_branch"]; ok {
+		t.Fatal("website request must not carry default_branch")
+	}
+	assertEqual(t, patches[2]["description"], "d")
+}
+
+func TestRepoEditFailsWhenIdentifierMissing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, map[string]interface{}{"name": "repo"})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "edit", map[string]string{"description": "x"})
+	if err == nil {
+		t.Fatal("expected error when identifier cannot be resolved")
+	}
+}

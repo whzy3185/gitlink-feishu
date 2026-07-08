@@ -57,6 +57,96 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "edit",
+			Description: tr.T("cmd.repo.edit.short"),
+			Flags: []common.Flag{
+				{Name: "description", Short: "d", Usage: tr.T("flag.repo.description")},
+				{Name: "website", Usage: tr.T("flag.repo.edit.website")},
+				{Name: "private", Usage: tr.T("flag.repo.private")},
+				{Name: "default-branch", Usage: tr.T("flag.repo.edit.default_branch")},
+				{Name: "category-id", Usage: tr.T("flag.repo.edit.category_id")},
+				{Name: "language-id", Usage: tr.T("flag.repo.edit.language_id")},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				private := ctx.Arg("private")
+				if private != "" && private != "true" && private != "false" {
+					return fmt.Errorf("--private must be true or false, got %q", private)
+				}
+				ids := map[string]interface{}{}
+				for flag, key := range map[string]string{"category-id": "project_category_id", "language-id": "project_language_id"} {
+					if v := ctx.Arg(flag); v != "" {
+						id, err := strconv.Atoi(v)
+						if err != nil {
+							return fmt.Errorf("--%s must be an integer, got %q", flag, v)
+						}
+						ids[key] = id
+					}
+				}
+				description := ctx.Arg("description")
+				website := ctx.Arg("website")
+				defaultBranch := ctx.Arg("default-branch")
+				if description == "" && website == "" && defaultBranch == "" && private == "" && len(ids) == 0 {
+					return fmt.Errorf("nothing to update: pass at least one of --description, --website, --private, --default-branch, --category-id, --language-id")
+				}
+
+				detail, err := ctx.CallAPI("GET", ctx.RepoPath(), nil)
+				if err != nil {
+					return err
+				}
+				data, _ := detail.Data.(map[string]interface{})
+				name, _ := data["name"].(string)
+				identifier, _ := data["identifier"].(string)
+				if name == "" || identifier == "" {
+					return fmt.Errorf("cannot resolve repository name/identifier from %s", ctx.RepoPath())
+				}
+				base := func() map[string]interface{} {
+					return map[string]interface{}{"name": name, "identifier": identifier}
+				}
+
+				// The server dispatches on which key is present (website,
+				// default_branch, or general metadata), so each group goes
+				// out as its own request.
+				if defaultBranch != "" {
+					payload := base()
+					payload["default_branch"] = defaultBranch
+					if _, err := ctx.CallAPI("PATCH", ctx.RepoPath(), payload); err != nil {
+						return err
+					}
+				}
+				if website != "" {
+					payload := base()
+					payload["website"] = website
+					if _, err := ctx.CallAPI("PATCH", ctx.RepoPath(), payload); err != nil {
+						return err
+					}
+				}
+				if description != "" || private != "" || len(ids) > 0 {
+					payload := base()
+					if description != "" {
+						payload["description"] = description
+					}
+					if private != "" {
+						payload["private"] = private == "true"
+					}
+					for k, v := range ids {
+						payload[k] = v
+					}
+					if _, err := ctx.CallAPI("PATCH", ctx.RepoPath(), payload); err != nil {
+						return err
+					}
+				}
+
+				env, err := ctx.CallAPI("GET", ctx.RepoPath(), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "readme",
 			Description: "Show repository README content",
 			Flags: []common.Flag{
