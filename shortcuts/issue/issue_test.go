@@ -1210,3 +1210,56 @@ func TestIssueCommentDeleteRequiresCommentID(t *testing.T) {
 		t.Fatal("expected error when --comment-id is missing")
 	}
 }
+
+func TestIssueCommentReplyToSetsParentID(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/issues/7/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"id": float64(101)})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment", map[string]string{
+		"number": "7", "body": "a reply", "reply-to": "99",
+	})
+	if err != nil {
+		t.Fatalf("comment failed: %v", err)
+	}
+	assertEqual(t, payload["notes"], "a reply")
+	assertEqual(t, payload["parent_id"], float64(99))
+	assertEqual(t, payload["reply_id"], float64(99))
+}
+
+func TestIssueCommentRepliesUsesChildrenJournalsPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/7/journals/99/children_journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"total_count": float64(0), "journals": []interface{}{}})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-replies", map[string]string{
+		"number": "7", "comment-id": "99",
+	})
+	if err != nil {
+		t.Fatalf("comment-replies failed: %v", err)
+	}
+}
+
+func TestIssueCommentRepliesRejectsNonIntegerCommentID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-replies", map[string]string{
+		"number": "7", "comment-id": "abc",
+	})
+	if err == nil {
+		t.Fatal("expected error for non-integer --comment-id")
+	}
+}

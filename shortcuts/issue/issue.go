@@ -274,6 +274,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.issue.comment.short"),
 			Flags: appendIssueNumberFlags(
 				common.Flag{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
+				common.Flag{Name: "reply-to", Usage: tr.T("flag.issue.comment_reply_to")},
 			),
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -289,6 +290,14 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}
 				payload := map[string]interface{}{
 					"notes": body,
+				}
+				if replyTo := ctx.Arg("reply-to"); replyTo != "" {
+					id, err := strconv.Atoi(replyTo)
+					if err != nil {
+						return fmt.Errorf("--reply-to must be an integer, got %q", replyTo)
+					}
+					payload["parent_id"] = id
+					payload["reply_id"] = id
 				}
 				env, err := ctx.CallAPI("POST", fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number), payload)
 				if err != nil {
@@ -324,6 +333,39 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					q.Set("keyword", keyword)
 				}
 				env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number), q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "comment-replies",
+			Description: tr.T("cmd.issue.comment_replies.short"),
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "comment-id", Short: "c", Usage: tr.T("flag.issue.comment_id"), Required: true},
+				common.Flag{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				common.Flag{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+			),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				number, err := issueNumberArg(ctx)
+				if err != nil {
+					return err
+				}
+				commentID, err := ctx.RequireArg("comment-id")
+				if err != nil {
+					return err
+				}
+				if _, err := strconv.Atoi(commentID); err != nil {
+					return fmt.Errorf("--comment-id must be an integer, got %q", commentID)
+				}
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("%s/issues/%s/journals/%s/children_journals", v1RepoPath(ctx), number, commentID), q)
 				if err != nil {
 					return err
 				}

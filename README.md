@@ -356,6 +356,10 @@ gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 -
 # Add a comment
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "Fixed"
 
+# Reply to a comment and list a comment's replies
+gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "Agreed" --reply-to 456
+gitlink-cli issue +comment-replies --owner Gitlink --repo forgeplus -n 123 -c 456
+
 # List, edit, and delete issue comments
 gitlink-cli issue +comments --owner Gitlink --repo forgeplus -n 123 --category comment
 gitlink-cli issue +comment-edit --owner Gitlink --repo forgeplus -n 123 -c 456 -b "Updated"
