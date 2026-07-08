@@ -2,6 +2,7 @@ package label
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -124,6 +125,92 @@ func TestLabelUpdatePreservesCurrentFields(t *testing.T) {
 	assertEqual(t, payload["color"], "#00FF00")
 }
 
+func TestLabelUpdatePreservesFieldsWhenLabelOnSecondPage(t *testing.T) {
+	var payload map[string]interface{}
+	var pagesFetched []string
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issue_tags.json":
+			page := r.URL.Query().Get("page")
+			pagesFetched = append(pagesFetched, page)
+			switch page {
+			case "1":
+				writeJSON(t, w, map[string]interface{}{
+					"total_count": labelListPageSize + 1,
+					"issue_tags":  fillerLabels(labelListPageSize),
+				})
+			case "2":
+				writeJSON(t, w, map[string]interface{}{
+					"total_count": labelListPageSize + 1,
+					"issue_tags": []interface{}{
+						map[string]interface{}{
+							"id":          float64(7),
+							"name":        "bug",
+							"description": "old description",
+							"color":       "#FF0000",
+						},
+					},
+				})
+			default:
+				t.Fatalf("unexpected page %q", page)
+			}
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issue_tags/7.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runLabelShortcut(t, server, "update", map[string]string{
+		"id":   "7",
+		"name": "renamed",
+	})
+	if err != nil {
+		t.Fatalf("update shortcut failed: %v", err)
+	}
+
+	if len(pagesFetched) != 2 || pagesFetched[0] != "1" || pagesFetched[1] != "2" {
+		t.Fatalf("expected pages [1 2] to be fetched, got %v", pagesFetched)
+	}
+	// The label lives on page 2; only --name was passed, so the description and
+	// color the server already holds must survive the PATCH untouched.
+	assertEqual(t, payload["name"], "renamed")
+	assertEqual(t, payload["description"], "old description")
+	assertEqual(t, payload["color"], "#FF0000")
+}
+
+func TestLabelUpdateErrorsWhenLabelNotFound(t *testing.T) {
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issue_tags.json":
+			writeJSON(t, w, map[string]interface{}{
+				"total_count": 1,
+				"issue_tags": []interface{}{
+					map[string]interface{}{
+						"id":          float64(3),
+						"name":        "docs",
+						"description": "documentation",
+						"color":       "#00FF00",
+					},
+				},
+			})
+		default:
+			t.Fatalf("missing label must not PATCH, got: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runLabelShortcut(t, server, "update", map[string]string{
+		"id":    "7",
+		"color": "#123456",
+	})
+	if err == nil {
+		t.Fatal("expected update of a missing label id to return an error")
+	}
+}
+
 func TestLabelUpdateRequiresAtLeastOneField(t *testing.T) {
 	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("update with no fields should not call API, got: %s %s", r.Method, r.URL.Path)
@@ -203,6 +290,21 @@ func findLabelShortcut(t *testing.T, name string) *common.Shortcut {
 func newLabelTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(handler)
+}
+
+// fillerLabels builds n distinct labels whose ids never collide with the target
+// ids used in the update tests, so a full page forces fetchLabel onto the next.
+func fillerLabels(n int) []interface{} {
+	labels := make([]interface{}, 0, n)
+	for i := 0; i < n; i++ {
+		labels = append(labels, map[string]interface{}{
+			"id":          float64(1000 + i),
+			"name":        fmt.Sprintf("filler-%d", i),
+			"description": "filler",
+			"color":       "#123456",
+		})
+	}
+	return labels
 }
 
 func assertRequest(t *testing.T, r *http.Request, method, path string) {
