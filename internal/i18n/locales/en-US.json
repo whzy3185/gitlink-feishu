@@ -44,6 +44,7 @@
   "cmd.issue.comment.short": "Add a comment to an issue",
   "cmd.issue.create.short": "Create a new issue",
   "cmd.issue.list.short": "List issues",
+  "cmd.issue.reopen.short": "Reopen a closed issue",
   "cmd.issue.short": "Issue operations",
   "cmd.issue.update.short": "Update an issue",
   "cmd.issue.view.short": "View issue details",

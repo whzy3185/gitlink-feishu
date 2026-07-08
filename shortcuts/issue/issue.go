@@ -182,29 +182,15 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.issue.close.short"),
 			Flags:       issueNumberFlags(),
 			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				number, err := issueNumberArg(ctx)
-				if err != nil {
-					return err
-				}
-				current, err := fetchExistingIssue(ctx, number)
-				if err != nil {
-					return err
-				}
-
-				body := map[string]interface{}{
-					"subject":     current.Subject,
-					"description": current.Description,
-				}
-				preserveIssueMetadata(body, current)
-				body["status_id"] = 5 // 5 = closed
-				env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), body)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
+				return setIssueStatus(ctx, 5) // 5 = closed
+			},
+		},
+		{
+			Name:        "reopen",
+			Description: tr.T("cmd.issue.reopen.short"),
+			Flags:       issueNumberFlags(),
+			Run: func(ctx *common.RuntimeContext) error {
+				return setIssueStatus(ctx, 1) // 1 = open
 			},
 		},
 		{
@@ -473,6 +459,34 @@ func normalizeIssueListIDs(env *output.Envelope) {
 		}
 		issues[i] = issue
 	}
+}
+
+// setIssueStatus flips an issue to statusID. The v1 PATCH is read-modify-write,
+// so the current issue is fetched and its metadata replayed to avoid clearing
+// fields that were not part of the status change.
+func setIssueStatus(ctx *common.RuntimeContext, statusID int) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	number, err := issueNumberArg(ctx)
+	if err != nil {
+		return err
+	}
+	current, err := fetchExistingIssue(ctx, number)
+	if err != nil {
+		return err
+	}
+	body := map[string]interface{}{
+		"subject":     current.Subject,
+		"description": current.Description,
+	}
+	preserveIssueMetadata(body, current)
+	body["status_id"] = statusID
+	env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), body)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
 }
 
 func fetchExistingIssue(ctx *common.RuntimeContext, number string) (*existingIssue, error) {
