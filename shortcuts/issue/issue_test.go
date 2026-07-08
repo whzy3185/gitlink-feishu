@@ -1127,3 +1127,64 @@ func TestNormalizeIssueStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestIssueCommentsListsJournalsWithFilters(t *testing.T) {
+	var query string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/7/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		query = r.URL.RawQuery
+		writeJSON(t, w, map[string]interface{}{"journals": []interface{}{}})
+	}))
+	defer server.Close()
+
+	args := map[string]string{"number": "7", "keyword": "lgtm", "category": "comment", "page": "1", "limit": "20"}
+	if err := runShortcut(t, server, "comments", args); err != nil {
+		t.Fatalf("comments failed: %v", err)
+	}
+	for _, want := range []string{"keyword=lgtm", "category=comment"} {
+		if !strings.Contains(query, want) {
+			t.Fatalf("expected %q in query, got %q", want, query)
+		}
+	}
+}
+
+func TestIssueCommentEditPatchesJournal(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/issues/7/journals/484049.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"id": float64(484049)})
+	}))
+	defer server.Close()
+
+	args := map[string]string{"number": "7", "comment-id": "484049", "body": "edited"}
+	if err := runShortcut(t, server, "comment-edit", args); err != nil {
+		t.Fatalf("comment-edit failed: %v", err)
+	}
+	if payload["notes"] != "edited" {
+		t.Fatalf("expected notes=edited, got %v", payload["notes"])
+	}
+
+	args["comment-id"] = "abc"
+	if err := runShortcut(t, server, "comment-edit", args); err == nil {
+		t.Fatal("expected error for non-integer --comment-id")
+	}
+}
+
+func TestIssueCommentDeleteUsesJournalEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/issues/7/journals/484049.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"status": float64(0)})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "comment-delete", map[string]string{"number": "7", "comment-id": "484049"}); err != nil {
+		t.Fatalf("comment-delete failed: %v", err)
+	}
+}
