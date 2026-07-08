@@ -872,3 +872,7 @@ See [skills/gitlink-shared/references/api-reference.md](./skills/gitlink-shared/
 ## License
 
 [MulanPSL-2.0](https://license.coscl.org.cn/MulanPSL2)
+
+# Low-level git objects: tree entries and blob content by SHA
+gitlink-cli repo +git-tree --owner myname --repo myrepo -s master --recursive
+gitlink-cli repo +blob --owner myname --repo myrepo -s <blob-sha> --decode

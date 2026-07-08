@@ -1,10 +1,12 @@
 package repo
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -632,5 +634,44 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	t.Helper()
 	if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", want) {
 		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
+	}
+}
+
+func TestRepoGitTreeBuildsPathAndRecursive(t *testing.T) {
+	var query string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/git/trees/master.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		query = r.URL.RawQuery
+		writeJSON(t, w, map[string]interface{}{"total_count": float64(2), "entries": []interface{}{}})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "git-tree", map[string]string{"sha": "master", "recursive": "true", "page": "1", "limit": "20"}); err != nil {
+		t.Fatalf("git-tree failed: %v", err)
+	}
+	if !strings.Contains(query, "recursive=true") {
+		t.Fatalf("expected recursive=true in query, got %q", query)
+	}
+}
+
+func TestRepoBlobDecode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/git/blobs/abc123.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"sha": "abc123", "encoding": "base64",
+			"content": base64.StdEncoding.EncodeToString([]byte("hello blob")),
+		})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "blob", map[string]string{"sha": "abc123", "decode": "true"}); err != nil {
+		t.Fatalf("blob failed: %v", err)
+	}
+	if err := runShortcut(t, server, "blob", map[string]string{"sha": "abc123"}); err != nil {
+		t.Fatalf("blob without decode failed: %v", err)
 	}
 }
