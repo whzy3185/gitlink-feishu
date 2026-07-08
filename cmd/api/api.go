@@ -40,6 +40,7 @@ func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
 	apiCmd.Flags().String("body-file", "", tr.T("flag.api.body_file"))
 	apiCmd.Flags().Bool("body-stdin", false, tr.T("flag.api.body_stdin"))
 	apiCmd.Flags().String("query", "", tr.T("flag.api.query"))
+	apiCmd.Flags().Bool("paginate", false, tr.T("flag.api.paginate"))
 	apiCmd.Flags().StringSlice("header", nil, tr.T("flag.api.header"))
 	apiCmd.Flags().String("batch-file", "", tr.T("flag.api.batch_file"))
 	apiCmd.Flags().Bool("dry-run", false, tr.T("flag.api.batch_dry_run"))
@@ -94,6 +95,10 @@ func runAPI(c *cobra.Command, args []string) error {
 		}
 	}
 
+	if paginate, _ := c.Flags().GetBool("paginate"); paginate {
+		return runAPIPaginate(cli, method, path, query)
+	}
+
 	env, err := cli.Do(method, path, body, query)
 	if err != nil {
 		var apiErr *client.APIError
@@ -105,6 +110,27 @@ func runAPI(c *cobra.Command, args []string) error {
 	}
 
 	return output.Print(env, resolveFormat())
+}
+
+// runAPIPaginate walks every page and prints the concatenated items as one array.
+// PaginateAll drives GET only, so a non-GET method must fail loudly rather than
+// silently degrade.
+func runAPIPaginate(cli *client.Client, method, path string, query url.Values) error {
+	if method != "GET" {
+		return fmt.Errorf("--paginate only supports GET requests, got %s", method)
+	}
+
+	items, err := cli.PaginateAll(path, query)
+	if err != nil {
+		var apiErr *client.APIError
+		if errors.As(err, &apiErr) {
+			errEnv := output.ErrorEnvelope(apiErr.Code, apiErr.Message, "")
+			return output.Print(errEnv, resolveFormat())
+		}
+		return err
+	}
+
+	return output.Print(output.SuccessEnvelope(items, nil), resolveFormat())
 }
 
 func readJSONBody(c *cobra.Command) (interface{}, error) {

@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -42,7 +44,7 @@ func TestNewAPICmd(t *testing.T) {
 	}
 
 	// Verify flags exist
-	flags := []string{"body", "query", "header", "batch-file", "dry-run", "continue-on-error", "var"}
+	flags := []string{"body", "query", "paginate", "header", "batch-file", "dry-run", "continue-on-error", "var"}
 	for _, f := range flags {
 		if cmd.Flags().Lookup(f) == nil {
 			t.Fatalf("flag %q not found", f)
@@ -387,6 +389,94 @@ func TestRunAPIBatchContinueOnError(t *testing.T) {
 	}
 	if len(seen) != 3 {
 		t.Fatalf("requests = %d, want 3 (%v)", len(seen), seen)
+	}
+}
+
+// captureStdout redirects os.Stdout while fn runs, since output.Print writes there directly.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdout = w
+	done := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		done <- buf.String()
+	}()
+	fn()
+	w.Close()
+	os.Stdout = old
+	return <-done
+}
+
+type paginateEnvelope struct {
+	OK   bool                     `json:"ok"`
+	Data []map[string]interface{} `json:"data"`
+}
+
+func TestRunAPIPaginateCombinesPages(t *testing.T) {
+	// Real GitLink list shape wraps the array under a resource key, not "data".
+	var pages []string
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/owner/repo/issues.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		page := r.URL.Query().Get("page")
+		pages = append(pages, page)
+		w.Header().Set("Content-Type", "application/json")
+		switch page {
+		case "1":
+			w.Write([]byte(`{"total_count":3,"issues":[{"id":1},{"id":2}]}`))
+		case "2":
+			w.Write([]byte(`{"total_count":3,"issues":[{"id":3}]}`))
+		default:
+			t.Fatalf("unexpected page: %s", page)
+		}
+	})
+	cmdutil.Format = "json"
+
+	out := captureStdout(t, func() {
+		cmd := NewAPICmd()
+		cmd.SetArgs([]string{"GET", "/repos/owner/repo/issues", "--paginate", "--query", "limit=2"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("paginate error: %v", err)
+		}
+	})
+
+	var env paginateEnvelope
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatalf("unmarshal output %q: %v", out, err)
+	}
+	if !env.OK {
+		t.Fatalf("expected ok=true, got %s", out)
+	}
+	if len(env.Data) != 3 {
+		t.Fatalf("expected 3 combined items, got %d (%s)", len(env.Data), out)
+	}
+	for i, want := range []float64{1, 2, 3} {
+		if env.Data[i]["id"] != want {
+			t.Fatalf("item[%d].id = %v, want %v", i, env.Data[i]["id"], want)
+		}
+	}
+	if len(pages) != 2 || pages[0] != "1" || pages[1] != "2" {
+		t.Fatalf("expected pages [1 2], got %v", pages)
+	}
+}
+
+func TestRunAPIPaginateRejectsNonGet(t *testing.T) {
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("non-GET paginate should not reach server")
+	})
+	cmdutil.Format = "json"
+
+	cmd := NewAPICmd()
+	cmd.SetArgs([]string{"POST", "/items", "--paginate"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected error for --paginate with non-GET method")
 	}
 }
 
