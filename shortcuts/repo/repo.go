@@ -226,6 +226,14 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "rename",
+			Description: tr.T("cmd.repo.rename.short"),
+			Flags: []common.Flag{
+				{Name: "name", Short: "n", Usage: tr.T("flag.repo.rename.name"), Required: true},
+			},
+			Run: runRename,
+		},
+		{
 			Name:        "fork",
 			Description: tr.T("cmd.repo.fork.short"),
 			Run: func(ctx *common.RuntimeContext) error {
@@ -261,6 +269,31 @@ func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
 		return translators[0]
 	}
 	return i18n.Default()
+}
+
+func runRename(ctx *common.RuntimeContext) error {
+	if _, err := ctx.RequireArg("name"); err != nil {
+		return err
+	}
+	name := strings.TrimSpace(ctx.Arg("name"))
+	if name == "" {
+		return fmt.Errorf("invalid --name: repository name must not be empty")
+	}
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	// The update endpoint requires both the display name and the identifier; the
+	// identifier is the URL slug, so renaming it also changes the repository's
+	// remote clone URL, mirroring `gh repo rename`.
+	body := map[string]interface{}{
+		"name":       name,
+		"identifier": name,
+	}
+	env, err := ctx.CallAPI("PATCH", ctx.RepoPath(), body)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
 }
 
 func runLanguages(ctx *common.RuntimeContext) error {
