@@ -420,6 +420,11 @@ gitlink-cli pr +reopen --owner Gitlink --repo forgeplus -i 42
 # View changed files
 gitlink-cli pr +files --owner Gitlink --repo forgeplus -i 42
 
+# List, edit, and delete PR comments (pull journals)
+gitlink-cli pr +comments --owner Gitlink --repo forgeplus -i 42
+gitlink-cli pr +comment-edit --owner Gitlink --repo forgeplus -i 42 -c 484052 -b "Updated" -s resolved
+gitlink-cli pr +comment-delete --owner Gitlink --repo forgeplus -i 42 -c 484052
+
 # List PR patchset versions
 gitlink-cli pr +versions --owner Gitlink --repo forgeplus -i 42
 
