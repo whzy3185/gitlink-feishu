@@ -431,6 +431,41 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "checks",
+			Description: tr.T("cmd.pr.checks.short"),
+			Long:        tr.T("cmd.pr.checks.long"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				prEnv, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
+				if err != nil {
+					return err
+				}
+				headBranch, headSHA, err := extractPullRequestHead(prEnv)
+				if err != nil {
+					return err
+				}
+				buildsEnv, err := ctx.CallAPI("GET", ctx.RepoPath()+"/builds", nil)
+				if err != nil {
+					return err
+				}
+				tr := ctx.Tr
+				if tr == nil {
+					tr = i18n.Default()
+				}
+				result := selectPullRequestChecks(tr, id, headBranch, headSHA, buildsFromEnvelope(buildsEnv))
+				return ctx.OutputData(result)
+			},
+		},
 	}
 }
 
