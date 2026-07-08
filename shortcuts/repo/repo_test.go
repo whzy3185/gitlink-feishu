@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -632,5 +633,31 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	t.Helper()
 	if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", want) {
 		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
+	}
+}
+
+func TestRepoActivityForwardsFilters(t *testing.T) {
+	var query string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/owner/repo/activity.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		query = r.URL.RawQuery
+		writeJSON(t, w, map[string]interface{}{"project_trends": []interface{}{}})
+	}))
+	defer server.Close()
+
+	args := map[string]string{"type": "Issue", "status": "create", "time": "30", "page": "1", "limit": "20"}
+	if err := runShortcut(t, server, "activity", args); err != nil {
+		t.Fatalf("activity failed: %v", err)
+	}
+	for _, want := range []string{"type=Issue", "status=create", "time=30"} {
+		if !strings.Contains(query, want) {
+			t.Fatalf("expected %q in query, got %q", want, query)
+		}
+	}
+
+	if err := runShortcut(t, server, "activity", map[string]string{"time": "abc", "page": "1", "limit": "20"}); err == nil {
+		t.Fatal("expected error for non-integer --time")
 	}
 }

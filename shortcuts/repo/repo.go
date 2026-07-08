@@ -119,6 +119,42 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Run:         runContributors,
 		},
 		{
+			Name:        "activity",
+			Description: tr.T("cmd.repo.activity.short"),
+			Flags: []common.Flag{
+				{Name: "type", Short: "t", Usage: tr.T("flag.repo.activity.type")},
+				{Name: "status", Short: "s", Usage: tr.T("flag.repo.activity.status")},
+				{Name: "time", Usage: tr.T("flag.repo.activity.time")},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				if trendType := ctx.Arg("type"); trendType != "" {
+					q.Set("type", trendType)
+				}
+				if status := ctx.Arg("status"); status != "" {
+					q.Set("status", status)
+				}
+				if timeDays := ctx.Arg("time"); timeDays != "" {
+					if _, err := strconv.Atoi(timeDays); err != nil {
+						return fmt.Errorf("--time must be an integer number of days, got %q", timeDays)
+					}
+					q.Set("time", timeDays)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/activity", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "contributor-stats",
 			Description: "List contributor statistics with code line counts",
 			Flags: []common.Flag{

@@ -233,6 +233,9 @@ gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 # List contributors
 gitlink-cli repo +contributors --owner Gitlink --repo forgeplus
 
+# Repository activity feed, filterable by type/action/time window
+gitlink-cli repo +activity --owner Gitlink --repo forgeplus -t Issue -s close --time 30
+
 # Show contributor code-line stats for a branch, tag, or commit
 gitlink-cli repo +contributor-stats --owner Gitlink --repo forgeplus --ref master --pass-year 1
 
