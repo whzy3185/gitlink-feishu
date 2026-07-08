@@ -872,3 +872,18 @@ See [skills/gitlink-shared/references/api-reference.md](./skills/gitlink-shared/
 ## License
 
 [MulanPSL-2.0](https://license.coscl.org.cn/MulanPSL2)
+
+### Commits
+
+```bash
+# List commits (optionally from a ref)
+gitlink-cli commit +list --owner Gitlink --repo forgeplus -s develop
+
+# Recent commits filtered by keyword
+gitlink-cli commit +recent --owner Gitlink --repo forgeplus -k fix
+
+# Diff and changed files of a commit
+gitlink-cli commit +diff --owner Gitlink --repo forgeplus -s <sha>
+gitlink-cli commit +files --owner Gitlink --repo forgeplus -s <sha> -f app/models/user.rb
+```
+
