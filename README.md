@@ -420,6 +420,14 @@ gitlink-cli pr +reopen --owner Gitlink --repo forgeplus -i 42
 # View changed files
 gitlink-cli pr +files --owner Gitlink --repo forgeplus -i 42
 
+# List commits of a pull request
+gitlink-cli pr +commits --owner Gitlink --repo forgeplus -i 42
+
+# Pre-flight: can a merge request be created between two branches?
+gitlink-cli pr +check-merge --owner Gitlink --repo forgeplus --head develop --base master
+# Cross-fork variant
+gitlink-cli pr +check-merge --owner Gitlink --repo forgeplus --head feat/x --base master --fork-project-id 12345
+
 # List PR patchset versions
 gitlink-cli pr +versions --owner Gitlink --repo forgeplus -i 42
 

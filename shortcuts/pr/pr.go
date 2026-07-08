@@ -3,6 +3,7 @@ package pr
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
@@ -221,6 +222,57 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}
 				id, _ := ctx.RequireArg("id")
 				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s/files", ctx.RepoPath(), id), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "commits",
+			Description: tr.T("cmd.pr.commits.short"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, _ := ctx.RequireArg("id")
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s/commits", ctx.RepoPath(), id), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "check-merge",
+			Description: tr.T("cmd.pr.check_merge.short"),
+			Flags: []common.Flag{
+				{Name: "head", Usage: tr.T("flag.pr.head"), Required: true},
+				{Name: "base", Usage: tr.T("flag.pr.base"), Required: true},
+				{Name: "fork-project-id", Usage: tr.T("flag.pr.fork_project_id")},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				head, _ := ctx.RequireArg("head")
+				base, _ := ctx.RequireArg("base")
+				payload := map[string]interface{}{
+					"head": head,
+					"base": base,
+				}
+				if forkID := ctx.Arg("fork-project-id"); forkID != "" {
+					id, err := strconv.Atoi(forkID)
+					if err != nil {
+						return fmt.Errorf("--fork-project-id must be an integer, got %q", forkID)
+					}
+					payload["fork_project_id"] = id
+					payload["is_original"] = true
+				}
+				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/pulls/check_can_merge", payload)
 				if err != nil {
 					return err
 				}
