@@ -138,7 +138,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				if err := enrichPullRequestClosedAt(ctx, env); err != nil {
+				if err := enrichPullRequestTimestamps(ctx, env); err != nil {
 					return err
 				}
 				return ctx.Output(env)
@@ -470,13 +470,22 @@ func extractIssueID(env *output.Envelope) (int64, error) {
 	return int64(idFloat), nil
 }
 
-func enrichPullRequestClosedAt(ctx *common.RuntimeContext, env *output.Envelope) error {
+func enrichPullRequestTimestamps(ctx *common.RuntimeContext, env *output.Envelope) error {
 	data, ok := env.Data.(map[string]interface{})
 	if !ok {
 		return nil
 	}
 	pr, ok := data["pull_request"].(map[string]interface{})
-	if !ok || !isClosedPullRequest(pr) || stringField(pr, "closed_at") != "" {
+	if !ok {
+		return nil
+	}
+	if mergedAt := stringField(pr, "merged_at"); mergedAt != "" {
+		data["merged_at"] = mergedAt
+		if merged, ok := pr["merged"].(bool); ok {
+			data["merged"] = merged
+		}
+	}
+	if !isClosedPullRequest(pr) || stringField(pr, "closed_at") != "" {
 		return nil
 	}
 	issue, ok := data["issue"].(map[string]interface{})
