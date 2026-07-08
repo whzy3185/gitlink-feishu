@@ -502,6 +502,9 @@ gitlink-cli action +run --owner Gitlink --repo forgeplus -w ci.yml -r master
 gitlink-cli action +rerun --owner Gitlink --repo forgeplus -i 6
 gitlink-cli action +job-rerun --owner Gitlink --repo forgeplus -i 6 -j build
 
+# Raw logs of a workflow job
+gitlink-cli action +logs --owner Gitlink --repo forgeplus -i 6 -j 0
+
 # Enable or disable a workflow
 gitlink-cli action +disable --owner Gitlink --repo forgeplus -w ci.yml
 gitlink-cli action +enable --owner Gitlink --repo forgeplus -w ci.yml

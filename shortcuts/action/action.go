@@ -147,6 +147,36 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "logs",
+			Description: tr.T("cmd.action.logs.short"),
+			Flags: []common.Flag{
+				{Name: "run-id", Short: "i", Usage: tr.T("flag.action.run_id"), Required: true},
+				{Name: "job", Short: "j", Usage: tr.T("flag.action.job"), Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				runID, err := requireIntArg(ctx, "run-id")
+				if err != nil {
+					return err
+				}
+				job, err := ctx.RequireArg("job")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/runs/%s/jobs/%s/logs", actionsPath(ctx), runID, url.PathEscape(job)), nil)
+				if err != nil {
+					return err
+				}
+				if text, ok := env.Data.(string); ok {
+					fmt.Print(text)
+					return nil
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "enable",
 			Description: tr.T("cmd.action.enable.short"),
 			Flags: []common.Flag{

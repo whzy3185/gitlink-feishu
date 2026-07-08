@@ -3,6 +3,7 @@
   "cmd.action.enable.short": "为仓库启用 Actions",
   "cmd.action.job_rerun.short": "重跑运行中的单个任务",
   "cmd.action.list.short": "列出工作流文件（.gitea/workflows）",
+  "cmd.action.logs.short": "获取流水线任务的原始日志",
   "cmd.action.rerun.short": "重跑一次运行的全部任务",
   "cmd.action.run.short": "触发一次工作流运行",
   "cmd.action.runs.short": "列出工作流的运行记录",

@@ -2,6 +2,7 @@ package action
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -155,5 +156,24 @@ func TestActionEnableDisableEndpoints(t *testing.T) {
 		if paths[i] != p {
 			t.Fatalf("expected %s, got %s", p, paths[i])
 		}
+	}
+}
+
+func TestActionLogsBuildsNestedLogsPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/actions/runs/6/jobs/0/logs.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprint(w, "log line 1\nlog line 2\n")
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "logs", map[string]string{"run-id": "6", "job": "0"}); err != nil {
+		t.Fatalf("logs failed: %v", err)
+	}
+
+	if err := runShortcut(t, server, "logs", map[string]string{"run-id": "abc", "job": "0"}); err == nil {
+		t.Fatal("expected error for non-integer --run-id")
 	}
 }

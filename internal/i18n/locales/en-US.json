@@ -3,6 +3,7 @@
   "cmd.action.enable.short": "Enable Actions for the repository",
   "cmd.action.job_rerun.short": "Rerun a single job of a run",
   "cmd.action.list.short": "List workflow files (.gitea/workflows)",
+  "cmd.action.logs.short": "Fetch the raw logs of a workflow job",
   "cmd.action.rerun.short": "Rerun all jobs of a run",
   "cmd.action.run.short": "Trigger a workflow run",
   "cmd.action.runs.short": "List runs of a workflow",
