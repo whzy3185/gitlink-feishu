@@ -65,6 +65,28 @@ func validateAPIArgs(c *cobra.Command, args []string) error {
 // path conversion, e.g. "C:/Program Files/Git/v1/owner/repo" for input "/v1/owner/repo".
 var msysPathRe = regexp.MustCompile(`^[A-Za-z]:/`)
 
+// restoreAPIPath restores an API path polluted by MSYS2/Git Bash path
+// conversion on Windows, e.g. "C:/Program Files/Git/v1/owner/repo" -> "/v1/owner/repo".
+// If the path does not start with a drive letter, or no known API prefix is
+// found, the original path is returned unchanged.
+func restoreAPIPath(path string) string {
+	if !msysPathRe.MatchString(path) {
+		return path
+	}
+	// Pick the EARLIEST occurrence among known API prefixes, so a path like
+	// ".../api/v1/users" restores to "/api/v1/users" rather than "/v1/users".
+	bestIdx := -1
+	for _, prefix := range []string{"/v1/", "/v2/", "/api/", "/users/", "/projects/"} {
+		if idx := strings.Index(path, prefix); idx >= 0 && (bestIdx == -1 || idx < bestIdx) {
+			bestIdx = idx
+		}
+	}
+	if bestIdx >= 0 {
+		return path[bestIdx:]
+	}
+	return path
+}
+
 func runAPI(c *cobra.Command, args []string) error {
 	batchFile, _ := c.Flags().GetString("batch-file")
 	if batchFile != "" {
@@ -76,15 +98,7 @@ func runAPI(c *cobra.Command, args []string) error {
 
 	// Fix MSYS2/Git Bash path auto-conversion on Windows:
 	// "/v1/owner/repo" is rewritten to "C:/Program Files/Git/v1/owner/repo".
-	// Detect the drive-letter prefix and restore the original API path.
-	if msysPathRe.MatchString(path) {
-		for _, prefix := range []string{"/v1/", "/v2/", "/api/", "/users/", "/projects/"} {
-			if idx := strings.Index(path, prefix); idx >= 0 {
-				path = path[idx:]
-				break
-			}
-		}
-	}
+	path = restoreAPIPath(path)
 
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
