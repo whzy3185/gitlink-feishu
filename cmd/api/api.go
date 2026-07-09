@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -60,6 +61,10 @@ func validateAPIArgs(c *cobra.Command, args []string) error {
 	return cobra.ExactArgs(2)(c, args)
 }
 
+// msysPathRe matches Windows drive-letter prefixes produced by MSYS2/Git Bash
+// path conversion, e.g. "C:/Program Files/Git/v1/owner/repo" for input "/v1/owner/repo".
+var msysPathRe = regexp.MustCompile(`^[A-Za-z]:/`)
+
 func runAPI(c *cobra.Command, args []string) error {
 	batchFile, _ := c.Flags().GetString("batch-file")
 	if batchFile != "" {
@@ -68,6 +73,18 @@ func runAPI(c *cobra.Command, args []string) error {
 
 	method := strings.ToUpper(args[0])
 	path := args[1]
+
+	// Fix MSYS2/Git Bash path auto-conversion on Windows:
+	// "/v1/owner/repo" is rewritten to "C:/Program Files/Git/v1/owner/repo".
+	// Detect the drive-letter prefix and restore the original API path.
+	if msysPathRe.MatchString(path) {
+		for _, prefix := range []string{"/v1/", "/v2/", "/api/", "/users/", "/projects/"} {
+			if idx := strings.Index(path, prefix); idx >= 0 {
+				path = path[idx:]
+				break
+			}
+		}
+	}
 
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
