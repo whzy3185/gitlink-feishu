@@ -24,6 +24,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/repo"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/search"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/user"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/watch"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/webhook"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/wiki"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
@@ -50,6 +51,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"org":       org.Shortcuts(tr),
 		"user":      user.Shortcuts(tr),
 		"search":    search.Shortcuts(tr),
+		"watch":     watch.Shortcuts(),
 		"ci":        ci.Shortcuts(tr),
 		"compare":   compare.Shortcuts(),
 		"dataset":   dataset.Shortcuts(tr),
@@ -75,6 +77,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"org":       tr.T("cmd.org.short"),
 		"user":      tr.T("cmd.user.short"),
 		"search":    tr.T("cmd.search.short"),
+		"watch":     "Watch (subscribe) repository operations",
 		"ci":        tr.T("cmd.ci.short"),
 		"compare":   "Compare branches, tags, or commits",
 		"dataset":   tr.T("cmd.dataset.short"),
