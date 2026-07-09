@@ -5,7 +5,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue.svg)](https://golang.org)
 [![npm version](https://img.shields.io/npm/v/@gitlink-ai/cli.svg)](https://www.npmjs.com/package/@gitlink-ai/cli)
 
-The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans and AI Agents. Supports **macOS, Linux, and Windows**. Covers repository management, issue tracking, pull requests, CI/CD, and AI-powered workflows, with 40+ commands and 12 AI Agent [Skills](./skills/).
+The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans and AI Agents. Supports **macOS, Linux, and Windows**. Covers repository management, issue tracking, pull requests, CI/CD, and AI-powered workflows, with 40+ commands and 13 AI Agent [Skills](./skills/).
 
 **[中文文档](./README.zh-CN.md)**
 
@@ -13,7 +13,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 
 ## Why gitlink-cli?
 
-- **Agent-Native Design** — 12 structured [Skills](./skills/) out of the box, compatible with Claude Code, OpenClaw, and other AI platforms — Agents can operate GitLink with zero extra setup
+- **Agent-Native Design** — 13 structured [Skills](./skills/) out of the box, compatible with Claude Code, OpenClaw, and other AI platforms — Agents can operate GitLink with zero extra setup
 - **Wide Coverage** — Repository, Issue, PR, Branch, Release, CI, Org, Search, User — all core domains covered
 - **AI-Friendly & Optimized** — Every command is tested with real Agents, featuring concise parameters, smart defaults, and structured output
 - **Cross-Platform** — Runs on macOS, Linux, and Windows (x64/arm64), install via `npm install -g @gitlink-ai/cli` in one command, binary auto-downloaded
@@ -55,7 +55,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 **From npm (recommended):**
 
 ```bash
-# One command: installs CLI binary + all 12 AI Agent Skills
+# One command: installs CLI binary + all 13 AI Agent Skills
 npm install -g @gitlink-ai/cli
 ```
 
@@ -293,7 +293,7 @@ git push gitlink
 
 ## AI Agent Skills
 
-The `skills/` directory contains 12 Agent Skill files for AI-automated GitLink operations.
+The `skills/` directory contains 13 Agent Skill files for AI-automated GitLink operations.
 
 See [skills/README.md](skills/README.md) for details.
 
@@ -311,6 +311,7 @@ See [skills/README.md](skills/README.md) for details.
 | `gitlink-user` | User management (profile info, etc.) |
 | `gitlink-pm` | Project management (sprints, kanban, weekly reports, etc.) |
 | `gitlink-workflow` | AI-powered workflows (issue triage, PR review, release notes, etc.) |
+| `gitlink-maintainer-copilot` | Maintainer dashboard, evidence pack, governance playbooks, and confirmed governance Issue creation |
 
 ## Project Structure
 
@@ -423,7 +424,7 @@ gitlink-cli uses Windows Credential Manager for secure token storage. If Credent
 
 ### Q: Where can I find the full API reference?
 
-See [skills/gitlink-shared/REFERENCE.md](skills/gitlink-shared/REFERENCE.md).
+See [skills/gitlink-shared/references/api-reference.md](skills/gitlink-shared/references/api-reference.md).
 
 ## License
 
