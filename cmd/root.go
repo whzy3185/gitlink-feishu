@@ -7,11 +7,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	aliasCmd "github.com/gitlink-org/gitlink-cli/cmd/alias"
 	apiCmd "github.com/gitlink-org/gitlink-cli/cmd/api"
 	authCmd "github.com/gitlink-org/gitlink-cli/cmd/auth"
+	browseCmd "github.com/gitlink-org/gitlink-cli/cmd/browse"
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	configCmd "github.com/gitlink-org/gitlink-cli/cmd/config"
 	doctorCmd "github.com/gitlink-org/gitlink-cli/cmd/doctor"
+	statusCmd "github.com/gitlink-org/gitlink-cli/cmd/status"
 	internalConfig "github.com/gitlink-org/gitlink-cli/internal/config"
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts"
@@ -59,6 +62,9 @@ func NewRootCmd(opts RootOptions, tr *i18n.Translator) (*cobra.Command, error) {
 	rootCmd.AddCommand(configCmd.NewConfigCmd(tr))
 	rootCmd.AddCommand(doctorCmd.NewDoctorCmd(tr))
 	rootCmd.AddCommand(newVersionCmd(version, tr))
+	rootCmd.AddCommand(aliasCmd.NewAliasCmd())
+	rootCmd.AddCommand(browseCmd.NewBrowseCmd())
+	rootCmd.AddCommand(statusCmd.NewStatusCmd())
 
 	shortcuts.RegisterAll(rootCmd, tr)
 
