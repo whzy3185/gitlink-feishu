@@ -347,3 +347,54 @@ func assertFloatSlice(t *testing.T, got interface{}, want []float64) {
 		}
 	}
 }
+
+func TestBatchReopenDryRun(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	if err := runShortcut(t, server, "batch-reopen", map[string]string{
+		"numbers": "1,2,3",
+		"dry-run": "true",
+	}); err != nil {
+		t.Fatalf("batch-reopen dry-run failed: %v", err)
+	}
+}
+
+func TestBatchReopenRequiresNumbers(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	if err := runShortcut(t, server, "batch-reopen", map[string]string{}); err == nil {
+		t.Fatal("expected error when no issue numbers are provided")
+	}
+}
+
+func TestBatchCommentDryRun(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	if err := runShortcut(t, server, "batch-comment", map[string]string{
+		"numbers": "1,2",
+		"body":    "hello",
+		"dry-run": "true",
+	}); err != nil {
+		t.Fatalf("batch-comment dry-run failed: %v", err)
+	}
+}
+
+func TestBatchCommentRequiresBody(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	if err := runShortcut(t, server, "batch-comment", map[string]string{"numbers": "1"}); err == nil {
+		t.Fatal("expected error when --body is missing")
+	}
+}
