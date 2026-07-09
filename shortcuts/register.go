@@ -5,6 +5,7 @@ import (
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/branch"
+	capShortcut "github.com/gitlink-org/gitlink-cli/shortcuts/capability"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/ci"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/compare"
@@ -58,6 +59,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"health":    health.Shortcuts(tr),
 		"ignore":    ignore.Shortcuts(),
 		"workflow":  workflow.Shortcuts(),
+		"capability":   capShortcut.Shortcuts(),
 	}
 
 	descriptions := map[string]string{
@@ -83,6 +85,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"health":    "Project health data collection",
 		"ignore":    tr.T("cmd.ignore.short"),
 		"workflow":  "AI agent workflow analysis",
+		"capability":   "API backend capability probing",
 	}
 
 	for name, shortcuts := range groups {
