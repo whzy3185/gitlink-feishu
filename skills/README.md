@@ -147,6 +147,7 @@ skills/
 | **gitlink-pm** | 项目管理 | 通过 Raw API 访问 |
 | **gitlink-workflow** | AI 工作流 | Issue 分类、PR Review、Release Notes |
 | **gitlink-health** | 开源项目健康度 | 详情见SKILL.md |
+| **gitlink-fork-sync** | Fork 与上游同步 | `branch +list` HEAD 比对 + git 同步方案 |
 
 ---
 
