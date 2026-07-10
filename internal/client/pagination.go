@@ -5,11 +5,17 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"sync"
 )
 
 // maxPaginationPages caps auto-pagination as a safety guard against
 // endpoints that ignore the page parameter and keep returning data.
 const maxPaginationPages = 1000
+
+// paginationWorkers bounds concurrent page fetches when the total page
+// count is known after the first page, so remaining pages can be fetched
+// in parallel without overwhelming the server.
+const paginationWorkers = 5
 
 // PaginateAll fetches all pages and returns combined results.
 // The list array is auto-detected inside the response body.
@@ -35,6 +41,17 @@ func (c *Client) PaginateAllKey(path string, params url.Values, listKey string) 
 	totalCount := -1
 
 	for page := 1; page <= maxPaginationPages; page++ {
+		if page == 2 && totalCount >= 0 {
+			perPage := len(all)
+			if perPage > 0 && totalCount > perPage {
+				rest, err := c.fetchPagesConcurrent(path, params, listKey, perPage, totalCount)
+				if err != nil {
+					return nil, err
+				}
+				all = append(all, rest...)
+			}
+			break
+		}
 		params.Set("page", strconv.Itoa(page))
 		env, err := c.Get(path, params)
 		if err != nil {
@@ -73,6 +90,66 @@ func (c *Client) PaginateAllKey(path string, params url.Values, listKey string) 
 		}
 	}
 
+	return all, nil
+}
+
+// fetchPagesConcurrent fetches pages 2..N in parallel with a bounded worker
+// pool, preserving page order in the returned slice. It is only used when
+// the endpoint reported a total_count, so the page count is known upfront.
+func (c *Client) fetchPagesConcurrent(path string, params url.Values, listKey string, perPage, totalCount int) ([]json.RawMessage, error) {
+	lastPage := (totalCount + perPage - 1) / perPage
+	if lastPage > maxPaginationPages {
+		lastPage = maxPaginationPages
+	}
+
+	type pageResult struct {
+		items []json.RawMessage
+		err   error
+	}
+	results := make([]pageResult, lastPage+1)
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, paginationWorkers)
+	for page := 2; page <= lastPage; page++ {
+		wg.Add(1)
+		go func(page int) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			q := url.Values{}
+			for k, vs := range params {
+				q[k] = append([]string(nil), vs...)
+			}
+			q.Set("page", strconv.Itoa(page))
+			env, err := c.Get(path, q)
+			if err != nil {
+				results[page] = pageResult{err: err}
+				return
+			}
+			if !env.OK {
+				results[page] = pageResult{err: fmt.Errorf("API error on page %d", page)}
+				return
+			}
+			items, _, isList := extractListItems(env.Data, listKey)
+			if !isList {
+				return
+			}
+			results[page] = pageResult{items: items}
+		}(page)
+	}
+	wg.Wait()
+
+	var all []json.RawMessage
+	for page := 2; page <= lastPage; page++ {
+		if results[page].err != nil {
+			return nil, results[page].err
+		}
+		all = append(all, results[page].items...)
+	}
+	if remaining := totalCount - perPage; len(all) > remaining {
+		all = all[:remaining]
+	}
 	return all, nil
 }
 

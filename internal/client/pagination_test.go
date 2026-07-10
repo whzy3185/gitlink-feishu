@@ -154,6 +154,71 @@ func TestPaginateAllKeyMissingKeyNotList(t *testing.T) {
 	}
 }
 
+func TestPaginateAllKeyConcurrentPagesOrdered(t *testing.T) {
+	// With total_count known after page 1, pages 2..N are fetched
+	// concurrently; the combined result must stay in page order.
+	const total = 25
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		var items []map[string]interface{}
+		for i := (page-1)*limit + 1; i <= page*limit && i <= total; i++ {
+			items = append(items, map[string]interface{}{"id": i})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"total_count": total,
+			"issues":      items,
+		})
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
+	params := url.Values{}
+	params.Set("limit", "4")
+	items, err := c.PaginateAllKey("/repos/o/r/issues", params, "issues")
+	if err != nil {
+		t.Fatalf("PaginateAllKey: %v", err)
+	}
+	if len(items) != total {
+		t.Fatalf("len = %d, want %d", len(items), total)
+	}
+	for i, raw := range items {
+		var obj struct {
+			ID int `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &obj); err != nil {
+			t.Fatalf("unmarshal item %d: %v", i, err)
+		}
+		if obj.ID != i+1 {
+			t.Fatalf("item %d id = %d, want %d (page order broken)", i, obj.ID, i+1)
+		}
+	}
+}
+
+func TestPaginateAllKeyConcurrentPageError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		if page == 3 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"total_count": 10,
+			"issues":      []map[string]interface{}{{"id": page*2 - 1}, {"id": page * 2}},
+		})
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
+	params := url.Values{}
+	params.Set("limit", "2")
+	if _, err := c.PaginateAllKey("/repos/o/r/issues", params, "issues"); err == nil {
+		t.Fatal("expected error from failing page")
+	}
+}
+
 func TestPaginateAllKeyServerCappedLimit(t *testing.T) {
 	// The server caps every page at 2 items regardless of the requested
 	// limit; with total_count reported, all 5 items must still be fetched.
