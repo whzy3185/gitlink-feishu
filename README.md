@@ -121,6 +121,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 📊 Profile | User ability, role, major, activity, and contribution statistics |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
 | 🤖 Workflow | AI-powered issue triage, PR review, release notes |
+| 🩺 Doctor | Diagnose configuration, authentication, repo context, and API connectivity |
 
 ## Installation & Quick Start
 
@@ -675,6 +676,21 @@ gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --ye
 > gitlink.org.cn. The per-repo `+view`/`+create`/`+update` routes follow the
 > published OpenAPI contract but are not yet deployed on production (they return
 > 404 there); they will work once the platform enables them.
+
+### Doctor (Self-Diagnostics)
+
+```bash
+# Run all checks: config file, config values, auth, repo context, API connectivity
+gitlink-cli doctor
+
+# Structured output for scripts / AI agents
+gitlink-cli doctor --format json
+
+# Offline mode: skip authenticated API connectivity checks
+gitlink-cli doctor --skip-network
+```
+
+Each check reports `ok` / `warning` / `error` with a fix `suggestion`. Warnings do not block usage.
 
 ### Raw API
 
