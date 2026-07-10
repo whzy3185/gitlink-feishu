@@ -104,14 +104,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}
 				title, _ := ctx.RequireArg("title")
 				head, _ := ctx.RequireArg("head")
-				base := ctx.Arg("base")
-				if base == "" {
-					base = "master"
-				}
 				payload := map[string]interface{}{
 					"title": title,
 					"head":  head,
-					"base":  base,
+					"base":  ctx.Arg("base"),
 				}
 				if b := ctx.Arg("body"); b != "" {
 					payload["body"] = b
@@ -231,16 +227,28 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "diff",
 			Description: tr.T("cmd.pr.diff.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "file", Short: "f", Usage: "Filter diff to a specific file path"},
+				{Name: "stat", Usage: "Show only diff stat summary", Bool: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
 				id, _ := ctx.RequireArg("id")
-				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s/files", ctx.RepoPath(), id), nil)
+
+				// v0 API：返回变更文件列表及 patch 内容。
+				q := url.Values{}
+				if f := ctx.Arg("file"); f != "" {
+					q.Set("filepath", f)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("%s/pulls/%s/files", ctx.RepoPath(), id), q)
 				if err != nil {
 					return err
+				}
+
+				if ctx.Arg("stat") == "true" {
+					return ctx.Output(formatDiffStat(env))
 				}
 				return ctx.Output(env)
 			},
@@ -337,9 +345,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.pr.review.short"),
 			Flags: []common.Flag{
 				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "content", Short: "c", Usage: tr.T("flag.pr.review_content")},
+				{Name: "body", Short: "b", Usage: tr.T("flag.pr.review_content")},
 				{Name: "status", Short: "s", Usage: tr.T("flag.pr.review_status"), Default: "common"},
-				{Name: "content", Short: "c", Usage: tr.T("flag.pr.review_content"), Required: true},
-				{Name: "commit", Short: "m", Usage: tr.T("flag.pr.review_commit")},
+				{Name: "commit-id", Usage: tr.T("flag.pr.review_commit")},
 				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
@@ -350,9 +359,13 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				content, err := ctx.RequireArg("content")
-				if err != nil {
-					return err
+				// --content 和 --body 互为别名，至少传一个。
+				content := ctx.Arg("content")
+				if content == "" {
+					content, err = ctx.RequireArg("body")
+					if err != nil {
+						return err
+					}
 				}
 				status := ctx.Arg("status")
 				if status == "" {
@@ -365,7 +378,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					"content": content,
 					"status":  status,
 				}
-				if commit := ctx.Arg("commit"); commit != "" {
+				if commit := ctx.Arg("commit-id"); commit != "" {
 					payload["commit_id"] = commit
 				}
 				if ctx.Arg("dry-run") == "true" {
@@ -380,19 +393,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				env, err := ctx.CallAPI("POST", prV1Path(ctx, id)+"/reviews", payload)
 				if err != nil {
 					return err
-				}
-
-				// Also post a journal comment so the review is visible in the PR conversation.
-				prEnv, journalErr := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
-				if journalErr == nil {
-					if issueID, extractErr := extractIssueID(prEnv); extractErr == nil {
-						statusLabel := map[string]string{
-							"approved": "approved", "rejected": "rejected", "common": "commented",
-						}[status]
-						summary := fmt.Sprintf("## Review: %s\n\n%s", statusLabel, content)
-						ctx.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, issueID),
-							map[string]interface{}{"notes": summary})
-					}
 				}
 
 				return ctx.Output(env)
@@ -414,7 +414,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 
 				prEnv, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
 				if err != nil {
-					return fmt.Errorf("fetch PR: %w", err)
+					return fmt.Errorf("获取 PR 详情失败: %w", err)
 				}
 				issueID, err := extractIssueID(prEnv)
 				if err != nil {
@@ -431,27 +431,108 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "check-merge",
+			Description: "Check if branches can be merged",
+			Flags: []common.Flag{
+				{Name: "head", Usage: "Source branch", Required: true},
+				{Name: "base", Short: "b", Usage: "Target branch", Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				head, _ := ctx.RequireArg("head")
+				base, _ := ctx.RequireArg("base")
+				payload := map[string]interface{}{
+					"head": head,
+					"base": base,
+				}
+				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/pulls/check_can_merge", payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "branches",
+			Description: "List available branches for PR",
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/pulls/get_branches", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
 	}
 }
 
-func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
-	if len(translators) > 0 && translators[0] != nil {
-		return translators[0]
+// getLatestVersionID calls the versions API and returns the latest version's ID.
+// GitLink returns versions in reverse chronological order, so the first is latest.
+func getLatestVersionID(ctx *common.RuntimeContext, prID string) (string, error) {
+	env, err := ctx.CallAPI("GET",
+		fmt.Sprintf("/v1%s/pulls/%s/versions", ctx.RepoPath(), prID), nil)
+	if err != nil {
+		return "", err
 	}
-	return i18n.Default()
+
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("unexpected versions response format")
+	}
+
+	versions, ok := data["versions"].([]interface{})
+	if !ok || len(versions) == 0 {
+		return "", fmt.Errorf("PR #%s 没有找到版本信息", prID)
+	}
+
+	latest, ok := versions[0].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("unexpected version format")
+	}
+
+	idFloat, ok := latest["id"].(float64)
+	if !ok {
+		return "", fmt.Errorf("version missing id field")
+	}
+
+	return fmt.Sprintf("%d", int64(idFloat)), nil
 }
 
-func prV1Path(ctx *common.RuntimeContext, id string) string {
-	return fmt.Sprintf("/v1/%s/%s/pulls/%s", ctx.Owner, ctx.Repo, id)
-}
-
-func validatePRReviewStatus(status string) error {
-	switch status {
-	case "common", "approved", "rejected":
-		return nil
-	default:
-		return fmt.Errorf("invalid --status value %q: use common, approved, or rejected", status)
+// formatDiffStat extracts add/delete statistics from the diff response.
+func formatDiffStat(env *output.Envelope) *output.Envelope {
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return env
 	}
+
+	stat := map[string]interface{}{
+		"file_nums":      data["file_nums"],
+		"total_addition": data["total_addition"],
+		"total_deletion": data["total_deletion"],
+	}
+
+	if files, ok := data["files"].([]interface{}); ok {
+		var fileStats []map[string]interface{}
+		for _, f := range files {
+			if fm, ok := f.(map[string]interface{}); ok {
+				fileStats = append(fileStats, map[string]interface{}{
+					"name":     fm["name"],
+					"addition": fm["addition"],
+					"deletion": fm["deletion"],
+					"type":     fm["type"],
+				})
+			}
+		}
+		stat["files"] = fileStats
+	}
+
+	return output.SuccessEnvelope(stat, nil)
 }
 
 func extractIssueID(env *output.Envelope) (int64, error) {
@@ -558,4 +639,26 @@ func numberField(m map[string]interface{}, key string) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// prV1Path returns the v1 API path for a specific PR.
+func prV1Path(ctx *common.RuntimeContext, id string) string {
+	return fmt.Sprintf("/v1/%s/%s/pulls/%s", ctx.Owner, ctx.Repo, id)
+}
+
+// validatePRReviewStatus validates the review status value.
+func validatePRReviewStatus(status string) error {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "common", "approved", "rejected", "":
+		return nil
+	default:
+		return fmt.Errorf("invalid review status %q: use common, approved, or rejected", status)
+	}
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

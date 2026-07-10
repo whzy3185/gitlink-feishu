@@ -1,232 +1,364 @@
 ---
 name: gitlink-onboarding
 version: 1.0.0
-description: "新人入门引导：帮助新贡献者发现适合入门的 Issue、了解项目贡献流程。当用户想参与项目贡献但不知从何入手、寻找入门任务、或询问如何开始贡献代码时触发。"
+description: "新人引导：为开源项目新贡献者提供从环境搭建到首次提交的完整引导。当用户提到「新人引导」「新手入门」「good first issue」「贡献指南」「如何参与」「onboarding」等场景时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
-  cliHelp: "gitlink-cli issue --help"
+  cliHelp: "gitlink-cli --help"
 ---
 
 # gitlink-onboarding（新人引导）
 
 **CRITICAL — 开始前必须先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)，其中包含认证、权限处理和 API 注意事项。**
-**CRITICAL — 本 Skill 为只读操作，不会修改仓库任何内容。无需用户额外确认即可执行。**
-**CRITICAL — GitLink 操作只能用 `gitlink-cli`。禁止用 `gh`（GitHub CLI）操作 GitLink 资源。**
+**CRITICAL — GitLink 操作只能用 `gitlink-cli`。禁止用 `gh`（GitHub CLI）操作 GitLink 资源。`gh` 仅适用于 GitHub 平台。**
 
 > **前置条件：** 先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md) 了解认证和全局参数。
 
+## 工作流概览
+
+本 Skill 为开源项目新贡献者提供从零到一的完整引导体验，涵盖环境搭建、项目理解、Issue 选择、代码修改到提交 PR 的全过程。
+
+| 阶段 | 操作 | AI Agent 角色 |
+|------|------|--------------|
+| ① 项目概览 | 拉取仓库信息、README、目录结构 | 执行 CLI 命令采集项目信息 |
+| ② 环境搭建 | 引导安装依赖、配置开发环境 | 根据项目类型生成环境搭建指南 |
+| ③ 寻找任务 | 搜索 good-first-issue 标签的 Issue | 推荐、筛选适合新人的 Issue |
+| ④ 代码引导 | 分析 Issue 对应的代码位置 | 生成代码定位和修改指引 |
+| ⑤ 提交贡献 | Fork → Branch → Commit → PR | 引导完成 Fork 工作流 |
+| ⑥ 发布引导评论 | 在 Issue 中添加新人引导评论 | 自动生成个性化引导内容 |
+
 ---
 
-## 功能概述
+## 详细工作流
 
-帮助新贡献者快速了解项目并找到适合入门的任务：
+### 工作流 1：项目新人入门（Project Onboarding）
 
-1. **项目总览** — 获取仓库基本信息（语言、分支、贡献者规模）
-2. **入门 Issue 发现** — 从开放 Issue 中筛选适合新手的任务
-3. **贡献指南** — 生成 Fork → Branch → PR 的完整操作步骤
+**场景**：新人想要参与一个 GitLink 项目，需要了解项目信息和上手指南。
 
----
-
-## 工作流：新人任务发现与引导
-
-### Step 1：获取项目概览
+#### Step 1：获取项目概览
 
 ```bash
+# 获取仓库基本信息
 gitlink-cli repo +info --owner <owner> --repo <repo> --format json
+
+# 获取 README 内容
+gitlink-cli repo +readme --owner <owner> --repo <repo>
+
+# 获取语言统计
+gitlink-cli repo +languages --owner <owner> --repo <repo> --format json
+
+# 获取贡献者列表
+gitlink-cli repo +contributors --owner <owner> --repo <repo> --format json
+
+# 获取目录结构（查看 src 目录）
+gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=src&ref=master'
 ```
 
-从返回数据中提取：
+#### Step 2：生成环境搭建指南
 
-| 字段 | 用途 |
+根据项目的语言和技术栈，AI 生成对应的环境搭建指南：
+
+**Go 项目模板：**
+```markdown
+## 🚀 环境搭建指南
+
+### 前置要求
+- Go 1.21+
+- Git
+- gitlink-cli（已安装）
+
+### 步骤
+1. Fork 项目：`gitlink-cli repo +fork --owner <owner> --repo <repo>`
+2. Clone 你的 Fork：`git clone https://www.gitlink.org.cn/<you>/<repo>.git`
+3. 添加 upstream：`git remote add upstream https://www.gitlink.org.cn/<owner>/<repo>.git`
+4. 安装依赖：`go mod download`
+5. 验证构建：`go build ./...`
+6. 运行测试：`go test ./...`
+```
+
+**Python 项目模板：**
+```markdown
+## 🚀 环境搭建指南
+
+### 前置要求
+- Python 3.10+
+- Git
+- gitlink-cli（已安装）
+
+### 步骤
+1. Fork 项目：`gitlink-cli repo +fork --owner <owner> --repo <repo>`
+2. Clone 你的 Fork：`git clone https://www.gitlink.org.cn/<you>/<repo>.git`
+3. 创建虚拟环境：`python -m venv venv && source venv/bin/activate`
+4. 安装依赖：`pip install -e ".[dev]"`
+5. 运行测试：`pytest tests/`
+```
+
+#### Step 3：输出项目结构分析
+
+AI 根据仓库信息和目录结构，输出项目概览报告：
+
+```markdown
+## 📋 项目概览 — <owner>/<repo>
+
+| 信息 | 详情 |
 |------|------|
-| `full_name` | 确认仓库正确 |
-| `default_branch` | 后续分支操作的目标分支（GitLink 通常是 `master`） |
-| `contributor_users_count` | 判断社区活跃度 |
-| `issues_count` | 了解任务池大小 |
-| `size` | 判断项目规模 |
-| `description` | 了解项目用途 |
+| 项目名称 | <name> |
+| 描述 | <description> |
+| 主要语言 | <language> |
+| 开源协议 | <license> |
+| 贡献者数 | <count> |
+| 开放 Issue | <count> |
+| 开放 PR | <count> |
 
-### Step 2：扫描开放 Issue
+### 📁 核心目录
+- `src/` — 源代码
+- `tests/` — 测试
+- `doc/` — 文档
+- `cmd/` — CLI 入口
 
-```bash
-gitlink-cli issue +list --owner <owner> --repo <repo> --state open --format json
+### 🤝 贡献流程
+1. Fork → Branch → Code → Test → PR
+2. 遵循 Conventional Commits 规范
+3. PR 需要通过 CI 检查和 Code Review
 ```
 
-返回的 Issue 数组中，关注以下字段：
-- `subject` — Issue 标题
-- `project_issues_index` — Issue 编号（用于 `+view` 的 `--number` 参数）
-- `status_id` — 状态（1=新增, 2=正在解决, 3=已解决, 5=关闭）
-- `tags` — 标签数组，每个元素含 `name` 字段
-- `assigners` — 已分配人（空数组 = 无人认领）
-- `priority` — 优先级（null 或 `{"name": "正常"/"紧急"/...}`）
-- `created_at` / `updated_at` — 时间信息
+---
 
-> ⚠️ **已知问题**：`--state open` 过滤不准确，返回列表可能包含已关闭的 Issue。需要在客户端按 `status_id` 过滤：仅保留 `status_id` 为 1（新增）或 2（正在解决）。
+### 工作流 2：寻找适合新人的 Issue
 
-### Step 3：预过滤 + 筛选入门级 Issue
+**场景**：新人不知道从哪里入手，需要推荐适合新手的任务。
 
-**第一步：客户端状态过滤**
-
-忽略 `--state` 参数的实际效果，从返回结果中手动过滤：
-- 保留：`status_id` = 1（新增）或 2（正在解决）
-- 排除：`status_id` = 3（已解决）、5（关闭）
-- `status_id` = 0（未知状态）：可纳入候选但需特别标注"状态未知，建议先评论确认"
-
-**第二步：根据标签/标题筛选入门级 Issue**
-
-标签匹配（优先级从高到低）：
-1. 标签名含 `good first issue`、`good-first-issue` → 官方标记的入门任务
-2. 标签名含 `help wanted`、`help-wanted` → 维护者明确求帮助
-3. 标签名含 `easy`、`beginner`、`新手`、`入门`、`低难度` → 社区约定的简单任务
-4. 标签名含 `bug`、`fix` 且标题含 `修复`、`fix` → 修复类任务通常范围明确
-5. 标签名含 `documentation`、`docs`、`文档` → 文档类任务对新手友好
-
-辅助判断（无标签时）：
-- `assigners` 为空 → 无人认领
-- `priority` 为 null 或 `name` = "正常" → 不紧急
-- 标题含 `优化`、`改进`、`添加`、`新增` → 可能是功能增强，范围弹性大
-
-过滤规则：
-- 已分配（`assigners` 非空）→ 排除（除非标签明确是 `help wanted`）
-- 标题含 `紧急`、`hotfix`、`安全` → 排除（不适合新手）
-
-### Step 4：深入查看候选 Issue
-
-对筛选出的每个候选 Issue（建议 3~5 个），获取详情：
+#### Step 1：搜索 good-first-issue
 
 ```bash
-gitlink-cli issue +view --owner <owner> --repo <repo> --number <project_issues_index> --format json
+# 搜索带 good-first-issue 标签的 Issue
+gitlink-cli search +issues --owner <owner> --repo <repo> --keyword "good first issue" --category opened
+
+# 查看所有打开的 Issue
+gitlink-cli issue +list --state open --format json
+
+# 获取标签列表（寻找新人友好标签）—— 标签查询暂未封装 Shortcut，用 Raw API
+gitlink-cli api GET /v1/<owner>/<repo>/issue_tags --query 'page=1&limit=50'
 ```
 
-从返回数据中确认：
-- `description` — 任务描述是否清晰、有可执行的步骤
-- `comment_journals_count` — 是否有讨论历史（有讨论 = 需求更明确）
-- `start_date` / `due_date` — 是否有时间限制
+#### Step 2：分析 Issue 新人友好度
 
-### Step 5：生成新人引导报告
+AI 对每个开放的 Issue 进行新人友好度评估：
 
-将所有信息组织为以下格式输出。
+| 评估维度 | 高友好 ✅ | 中友好 🟡 | 低友好 🔴 |
+|---------|----------|----------|----------|
+| 标题清晰度 | 明确描述问题和期望 | 模糊但可理解 | 标题不清 |
+| 描述完整度 | 有复现步骤、预期结果 | 有简要描述 | 只有标题 |
+| 代码定位 | 标注了文件/函数 | 可推断位置 | 无任何定位信息 |
+| 改动范围 | 单文件、<50 行 | 多文件或 >50 行 | 涉及架构改动 |
+| 难度标签 | good-first-issue / easy | medium | hard / critical |
+
+#### Step 3：推荐 Issue 列表
+
+```markdown
+## 🎯 推荐新手任务
+
+### ⭐ 强烈推荐（新人友好度：⭐⭐⭐）
+
+1. **Issue #<n>** — <title>
+   - 📁 涉及文件：`<file_path>`
+   - 📝 改动范围：约 <n> 行
+   - 💡 提示：<具体修改建议>
+   - 🔗 链接：https://www.gitlink.org.cn/<owner>/<repo>/issues/<n>
+
+### ✅ 值得尝试（新人友好度：⭐⭐）
+
+2. **Issue #<n>** — <title>
+   - 📝 需要了解：<相关知识>
+   - 💡 提示：<学习建议>
+```
+
+---
+
+### 工作流 3：Issue 引导评论生成
+
+**场景**：项目维护者希望为 good-first-issue 自动生成引导评论，帮助新人快速上手。
+
+#### Step 1：获取 Issue 详情
+
+```bash
+# 查看 Issue 详情
+gitlink-cli issue +view --number <issue_number> --format json
+
+# 获取相关文件内容（用于代码定位）—— 原始文件读取暂未封装 Shortcut，用 Raw API
+gitlink-cli api GET /<owner>/<repo>/raw/master/<file_path>
+```
+
+#### Step 2：生成引导评论
+
+AI 根据 Issue 内容生成结构化的引导评论：
+
+```markdown
+## 🌟 欢迎贡献！
+
+感谢你对本项目的关注！这是一个 **good first issue**，非常适合首次贡献者。
+
+### 📋 任务描述
+<用自己的话重述 Issue 内容>
+
+### 🗺️ 代码定位
+- 需要修改的文件：`<file_path>`
+- 相关函数/类：`<function_name>`（第 <n> 行附近）
+- 依赖的上下文：`<related_file>`
+
+### ✏️ 修改步骤
+1. **Fork 项目**
+   ```bash
+   gitlink-cli repo +fork --owner <owner> --repo <repo>
+   ```
+2. **创建分支**
+   ```bash
+   git checkout -b fix/<branch-name>
+   ```
+3. **定位代码**
+   - 打开 `<file_path>`
+   - 找到 `<function_name>` 函数
+   - 理解当前逻辑：<简要说明>
+4. **实施修改**
+   - <具体修改步骤>
+   - 预期改动约 <n> 行
+5. **测试验证**
+   ```bash
+   go test ./<package>/...  # 或 pytest tests/
+   ```
+6. **提交 PR**
+   ```bash
+   git add .
+   git commit -m "fix: <commit-message>"
+   git push origin fix/<branch-name>
+   gitlink-cli pr +create --owner <owner> --repo <repo> \
+     --head <you>:fix/<branch-name> --base master \
+     --title "fix: <title>"
+   ```
+
+### 💡 提示
+- 不确定的地方可以先在 Issue 中提问
+- PR 描述中引用本 Issue：`Fixes #<number>`
+- 遵循项目的代码风格和提交规范
+
+### ❓ 需要帮助？
+如果遇到任何问题，请随时在下方评论，维护者会尽快回复！
+```
+
+#### Step 3：发布引导评论
+
+```bash
+# 将引导评论发布到 Issue
+gitlink-cli issue +comment \
+  --number <issue_number> \
+  --body "$(cat <<'EOF'
+## 🌟 欢迎贡献！
+...引导内容...
+EOF
+)"
+```
+
+---
+
+### 工作流 4：新人贡献全流程引导
+
+**场景**：新人已选定 Issue，需要从 Fork 到提交 PR 的全流程指导。
+
+```bash
+# Step 1：Fork 仓库
+gitlink-cli repo +fork --owner <owner> --repo <repo>
+
+# Step 2：Clone Fork
+git clone https://www.gitlink.org.cn/<you>/<repo>.git
+cd <repo>
+
+# Step 3：添加 upstream
+git remote add upstream https://www.gitlink.org.cn/<owner>/<repo>.git
+
+# Step 4：创建分支
+git checkout -b fix/<issue-descriptor>
+
+# Step 5：（用户进行代码修改）
+
+# Step 6：提交
+git add -A
+git commit -m "fix: <description> (#<issue_number>)"
+
+# Step 7：推送到 Fork
+git push origin fix/<issue-descriptor>
+
+# Step 8：创建 PR
+gitlink-cli pr +create \
+  --owner <owner> --repo <repo> \
+  --head <you>:fix/<issue-descriptor> --base master \
+  --title "fix: <title>" \
+  --body "## 变更说明\n\nFixes #<issue_number>\n\n### 修改内容\n- ...\n\n### 测试\n- [ ] 单元测试通过\n- [ ] 手动验证"
+```
+
+---
+
+## 新人友好度评估标准
+
+用于评估项目是否对新人友好：
+
+| 维度 | 评估方法 | 数据来源 |
+|------|---------|---------|
+| README 完整性 | README 是否包含项目介绍、安装步骤、贡献指南 | `repo +readme` |
+| Issue 标签 | 是否有 good-first-issue / easy 标签 | `api GET /v1/:owner/:repo/issue_tags` |
+| 文档覆盖 | 是否有 Wiki、API 文档 | `wiki +list` |
+| CI 配置 | 是否有自动化构建和测试 | `.gitea/workflows/` 或 `.github/workflows/` |
+| 维护者响应 | Issue 平均响应时间 | `issue +list` + 创建时间分析 |
+| 贡献指南 | 是否有 CONTRIBUTING.md | `api GET /:owner/:repo/raw/master/CONTRIBUTING.md` |
 
 ---
 
 ## 输出模板
 
+### 项目新手上手指南
+
 ```markdown
-# 🚀 {{仓库名}} 新人引导报告
+# 🚀 <项目名> 新人上手指南
 
-## 项目概览
+## 1. 了解项目
+<项目简介 + 技术栈>
 
-| 项目 | 信息 |
+## 2. 环境搭建
+<Step-by-step 安装指南>
+
+## 3. 项目结构
+<目录说明 + 核心模块>
+
+## 4. 选择任务
+<推荐 Issue 列表>
+
+## 5. 开始贡献
+<Fork → Branch → Code → PR 流程>
+
+## 6. 获取帮助
+<社区链接 / 维护者联系 / 文档>
+```
+
+---
+
+## 决策规则
+
+| 条件 | 操作 |
 |------|------|
-| 仓库 | {{full_name}} |
-| 描述 | {{description}} |
-| 主分支 | {{default_branch}} |
-| 贡献者数 | {{contributor_users_count}} |
-| 开放 Issue | {{issues_count 或实际列表长度}} |
-| 项目规模 | {{size}} |
-
----
-
-## 📋 推荐的入门 Issue
-
-> 以下 Issue 适合新贡献者，按推荐度排序。
-
-### ⭐ 最推荐（官方标记/明确入门级）
-
-| # | 标题 | 标签 | 推荐理由 |
-|---|------|------|----------|
-| {{number}} | {{subject}} | {{tags}} | good first issue 官方标记 |
-| ... | ... | ... | ... |
-
-### 👍 推荐（文档/简单修复）
-
-| # | 标题 | 标签 | 推荐理由 |
-|---|------|------|----------|
-| {{number}} | {{subject}} | {{tags}} | 文档类任务，无需深入代码 |
-| ... | ... | ... | ... |
-
-### 🤔 可尝试（功能增强，范围需确认）
-
-| # | 标题 | 标签 | 推荐理由 |
-|---|------|------|----------|
-| {{number}} | {{subject}} | {{tags}} | 功能明确，建议先评论确认范围 |
-| ... | ... | ... | ... |
-
----
-
-## 📖 贡献流程
-
-### 第 1 步：Fork 仓库
-
-在 GitLink 网页打开 https://www.gitlink.org.cn/{{owner}}/{{repo}} ，点击右上角 **Fork** 按钮。
-
-### 第 2 步：Clone 到本地
-
-```bash
-git clone https://www.gitlink.org.cn/<你的用户名>/{{repo}}.git
-cd {{repo}}
-git remote add upstream https://www.gitlink.org.cn/{{owner}}/{{repo}}.git
-```
-
-### 第 3 步：创建分支
-
-```bash
-git checkout -b fix/issue-{{number}}-简要描述
-```
-
-### 第 4 步：修改 + 提交
-
-```bash
-git add -A
-git commit -m "fix: 简要描述修改内容 (#{{number}})"
-```
-
-### 第 5 步：Push 并提 PR
-
-```bash
-git push origin fix/issue-{{number}}-简要描述
-gitlink-cli pr +create \
-  --owner {{owner}} \
-  --repo {{repo}} \
-  --head <你的用户名>:fix/issue-{{number}}-简要描述 \
-  --base {{default_branch}} \
-  --title "fix: 简要描述 (#{{number}})"
-```
-
-### 第 6 步：在 Issue 下留言
-
-在 Issue 页面评论说明你正在处理，避免与他人重复劳动。如果 Issue 已有讨论，先阅读并确认无人认领。
-
----
-
-## ⚠️ 注意事项
-
-1. **先评论再动手** — 在 Issue 下留言「我来处理这个」，避免重复劳动
-2. **保持 PR 小** — 一个 PR 只解决一个问题，方便维护者 Review
-3. **阅读贡献指南** — 如果仓库有 `CONTRIBUTING.md`，先阅读
-4. **不确定就问** — 对需求有疑问，在 Issue 下直接提问
-```
-
----
-
-## 异常场景处理
-
-| 场景 | 处理方式 |
-|------|----------|
-| 无开放 Issue | 输出项目概览后，建议用户关注 `watch` 仓库等待新 Issue，或查看已有 PR 了解贡献模式 |
-| 所有 Issue 已分配 | 列出已分配 Issue，建议用户在感兴趣的 Issue 下评论询问是否需要帮助 |
-| 无入门级标签 | 列出所有未分配的开放 Issue，标注「无明确入门标记，建议根据兴趣自行选择」，优先推荐标题含 `fix`/`doc`/`优化` 的 |
-| `repo +info` 返回空 | 检查 owner/repo 是否正确，提示用户确认仓库名 |
+| 项目无 README | 提示维护者补充 README，但仍提供基础引导 |
+| 无 good-first-issue 标签 | 从开放的 Issue 中推荐最简单的（标题包含"文档""修复""小"） |
+| Issue 无描述 | 提示用户先在 Issue 中提问获取更多信息 |
+| 用户未登录 | 引导执行 `gitlink-cli auth login` |
+| 用户无 Fork | 引导执行 Fork 流程 |
+| Fork 已存在但未配置 upstream | 引导添加 upstream remote |
 
 ---
 
 ## 注意事项
 
-- ✅ **所有命令使用 `--format json`**，确保可解析
-- ✅ **`issue +view` 使用 `--number`（网页编号）**，非数据库 ID
-- ✅ **本 Skill 为纯只读**，不会修改仓库
-- ✅ **Owner/repo 优先从 `git remote` 自动解析**，无 git 上下文时询问用户
-- ⚠️ **Issue 列表可能分页**，如果总数 >20，需要追加 `--page 2` 等参数获取全部
-- ⚠️ **`issue +list --state open` 过滤不准确**，返回列表可能含已关闭 Issue。必须客户端按 `status_id` 二次过滤（保留 1、2，排除 3、5、0）
-- ⚠️ **此仓库未使用 Issue 标签系统**，筛选主要依赖标题关键词和 `assigners` 状态。如目标仓库有标签，优先使用标签匹配
+- 引导评论发布前确认用户意图（维护者模式）
+- 推荐的 Issue 应标注预估改动范围和难度
+- Fork 工作流严格遵循 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md) 中的 PR 协作流程
+- 不确定的信息（如代码定位）应明确标注"建议确认"
+- 遵循项目的贡献规范（如果存在 CONTRIBUTING.md）
+- 所有 CLI 命令使用 `--format json` 以便解析

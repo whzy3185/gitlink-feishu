@@ -38,6 +38,8 @@ metadata:
 | `repo +fork` | Fork 仓库 | 是 |
 | `repo +delete` | 删除仓库 | 是 |
 
+> 提交记录、标签列表、原始文件内容等暂未封装 Shortcut，可通过 Raw API 访问（见下方「Raw API 补充」）。
+
 ## 使用示例
 
 ```bash
@@ -80,11 +82,20 @@ gitlink-cli repo +fork --owner Gitlink --repo forgeplus
 
 # 删除仓库（⚠️ 危险操作）
 gitlink-cli repo +delete --owner myuser --repo old-project
+
+# 查看 README
+gitlink-cli repo +readme --owner Gitlink --repo forgeplus
+
+# 查看贡献者
+gitlink-cli repo +contributors --owner Gitlink --repo forgeplus
+
+# 查看语言统计
+gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 ```
 
 ## Raw API 补充
 
-Shortcuts 未覆盖的仓库操作可用 Raw API：
+提交记录、标签列表、原始文件内容等操作暂未封装为 Shortcut，可直接用 Raw API：
 
 ```bash
 # 获取提交列表
@@ -93,8 +104,9 @@ gitlink-cli api GET /:owner/:repo/commits --query 'page=1&limit=20'
 # 获取标签列表
 gitlink-cli api GET /:owner/:repo/tags
 
-# 获取文件内容
+# 获取文件内容（按 ref 指定分支/标签）
 gitlink-cli api GET /:owner/:repo/raw/main/README.md
+gitlink-cli api GET /:owner/:repo/raw/develop/src/main.go
 ```
 
 ## 注意事项

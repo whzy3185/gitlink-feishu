@@ -47,12 +47,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				build, _ := ctx.RequireArg("build")
 				stage := ctx.Arg("stage")
 				step := ctx.Arg("step")
-				if stage == "" {
-					stage = "1"
-				}
-				if step == "" {
-					step = "1"
-				}
 				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/builds/%s/logs/%s/%s", ctx.RepoPath(), build, stage, step), nil)
 				if err != nil {
 					return err
@@ -95,6 +89,41 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}
 				return ctx.Output(env)
 			},
+		},
+		newCIToggleShortcut("enable", "Enable CI for a repository"),
+		newCIToggleShortcut("disable", "Disable CI for a repository"),
+		{
+			Name:        "authorize",
+			Description: "Check CI authorization status",
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/ci_authorize", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+	}
+}
+
+// newCIToggleShortcut 生成 enable/disable CI 的 shortcut。
+func newCIToggleShortcut(action, description string) *common.Shortcut {
+	return &common.Shortcut{
+		Name:        action,
+		Description: description,
+		Run: func(ctx *common.RuntimeContext) error {
+			if err := ctx.ResolveOwnerRepo(); err != nil {
+				return err
+			}
+			env, err := ctx.CallAPI("POST",
+				fmt.Sprintf("/v1/%s/%s/actions/%s", ctx.Owner, ctx.Repo, action), nil)
+			if err != nil {
+				return err
+			}
+			return ctx.Output(env)
 		},
 	}
 }

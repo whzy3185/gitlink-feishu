@@ -14,6 +14,7 @@ import (
 	doctorCmd "github.com/gitlink-org/gitlink-cli/cmd/doctor"
 	internalConfig "github.com/gitlink-org/gitlink-cli/internal/config"
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
+	serverCmd "github.com/gitlink-org/gitlink-cli/cmd/server"
 	"github.com/gitlink-org/gitlink-cli/shortcuts"
 )
 
@@ -58,6 +59,7 @@ func NewRootCmd(opts RootOptions, tr *i18n.Translator) (*cobra.Command, error) {
 	rootCmd.AddCommand(apiCmd.NewAPICmd(tr))
 	rootCmd.AddCommand(configCmd.NewConfigCmd(tr))
 	rootCmd.AddCommand(doctorCmd.NewDoctorCmd(tr))
+	rootCmd.AddCommand(serverCmd.NewServerCmd())
 	rootCmd.AddCommand(newVersionCmd(version, tr))
 
 	shortcuts.RegisterAll(rootCmd, tr)

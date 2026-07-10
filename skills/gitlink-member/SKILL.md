@@ -1,57 +1,41 @@
 ---
 name: gitlink-member
-description: "仓库成员管理：列出、添加、批量添加、移除成员，调整成员角色，生成、查看和接受项目邀请链接。"
+version: 1.0.0
+description: "项目成员管理：列出、添加、移除项目成员。当用户需要管理 GitLink 项目协作成员时触发。"
 metadata:
+  requires:
+    bins: ["gitlink-cli"]
   cliHelp: "gitlink-cli member --help"
 ---
 
-# gitlink-member（仓库成员管理）
+# gitlink-member（成员操作）
 
-当用户需要管理 GitLink 仓库成员、成员角色或邀请链接时使用本 Skill。
+**CRITICAL — 开始前必须先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)，其中包含认证、权限处理和 API 注意事项。**
+**CRITICAL — 所有 Shortcuts 在执行写入/删除操作前，务必先确认用户意图。**
 
-## 常用命令
+## Shortcuts
 
-| 命令 | 用途 |
-|------|------|
-| `member +list` | 列出仓库成员 |
-| `member +add` | 通过用户 ID 添加仓库成员 |
-| `member +batch-add` | 通过用户 ID 列表或 CSV 批量添加成员 |
-| `member +remove` | 通过用户 ID 移除仓库成员 |
-| `member +role` | 修改成员角色 |
-| `member +invite-link` | 获取或生成当前邀请链接 |
-| `member +invite-info` | 查看邀请链接信息 |
-| `member +accept-invite` | 接受邀请链接 |
+| Shortcut | 说明 |
+|----------|------|
+| `member +list` | 列出项目成员 |
+| `member +add` | 添加项目成员 |
+| `member +remove` | 移除项目成员 |
 
-## 示例
+## 使用示例
 
 ```bash
-# 列出仓库成员
-gitlink-cli member +list --owner Gitlink --repo forgeplus
+# 列出项目成员
+gitlink-cli member +list --owner myuser --repo myrepo
 
-# 添加成员
-gitlink-cli member +add --owner Gitlink --repo forgeplus --user-id 101
+# 添加成员（使用用户 ID）
+gitlink-cli member +add --owner myuser --repo myrepo --user-id 42
 
-# 批量添加前预览
-gitlink-cli member +batch-add --owner Gitlink --repo forgeplus --user-ids 101,102 --dry-run
-
-# 从 CSV 批量添加。CSV 支持 user_id、userid、id 列；无表头时读取第一列。
-gitlink-cli member +batch-add --owner Gitlink --repo forgeplus --from members.csv
-
-# 修改角色。角色支持 Manager、Developer、Reporter，也支持小写别名。
-gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role Developer
-
-# 获取或生成当前邀请链接。role 支持 manager、developer、reporter；apply 表示是否需要审核。
-gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
-
-# 查看邀请链接信息
-gitlink-cli member +invite-info --owner Gitlink --repo forgeplus --sign <invite_sign>
-
-# 接受邀请链接
-gitlink-cli member +accept-invite --owner Gitlink --repo forgeplus --sign <invite_sign>
+# 移除成员
+gitlink-cli member +remove --owner myuser --repo myrepo --user-id 42
 ```
 
-## 安全规则
+## API 注意事项
 
-- 执行 `member +remove`、`member +role`、`member +add`、`member +batch-add` 前，确认目标仓库和用户 ID。
-- 批量添加前优先使用 `--dry-run` 预览。
-- 避免在公开日志中暴露邀请链接的完整 `sign`。
+- 成员 API 使用非 v1 路径：`/{owner}/{repo}/collaborators`
+- 添加和移除成员需要**用户 ID**（数字），不是用户名。可通过 `user +info` 获取用户 ID
+- 移除成员调用 DELETE `/{owner}/{repo}/collaborators/remove`

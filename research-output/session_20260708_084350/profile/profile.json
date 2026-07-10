@@ -1,0 +1,52 @@
+{
+  "scenario": "profile",
+  "mode": "project",
+  "profiles": [
+    {
+      "type": "project",
+      "repo": "whale_hihihi/gitlink-cli",
+      "name": "gitlink-cli",
+      "description": "",
+      "topics": [
+        {
+          "topic": "reinforcement_learning",
+          "count": 1
+        },
+        {
+          "topic": "devops",
+          "count": 1
+        }
+      ],
+      "languages": [
+        "Dockerfile",
+        "Go",
+        "HTML",
+        "JavaScript",
+        "Mermaid",
+        "Python",
+        "Shell"
+      ],
+      "stars": 0,
+      "forks": 0,
+      "visits": 0,
+      "contributors_count": 20,
+      "top_contributors": [
+        "wbtiger",
+        "whale",
+        "wauxing",
+        "Surponess",
+        "wangyue789",
+        "tiger",
+        "muel",
+        "puygob236"
+      ],
+      "score": {
+        "doc": 5,
+        "license": 0,
+        "collab": 10,
+        "impact": 0
+      },
+      "score_total": 15
+    }
+  ]
+}

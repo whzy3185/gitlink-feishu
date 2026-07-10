@@ -1,0 +1,60 @@
+{
+  "scenario": "profile",
+  "mode": "project",
+  "profiles": [
+    {
+      "type": "project",
+      "repo": "caoweiqiong/zwf",
+      "name": "ZhiWenCraft",
+      "description": "",
+      "topics": [
+        {
+          "topic": "computer_vision",
+          "count": 1
+        },
+        {
+          "topic": "generative_ai",
+          "count": 1
+        },
+        {
+          "topic": "devops",
+          "count": 1
+        },
+        {
+          "topic": "database",
+          "count": 1
+        },
+        {
+          "topic": "security",
+          "count": 1
+        }
+      ],
+      "languages": [
+        "Batchfile",
+        "CSS",
+        "HTML",
+        "JavaScript",
+        "Python",
+        "Shell",
+        "TypeScript"
+      ],
+      "stars": 2,
+      "forks": 0,
+      "visits": 0,
+      "contributors_count": 4,
+      "top_contributors": [
+        "dev",
+        "huster42",
+        "whale",
+        "LegendC"
+      ],
+      "score": {
+        "doc": 5,
+        "license": 0,
+        "collab": 4,
+        "impact": 4
+      },
+      "score_total": 13
+    }
+  ]
+}

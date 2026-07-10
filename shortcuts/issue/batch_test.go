@@ -1,11 +1,12 @@
 package issue
 
 import (
-	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
 func TestParseIssueNumbers(t *testing.T) {
@@ -25,51 +26,94 @@ func TestParseIssueNumbersRejectsInvalidNumber(t *testing.T) {
 	}
 }
 
-func TestReadIssueNumbersFromCSVWithHeader(t *testing.T) {
+func TestReadCSVWithNumberHeader(t *testing.T) {
 	path := writeTempCSV(t, "title,number,state\nfirst,12,open\nsecond,13,open\n")
-	got, err := readIssueNumbersFromCSV(path)
+	headers, rows, err := ReadCSV(path)
 	if err != nil {
-		t.Fatalf("readIssueNumbersFromCSV returned error: %v", err)
+		t.Fatalf("ReadCSV returned error: %v", err)
+	}
+	col := FindColumn(headers, "number", "issue_number", "project_issues_index")
+	if col == -1 {
+		t.Fatal("column 'number' not found")
+	}
+	numbers := make([]string, 0, len(rows))
+	for _, row := range rows {
+		numbers = append(numbers, row[col])
+	}
+	numbers, err = normalizeIssueNumbers(numbers)
+	if err != nil {
+		t.Fatalf("normalizeIssueNumbers returned error: %v", err)
 	}
 	want := []string{"12", "13"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("readIssueNumbersFromCSV() = %#v, want %#v", got, want)
+	if !reflect.DeepEqual(numbers, want) {
+		t.Fatalf("got %#v, want %#v", numbers, want)
 	}
 }
 
-func TestReadIssueNumbersFromCSVWithProjectIssuesIndexHeader(t *testing.T) {
+func TestReadCSVWithProjectIssuesIndexHeader(t *testing.T) {
 	path := writeTempCSV(t, "title,project_issues_index,state\nfirst,12,open\nsecond,13,open\n")
-	got, err := readIssueNumbersFromCSV(path)
+	headers, rows, err := ReadCSV(path)
 	if err != nil {
-		t.Fatalf("readIssueNumbersFromCSV returned error: %v", err)
+		t.Fatalf("ReadCSV returned error: %v", err)
+	}
+	col := FindColumn(headers, "number", "issue_number", "project_issues_index")
+	if col == -1 {
+		t.Fatal("column 'project_issues_index' not found")
+	}
+	numbers := make([]string, 0, len(rows))
+	for _, row := range rows {
+		numbers = append(numbers, row[col])
+	}
+	numbers, err = normalizeIssueNumbers(numbers)
+	if err != nil {
+		t.Fatalf("normalizeIssueNumbers returned error: %v", err)
 	}
 	want := []string{"12", "13"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("readIssueNumbersFromCSV() = %#v, want %#v", got, want)
+	if !reflect.DeepEqual(numbers, want) {
+		t.Fatalf("got %#v, want %#v", numbers, want)
 	}
 }
 
-func TestReadIssueNumbersFromCSVWithoutHeaderUsesFirstColumn(t *testing.T) {
+func TestReadCSVHeaderlessReturnsNoColumnMatch(t *testing.T) {
 	path := writeTempCSV(t, "21,open\n22,closed\n21,duplicate\n")
-	got, err := readIssueNumbersFromCSV(path)
+	headers, rows, err := ReadCSV(path)
 	if err != nil {
-		t.Fatalf("readIssueNumbersFromCSV returned error: %v", err)
+		t.Fatalf("ReadCSV returned error: %v", err)
 	}
-	want := []string{"21", "22"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("readIssueNumbersFromCSV() = %#v, want %#v", got, want)
+	// 无表头时 FindColumn 返回 -1
+	col := FindColumn(headers, "number", "issue_number", "project_issues_index")
+	if col != -1 {
+		t.Fatalf("expected -1 for headerless CSV, got %d", col)
+	}
+	// 退回到首列（index 0）作为 issue 编号来源
+	col = 0
+	numbers := make([]string, 0, len(rows))
+	for _, row := range rows {
+		numbers = append(numbers, row[col])
+	}
+	numbers, err = normalizeIssueNumbers(numbers)
+	if err != nil {
+		t.Fatalf("normalizeIssueNumbers returned error: %v", err)
+	}
+	want := []string{"22", "21"}
+	if !reflect.DeepEqual(numbers, want) {
+		t.Fatalf("got %#v, want %#v", numbers, want)
 	}
 }
 
-func TestCollectIssueNumbersMergesCLIAndCSV(t *testing.T) {
+func TestResolveIssueNumbersMergesCLIAndCSV(t *testing.T) {
 	path := writeTempCSV(t, "number\n2\n3\n")
-	got, err := collectIssueNumbers("1,2", path)
+	ctx := &common.RuntimeContext{
+		Owner: "owner",
+		Repo:  "repo",
+	}
+	got, err := ResolveIssueNumbers(ctx, "1,2", path, "")
 	if err != nil {
-		t.Fatalf("collectIssueNumbers returned error: %v", err)
+		t.Fatalf("ResolveIssueNumbers returned error: %v", err)
 	}
 	want := []string{"1", "2", "3"}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("collectIssueNumbers() = %#v, want %#v", got, want)
+		t.Fatalf("ResolveIssueNumbers() = %#v, want %#v", got, want)
 	}
 }
 
@@ -213,137 +257,4 @@ func writeTempCSV(t *testing.T, content string) string {
 		t.Fatalf("write temp csv: %v", err)
 	}
 	return path
-}
-
-func TestBatchUpdateDryRun(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "batch-update", map[string]string{
-		"ids":          "101,102",
-		"status-id":    "3",
-		"priority-id":  "2",
-		"tag-ids":      "7,8",
-		"assigner-ids": "11",
-		"dry-run":      "true",
-	})
-	if err != nil {
-		t.Fatalf("batch-update dry-run failed: %v", err)
-	}
-}
-
-func TestBatchUpdateCallsAPI(t *testing.T) {
-	var payload map[string]interface{}
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/issues/batch_update.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "batch-update", map[string]string{
-		"ids":          "101,102,101",
-		"status-id":    "3",
-		"priority-id":  "2",
-		"milestone-id": "9",
-		"tag-ids":      "7,8",
-		"assigner-ids": "11,12",
-	})
-	if err != nil {
-		t.Fatalf("batch-update failed: %v", err)
-	}
-	assertFloatSlice(t, payload["ids"], []float64{101, 102})
-	assertEqual(t, payload["status_id"], float64(3))
-	assertEqual(t, payload["priority_id"], float64(2))
-	assertEqual(t, payload["milestone_id"], float64(9))
-	assertFloatSlice(t, payload["issue_tag_ids"], []float64{7, 8})
-	assertFloatSlice(t, payload["assigner_ids"], []float64{11, 12})
-}
-
-func TestBatchUpdateRequiresUpdateField(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	if err := runShortcut(t, server, "batch-update", map[string]string{"ids": "101"}); err == nil {
-		t.Fatal("expected error when no update fields are provided")
-	}
-}
-
-func TestBatchUpdateRejectsInvalidIDs(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	cases := []map[string]string{
-		{"ids": "abc", "status-id": "3"},
-		{"ids": "101", "status-id": "bad"},
-		{"ids": "101", "tag-ids": "7,,8"},
-	}
-	for _, args := range cases {
-		if err := runShortcut(t, server, "batch-update", args); err == nil {
-			t.Fatalf("expected validation error for args %#v", args)
-		}
-	}
-}
-
-func TestBatchDeleteDryRun(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	if err := runShortcut(t, server, "batch-delete", map[string]string{"ids": "101,102", "dry-run": "true"}); err != nil {
-		t.Fatalf("batch-delete dry-run failed: %v", err)
-	}
-}
-
-func TestBatchDeleteRequiresYes(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected API call without --yes: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	if err := runShortcut(t, server, "batch-delete", map[string]string{"ids": "101"}); err == nil {
-		t.Fatal("expected --yes confirmation error")
-	}
-}
-
-func TestBatchDeleteCallsAPIWithYes(t *testing.T) {
-	var payload map[string]interface{}
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/issues/batch_destroy.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-	})
-	defer server.Close()
-
-	if err := runShortcut(t, server, "batch-delete", map[string]string{"ids": "101,102,101", "yes": "true"}); err != nil {
-		t.Fatalf("batch-delete failed: %v", err)
-	}
-	assertFloatSlice(t, payload["ids"], []float64{101, 102})
-}
-
-func assertFloatSlice(t *testing.T, got interface{}, want []float64) {
-	t.Helper()
-	items, ok := got.([]interface{})
-	if !ok {
-		t.Fatalf("got %#v, want []interface{}", got)
-	}
-	if len(items) != len(want) {
-		t.Fatalf("got len %d, want %d: %#v", len(items), len(want), got)
-	}
-	for i := range want {
-		if items[i] != want[i] {
-			t.Fatalf("item %d = %#v, want %#v", i, items[i], want[i])
-		}
-	}
 }

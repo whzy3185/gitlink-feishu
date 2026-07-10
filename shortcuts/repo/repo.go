@@ -199,12 +199,12 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				// Get current user login for the create path
 				userEnv, err := ctx.CallAPI("GET", "/users/me", nil)
 				if err != nil {
-					return fmt.Errorf("failed to get current user: %w", err)
+					return fmt.Errorf("获取当前用户信息失败: %w", err)
 				}
 				userData, _ := userEnv.Data.(map[string]interface{})
 				login, _ := userData["login"].(string)
 				if login == "" {
-					return fmt.Errorf("cannot determine current user login")
+					return fmt.Errorf("无法确定当前用户")
 				}
 				userID, _ := userData["user_id"].(float64)
 				body := map[string]interface{}{

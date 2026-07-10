@@ -2,12 +2,15 @@ package release
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
-	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -183,16 +186,101 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					_, viewErr := ctx.CallAPI("GET", path, nil)
 					if viewErr != nil {
 						// Release no longer exists — delete actually succeeded
-						return ctx.Output(output.SuccessEnvelope(map[string]interface{}{
+						return ctx.OutputData(map[string]interface{}{
 							"message": "删除成功",
-						}, nil))
+						})
 					}
 					// Release still exists — delete truly failed
 					return delErr
 				}
-				return ctx.Output(output.SuccessEnvelope(map[string]interface{}{
+				return ctx.OutputData(map[string]interface{}{
 					"message": "删除成功",
-				}, nil))
+				})
+			},
+		},
+		{
+			Name:        "download",
+			Description: "Download release assets",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: "Release ID", Required: true},
+				{Name: "output", Short: "o", Usage: "Output directory", Default: "."},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				outputDir := ctx.Arg("output")
+
+				// Fetch release details to find assets
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/releases/%s", ctx.RepoPath(), id), nil)
+				if err != nil {
+					return err
+				}
+
+				data, ok := env.Data.(map[string]interface{})
+				if !ok {
+					return fmt.Errorf("unexpected release response format")
+				}
+
+				assets, _ := data["assets"].([]interface{})
+				if len(assets) == 0 {
+					return ctx.OutputData(map[string]interface{}{
+						"message": "没有可下载的资源",
+					})
+				}
+
+				if err := os.MkdirAll(outputDir, 0o755); err != nil {
+					return fmt.Errorf("创建输出目录失败: %w", err)
+				}
+
+				var downloaded []string
+				for _, a := range assets {
+					asset, _ := a.(map[string]interface{})
+					downloadURL, _ := asset["url"].(string)
+					filename, _ := asset["filename"].(string)
+					if downloadURL == "" || filename == "" {
+						continue
+					}
+
+					// Build full URL if relative
+					if downloadURL[0] == '/' {
+						downloadURL = ctx.Client.BaseURL + downloadURL
+					}
+
+					resp, err := ctx.Client.HTTP.Get(downloadURL)
+					if err != nil {
+						return fmt.Errorf("下载 %s 失败: %w", filename, err)
+					}
+
+					if resp.StatusCode != http.StatusOK {
+						resp.Body.Close()
+						return fmt.Errorf("下载 %s 失败: HTTP %d", filename, resp.StatusCode)
+					}
+
+					destPath := filepath.Join(outputDir, filename)
+					f, err := os.Create(destPath)
+					if err != nil {
+						resp.Body.Close()
+						return fmt.Errorf("创建文件 %s 失败: %w", destPath, err)
+					}
+					if _, err := io.Copy(f, resp.Body); err != nil {
+						f.Close()
+						resp.Body.Close()
+						return fmt.Errorf("写入文件 %s 失败: %w", destPath, err)
+					}
+					f.Close()
+					resp.Body.Close()
+					downloaded = append(downloaded, filename)
+				}
+
+				return ctx.OutputData(map[string]interface{}{
+					"message":    fmt.Sprintf("已下载 %d 个资源", len(downloaded)),
+					"downloaded": downloaded,
+				})
 			},
 		},
 	}

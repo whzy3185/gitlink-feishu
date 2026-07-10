@@ -41,19 +41,34 @@ func New() (*Client, error) {
 	}, nil
 }
 
+// Do makes an API call with automatic .json suffix appended.
 func (c *Client) Do(method, path string, body interface{}, query url.Values) (*output.Envelope, error) {
 	path = normalizeAPIPath(c.BaseURL, path)
+	return c.do(method, path, body, query, true, "json")
+}
 
-	// Append .json suffix if not already present (GitLink API convention)
-	// Handle paths that may already contain query strings (e.g., /path?key=val)
-	if idx := strings.Index(path, "?"); idx != -1 {
-		basePath := path[:idx]
-		queryStr := path[idx:]
-		if shouldAppendJSONSuffix(basePath) {
-			path = basePath + ".json" + queryStr
+// DoRaw makes an API call without appending .json suffix.
+func (c *Client) DoRaw(method, path string, body interface{}, query url.Values) (*output.Envelope, error) {
+	return c.do(method, path, body, query, false, "json")
+}
+
+// DoForm makes an API call with form-encoded body (no .json suffix).
+// Used for Wiki and other endpoints that expect application/x-www-form-urlencoded.
+func (c *Client) DoForm(method, path string, body url.Values, query url.Values) (*output.Envelope, error) {
+	return c.do(method, path, body, query, false, "form")
+}
+
+func (c *Client) do(method, path string, body interface{}, query url.Values, appendJSON bool, encoding string) (*output.Envelope, error) {
+	if appendJSON {
+		if idx := strings.Index(path, "?"); idx != -1 {
+			basePath := path[:idx]
+			queryStr := path[idx:]
+			if shouldAppendJSONSuffix(basePath) {
+				path = basePath + ".json" + queryStr
+			}
+		} else if shouldAppendJSONSuffix(path) {
+			path += ".json"
 		}
-	} else if shouldAppendJSONSuffix(path) {
-		path += ".json"
 	}
 	fullURL := c.BaseURL + path
 	if len(query) > 0 {
@@ -64,14 +79,26 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		fullURL += sep + query.Encode()
 	}
 
-	// Replace path params
+	var bodyData []byte
 	var bodyReader io.Reader
+	var contentType string
 	if body != nil {
-		data, err := json.Marshal(body)
-		if err != nil {
-			return nil, err
+		if encoding == "form" {
+			formValues, ok := body.(url.Values)
+			if !ok {
+				return nil, fmt.Errorf("DoForm requires url.Values body")
+			}
+			bodyData = []byte(formValues.Encode())
+			contentType = "application/x-www-form-urlencoded"
+		} else {
+			var err error
+			bodyData, err = json.Marshal(body)
+			if err != nil {
+				return nil, err
+			}
+			contentType = "application/json"
 		}
-		bodyReader = bytes.NewReader(data)
+		bodyReader = bytes.NewReader(bodyData)
 	}
 
 	req, err := http.NewRequest(method, fullURL, bodyReader)
@@ -79,8 +106,15 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		return nil, err
 	}
 
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+
 	if c.Debug {
 		fmt.Printf("→ %s %s\n", method, fullURL)
+		if bodyData != nil {
+			fmt.Printf("  body: %s\n", string(bodyData))
+		}
 	}
 
 	resp, err := c.HTTP.Do(req)
@@ -98,7 +132,6 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		fmt.Printf("← %d %s\n", resp.StatusCode, string(respData[:min(len(respData), 200)]))
 	}
 
-	// Check HTTP-level errors
 	if resp.StatusCode >= 400 {
 		return nil, &APIError{
 			StatusCode: resp.StatusCode,
@@ -107,10 +140,8 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		}
 	}
 
-	// Parse JSON
 	var raw map[string]interface{}
 	if err := json.Unmarshal(respData, &raw); err != nil {
-		// Not JSON, return as-is
 		return output.SuccessEnvelope(string(respData), nil), nil
 	}
 
@@ -147,7 +178,6 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		}
 	}
 
-	// Auto-parse JSON string data (GitLink API quirk: some endpoints return data as JSON string)
 	if dataStr, ok := raw["data"].(string); ok {
 		var parsedData interface{}
 		if err := json.Unmarshal([]byte(dataStr), &parsedData); err == nil {
@@ -155,7 +185,6 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		}
 	}
 
-	// Build meta from pagination info
 	var meta *output.Meta
 	if tc, ok := raw["total_count"]; ok {
 		meta = &output.Meta{}

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitLink CLI · 智能化能力展示</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --txt:#c9d1d9; --acc:#58a6ff; --green:#3fb950; --red:#f85149; --yellow:#d29922; }
+  body { background:var(--bg); color:var(--txt); font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
+  .panel { background:var(--panel); border:1px solid var(--border); }
+  .mono { font-family: "Cascadia Code", Consolas, "Courier New", monospace; }
+  #term-out { background:#010409; min-height:300px; max-height:440px; overflow-y:auto; padding:14px; }
+  .l-cmd { color:var(--acc); } .l-out { color:var(--txt); white-space:pre-wrap; word-break:break-all; }
+  .l-err { color:var(--red); } .l-muted { color:#6e7681; font-style:italic; }
+  #term-input { background:#010409; border-top:1px solid var(--border); }
+  .skill-card { transition:.2s; }
+  .skill-card:hover { border-color:var(--acc); transform:translateY(-2px); }
+  .step { transition:.3s; }
+  .step.active { border-color:var(--green); background:#1c2820; }
+  .verb { font-size:11px; padding:2px 7px; border-radius:4px; border:1px solid var(--border); background:#0d1117; cursor:pointer; transition:.15s; }
+  .verb:hover { border-color:var(--acc); color:var(--acc); }
+  .chip { background:#21262d; border:1px solid var(--border); }
+  .fbtn { font-size:12px; padding:4px 12px; border-radius:9999px; border:1px solid var(--border); cursor:pointer; transition:.15s; }
+  .fbtn.active { background:var(--acc); color:#000; border-color:var(--acc); }
+  details > summary { list-style:none; }
+  details > summary::-webkit-details-marker { display:none; }
+  details[open] > summary .arr { transform:rotate(90deg); }
+  .arr { display:inline-block; transition:.15s; }
+  #skill-modal-body h1,#skill-modal-body h2,#skill-modal-body h3,#skill-modal-body h4 { color:#fff; margin:.7em 0 .35em; font-weight:600; }
+  #skill-modal-body h1 { font-size:1.3em; border-bottom:1px solid var(--border); padding-bottom:.2em; }
+  #skill-modal-body h2 { font-size:1.15em; } #skill-modal-body h3 { font-size:1.02em; }
+  #skill-modal-body p { margin:.4em 0; line-height:1.6; }
+  #skill-modal-body table { border-collapse:collapse; margin:.5em 0; display:block; overflow-x:auto; }
+  #skill-modal-body th,#skill-modal-body td { border:1px solid var(--border); padding:4px 8px; text-align:left; font-size:.85em; }
+  #skill-modal-body th { background:#21262d; }
+  #skill-modal-body code { background:#010409; padding:1px 5px; border-radius:3px; color:var(--green); font-size:.85em; }
+  #skill-modal-body pre { background:#010409; padding:10px; border-radius:6px; overflow-x:auto; margin:.5em 0; border:1px solid var(--border); }
+  #skill-modal-body pre code { background:none; padding:0; color:var(--txt); }
+  #skill-modal-body strong { color:#fff; }
+  #skill-modal-body blockquote { border-left:3px solid var(--acc); padding-left:10px; color:#8b949e; margin:.5em 0; }
+  #skill-modal-body ul,#skill-modal-body ol { padding-left:1.4em; margin:.4em 0; }
+  #skill-modal-body hr { border-color:var(--border); margin:.8em 0; }
+  #skill-modal-body a { color:var(--acc); }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Header -->
+<header class="border-b border-[var(--border)] panel">
+  <div class="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between flex-wrap gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-white">🚀 GitLink CLI · 智能化能力展示</h1>
+      <p class="text-sm text-[#8b949e] mt-1">从「开发者工具」升级为「AI 可驱动平台」—— 命令 · Skills · 工作流 · 科研辅助</p>
+    </div>
+    <div class="flex gap-2 flex-wrap text-xs">
+      <span class="chip px-3 py-1.5 rounded-full">🛠 25 域 / 160+ 命令</span>
+      <span class="chip px-3 py-1.5 rounded-full">🧠 53 Skills</span>
+      <span class="chip px-3 py-1.5 rounded-full">🚪 pr-guard 工作流</span>
+      <span class="chip px-3 py-1.5 rounded-full">🔬 科研四维画像</span>
+    </div>
+  </div>
+  <div class="max-w-7xl mx-auto px-6 pb-4 flex items-center gap-3 flex-wrap text-sm">
+    <span class="text-[#8b949e] whitespace-nowrap">🔑 GitLink Token</span>
+    <input id="token-input" type="password" placeholder="粘贴你的 GitLink 个人访问令牌（仅存本机浏览器；公开仓库命令可免）" class="flex-1 min-w-[220px] bg-[#0d1117] border border-[var(--border)] rounded px-3 py-1.5 text-xs mono">
+    <span class="text-[#8b949e] whitespace-nowrap">📦 默认目标</span>
+    <input id="owner-input" value="Gitlink" class="w-28 bg-[#0d1117] border border-[var(--border)] rounded px-2 py-1.5 text-xs mono" placeholder="owner">
+    <span class="text-[#6e7681]">/</span>
+    <input id="repo-input" value="gitlink-cli" class="w-36 bg-[#0d1117] border border-[var(--border)] rounded px-2 py-1.5 text-xs mono" placeholder="repo">
+    <span id="token-state" class="text-xs"></span>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-8 space-y-10">
+
+  <!-- ① 命令浏览器 + 参数构建 + 终端 -->
+  <section>
+    <h2 class="text-xl font-bold text-white mb-1">▶ 命令浏览器 <span class="text-sm text-[#8b949e] font-normal">（先选大方向 → 展开域 → 点动词填参数 → 真跑）</span></h2>
+    <p class="text-sm text-[#8b949e] mb-4">左侧点分类展开命令域；点动词在右侧「参数构建」里填参（搜索类命令的 keyword 等由你决定），回车或点▶运行。本地命令免 token。</p>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <!-- 左：折叠分层浏览器 -->
+      <div class="panel rounded-lg p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <h3 class="font-semibold text-white">命令域</h3>
+          <input id="cmd-search" placeholder="🔍 搜索" class="flex-1 bg-[#0d1117] border border-[var(--border)] rounded px-2 py-1 text-xs mono">
+        </div>
+        <div id="cmd-groups" class="text-sm max-h-[460px] overflow-y-auto pr-1"></div>
+      </div>
+      <!-- 右：参数构建 + 终端 -->
+      <div class="panel rounded-lg lg:col-span-2 flex flex-col">
+        <!-- 参数构建条 -->
+        <div class="px-4 py-3 border-b border-[var(--border)] bg-[#0d1017]">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-xs text-[var(--yellow)] font-semibold">🧩 参数构建</span>
+            <span id="builder-hint" class="text-xs text-[#6e7681]">点左侧动词开始</span>
+          </div>
+          <div id="builder-params" class="grid grid-cols-2 gap-2 mb-2"></div>
+          <div class="flex items-center gap-2">
+            <span class="text-[var(--green)] mono text-sm">$</span>
+            <input id="builder-cmd" class="flex-1 bg-[#010409] border border-[var(--border)] rounded px-2 py-1.5 text-xs mono text-[var(--green)]" placeholder="组装好的命令会显示在这里（可手改）" autocomplete="off">
+            <button onclick="runBuilder()" class="bg-[var(--green)] text-black px-3 py-1.5 rounded text-xs font-semibold whitespace-nowrap">▶ 运行</button>
+          </div>
+        </div>
+        <!-- 终端 -->
+        <div class="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)] text-xs text-[#8b949e]">
+          <span class="w-3 h-3 rounded-full bg-[var(--red)]"></span><span class="w-3 h-3 rounded-full bg-[var(--yellow)]"></span><span class="w-3 h-3 rounded-full bg-[var(--green)]"></span>
+          <span class="ml-2">终端</span><span id="term-target" class="ml-auto text-[var(--acc)]"></span>
+        </div>
+        <div id="term-out" class="mono text-sm flex-1"></div>
+        <div class="flex items-center px-4 py-2 mono text-sm" id="term-input">
+          <span class="text-[var(--green)] mr-2">$</span>
+          <input id="cmd-input" class="flex-1 bg-transparent text-[var(--green)] mono" placeholder="或在此自由输入 gitlink-cli 命令回车" autocomplete="off">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② Skill 卡片墙 -->
+  <section>
+    <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+      <h2 class="text-xl font-bold text-white">🧠 Skill 全集 <span class="text-sm text-[#8b949e] font-normal">（53 个 · 点卡片读 SKILL.md 全文）</span></h2>
+      <div class="flex gap-2 flex-wrap">
+        <button class="fbtn active" onclick="filterSkill('all',this)">全部 53</button>
+        <button class="fbtn" onclick="filterSkill('new',this)">✨ 本次新增 7</button>
+        <button class="fbtn" onclick="filterSkill('research',this)">🔬 科研</button>
+        <button class="fbtn" onclick="filterSkill('quality',this)">🚪 代码质量</button>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" id="skill-wall"></div>
+  </section>
+
+  <!-- ③ 任务三 pr-guard -->
+  <section class="panel rounded-lg p-6">
+    <div class="flex items-center gap-2 mb-1"><h2 class="text-xl font-bold text-white">🚪 任务三：代码质量看门人</h2><span class="chip px-2 py-0.5 rounded text-xs">pr-guard</span></div>
+    <div class="text-sm text-[#8b949e] mb-3 space-y-1">
+      <p><b class="text-[var(--txt)]">是什么</b>：PR 提交后自动跑完 5 步质量门禁 —— 串接 <code class="text-[var(--green)]">pr → code-review → ci → api → pr</code> 四个命令域。</p>
+      <p><b class="text-[var(--txt)]">门禁规则</b>：<span class="text-[var(--green)]">0 Critical + CI success → ✅ 合并</span>；否则 <span class="text-[var(--red)]">🔴 拒绝</span>。</p>
+      <p><b class="text-[var(--txt)]">与 code-review 区别</b>：code-review 只做 Review；pr-guard 是<b>完整闭环</b>（采集→审查→CI→评论→判定/合并）。</p>
+      <p><b class="text-[var(--txt)]">任务三全家桶</b>（不止 pr-guard）：code-review×pr-summary 闭环、community-ops-sweep 七段式周报（wauxing）+ 自动化 Skill 族 <code class="text-[var(--green)]">gatekeeper / commit-quality / issue-triage / issueops / release-auto / wiki-builder / pipeline-guardian / webhook-sentinel</code>（点下方 Skill 墙查看）。</p>
+    </div>
+    <div class="flex items-center justify-between gap-2 mb-5 flex-wrap" id="pr-steps"></div>
+    <div class="flex gap-2 flex-wrap">
+      <button onclick="runPipeline()" class="bg-[var(--acc)] text-black px-4 py-2 rounded font-semibold text-sm hover:opacity-90">▶ 模拟流水线</button>
+      <button onclick="livePR()" class="border border-[var(--border)] text-[var(--txt)] px-4 py-2 rounded text-sm hover:bg-[#21262d]">🔌 用真实 PR 跑（需 token）</button>
+    </div>
+    <div id="pr-verdict" class="mt-4 text-sm mono"></div>
+  </section>
+
+  <!-- ④ 任务四 科研画像 -->
+  <section class="panel rounded-lg p-6">
+    <div class="flex items-center gap-2 mb-1"><h2 class="text-xl font-bold text-white">🔬 任务四：科研仓库画像</h2><span class="chip px-2 py-0.5 rounded text-xs">research-insight</span></div>
+    <div class="text-sm text-[#8b949e] mb-3 space-y-1">
+      <p><b class="text-[var(--txt)]">是什么</b>：四维科研评分（🔁可复现性 / 📈活跃度 / 📑引用价值 / 🤝协作健康）+ 贡献者协作网络 + 巴士因子。</p>
+      <p><b class="text-[var(--txt)]">区别于 health</b>：health 看「工程维护好不好」，本工具看「<b class="text-[var(--txt)]">科研上值不值得引用/复现</b>」；含 <b class="text-[var(--txt)]">fork 检测</b>（fork 自动改评 upstream）。</p>
+      <p><b class="text-[var(--txt)]">任务四全家桶</b>（whale 主导，<b class="text-[var(--txt)]">S1–S6 全生命周期</b>）：<code class="text-[var(--green)]">research-insight(S1) / research-graph(S2) / compliance(S3) / collab-match(S4) / research-progress(S5) / research-visual(S6)</code> + research-fork-impact/scholar-profile；Python 算法层 ~5800 行 + Go Web demo。</p>
+      <p><b class="text-[var(--txt)]">真实验证</b>：<code class="text-[var(--green)]">whale_hihihi/gitlink-cli</code> → 识别为 fork、巴士因子 38%、可复现性 8/10。</p>
+    </div>
+    <div class="flex items-center gap-2 mb-5 flex-wrap">
+      <span class="text-sm text-[#8b949e]">分析对象 = 顶栏 owner/repo</span>
+      <button onclick="analyze()" class="bg-[var(--green)] text-black px-4 py-2 rounded font-semibold text-sm hover:opacity-90">🔍 实拉分析</button>
+      <span id="analyze-status" class="text-xs text-[#8b949e]">（公开仓库可免 token）</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div><canvas id="radar"></canvas><div id="repro-detail" class="text-xs text-[#8b949e] mt-3 mono"></div></div>
+      <div>
+        <h4 class="text-white font-semibold mb-2">协作网络图 <span id="bus-info" class="text-xs text-[#8b949e] font-normal">（点「实拉分析」用真实贡献者重绘）</span></h4>
+        <svg id="collab-svg" viewBox="0 0 360 260" class="w-full panel rounded border border-[var(--border)]"></svg>
+        <div id="repo-meta" class="text-xs text-[#8b949e] mt-2"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑤ 验证 -->
+  <section>
+    <h2 class="text-xl font-bold text-white mb-4">✅ 验证：三层证据（对照模板法）</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div class="panel rounded-lg p-4"><div class="text-[var(--green)] text-2xl mb-1">①</div><h4 class="text-white font-semibold">命令层</h4><p class="text-sm text-[#8b949e] mt-1">命令真实执行，返回真实数据（非 unknown/401）</p></div>
+      <div class="panel rounded-lg p-4"><div class="text-[var(--yellow)] text-2xl mb-1">②</div><h4 class="text-white font-semibold">编排层</h4><p class="text-sm text-[#8b949e] mt-1">AI 按 SKILL.md 的顺序调命令</p></div>
+      <div class="panel rounded-lg p-4"><div class="text-[var(--acc)] text-2xl mb-1">③</div><h4 class="text-white font-semibold">输出层</h4><p class="text-sm text-[#8b949e] mt-1">输出符合 SKILL.md 模板（判定/评分/清单）</p></div>
+    </div>
+  </section>
+
+  <footer class="text-center text-xs text-[#6e7681] py-6 border-t border-[var(--border)]">
+    GitLink CLI 智能化能力展示 · 子任务一~四 + DevOps · 后端 demo/web/server.py（访客自带 token，零凭据上云）
+  </footer>
+</main>
+
+<script>
+// ===== token & owner/repo =====
+const tokenInput=document.getElementById('token-input'), ownerInput=document.getElementById('owner-input'), repoInput=document.getElementById('repo-input');
+tokenInput.value=localStorage.getItem('gl_token')||'';
+const tokenState=document.getElementById('token-state');
+function syncTokenState(){ tokenState.textContent=tokenInput.value?'✅ 已提供':'⚠️ 未提供（公开仓库命令仍可跑）'; tokenState.style.color=tokenInput.value?'var(--green)':'var(--yellow)'; }
+tokenInput.addEventListener('input',()=>{localStorage.setItem('gl_token',tokenInput.value);syncTokenState();}); syncTokenState();
+const getToken=()=>tokenInput.value.trim(), getOwner=()=>ownerInput.value.trim()||'Gitlink', getRepo=()=>repoInput.value.trim()||'gitlink-cli';
+function syncTarget(){ document.getElementById('term-target').textContent=getOwner()+'/'+getRepo(); } syncTarget();
+[ownerInput,repoInput].forEach(el=>el.addEventListener('input',()=>{syncTarget();updateCmd();}));
+
+// ===== 命令域（25 域，按子任务分组）=====
+const DOMAIN_GROUPS=[
+  {g:'资源管理（仓库/文件/版本）',open:true,domains:[
+    {d:'repo',v:['info','languages','contributors','readme','tree','code-stats','list','create','delete','fork','stargazers','watchers']},
+    {d:'file',v:['get','browse','create','update','delete']},
+    {d:'branch',v:['list','create','delete','protect','unprotect']},
+    {d:'release',v:['list','view','create','update','delete','download']},
+    {d:'search',v:['issues','repos','users']},
+    {d:'compare',v:['view','files']}]},
+  {g:'Issue 跟踪',domains:[
+    {d:'issue',v:['list','view','create','update','close','comment','batch-create','batch-update','batch-close','batch-assign','batch-label']},
+    {d:'label',v:['list','create','update','delete']},
+    {d:'milestone',v:['list','view','create','close','delete']}]},
+  {g:'PR 与代码审查',domains:[
+    {d:'pr',v:['list','view','diff','files','merge','reopen','comment','review','reviews','check-merge']}]},
+  {g:'CI/CD · 流水线 · 工作流',domains:[
+    {d:'ci',v:['builds','logs','restart','stop','enable','disable']},
+    {d:'pipeline',v:['list','runs','run','view','logs','results','save-yaml']},
+    {d:'workflow',v:['triage','health','pr-summary','repo-report']}]},
+  {g:'项目管理 · 协作',domains:[
+    {d:'pm',v:['boards','sprints','weekly','tags','pipelines','actions']},
+    {d:'org',v:['list','info','members','create']},
+    {d:'member',v:['list','add','remove']},
+    {d:'webhook',v:['list','view','create','update','delete','history','test']},
+    {d:'wiki',v:['list','view','create','update','delete']}]},
+  {g:'用户与画像',domains:[
+    {d:'user',v:['me','info','headmaps','stats-activity','stats-develop','trends']},
+    {d:'profile',v:['activity','ability','contribution','role']}]},
+  {g:'数据 · 合规 · 健康',domains:[
+    {d:'dataset',v:['list','view','create','update']},
+    {d:'license',v:['list']},
+    {d:'health',v:['fetch']}]},
+  {g:'本地工具（免登录）',open:true,domains:[
+    {d:'snippet',v:['create','list','view','search','update','delete','export']},
+    {d:'auth',v:['login','status','logout'],raw:true}]},
+];
+const LOCAL_DOMAINS=new Set(['snippet','auth','config','version','doctor']);
+
+// 需要额外参数表单的动词（flag 已核对 CLI --help）
+const FORM={
+  'search +issues':[{f:'-k',k:'keyword',req:true,ph:'如 good first issue'},{f:'-c',k:'category',sel:['opened','closed','all'],def:'opened'}],
+  'search +repos':[{f:'-k',k:'keyword',req:true,ph:'如 gitlink'}],
+  'search +users':[{f:'-k',k:'keyword',req:true,ph:'如用户名'}],
+  'issue +list':[{f:'-s',k:'state',sel:['open','closed','all'],def:'open'},{f:'-k',k:'keyword',ph:'可选关键词'}],
+  'issue +view':[{f:'-n',k:'number',req:true,ph:'Issue 编号（URL 里）'}],
+  'pr +view':[{f:'-i',k:'id',req:true,ph:'PR 编号'}],
+  'file +get':[{f:'--path',k:'path',req:true,ph:'如 LICENSE / README.md'}],
+  'repo +tree':[{f:'--path',k:'path',ph:'目录路径，默认根'}],
+  'snippet +create':[{f:'--title',k:'title',req:true},{f:'--language',k:'language',ph:'python/go'},{f:'--tags',k:'tags',ph:'逗号分隔'},{f:'--content',k:'content',req:true,area:true}],
+  'snippet +view':[{f:'--id',k:'id',req:true,ph:'先 +list 取 id'}],
+  'snippet +search':[{f:'--query',k:'query',req:true,ph:'搜索词'}],
+  'snippet +delete':[{f:'--id',k:'id',req:true,ph:'先 +list 取 id'}],
+};
+
+// ===== 渲染折叠浏览器 =====
+function renderDomains(q=''){
+  const Q=q.trim().toLowerCase(); let html='';
+  DOMAIN_GROUPS.forEach(grp=>{
+    const doms=grp.domains.filter(dm=>!Q||dm.d.includes(Q)||dm.v.some(x=>x.includes(Q)));
+    if(!doms.length) return;
+    html+=`<details class="mb-1" ${grp.open&&!Q?'open':''}><summary class="cursor-pointer text-xs text-[var(--yellow)] py-1 select-none hover:text-[var(--acc)]"><span class="arr">▸</span> ${grp.g} <span class="text-[#6e7681]">(${doms.length})</span></summary><div class="pl-2 mt-1 space-y-1.5">`;
+    doms.forEach(dm=>{
+      const local=LOCAL_DOMAINS.has(dm.d);
+      const tag=local?'<span class="text-[10px] text-[var(--green)]">本地</span>':'<span class="text-[10px] text-[#6e7681]">平台</span>';
+      const verbs=dm.v.filter(x=>!Q||x.includes(Q)||dm.d.includes(Q)).map(v=>{
+        const formTag=FORM[dm.d+' +'+v]?'<span class="text-[var(--acc)]">⚙</span>':'';
+        return `<span class="verb" onclick="clickVerb('${dm.d}','+${v}')">${formTag}+${v}</span>`;
+      }).join(' ');
+      html+=`<div class="panel rounded p-2"><div class="mono text-xs text-[var(--acc)] mb-1">${dm.d} ${tag}</div><div class="flex flex-wrap gap-1">${verbs}</div></div>`;
+    });
+    html+=`</div></details>`;
+  });
+  document.getElementById('cmd-groups').innerHTML=html||'<p class="text-xs text-[#6e7681]">无匹配</p>';
+}
+renderDomains();
+document.getElementById('cmd-search').addEventListener('input',e=>renderDomains(e.target.value));
+
+// ===== 参数构建 =====
+let currentVerb=null;
+function clickVerb(domain,verb){
+  currentVerb={domain,verb,key:domain+' '+verb,local:LOCAL_DOMAINS.has(domain),form:FORM[domain+' '+verb]};
+  renderBuilder();
+}
+function buildCmd(){
+  const v=currentVerb; if(!v) return '';
+  let parts=['gitlink-cli',v.domain,v.verb];
+  if(v.form) v.form.forEach(p=>{
+    const el=document.getElementById('pf-'+p.k); let val=el?el.value.trim():'';
+    if(p.sel&&!val) val=p.def||'';
+    if(val) parts.push(p.f,val);
+  });
+  if(!v.local) parts.push('--owner',getOwner(),'--repo',getRepo());
+  return parts.join(' ');
+}
+function updateCmd(){ const c=buildCmd(); if(c) document.getElementById('builder-cmd').value=c; }
+function renderBuilder(){
+  const v=currentVerb; const pe=document.getElementById('builder-params'); const hi=document.getElementById('builder-hint');
+  if(!v){ pe.innerHTML=''; hi.textContent='点左侧动词开始'; document.getElementById('builder-cmd').value=''; return; }
+  hi.innerHTML=`<code class="text-[var(--acc)]">${v.domain} ${v.verb}</code> · ${v.local?'本地命令':(v.form?'填参数后运行（自动带 owner/repo）':'平台命令，自动带 owner/repo')}`;
+  if(v.form){
+    pe.innerHTML=v.form.map(p=>{
+      const req=p.req?'<span class="text-[var(--red)]">*</span>':'';
+      const label=`<label class="text-xs text-[#8b949e]">${p.k}${req}${p.req?'<span class="text-[10px]"> 必填</span>':''}</label>`;
+      if(p.sel) return `<div>${label}<select id="pf-${p.k}" class="w-full mt-0.5 bg-[#0d1117] border border-[var(--border)] rounded px-1 py-1 text-xs mono">${p.sel.map(s=>`<option ${s===p.def?'selected':''}>${s}</option>`).join('')}</select></div>`;
+      if(p.area) return `<div class="col-span-2">${label}<textarea id="pf-${p.k}" rows="2" placeholder="${p.ph||''}" class="w-full mt-0.5 bg-[#0d1117] border border-[var(--border)] rounded px-2 py-1 text-xs mono"></textarea></div>`;
+      return `<div>${label}<input id="pf-${p.k}" placeholder="${p.ph||''}" class="w-full mt-0.5 bg-[#0d1117] border border-[var(--border)] rounded px-2 py-1 text-xs mono"></div>`;
+    }).join('');
+    setTimeout(()=>v.form.forEach(p=>{const el=document.getElementById('pf-'+p.k);if(el){el.oninput=updateCmd;el.onchange=updateCmd;}}),0);
+  } else { pe.innerHTML=''; }
+  updateCmd();
+}
+function runBuilder(){ const c=document.getElementById('builder-cmd').value.trim(); if(c) runRaw(c); }
+
+// ===== 终端 =====
+const out=document.getElementById('term-out');
+const input=document.getElementById('cmd-input');
+let history=[],hidx=0;
+function appendOut(text,cls='l-out'){const div=document.createElement('div');div.className='mono text-sm '+cls;div.textContent=text;out.appendChild(div);out.scrollTop=out.scrollHeight;}
+async function runRaw(cmd){
+  if(!cmd||cmd.startsWith('#'))return;
+  history.push(cmd);hidx=history.length;
+  appendOut('$ '+cmd,'l-cmd');
+  const m=document.createElement('div');m.className='mono text-sm l-muted';m.textContent='⏳ 运行中...';out.appendChild(m);out.scrollTop=out.scrollHeight;
+  try{
+    const r=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd,token:getToken()})});
+    const d=await r.json();m.remove();
+    if(d.stdout) appendOut(d.stdout,'l-out');
+    if(d.stderr) appendOut('[stderr] '+d.stderr,d.ok?'l-muted':'l-err');
+    if(!d.ok){
+      if(!d.stdout&&!d.stderr&&d.error) appendOut('❌ '+d.error,'l-err');
+      if(d.code!=null) appendOut('[退出码 '+d.code+']','l-err');
+      if(/缺少必需参数|required|missing/i.test(d.stderr||d.error||'')) appendOut('💡 该命令有必填参数，看上方「参数构建」填写','l-muted');
+      if(d.needs_token&&!d.token_provided&&/401|登录|未授权|token/i.test(d.stderr||d.error||'')) appendOut('💡 此命令可能需要 token（顶栏填写）','l-muted');
+      if(/timeout|handshake|refused|no such host|dial tcp/i.test(d.stderr||d.error||'')) appendOut('💡 网络连不上 GitLink（TLS/超时），稍后重试一次','l-muted');
+      if(/接口数据异常|\[-1\]|数据异常/i.test(d.stderr||d.error||'')) appendOut('💡 GitLink 接口对该仓库返回异常（该仓库可能无此类数据 / CI 未启用）','l-muted');
+    } else if(!d.stdout&&!d.stderr){ appendOut('(无输出)','l-muted'); }
+  }catch(e){m.remove();appendOut('❌ 请求失败：'+e+'（后端 server.py 是否启动？）','l-err');}
+}
+input.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){const c=input.value.trim();input.value='';runRaw(c);}
+  else if(e.key==='ArrowUp'){if(hidx>0){hidx--;input.value=history[hidx]||'';e.preventDefault();}}
+  else if(e.key==='ArrowDown'){if(hidx<history.length){hidx++;input.value=history[hidx]||'';e.preventDefault();}}
+});
+
+// ===== Skill 全集 =====
+const SKILLS=['auth','branch','ci','ci-health','code-review','collab-match','commit-quality','compare','competition-manager','compliance','contributor-insight','digest','file','gatekeeper','health','insight','issue','issue-tag','issue-triage','issueops','label','license-compliance','member','milestone','notification-digest','onboarding','org','pipeline','pipeline-guardian','pm','pr','pr-guard','release','release-auto','repo','research-fork-impact','research-graph','research-insight','research-progress','research-tracker','research-visual','scholar-profile','search','shared','snippet','stale-issue-manager','todo','user','webhook','webhook-sentinel','wiki','wiki-builder','workflow'];
+const NEW_SKILLS=new Set(['onboarding','auth','snippet','digest','todo','pr-guard','research-insight']);
+const SKILL_ICON={onboarding:'🚀',auth:'🔑',snippet:'📦',digest:'📰',todo:'📋','pr-guard':'🚪','research-insight':'🔬','code-review':'👁','commit-quality':'✨','health':'❤','release-auto':'🏷','workflow':'🔁','compliance':'✅','license-compliance':'📜','wiki-builder':'📚','pipeline-guardian':'🛡','webhook-sentinel':'📡'};
+function skillCat(n){if(NEW_SKILLS.has(n))return'new';if(/research|scholar|contributor-insight|insight|fork-impact|tracker/.test(n))return'research';if(/code-review|commit-quality|gatekeeper|pr-guard|compliance|license-compliance/.test(n))return'quality';return'other';}
+function skillEmoji(n){return SKILL_ICON[n]||(/research|scholar/.test(n)?'🔬':/wiki/.test(n)?'📚':/pipeline|ci|webhook/.test(n)?'🛠':'📁');}
+let SKILL_FILTER='all';
+function filterSkill(f,btn){SKILL_FILTER=f;document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderSkills();}
+function renderSkills(){
+  const list=SKILLS.filter(n=>SKILL_FILTER==='all'?true:(SKILL_FILTER==='new'?NEW_SKILLS.has(n):skillCat(n)===SKILL_FILTER));
+  document.getElementById('skill-wall').innerHTML=list.map(n=>{
+    const tag=NEW_SKILLS.has(n)?'<span class="text-[10px] text-[var(--green)]">✨新增</span>':(skillCat(n)==='research'?'<span class="text-[10px] text-[var(--acc)]">科研</span>':skillCat(n)==='quality'?'<span class="text-[10px] text-[var(--yellow)]">质量</span>':'');
+    return `<div class="skill-card panel rounded-lg p-3 cursor-pointer" onclick="openSkill('${n}')"><div class="text-xl mb-1">${skillEmoji(n)}</div><div class="text-white text-sm font-semibold mono">gitlink-${n}</div><div class="mt-1">${tag}</div><div class="text-[10px] text-[var(--green)] mt-2">📖 SKILL.md →</div></div>`;
+  }).join('');
+}
+renderSkills();
+
+// ===== pr-guard =====
+const STEPS=[{n:'① 采集',d:'pr +diff/+files',c:'#8b949e'},{n:'② AI Review',d:'分级找问题',c:'#d29922'},{n:'③ CI 检查',d:'ci +builds',c:'#58a6ff'},{n:'④ 汇总评论',d:'api reviews',c:'#a371f7'},{n:'⑤ 质量判定',d:'门禁规则',c:'#3fb950'}];
+document.getElementById('pr-steps').innerHTML=STEPS.map((s,i)=>`<div class="step panel rounded p-3 text-center flex-1 min-w-[120px]" id="step-${i}"><div class="text-sm font-semibold text-white">${s.n}</div><div class="text-xs mono mt-1" style="color:${s.c}">${s.d}</div></div>${i<STEPS.length-1?'<span class="text-[#6e7681]">→</span>':''}`).join('');
+function runPipeline(){
+  document.getElementById('pr-verdict').textContent='';STEPS.forEach((_,i)=>document.getElementById('step-'+i).classList.remove('active'));
+  let i=0;const tick=setInterval(()=>{if(i>0)document.getElementById('step-'+(i-1)).classList.remove('active');if(i>=STEPS.length){clearInterval(tick);document.getElementById('pr-verdict').innerHTML='<span style="color:var(--green)">✅ 质量判定：通过</span> ｜ 0 Critical + CI success → 建议合并';return;}document.getElementById('step-'+i).classList.add('active');i++;},600);
+}
+async function livePR(){
+  runRaw(`pr +list --owner ${getOwner()} --repo ${getRepo()} --format json`);
+}
+
+// ===== 雷达 + 协作图 =====
+let radarChart=new Chart(document.getElementById('radar'),{type:'radar',data:{labels:['🔁 可复现性','📈 活跃度','📑 引用价值','🤝 协作健康'],datasets:[{label:'示例（点「实拉分析」换真实数据）',data:[6,5,5,6],fill:true,backgroundColor:'rgba(88,166,255,0.18)',borderColor:'#58a6ff',pointBackgroundColor:'#58a6ff'}]},options:{plugins:{legend:{labels:{color:'#c9d1d9',font:{size:11}}}},scales:{r:{min:0,max:10,ticks:{color:'#6e7681',backdropColor:'transparent',stepSize:2},grid:{color:'#30363d'},pointLabels:{color:'#c9d1d9',font:{size:12}},angleLines:{color:'#30363d'}}}}});
+function drawCollab(contribs,repoName){
+  const svg=document.getElementById('collab-svg');svg.innerHTML='';const cx=180,cy=130,R=95;
+  svg.innerHTML+=`<circle cx="${cx}" cy="${cy}" r="24" fill="#1f6feb"/><text x="${cx}" y="${cy+3}" text-anchor="middle" fill="#fff" font-size="9">${(repoName||'repo').slice(0,8)}</text>`;
+  const top=(contribs||[]).slice(0,6);if(!top.length){svg.innerHTML+='<text x="180" y="250" text-anchor="middle" fill="#6e7681" font-size="10">（点「实拉分析」用真实贡献者重绘）</text>';return;}
+  const max=top[0].contributions||1;
+  top.forEach((c,i)=>{const a=(-Math.PI/2)+i*(2*Math.PI/top.length),x=cx+Math.cos(a)*R,y=cy+Math.sin(a)*R,rad=Math.max(8,18*(c.contributions/max)),core=i<2;
+    svg.innerHTML+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="${core?'#3fb950':'#30363d'}" stroke-width="${core?2:1}" stroke-dasharray="${core?'':'4'}"/>`;
+    svg.innerHTML+=`<circle cx="${x}" cy="${y}" r="${rad}" fill="${core?'#238636':'#6e7681'}"/><text x="${x}" y="${y+3}" text-anchor="middle" fill="#fff" font-size="9">${(c.name||'?').slice(0,8)}</text><text x="${x}" y="${y+rad+12}" text-anchor="middle" fill="#8b949e" font-size="8">${c.perc||''}</text>`;});
+}
+drawCollab(null);
+async function analyze(){
+  document.getElementById('analyze-status').textContent='⏳ 采集中...';
+  try{
+    const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:getOwner(),repo:getRepo(),token:getToken()})});
+    const d=await r.json();if(!d.ok){document.getElementById('analyze-status').textContent='❌ '+d.error;return;}
+    const s=d.scores;radarChart.data.datasets[0].label=`${d.owner}/${d.repo}${d.is_fork?'（⚠️ fork of '+d.fork_from+'）':''}`;
+    radarChart.data.datasets[0].data=[s.repro,s.activity,s.citation,s.collab];radarChart.update();
+    document.getElementById('analyze-status').innerHTML=`✅ ${d.contributor_count} 贡献者 · ${d.release_count} release · 协议 ${d.license}`;
+    document.getElementById('repo-meta').innerHTML=`${d.is_fork?'⚠️ <b style="color:var(--yellow)">是 fork</b>（引用应指 upstream '+d.fork_from+'）':'✅ 独立仓库'} · 巴士因子 <b style="color:${d.bus_risk==='低'?'var(--green)':d.bus_risk==='中'?'var(--yellow)':'var(--red)'}">${d.bus_factor}%（${d.bus_risk}风险）</b>`;
+    document.getElementById('repro-detail').innerHTML='可复现性 '+s.repro+'/'+d.repro_max+'：'+d.repro_detail.map(x=>x[1]?'✅'+x[0]:'❌'+x[0]).join(' · ');
+    drawCollab(d.contributors,d.name);
+  }catch(e){document.getElementById('analyze-status').textContent='❌ '+e;}
+}
+
+// 初始提示
+appendOut('💡 左侧点分类展开 → 点动词（带 ⚙ 的有参数表单）→ 右侧填参 → ▶运行。','l-muted');
+appendOut('   本地命令（snippet/auth）免 token；公开仓库的 repo/issue 等其实不填 token 也能跑。','l-muted');
+
+// ===== Skill 详情模态框 =====
+async function openSkill(name){
+  const modal=document.getElementById('skill-modal');
+  document.getElementById('skill-modal-title').textContent='📖 gitlink-'+name;
+  const body=document.getElementById('skill-modal-body');body.innerHTML='<p class="text-[#8b949e]">⏳ 加载 SKILL.md...</p>';modal.classList.remove('hidden');
+  try{const r=await fetch('/api/skill?name='+encodeURIComponent(name));const d=await r.json();if(!d.ok){body.innerHTML='<p class="l-err">❌ '+d.error+'</p>';return;}body.innerHTML=marked.parse(d.content);}catch(e){body.innerHTML='<p class="l-err">❌ '+e+'</p>';}
+}
+function closeSkill(){document.getElementById('skill-modal').classList.add('hidden');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSkill();});
+</script>
+
+<div id="skill-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" onclick="closeSkill()" style="background:rgba(0,0,0,.75)">
+  <div class="panel rounded-lg max-w-4xl w-full max-h-[88vh] flex flex-col" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-[var(--border)]">
+      <h3 id="skill-modal-title" class="text-white font-bold text-lg"></h3>
+      <button onclick="closeSkill()" class="text-[#8b949e] hover:text-white text-3xl leading-none">×</button>
+    </div>
+    <div class="p-6 overflow-y-auto text-sm" id="skill-modal-body"></div>
+  </div>
+</div>
+</body>
+</html>

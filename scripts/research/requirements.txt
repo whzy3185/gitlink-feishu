@@ -1,0 +1,6 @@
+# 子赛题四·科研辅助算法层依赖
+# 数据采集/报告/匹配/进度/合规/洞悉 仅用 Python 标准库（subprocess/json/sqlite3/re/datetime），无需第三方库。
+# 实测真正被 import 的第三方库只有以下两个：
+networkx>=3.1          # S2 科研知识图谱构建
+plotly>=5.18           # S6 科研成果可视化（交互 HTML）
+# （如后续 S4 升级为 TF-IDF、S6 改用模板渲染，再按需加 scikit-learn / jinja2）

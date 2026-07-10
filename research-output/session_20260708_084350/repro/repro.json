@@ -1,0 +1,143 @@
+{
+  "scenario": "S3_compliance_reproducibility",
+  "repo": "whale_hihihi/gitlink-cli",
+  "default_branch": "master",
+  "license": "MulanPSL-2.0",
+  "repro_items": [
+    {
+      "name": "CI 配置",
+      "pass": true,
+      "score": 2,
+      "evidence": "检测到 CI 配置: .devops, .gitea, .github"
+    },
+    {
+      "name": "依赖锁文件",
+      "pass": true,
+      "score": 2,
+      "evidence": "存在 lockfile: go.sum"
+    },
+    {
+      "name": "README 复现说明",
+      "pass": true,
+      "score": 2,
+      "evidence": "README 含复现关键词 10 个: install, setup, build, 运行, run"
+    },
+    {
+      "name": "版本 tag",
+      "pass": false,
+      "score": 1,
+      "evidence": "repo_info 无显式 tag 字段（默认分支: master），建议打 tag 固定可复现版本"
+    },
+    {
+      "name": "容器化环境",
+      "pass": true,
+      "score": 2,
+      "evidence": "存在容器配置: Dockerfile"
+    }
+  ],
+  "compliance_items": [
+    {
+      "name": "LICENSE 文件",
+      "pass": true,
+      "score": 2,
+      "evidence": "LICENSE 声明为 MulanPSL-2.0"
+    },
+    {
+      "name": "安全策略 SECURITY.md",
+      "pass": false,
+      "score": 0,
+      "evidence": "缺少 SECURITY.md，无安全披露流程"
+    },
+    {
+      "name": "版权声明",
+      "pass": true,
+      "score": 2,
+      "evidence": "LICENSE/README 中含 copyright/版权 声明"
+    },
+    {
+      "name": "依赖清单声明",
+      "pass": true,
+      "score": 2,
+      "evidence": "存在依赖管理文件（建议核对各依赖许可证兼容性）"
+    },
+    {
+      "name": "贡献指南",
+      "pass": false,
+      "score": 1,
+      "evidence": "缺少 CONTRIBUTING.md"
+    }
+  ],
+  "privacy_items": [
+    {
+      "name": "数据目录入库",
+      "pass": true,
+      "score": 2,
+      "evidence": "未发现 data/ 目录入库"
+    },
+    {
+      "name": ".env 入库",
+      "pass": true,
+      "score": 2,
+      "evidence": ".env 未入库"
+    },
+    {
+      "name": ".gitignore 忽略 .env",
+      "pass": false,
+      "score": 1,
+      "evidence": ".gitignore 未忽略 .env（建议添加 .env）"
+    }
+  ],
+  "secrets": [],
+  "risks": [
+    {
+      "area": "privacy",
+      "name": "数据隐私",
+      "evidence": ".gitignore 未忽略 .env（预防性建议）",
+      "level": "high"
+    },
+    {
+      "area": "repro/compliance",
+      "name": "版本 tag",
+      "evidence": "repo_info 无显式 tag 字段（默认分支: master），建议打 tag 固定可复现版本",
+      "level": "medium"
+    },
+    {
+      "area": "repro/compliance",
+      "name": "安全策略 SECURITY.md",
+      "evidence": "缺少 SECURITY.md，无安全披露流程",
+      "level": "medium"
+    },
+    {
+      "area": "repro/compliance",
+      "name": "贡献指南",
+      "evidence": "缺少 CONTRIBUTING.md",
+      "level": "medium"
+    },
+    {
+      "area": "repro/compliance",
+      "name": ".gitignore 忽略 .env",
+      "evidence": ".gitignore 未忽略 .env（建议添加 .env）",
+      "level": "medium"
+    }
+  ],
+  "repro_score": 9.0,
+  "compliance_score": 7.5,
+  "meta": {
+    "key_files_found": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "go.mod"
+    ],
+    "tree_size": 31,
+    "languages": {
+      "Dockerfile": "0.1%",
+      "Go": "60.5%",
+      "HTML": "8.2%",
+      "JavaScript": "1.9%",
+      "Mermaid": "3.7%",
+      "Python": "22.4%",
+      "Shell": "3.2%"
+    }
+  }
+}

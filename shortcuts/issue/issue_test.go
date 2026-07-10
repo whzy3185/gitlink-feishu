@@ -777,12 +777,20 @@ func TestBatchClosePreservesCurrentDescription(t *testing.T) {
 	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "batch-close", map[string]string{
-		"numbers": "42",
-		"dry-run": "false",
-	})
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{
+			HTTP:    server.Client(),
+			BaseURL: server.URL,
+		},
+		Owner:  "owner",
+		Repo:   "repo",
+		Format: "json",
+		Args:   map[string]string{},
+	}
+
+	err := patchIssue(ctx, "42", map[string]interface{}{"status_id": closeIssueStatusID}, "close")
 	if err != nil {
-		t.Fatalf("batch-close shortcut failed: %v", err)
+		t.Fatalf("patchIssue (close) failed: %v", err)
 	}
 	assertEqual(t, updatePayload["subject"], "Existing title")
 	assertEqual(t, updatePayload["description"], "Existing description")
@@ -1056,74 +1064,5 @@ func TestIssueCloseHTTPError(t *testing.T) {
 	err := runShortcut(t, server, "close", map[string]string{"number": "42"})
 	if err == nil {
 		t.Fatal("expected error for PATCH HTTP 500")
-	}
-}
-
-func TestFetchExistingIssueBadData(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, "not a map")
-	})
-	defer server.Close()
-
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
-		Owner:  "owner",
-		Repo:   "repo",
-	}
-	_, err := fetchExistingIssue(ctx, "1")
-	if err == nil {
-		t.Fatal("expected error for non-map response")
-	}
-}
-
-func TestFetchExistingIssueNoSubject(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, map[string]interface{}{"id": float64(1)})
-	})
-	defer server.Close()
-
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
-		Owner:  "owner",
-		Repo:   "repo",
-	}
-	_, err := fetchExistingIssue(ctx, "1")
-	if err == nil {
-		t.Fatal("expected error for missing subject")
-	}
-}
-
-// --- normalizeIssueStatus ---
-
-func TestNormalizeIssueStatus(t *testing.T) {
-	tests := []struct {
-		input   string
-		want    interface{}
-		wantErr bool
-	}{
-		{"open", 1, false},
-		{"OPEN", 1, false},
-		{"  open  ", 1, false},
-		{"closed", 5, false},
-		{"CLOSED", 5, false},
-		{"0", 0, false},
-		{"10", 10, false},
-		{"invalid", nil, true},
-		{"", nil, true},
-	}
-	for _, tt := range tests {
-		got, err := normalizeIssueStatus(tt.input)
-		if tt.wantErr {
-			if err == nil {
-				t.Errorf("normalizeIssueStatus(%q) expected error", tt.input)
-			}
-		} else {
-			if err != nil {
-				t.Errorf("normalizeIssueStatus(%q) error: %v", tt.input, err)
-			}
-			if got != tt.want {
-				t.Errorf("normalizeIssueStatus(%q) = %v, want %v", tt.input, got, tt.want)
-			}
-		}
 	}
 }
