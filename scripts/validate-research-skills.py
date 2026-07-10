@@ -98,6 +98,12 @@ def validate_skill(root: Path, name: str, spec: dict[str, list[str]]) -> None:
 
     if frontmatter.get("name") != name:
         fail(f"{skill_md} 的 name 字段错误：{frontmatter.get('name')}")
+    if not re.fullmatch(r"\d+\.\d+\.\d+", frontmatter.get("version", "")):
+        fail(f"{skill_md} 的 version 必须使用 x.y.z 格式")
+    if "gitlink-cli" not in frontmatter.get("bins", ""):
+        fail(f"{skill_md} 的 metadata.requires.bins 缺少 gitlink-cli")
+    if not frontmatter.get("cliHelp", "").startswith("gitlink-cli "):
+        fail(f"{skill_md} 的 cliHelp 必须以 gitlink-cli 开头")
     description = frontmatter.get("description", "")
     if len(description) < 30:
         fail(f"{skill_md} 的 description 过短")

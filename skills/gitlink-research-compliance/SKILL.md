@@ -1,6 +1,11 @@
 ---
 name: gitlink-research-compliance
+version: 0.1.0
 description: "科研开源合规与敏感风险检查：审计 GitLink 科研仓库的许可证、SECURITY、CONTRIBUTING、依赖声明和敏感文件风险。用于开源发布前预检查、论文代码发布合规清单和整改建议。"
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli repo --help"
 ---
 
 # gitlink-research-compliance
@@ -74,4 +79,3 @@ gitlink-cli api GET /<owner>/<repo>/sub_entries --query 'filepath=&ref=<branch>'
 - 不要下载或展示疑似密钥内容，只报告路径和风险类型。
 - 如果只能获取根目录文件树，报告必须说明深层敏感文件未覆盖。
 - 私有仓库需要用户自行完成认证，不能要求用户粘贴 Token。
-

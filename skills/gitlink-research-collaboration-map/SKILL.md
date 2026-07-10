@@ -1,6 +1,11 @@
 ---
 name: gitlink-research-collaboration-map
+version: 0.1.0
 description: "科研协作画像与合作建议：分析 GitLink 科研仓库的贡献者、Issue、PR、语言和用户信息，识别核心维护者、潜在协作者、未响应研究问题和协作分工建议。用于课题组协作复盘、跨团队合作匹配和学生贡献画像。"
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli repo --help"
 ---
 
 # gitlink-research-collaboration-map

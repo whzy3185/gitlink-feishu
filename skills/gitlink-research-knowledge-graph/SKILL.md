@@ -1,6 +1,11 @@
 ---
 name: gitlink-research-knowledge-graph
+version: 0.1.0
 description: "科研热点追踪与轻量知识图谱：按关键词搜索 GitLink 科研仓库，聚合仓库、语言、贡献者、Issue/PR 主题和研究方向，输出趋势分析、图谱节点边和选题建议。用于科研选题、技术生态调研和领域知识图谱构建。"
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli search --help"
 ---
 
 # gitlink-research-knowledge-graph

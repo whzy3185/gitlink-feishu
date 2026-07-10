@@ -1,6 +1,11 @@
 ---
 name: gitlink-research-reproducibility
+version: 0.1.0
 description: "科研仓库复现性审计：检查 GitLink 科研、论文复现、实验代码仓库是否具备 README、LICENSE、依赖清单、测试入口、CI、示例和数据/实验说明。用于生成复现性评分、缺失项和整改建议。"
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli repo --help"
 ---
 
 # gitlink-research-reproducibility
@@ -87,4 +92,3 @@ gitlink-cli repo +tree --owner <owner> --repo <repo> --path docs --ref <branch> 
 - 复现性评分是工程辅助判断，不等同于论文质量评价。
 - GitLink 平台 API 可能返回字段差异，缺失字段时用“未知”而不是编造。
 - 如果仓库是镜像仓库，需标注 GitLink 内协作数据可能不代表原平台活跃度。
-

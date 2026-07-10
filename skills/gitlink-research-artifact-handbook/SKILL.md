@@ -1,6 +1,11 @@
 ---
 name: gitlink-research-artifact-handbook
+version: 0.1.0
 description: "科研成果沉淀手册生成：基于 GitLink 仓库 README、目录结构、Release、Issue、PR、贡献者和语言信息，生成面向答辩、开源发布或课题组交接的科研成果手册。用于梳理代码、实验、论文、数据、贡献和复现入口。"
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli repo --help"
 ---
 
 # gitlink-research-artifact-handbook
@@ -70,4 +75,3 @@ gitlink-cli release +list --owner <owner> --repo <repo> --format json
 - 对 Issue/PR 只做摘要，不贴完整讨论。
 - 如果仓库没有 Release，建议使用 Release 固化阶段成果。
 - 如果根目录 README 已完整，保留其结构并补交接清单；如果 README 很弱，按模板重建手册。
-

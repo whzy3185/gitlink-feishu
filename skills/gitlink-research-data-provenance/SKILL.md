@@ -1,6 +1,11 @@
 ---
 name: gitlink-research-data-provenance
+version: 0.1.0
 description: "科研数据来源与隐私审计：检查 GitLink 科研仓库中的数据集说明、下载来源、引用链、隐私风险、数据许可证和大文件痕迹。用于论文代码发布前的数据治理、复现实验数据说明和科研合规预审。"
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli repo --help"
 ---
 
 # gitlink-research-data-provenance
@@ -76,4 +81,3 @@ gitlink-cli repo +tree --owner <owner> --repo <repo> --path docs --ref <branch> 
 - 发现 `patient`、`student`、`email`、`phone`、`idcard`、`address`、`face`、`medical` 等词时，标注隐私复核风险。
 - 如果仓库只包含数据下载脚本，检查脚本是否说明下载地址、数据许可证和引用方式。
 - 无法确认的事项标注“未确认”，不要编造数据来源。
-

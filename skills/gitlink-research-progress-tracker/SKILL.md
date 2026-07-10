@@ -1,6 +1,11 @@
 ---
 name: gitlink-research-progress-tracker
+version: 0.1.0
 description: "科研项目进度跟踪与预警：基于 GitLink Issue、PR、Release、贡献者和仓库更新时间生成课题组周报、停滞风险、开放问题队列和下一步建议。用于科研项目管理、中期检查和例会汇报。"
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli issue --help"
 ---
 
 # gitlink-research-progress-tracker
