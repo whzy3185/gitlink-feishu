@@ -2,9 +2,9 @@ package pr
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -18,7 +18,7 @@ func TestPRCommentPostsToCorrectIssueJournal(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/owner/repo/pulls/13.json":
-			writeJSON(t, w, map[string]interface{}{
+			common.WriteJSON(t, w, map[string]interface{}{
 				"issue": map[string]interface{}{
 					"id":      float64(142301),
 					"subject": "test PR",
@@ -29,8 +29,8 @@ func TestPRCommentPostsToCorrectIssueJournal(t *testing.T) {
 			})
 		case r.Method == "POST" && r.URL.Path == "/v1/owner/repo/issues/142301/journals.json":
 			journalPath = r.URL.Path
-			journalPayload = decodeJSON(t, r)
-			writeJSON(t, w, map[string]interface{}{
+			journalPayload = common.DecodeJSON(t, r)
+			common.WriteJSON(t, w, map[string]interface{}{
 				"id":      float64(12345),
 				"message": "评论成功",
 			})
@@ -51,13 +51,13 @@ func TestPRCommentPostsToCorrectIssueJournal(t *testing.T) {
 	if journalPath == "" {
 		t.Fatal("journal endpoint was not called")
 	}
-	assertEqual(t, journalPayload["notes"], "LGTM, looks good!")
+	common.AssertEqual(t, journalPayload["notes"], "LGTM, looks good!")
 }
 
 func TestPRCommentFailsWhenPRNotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		writeJSON(t, w, map[string]interface{}{
+		common.WriteJSON(t, w, map[string]interface{}{
 			"status": 404,
 			"error":  "Not Found",
 		})
@@ -75,7 +75,7 @@ func TestPRCommentFailsWhenPRNotFound(t *testing.T) {
 
 func TestPRCommentFailsWhenIssueFieldMissing(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, map[string]interface{}{
+		common.WriteJSON(t, w, map[string]interface{}{
 			"pull_request": map[string]interface{}{
 				"id": float64(14791),
 			},
@@ -508,6 +508,182 @@ func findPRShortcut(t *testing.T, name string) *common.Shortcut {
 	return nil
 }
 
+// --- Review tests (from master) ---
+
+func TestPRReviewsList(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/v1/owner/repo/pulls/13/reviews.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"total_count": 1,
+				"reviews": []interface{}{
+					map[string]interface{}{
+						"id":      float64(1),
+						"content": "LGTM",
+						"status":  "approved",
+					},
+				},
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "reviews", map[string]string{
+		"id": "13",
+	})
+	if err != nil {
+		t.Fatalf("reviews list failed: %v", err)
+	}
+}
+
+func TestPRReviewCreate(t *testing.T) {
+	var reviewPayload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/v1/owner/repo/pulls/13/reviews.json" {
+			reviewPayload = common.DecodeJSON(t, r)
+			common.WriteJSON(t, w, map[string]interface{}{
+				"id":      float64(2),
+				"content": "Looks good",
+				"status":  "approved",
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review", map[string]string{
+		"id":     "13",
+		"body":   "Looks good",
+		"status": "approved",
+	})
+	if err != nil {
+		t.Fatalf("review create failed: %v", err)
+	}
+
+	common.AssertEqual(t, reviewPayload["content"], "Looks good")
+	common.AssertEqual(t, reviewPayload["status"], "approved")
+}
+
+// --- Diff tests ---
+
+func TestPRDiffWithFileFilter(t *testing.T) {
+	var requestPath string
+	var requestQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestPath = r.URL.Path
+		requestQuery = r.URL.RawQuery
+		common.WriteJSON(t, w, []interface{}{
+			map[string]interface{}{"filename": "src/main.go", "patch": "@@ -1 +1 @@"},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "diff", map[string]string{
+		"id":   "42",
+		"file": "src/main.go",
+	})
+	if err != nil {
+		t.Fatalf("diff with file filter failed: %v", err)
+	}
+
+	if requestPath != "/owner/repo/pulls/42/files.json" {
+		t.Fatalf("unexpected path: %s", requestPath)
+	}
+	if !strings.Contains(requestQuery, "filepath=src") {
+		t.Errorf("expected filepath query param, got: %s", requestQuery)
+	}
+}
+
+func TestPRCheckMergePostsCorrectPayload(t *testing.T) {
+	var requestMethod string
+	var requestPath string
+	var checkPayload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestMethod = r.Method
+		requestPath = r.URL.Path
+		if r.Body != nil {
+			checkPayload = common.DecodeJSON(t, r)
+		}
+		common.WriteJSON(t, w, map[string]interface{}{
+			"can_merge": true,
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "check-merge", map[string]string{
+		"head": "feature-branch",
+		"base": "master",
+	})
+	if err != nil {
+		t.Fatalf("check-merge shortcut failed: %v", err)
+	}
+
+	common.AssertEqual(t, requestMethod, "POST")
+	common.AssertEqual(t, requestPath, "/owner/repo/pulls/check_can_merge.json")
+	common.AssertEqual(t, checkPayload["head"], "feature-branch")
+	common.AssertEqual(t, checkPayload["base"], "master")
+}
+
+func TestPRBranchesList(t *testing.T) {
+	var requestMethod string
+	var requestPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestMethod = r.Method
+		requestPath = r.URL.Path
+		common.WriteJSON(t, w, map[string]interface{}{
+			"branches": []interface{}{
+				"master",
+				"develop",
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "branches", map[string]string{})
+	if err != nil {
+		t.Fatalf("branches shortcut failed: %v", err)
+	}
+
+	common.AssertEqual(t, requestMethod, "GET")
+	common.AssertEqual(t, requestPath, "/owner/repo/pulls/get_branches.json")
+}
+
+func TestPRDiffFailsWhenPRNotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		common.WriteJSON(t, w, map[string]interface{}{
+			"status": float64(404),
+			"error":  "Not Found",
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "diff", map[string]string{
+		"id": "999",
+	})
+	if err == nil {
+		t.Fatal("expected error for non-existent PR, got nil")
+	}
+}
+
+// writeJSON is a thin local alias used by the upstream-merged PR tests; it
+// delegates to common.WriteJSON to avoid a second copy of the implementation.
+func writeJSON(t *testing.T, w http.ResponseWriter, payload interface{}) {
+	t.Helper()
+	common.WriteJSON(t, w, payload)
+}
+
+// assertEqual is a thin local alias used by the upstream-merged PR tests; it
+// delegates to common.AssertEqual.
+func assertEqual(t *testing.T, got interface{}, want interface{}) {
+	t.Helper()
+	common.AssertEqual(t, got, want)
+}
+
+// decodeJSON decodes an HTTP request body into a map; used by the
+// upstream-merged PR tests that assert on request payloads.
 func decodeJSON(t *testing.T, r *http.Request) map[string]interface{} {
 	t.Helper()
 	var payload map[string]interface{}
@@ -515,19 +691,4 @@ func decodeJSON(t *testing.T, r *http.Request) map[string]interface{} {
 		t.Fatalf("failed to decode request body: %v", err)
 	}
 	return payload
-}
-
-func writeJSON(t *testing.T, w http.ResponseWriter, payload interface{}) {
-	t.Helper()
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		t.Fatalf("failed to write response: %v", err)
-	}
-}
-
-func assertEqual(t *testing.T, got interface{}, want interface{}) {
-	t.Helper()
-	if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", want) {
-		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
-	}
 }

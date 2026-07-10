@@ -24,6 +24,9 @@ metadata:
 | `ci +logs` | 构建日志 | 是 |
 | `ci +restart` | 重启构建 | 是 |
 | `ci +stop` | 停止构建 | 是 |
+| `ci +enable` | 启用 CI | 是 |
+| `ci +disable` | 停用 CI | 是 |
+| `ci +authorize` | CI 授权状态 | 是 |
 
 ## 使用示例
 
@@ -39,17 +42,18 @@ gitlink-cli ci +restart --build 42
 
 # 停止构建
 gitlink-cli ci +stop --build 42
-```
 
-## Raw API 补充
-
-```bash
-# 激活 CI
-gitlink-cli api POST /:owner/:repo/activate
+# 启用 CI（需先配置 .gitlink-ci.yml 流水线文件）
+gitlink-cli ci +enable --owner myuser --repo myrepo
 
 # 停用 CI
-gitlink-cli api DELETE /:owner/:repo/deactivate
+gitlink-cli ci +disable --owner myuser --repo myrepo
 
-# CI 授权状态
-gitlink-cli api GET /:owner/:repo/ci_authorize
+# 查看 CI 授权状态
+gitlink-cli ci +authorize --owner myuser --repo myrepo
 ```
+
+## 注意事项
+
+- `ci +enable` 需要仓库已配置 `.gitlink-ci.yml` 流水线文件，否则返回 -1
+- 构建操作需要仓库已启用 CI，可通过 `ci +authorize` 查看状态

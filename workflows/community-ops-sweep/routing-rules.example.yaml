@@ -1,0 +1,37 @@
+# 路由规则（R2 owner 建议 + 可选 auto_assign）
+
+# rules：首次命中生效，顺序即优先级
+# 默认用途：R2 建议 owner 的依据（LLM 参考 + 确定性兜底）
+# auto_assign: true → 该规则命中的 issue 自动指派（内部团队仓，opt-in）
+
+rules:
+  - match:
+      labels: [bug]
+      any_keyword: [auth, 认证, 登录, token, oauth, session]
+    assigner: auth-owner
+    auto_assign: false
+
+  - match:
+      labels: [bug]
+      any_keyword: [ci, build, 构建, pipeline, deploy]
+    assigner: ci-owner
+    auto_assign: false
+
+  - match:
+      labels: [docs]
+    assigner: doc-maintainer
+    auto_assign: false
+
+  - match:
+      labels: [enhancement, feature]
+    assigner: product-owner
+    auto_assign: false
+
+  - match:
+      labels: [security]
+    assigner: security-team
+    auto_assign: false
+
+# 所有未命中规则 → 兜底
+default_assigner: maintainer
+auto_assign: false

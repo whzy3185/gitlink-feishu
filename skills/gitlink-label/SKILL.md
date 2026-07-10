@@ -1,72 +1,42 @@
 ---
 name: gitlink-label
 version: 1.0.0
-description: "Issue label management: list, create, update, and delete GitLink issue labels (项目标记). Triggered when a user needs to manage labels, set up a triage taxonomy, or tag issues."
+description: "标签管理：列出、创建、删除 Issue 标签。当用户需要管理 GitLink 项目标签时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
   cliHelp: "gitlink-cli label --help"
 ---
 
-# gitlink-label
+# gitlink-label（标签操作）
 
-**CRITICAL**: Read [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md) before starting. It covers authentication, permissions, global flags, and GitLink API behavior.
-**CRITICAL**: Confirm user intent before running write or destructive operations such as `+create`, `+update`, or `+delete`.
-**CRITICAL**: Use `gitlink-cli` for GitLink resources. Do not use GitHub-only tools such as `gh`.
+**CRITICAL — 开始前必须先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)，其中包含认证、权限处理和 API 注意事项。**
+**CRITICAL — 所有 Shortcuts 在执行写入/删除操作前，务必先确认用户意图。**
 
 ## Shortcuts
 
-| Shortcut | Description | Operation |
-|----------|-------------|-----------|
-| `label +list` | List issue labels | Read |
-| `label +create` | Create an issue label | Write |
-| `label +update` | Update a label, preserving unspecified fields | Write |
-| `label +delete` | Delete an issue label | Destructive |
+| Shortcut | 说明 |
+|----------|------|
+| `label +list` | 列出标签 |
+| `label +create` | 创建标签 |
+| `label +delete` | 删除标签 |
 
-## Examples
+## 使用示例
 
 ```bash
-# List all labels
+# 列出标签
 gitlink-cli label +list --owner Gitlink --repo forgeplus
 
-# Filter labels by keyword, sorted by issue count
-gitlink-cli label +list --owner Gitlink --repo forgeplus -k bug --sort-by issues_count --sort-direction desc
+# 创建标签
+gitlink-cli label +create --owner Gitlink --repo forgeplus --name bug --color "#FF0000" --description "Bug report"
 
-# Create a label (color defaults to #1E90FF when omitted)
-gitlink-cli label +create --owner Gitlink --repo forgeplus -n bug -d "Something is broken" -c "#FF0000"
-
-# Update only the color; name and description are preserved
-gitlink-cli label +update --owner Gitlink --repo forgeplus -i 42 -c "#00FF00"
-
-# Delete a label
-gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
+# 删除标签（使用 label ID）
+gitlink-cli label +delete --owner Gitlink --repo forgeplus --id 3
 ```
 
-## Parameters
+## API 注意事项
 
-| Command | Key parameters |
-|---------|----------------|
-| `+list` | `--keyword`, `--only-name`, `--sort-by` (updated_on / created_on / issues_count), `--sort-direction` (asc / desc) |
-| `+create` | `--name` (required), `--description`, `--color` (hex, default `#1E90FF`) |
-| `+update` | `--id` (required) plus at least one of `--name`, `--description`, `--color` |
-| `+delete` | `--id` (required) |
-
-## API Notes
-
-- Labels map to the GitLink "项目标记" / `issue_tags` API: `/api/v1/{owner}/{repo}/issue_tags`.
-- `--color` must be a hex value (`#RGB` or `#RRGGBB`); it is validated client-side before the API call.
-- `+update` first fetches the label's current values from the list endpoint and merges the requested changes, so fields you do not pass are preserved (the API requires `name`, `description`, and `color` together).
-- To attach a label to an issue, pass its id via the issue update API field `issue_tag_ids` (see `gitlink-issue`); use `label +list --only-name true` to resolve label ids quickly.
-
-## Typical workflow: bootstrap a triage taxonomy
-
-```bash
-# Create a consistent label set for issue triage
-gitlink-cli label +create -n bug         -c "#D73A4A" -d "Confirmed defect"
-gitlink-cli label +create -n enhancement -c "#A2EEEF" -d "Feature request"
-gitlink-cli label +create -n question     -c "#D876E3" -d "Needs clarification"
-gitlink-cli label +create -n security     -c "#B60205" -d "Security-sensitive"
-
-# Verify the taxonomy
-gitlink-cli label +list --only-name true --format json
-```
+- 标签使用 v1 API：`/v1/{owner}/{repo}/issue_tags`
+- 创建标签时 color 为可选参数，格式为十六进制颜色值（如 `#FF0000`）
+- 删除标签需要标签 ID，可通过 `label +list` 获取
+- `label +list` 支持排序：`--order-by`（updated_on/created_on/issues_count）和 `--order-direction`（asc/desc）

@@ -1,0 +1,148 @@
+{
+  "scenario": "S3_compliance_reproducibility",
+  "repo": "caoweiqiong/zwf",
+  "default_branch": "master",
+  "license": "None",
+  "repro_items": [
+    {
+      "name": "CI 配置",
+      "pass": false,
+      "score": 0,
+      "evidence": "未找到 .gitea/.github/.gitlab 等 CI 配置"
+    },
+    {
+      "name": "依赖锁文件",
+      "pass": true,
+      "score": 2,
+      "evidence": "存在 lockfile: package-lock.json"
+    },
+    {
+      "name": "README 复现说明",
+      "pass": true,
+      "score": 2,
+      "evidence": "README 含复现关键词 11 个: install, 环境, 依赖, build, 构建"
+    },
+    {
+      "name": "版本 tag",
+      "pass": false,
+      "score": 1,
+      "evidence": "repo_info 无显式 tag 字段（默认分支: master），建议打 tag 固定可复现版本"
+    },
+    {
+      "name": "容器化环境",
+      "pass": true,
+      "score": 2,
+      "evidence": "存在容器配置: docker-compose.yml"
+    }
+  ],
+  "compliance_items": [
+    {
+      "name": "LICENSE 文件",
+      "pass": false,
+      "score": 0,
+      "evidence": "缺少 LICENSE 文件"
+    },
+    {
+      "name": "安全策略 SECURITY.md",
+      "pass": false,
+      "score": 0,
+      "evidence": "缺少 SECURITY.md，无安全披露流程"
+    },
+    {
+      "name": "版权声明",
+      "pass": false,
+      "score": 1,
+      "evidence": "未在 LICENSE/README 中发现版权声明（建议源文件头补 Copyright 注释）"
+    },
+    {
+      "name": "依赖清单声明",
+      "pass": true,
+      "score": 2,
+      "evidence": "存在依赖管理文件（建议核对各依赖许可证兼容性）"
+    },
+    {
+      "name": "贡献指南",
+      "pass": false,
+      "score": 1,
+      "evidence": "缺少 CONTRIBUTING.md"
+    }
+  ],
+  "privacy_items": [
+    {
+      "name": "数据目录入库",
+      "pass": true,
+      "score": 2,
+      "evidence": "未发现 data/ 目录入库"
+    },
+    {
+      "name": ".env 入库",
+      "pass": true,
+      "score": 2,
+      "evidence": ".env 未入库"
+    },
+    {
+      "name": ".gitignore 忽略 .env",
+      "pass": true,
+      "score": 2,
+      "evidence": ".gitignore 已配置忽略 .env"
+    }
+  ],
+  "secrets": [],
+  "risks": [
+    {
+      "area": "repro/compliance",
+      "name": "CI 配置",
+      "evidence": "未找到 .gitea/.github/.gitlab 等 CI 配置",
+      "level": "medium"
+    },
+    {
+      "area": "repro/compliance",
+      "name": "版本 tag",
+      "evidence": "repo_info 无显式 tag 字段（默认分支: master），建议打 tag 固定可复现版本",
+      "level": "medium"
+    },
+    {
+      "area": "repro/compliance",
+      "name": "LICENSE 文件",
+      "evidence": "缺少 LICENSE 文件",
+      "level": "medium"
+    },
+    {
+      "area": "repro/compliance",
+      "name": "安全策略 SECURITY.md",
+      "evidence": "缺少 SECURITY.md，无安全披露流程",
+      "level": "medium"
+    },
+    {
+      "area": "repro/compliance",
+      "name": "版权声明",
+      "evidence": "未在 LICENSE/README 中发现版权声明（建议源文件头补 Copyright 注释）",
+      "level": "medium"
+    },
+    {
+      "area": "repro/compliance",
+      "name": "贡献指南",
+      "evidence": "缺少 CONTRIBUTING.md",
+      "level": "medium"
+    }
+  ],
+  "repro_score": 7.0,
+  "compliance_score": 6.2,
+  "meta": {
+    "key_files_found": [
+      ".gitignore",
+      "README.md",
+      "package.json"
+    ],
+    "tree_size": 22,
+    "languages": {
+      "Batchfile": "0.2%",
+      "CSS": "3.4%",
+      "HTML": "29.2%",
+      "JavaScript": "1.6%",
+      "Python": "21.1%",
+      "Shell": "0.7%",
+      "TypeScript": "43.8%"
+    }
+  }
+}

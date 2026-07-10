@@ -1,0 +1,56 @@
+{
+  "scenario": "S5_progress_tracking",
+  "repo": "caoweiqiong/zwf",
+  "generated_at": "2026-07-07T12:39:04.575941+00:00",
+  "week_stats": {
+    "this_week": {
+      "commits": 12,
+      "issues_opened": 0,
+      "issues_closed": 0,
+      "issues_stale": 0,
+      "prs_opened": 0,
+      "prs_merged": 0,
+      "prs_open_stale": 0,
+      "contributors_active": 4,
+      "contributors_active_logins": [
+        "Dev",
+        "HUSTER42",
+        "LegendC",
+        "whale"
+      ]
+    },
+    "last_week": {
+      "commits": 0,
+      "issues_opened": 0,
+      "issues_closed": 0,
+      "issues_stale": 0,
+      "prs_opened": 0,
+      "prs_merged": 0,
+      "prs_open_stale": 0,
+      "contributors_active": 0,
+      "contributors_active_logins": []
+    },
+    "window": {
+      "this_week_start": "2026-06-30T12:39:04.575941+00:00",
+      "now": "2026-07-07T12:39:04.575941+00:00",
+      "last_week_start": "2026-06-23T12:39:04.575941+00:00",
+      "last_week_end": "2026-06-30T12:39:04.575941+00:00"
+    },
+    "total_contributors": 4
+  },
+  "trend": {
+    "commit_delta_pct": 100.0,
+    "activity_level": "increasing",
+    "this_week_commits": 12,
+    "last_week_commits": 0
+  },
+  "milestones": [],
+  "risk_warnings": [],
+  "meta": {
+    "commits_fetched": 30,
+    "issues_fetched": 0,
+    "prs_fetched": 0,
+    "milestones_fetched": 0,
+    "contributors_fetched": 4
+  }
+}

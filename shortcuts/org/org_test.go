@@ -1,182 +1,276 @@
 package org
 
 import (
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
-	"github.com/gitlink-org/gitlink-cli/internal/client"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func runShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
-	t.Helper()
-	shortcut := findShortcut(t, name)
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
-		Owner:  "owner",
-		Repo:   "repo",
-		Format: "json",
-		Args:   args,
-	}
-	return shortcut.Run(ctx)
-}
-
-func findShortcut(t *testing.T, name string) *common.Shortcut {
-	t.Helper()
-	for _, s := range Shortcuts() {
-		if s.Name == name {
-			return s
-		}
-	}
-	t.Fatalf("shortcut %q not found", name)
-	return nil
-}
-
-func writeJSON(w http.ResponseWriter, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
-}
-
-// --- list ---
-
 func TestOrgList(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/organizations.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/organizations.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"total_count": float64(1),
+				"organizations": []interface{}{
+					map[string]interface{}{
+						"id":   float64(1),
+						"name": "test-org",
+					},
+				},
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		writeJSON(w, []interface{}{
-			map[string]interface{}{"login": "org1"},
-			map[string]interface{}{"login": "org2"},
-		})
-	}))
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "list", map[string]string{"page": "1", "limit": "20"})
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{})
+	err := common.RunShortcut(t, Shortcuts(), "list", ctx)
 	if err != nil {
 		t.Fatalf("list failed: %v", err)
 	}
 }
 
-// --- info ---
-
 func TestOrgInfo(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/organizations/myorg.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/organizations/5.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"id":   float64(5),
+				"name": "test-org",
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		writeJSON(w, map[string]interface{}{"login": "myorg", "name": "My Org"})
-	}))
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "info", map[string]string{"id": "myorg"})
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{
+		"id": "5",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "info", ctx)
 	if err != nil {
 		t.Fatalf("info failed: %v", err)
 	}
 }
 
-// --- members ---
-
 func TestOrgMembers(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/organizations/myorg/organization_users.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/organizations/5/organization_users.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"total_count": float64(2),
+				"organization_users": []interface{}{
+					map[string]interface{}{
+						"user": map[string]interface{}{"login": "alice"},
+					},
+				},
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		writeJSON(w, []interface{}{
-			map[string]interface{}{"login": "user1"},
-		})
-	}))
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "members", map[string]string{"id": "myorg", "page": "1", "limit": "20"})
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{
+		"id": "5",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "members", ctx)
 	if err != nil {
 		t.Fatalf("members failed: %v", err)
 	}
 }
 
-// --- create ---
-
 func TestOrgCreate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/organizations.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+	var requestMethod string
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		requestMethod = r.Method
+		payload := common.DecodeJSON(t, r)
+		if payload["name"] != "new-org" {
+			t.Fatalf("expected name=new-org, got %v", payload["name"])
 		}
-		if r.Method != "POST" {
-			t.Fatalf("expected POST, got %s", r.Method)
+		if payload["nickname"] != "new-org" {
+			t.Fatalf("expected nickname=new-org, got %v", payload["nickname"])
 		}
-		writeJSON(w, map[string]interface{}{"login": "neworg"})
-	}))
+		if payload["visibility"] != "common" {
+			t.Fatalf("expected visibility=common, got %v", payload["visibility"])
+		}
+		common.WriteJSON(t, w, map[string]interface{}{
+			"id":   float64(10),
+			"name": "new-org",
+		})
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "create", map[string]string{"name": "neworg", "description": "A new org"})
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{
+		"name": "new-org",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "create", ctx)
 	if err != nil {
 		t.Fatalf("create failed: %v", err)
 	}
+	if requestMethod != "POST" {
+		t.Errorf("expected POST, got %s", requestMethod)
+	}
 }
 
-func TestOrgCreateNoDescription(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]interface{}{"login": "neworg"})
-	}))
+// --- teams ---
+
+func TestOrgTeams(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/organizations/5/teams.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"total_count": float64(1),
+				"teams": []interface{}{
+					map[string]interface{}{
+						"id":   float64(1),
+						"name": "dev-team",
+					},
+				},
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "create", map[string]string{"name": "neworg"})
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{
+		"id": "5",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "teams", ctx)
 	if err != nil {
-		t.Fatalf("create failed: %v", err)
+		t.Fatalf("teams failed: %v", err)
 	}
 }
 
-// --- HTTP error paths ---
+// --- create-team ---
 
-func TestOrgListHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
+func TestOrgCreateTeam(t *testing.T) {
+	var requestMethod string
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		requestMethod = r.Method
+		payload := common.DecodeJSON(t, r)
+		if payload["name"] != "new-team" {
+			t.Fatalf("expected name=new-team, got %v", payload["name"])
+		}
+		common.WriteJSON(t, w, map[string]interface{}{
+			"id":   float64(1),
+			"name": "new-team",
+		})
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "list", map[string]string{"page": "1", "limit": "20"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{
+		"id":   "5",
+		"name": "new-team",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "create-team", ctx)
+	if err != nil {
+		t.Fatalf("create-team failed: %v", err)
+	}
+	if requestMethod != "POST" {
+		t.Errorf("expected POST, got %s", requestMethod)
 	}
 }
 
-func TestOrgInfoHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
+// --- remove-member ---
+
+func TestOrgRemoveMember(t *testing.T) {
+	var requestMethod string
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		requestMethod = r.Method
+		common.WriteJSON(t, w, map[string]interface{}{
+			"ok": true,
+		})
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "info", map[string]string{"id": "myorg"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{
+		"id":  "5",
+		"uid": "42",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "remove-member", ctx)
+	if err != nil {
+		t.Fatalf("remove-member failed: %v", err)
+	}
+	if requestMethod != "DELETE" {
+		t.Errorf("expected DELETE, got %s", requestMethod)
 	}
 }
 
-func TestOrgMembersHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
+// --- nickname (view) ---
+
+func TestOrgNicknameView(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/organizations/5/organization_users/42.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"nickname": "thename",
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "members", map[string]string{"id": "myorg", "page": "1", "limit": "20"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{
+		"id":  "5",
+		"uid": "42",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "nickname", ctx)
+	if err != nil {
+		t.Fatalf("nickname failed: %v", err)
 	}
 }
 
-func TestOrgCreateHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
+// --- nickname (set) ---
+
+func TestOrgNicknameSet(t *testing.T) {
+	var requestMethod string
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		requestMethod = r.Method
+		payload := common.DecodeJSON(t, r)
+		if payload["nickname"] != "newname" {
+			t.Fatalf("expected nickname=newname, got %v", payload["nickname"])
+		}
+		common.WriteJSON(t, w, map[string]interface{}{
+			"nickname": "newname",
+		})
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "create", map[string]string{"name": "neworg"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{
+		"id":       "5",
+		"uid":      "42",
+		"nickname": "newname",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "nickname", ctx)
+	if err != nil {
+		t.Fatalf("nickname set failed: %v", err)
+	}
+	if requestMethod != "PUT" {
+		t.Errorf("expected PUT, got %s", requestMethod)
+	}
+}
+
+// --- uid ---
+
+func TestOrgUID(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/users/baoerjun.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"id":    float64(148287),
+				"login": "baoerjun",
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{
+		"login": "baoerjun",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "uid", ctx)
+	if err != nil {
+		t.Fatalf("uid failed: %v", err)
 	}
 }

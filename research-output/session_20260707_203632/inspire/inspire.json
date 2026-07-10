@@ -1,0 +1,131 @@
+{
+  "scenario": "inspire",
+  "mode": "repo",
+  "repo": "caoweiqiong/zwf",
+  "gap_topics": [
+    "computer_vision",
+    "generative_ai",
+    "devops",
+    "database",
+    "security"
+  ],
+  "needed_languages": [
+    "Batchfile",
+    "CSS",
+    "HTML",
+    "JavaScript",
+    "Python",
+    "Shell",
+    "TypeScript",
+    "python",
+    "r",
+    "typescript"
+  ],
+  "gap_signals": [],
+  "candidates": [
+    {
+      "login": "dev",
+      "score": 17.8,
+      "topic_overlap": 0.0,
+      "language_match": 0.0,
+      "activity_level": "high",
+      "repo_languages": [],
+      "repo_count": 0,
+      "reasons": [
+        "本仓库活跃贡献者"
+      ]
+    },
+    {
+      "login": "LegendC",
+      "score": 16.2,
+      "topic_overlap": 0.0,
+      "language_match": 0.1,
+      "activity_level": "high",
+      "repo_languages": [
+        "typescript"
+      ],
+      "repo_count": 2,
+      "reasons": [
+        "语言匹配: typescript",
+        "本仓库活跃贡献者"
+      ]
+    },
+    {
+      "login": "huster42",
+      "score": 15.4,
+      "topic_overlap": 0.0,
+      "language_match": 0.0,
+      "activity_level": "high",
+      "repo_languages": [],
+      "repo_count": 0,
+      "reasons": [
+        "本仓库活跃贡献者"
+      ]
+    },
+    {
+      "login": "whale",
+      "score": 14.6,
+      "topic_overlap": 0.0,
+      "language_match": 0.0,
+      "activity_level": "high",
+      "repo_languages": [],
+      "repo_count": 0,
+      "reasons": [
+        "本仓库活跃贡献者"
+      ]
+    },
+    {
+      "login": "pxz2fgtcv",
+      "score": 8.0,
+      "topic_overlap": 0.0,
+      "language_match": 0.0,
+      "activity_level": "medium",
+      "repo_languages": [],
+      "repo_count": 0,
+      "reasons": [
+        "无明显主题/语言重叠"
+      ]
+    },
+    {
+      "login": "pepox4cvf",
+      "score": 8.0,
+      "topic_overlap": 0.0,
+      "language_match": 0.0,
+      "activity_level": "medium",
+      "repo_languages": [
+        "markdown"
+      ],
+      "repo_count": 1,
+      "reasons": [
+        "无明显主题/语言重叠"
+      ]
+    },
+    {
+      "login": "pfmy8cv3n",
+      "score": 8.0,
+      "topic_overlap": 0.0,
+      "language_match": 0.0,
+      "activity_level": "medium",
+      "repo_languages": [],
+      "repo_count": 0,
+      "reasons": [
+        "无明显主题/语言重叠"
+      ]
+    },
+    {
+      "login": "mcvzf42hi",
+      "score": 8.0,
+      "topic_overlap": 0.0,
+      "language_match": 0.0,
+      "activity_level": "medium",
+      "repo_languages": [],
+      "repo_count": 0,
+      "reasons": [
+        "无明显主题/语言重叠"
+      ]
+    }
+  ],
+  "innovation_points": [],
+  "idea": null,
+  "llm_used": false
+}
