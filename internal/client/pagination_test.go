@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPaginateAllKeyResourceWrappedPages(t *testing.T) {
@@ -243,5 +244,36 @@ func TestPaginateAllKeyServerCappedLimit(t *testing.T) {
 	}
 	if len(items) != 5 {
 		t.Fatalf("len(items) = %d, want 5", len(items))
+	}
+}
+
+// BenchmarkPaginateAllKey measures full-list pagination against a server with
+// simulated per-page latency, exercising the concurrent page-fetch path.
+func BenchmarkPaginateAllKey(b *testing.B) {
+	const total, perPage = 500, 50
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(5 * time.Millisecond)
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		var items []string
+		for i := (page-1)*perPage + 1; i <= page*perPage && i <= total; i++ {
+			items = append(items, fmt.Sprintf(`{"id":%d}`, i))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"total_count":%d,"issues":[%s]}`, total, strings.Join(items, ","))
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		params := url.Values{}
+		params.Set("limit", strconv.Itoa(perPage))
+		items, err := c.PaginateAllKey("/repos/o/r/issues", params, "issues")
+		if err != nil {
+			b.Fatalf("PaginateAllKey: %v", err)
+		}
+		if len(items) != total {
+			b.Fatalf("len = %d, want %d", len(items), total)
+		}
 	}
 }
