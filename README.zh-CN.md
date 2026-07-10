@@ -571,6 +571,26 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
 ```
 
+### Shell 自动补全
+
+`gitlink-cli` 内置 bash / zsh / fish / PowerShell 补全：
+
+```bash
+# Bash（加入 ~/.bashrc）
+source <(gitlink-cli completion bash)
+
+# Zsh（加入 ~/.zshrc）
+source <(gitlink-cli completion zsh)
+
+# Fish
+gitlink-cli completion fish | source
+
+# PowerShell
+gitlink-cli completion powershell | Out-String | Invoke-Expression
+```
+
+各 shell 的一次性安装方式见 `gitlink-cli completion <shell> --help`。
+
 ## 全局参数
 
 | 参数 | 说明 | 示例 |

@@ -697,6 +697,26 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
 ```
 
+### Shell Completion
+
+`gitlink-cli` ships with built-in shell completion (bash / zsh / fish / PowerShell):
+
+```bash
+# Bash (add to ~/.bashrc)
+source <(gitlink-cli completion bash)
+
+# Zsh (add to ~/.zshrc)
+source <(gitlink-cli completion zsh)
+
+# Fish
+gitlink-cli completion fish | source
+
+# PowerShell
+gitlink-cli completion powershell | Out-String | Invoke-Expression
+```
+
+Run `gitlink-cli completion <shell> --help` for install-once instructions per shell.
+
 ## Global Parameters
 
 | Parameter | Description | Example |
