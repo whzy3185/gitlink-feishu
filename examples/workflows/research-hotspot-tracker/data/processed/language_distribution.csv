@@ -1,0 +1,6 @@
+repo,Batchfile,C,C++,CMake,Cuda,Dockerfile,HTML,JavaScript,Jupyter Notebook,MAXScript,Makefile,Perl,Python,SCSS,Shell
+NSCCN/AlphaFold3,0%,0%,14.0%,0.2%,0%,0.3%,0%,0%,0%,0%,0%,0%,85.1%,0%,0.4%
+Supercomputing/alphafold,0%,0%,0%,0%,0%,0.4%,0%,0%,0.1%,0%,0%,0%,97.5%,0%,2.0%
+NSCCN/AlphaFill,0.2%,0.7%,79.8%,5.7%,0%,0%,8.3%,3.6%,0%,0.3%,0.1%,0.2%,0%,1.1%,0.1%
+NSCCN/RoseTTAFold,0%,0%,0%,0%,0%,0%,0%,0%,0%,0%,0%,0%,97.6%,0%,2.4%
+scnc/openfold,0%,0%,0.2%,0%,0.5%,0.1%,0%,0%,3.0%,0%,0%,0%,93.5%,0%,2.7%

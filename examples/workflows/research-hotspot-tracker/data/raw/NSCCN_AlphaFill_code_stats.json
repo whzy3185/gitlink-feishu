@@ -1,0 +1,52 @@
+{
+  "ok": true,
+  "data": {
+    "additions": 271596,
+    "author_count": 3,
+    "authors": [
+      {
+        "additions": 271462,
+        "author": {
+          "email": "maarten@hekkelman.com",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/M/233_188_180/120.png",
+          "login": "Maarten L. Hekkelman",
+          "name": "Maarten L. Hekkelman",
+          "type": null
+        },
+        "commits": 274,
+        "deletions": 64176
+      },
+      {
+        "additions": 128,
+        "author": {
+          "email": "83767200+idadevries@users.noreply.github.com",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/I/53_166_51/120.png",
+          "login": "IdaDeVries",
+          "name": "IdaDeVries",
+          "type": null
+        },
+        "commits": 4,
+        "deletions": 38
+      },
+      {
+        "additions": 6,
+        "author": {
+          "email": "r.joosten@nki.nl",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/R/236_194_58/120.png",
+          "login": "rjoosten",
+          "name": "rjoosten",
+          "type": null
+        },
+        "commits": 1,
+        "deletions": 1
+      }
+    ],
+    "change_files": null,
+    "commit_count": 279,
+    "commit_count_in_all_branches": 417,
+    "deletions": 64215
+  }
+}

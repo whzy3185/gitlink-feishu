@@ -1,0 +1,61 @@
+{
+  "ok": true,
+  "data": {
+    "list": [
+      {
+        "contribution_perc": "93.71%",
+        "contributions": 447,
+        "email": "maarten@hekkelman.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/M/233_188_180/120.png",
+        "login": null,
+        "name": "maarten l. hekkelman",
+        "type": null
+      },
+      {
+        "contribution_perc": "3.35%",
+        "contributions": 16,
+        "email": "49699333+dependabot[bot]@users.noreply.github.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/D/241_157_191/120.png",
+        "login": null,
+        "name": "dependabot[bot]",
+        "type": null
+      },
+      {
+        "contribution_perc": "1.68%",
+        "contributions": 8,
+        "email": "r.joosten@nki.nl",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/R/236_194_58/120.png",
+        "login": null,
+        "name": "rjoosten",
+        "type": null
+      },
+      {
+        "contribution_perc": "1.05%",
+        "contributions": 5,
+        "email": "83767200+idadevries@users.noreply.github.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/I/53_166_51/120.png",
+        "login": null,
+        "name": "idadevries",
+        "type": null
+      },
+      {
+        "contribution_perc": "0.21%",
+        "contributions": 1,
+        "email": "robbie_joosten@hotmail.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/R/236_156_171/120.png",
+        "login": null,
+        "name": "robbie p. joosten",
+        "type": null
+      }
+    ],
+    "total_count": 5
+  },
+  "meta": {
+    "total_count": 5
+  }
+}
