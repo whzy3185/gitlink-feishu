@@ -13,6 +13,7 @@ import (
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/client"
+	repocontext "github.com/gitlink-org/gitlink-cli/internal/context"
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 )
@@ -73,6 +74,11 @@ func runAPI(c *cobra.Command, args []string) error {
 		path = "/" + path
 	}
 
+	path, err := resolvePathPlaceholders(path)
+	if err != nil {
+		return err
+	}
+
 	cli, err := client.New()
 	if err != nil {
 		return err
@@ -105,6 +111,27 @@ func runAPI(c *cobra.Command, args []string) error {
 	}
 
 	return output.Print(env, resolveFormat())
+}
+
+// resolvePathPlaceholders substitutes :owner/:repo (and {{owner}}/{{repo}})
+// segments in a single-call path with the global --owner/--repo flags or the
+// values auto-resolved from the current git remote, matching the help-text
+// examples. Paths without placeholders are returned unchanged.
+func resolvePathPlaceholders(path string) (string, error) {
+	hasColon := strings.Contains(path, "/:owner") || strings.Contains(path, "/:repo")
+	hasBrace := strings.Contains(path, "{{owner}}") || strings.Contains(path, "{{repo}}")
+	if !hasColon && !hasBrace {
+		return path, nil
+	}
+	owner, repo, err := repocontext.ResolveOwnerRepo(cmdutil.Owner, cmdutil.Repo)
+	if err != nil {
+		return "", fmt.Errorf("path contains :owner/:repo placeholders: %w", err)
+	}
+	path = strings.ReplaceAll(path, "/:owner", "/"+owner)
+	path = strings.ReplaceAll(path, "/:repo", "/"+repo)
+	path = strings.ReplaceAll(path, "{{owner}}", owner)
+	path = strings.ReplaceAll(path, "{{repo}}", repo)
+	return path, nil
 }
 
 func readJSONBody(c *cobra.Command) (interface{}, error) {
