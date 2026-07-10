@@ -339,6 +339,9 @@ gitlink-cli issue +update --owner Gitlink --repo forgeplus --number 123 --priori
 # Close an issue
 gitlink-cli issue +close --owner Gitlink --repo forgeplus -i 123
 
+# Delete an issue (destructive; requires --yes)
+gitlink-cli issue +delete --owner Gitlink --repo forgeplus --number 123 --yes
+
 # Preview batch close without changing data
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,124 --dry-run
 

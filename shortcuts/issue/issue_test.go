@@ -417,6 +417,38 @@ func TestIssueCloseFetchFails(t *testing.T) {
 	}
 }
 
+// --- delete ---
+
+func TestIssueDelete(t *testing.T) {
+	var deletedPath string
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		deletedPath = r.URL.Path
+		writeJSON(t, w, map[string]interface{}{"status": float64(0), "message": "success"})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "delete", map[string]string{"number": "42", "yes": "true"})
+	if err != nil {
+		t.Fatalf("delete failed: %v", err)
+	}
+	assertEqual(t, deletedPath, "/v1/owner/repo/issues/42.json")
+}
+
+func TestIssueDeleteRequiresConfirmation(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request without --yes: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "delete", map[string]string{"number": "42"})
+	if err == nil {
+		t.Fatal("expected error without --yes confirmation")
+	}
+}
+
 // --- update ---
 
 func TestIssueUpdateTitle(t *testing.T) {

@@ -208,6 +208,30 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "delete",
+			Description: tr.T("cmd.issue.delete.short"),
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "yes", Usage: tr.T("flag.issue.delete.yes"), Bool: true, Default: "false"},
+			),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				number, err := issueNumberArg(ctx)
+				if err != nil {
+					return err
+				}
+				if !parseBool(ctx.Arg("yes")) {
+					return fmt.Errorf("delete is destructive; pass --yes to confirm deleting issue #%s", number)
+				}
+				env, err := ctx.CallAPI("DELETE", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "update",
 			Description: tr.T("cmd.issue.update.short"),
 			Flags: appendIssueNumberFlags(
