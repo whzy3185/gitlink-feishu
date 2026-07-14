@@ -83,6 +83,8 @@ skills/
 │   ├── SKILL.md                       # 分支操作指南
 │   └── examples/
 │       └── branch-workflow.md         # 分支工作流
+├── gitlink-tag/                       # Git 标签管理
+│   └── SKILL.md                       # 标签操作指南
 ├── gitlink-release/                   # 版本发布
 │   ├── SKILL.md                       # Release 操作指南
 │   └── references/                    # Release 命令参考文档
@@ -134,6 +136,7 @@ skills/
 | **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +versions`, `pr +version-diff`, `pr +reviews`, `pr +review` |
 | **gitlink-member** | 仓库成员管理 | `member +list`, `member +add`, `member +batch-add`, `member +role`, `member +invite-link` |
 | **gitlink-branch** | 分支管理 | `branch +list`, `branch +create`, `branch +delete`, `branch +protect` |
+| **gitlink-tag** | Git 标签管理 | `tag +list`, `tag +names`, `tag +view`, `tag +delete` |
 | **gitlink-release** | 版本发布 | `release +list`, `release +create`, `release +edit`, `release +update`, `release +view` |
 
 ### 辅助 Skills

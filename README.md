@@ -109,6 +109,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔀 PR | Create, merge, review pull requests, view changed files |
 | 👥 Member | List, add, remove repository members, change roles, create and accept invite links |
 | 🌿 Branch | Create, delete, list, protect, unprotect branches |
+| 🏷️ Tag | List, search, view, and delete Git tags |
 | 🏷️ Release | Create, edit, update, view, delete releases |
 | 🏢 Org | Manage organizations, members, teams |
 | 🔧 CI | View builds, logs, CI/CD operations |
@@ -473,6 +474,22 @@ gitlink-cli branch +protect --name main
 gitlink-cli branch +unprotect --name main
 ```
 
+### Tag Management
+
+```bash
+# List tags with commit details
+gitlink-cli tag +list --owner Gitlink --repo forgeplus --page 1 --limit 20
+
+# List tag names without pagination
+gitlink-cli tag +names --owner Gitlink --repo forgeplus -k v1
+
+# View a tag
+gitlink-cli tag +view --owner Gitlink --repo forgeplus --name v1.0.0
+
+# Delete a tag
+gitlink-cli tag +delete --owner Gitlink --repo forgeplus --name release/v1.0.0
+```
+
 ### Release Management
 
 ```bash
@@ -762,6 +779,7 @@ See [skills/README.md](./skills/README.md) for details.
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
 | `gitlink-member` | Repository member and invite link management |
 | `gitlink-branch` | Branch management (create, delete, list, protect, unprotect) |
+| `gitlink-tag` | Git tag operations (list, search, view, delete) |
 | `gitlink-release` | Release management (create, edit, update, view, delete, etc.) |
 | `gitlink-ci` | CI/CD operations (builds, logs, etc.) |
 | `gitlink-pipeline` | Pipeline workflow operations (runs, logs, enable, disable, delete, etc.) |
