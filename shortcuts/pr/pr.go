@@ -1,24 +1,52 @@
 package pr
 
 import (
-	"encoding/base64"
 	"fmt"
 	"net/url"
 	"strings"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func Shortcuts() []*common.Shortcut {
+func v1RepoPath(ctx *common.RuntimeContext) string {
+	return fmt.Sprintf("/v1/%s/%s", ctx.Owner, ctx.Repo)
+}
+
+func normalizePullRequestListState(state string) string {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "open", "opened":
+		return "0"
+	case "merged":
+		return "1"
+	case "closed":
+		return "2"
+	case "all", "":
+		return ""
+	default:
+		return state
+	}
+}
+
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List pull requests",
+			Description: tr.T("cmd.pr.list.short"),
 			Flags: []common.Flag{
-				{Name: "state", Short: "s", Usage: "Filter: open, merged, closed", Default: "open"},
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "state", Short: "s", Usage: tr.T("flag.pr.state"), Default: "open"},
+				{Name: "keyword", Short: "k", Usage: tr.T("flag.search.keyword")},
+				{Name: "priority-id", Usage: tr.T("flag.pr.priority_id")},
+				{Name: "tag-id", Usage: tr.T("flag.pr.tag_id")},
+				{Name: "milestone-id", Usage: tr.T("flag.pr.milestone_id")},
+				{Name: "reviewer-id", Usage: tr.T("flag.pr.reviewer_id")},
+				{Name: "assignee-id", Usage: tr.T("flag.pr.assignee_id")},
+				{Name: "sort-by", Usage: tr.T("flag.sort_by")},
+				{Name: "sort-direction", Usage: tr.T("flag.sort_direction")},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -27,10 +55,34 @@ func Shortcuts() []*common.Shortcut {
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
-				if s := ctx.Arg("state"); s != "" {
-					q.Set("state", s)
+				if s := normalizePullRequestListState(ctx.Arg("state")); s != "" {
+					q.Set("status", s)
 				}
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/pulls", q)
+				if keyword := ctx.Arg("keyword"); keyword != "" {
+					q.Set("keyword", keyword)
+				}
+				if priorityID := ctx.Arg("priority-id"); priorityID != "" {
+					q.Set("priority_id", priorityID)
+				}
+				if tagID := ctx.Arg("tag-id"); tagID != "" {
+					q.Set("issue_tag_id", tagID)
+				}
+				if milestoneID := ctx.Arg("milestone-id"); milestoneID != "" {
+					q.Set("version_id", milestoneID)
+				}
+				if reviewerID := ctx.Arg("reviewer-id"); reviewerID != "" {
+					q.Set("reviewer_id", reviewerID)
+				}
+				if assigneeID := ctx.Arg("assignee-id"); assigneeID != "" {
+					q.Set("assign_user_id", assigneeID)
+				}
+				if sortBy := ctx.Arg("sort-by"); sortBy != "" {
+					q.Set("sort_by", sortBy)
+				}
+				if sortDirection := ctx.Arg("sort-direction"); sortDirection != "" {
+					q.Set("sort_direction", sortDirection)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx)+"/pulls", q)
 				if err != nil {
 					return err
 				}
@@ -39,12 +91,12 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: "Create a pull request",
+			Description: tr.T("cmd.pr.create.short"),
 			Flags: []common.Flag{
-				{Name: "title", Short: "t", Usage: "PR title", Required: true},
-				{Name: "body", Short: "b", Usage: "PR description"},
-				{Name: "head", Usage: "Source branch", Required: true},
-				{Name: "base", Usage: "Target branch", Default: "master"},
+				{Name: "title", Short: "t", Usage: tr.T("flag.pr.title"), Required: true},
+				{Name: "body", Short: "b", Usage: tr.T("flag.pr.body")},
+				{Name: "head", Usage: tr.T("flag.pr.head"), Required: true},
+				{Name: "base", Usage: tr.T("flag.pr.base"), Default: "master"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -56,9 +108,13 @@ func Shortcuts() []*common.Shortcut {
 				if base == "" {
 					base = "master"
 				}
-				payload, err := buildCreatePRPayload(ctx, title, head, base, ctx.Arg("body"))
-				if err != nil {
-					return err
+				payload := map[string]interface{}{
+					"title": title,
+					"head":  head,
+					"base":  base,
+				}
+				if b := ctx.Arg("body"); b != "" {
+					payload["body"] = b
 				}
 				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/pulls", payload)
 				if err != nil {
@@ -69,9 +125,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "view",
-			Description: "View pull request details",
+			Description: tr.T("cmd.pr.view.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -90,10 +146,10 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "merge",
-			Description: "Merge a pull request",
+			Description: tr.T("cmd.pr.merge.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
-				{Name: "method", Short: "m", Usage: "Merge method: merge, rebase, squash", Default: "merge"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "method", Short: "m", Usage: tr.T("flag.pr.merge_method"), Default: "merge"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -115,10 +171,10 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "close",
-			Description: "Close a pull request",
+			Name:        "refuse",
+			Description: "Refuse and close a pull request",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -155,9 +211,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "files",
-			Description: "List changed files in a pull request",
+			Description: tr.T("cmd.pr.files.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -173,9 +229,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "diff",
-			Description: "Show diff for a pull request",
+			Description: tr.T("cmd.pr.diff.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -191,9 +247,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "versions",
-			Description: "List pull request patchset versions",
+			Description: tr.T("cmd.pr.versions.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -212,11 +268,11 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "version-diff",
-			Description: "Show diff for a pull request patchset version",
+			Description: tr.T("cmd.pr.version_diff.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
-				{Name: "version-id", Short: "v", Usage: "Patchset version ID", Required: true},
-				{Name: "file", Short: "f", Usage: "Filter diff by file path"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "version-id", Short: "v", Usage: tr.T("flag.pr.version_id"), Required: true},
+				{Name: "file", Short: "f", Usage: tr.T("flag.pr.file")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -249,10 +305,10 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "reviews",
-			Description: "List pull request reviews",
+			Description: tr.T("cmd.pr.reviews.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
-				{Name: "status", Short: "s", Usage: "Filter review status: common, approved, rejected"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "status", Short: "s", Usage: tr.T("flag.pr.review_status_filter")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -278,13 +334,13 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "review",
-			Description: "Create a pull request review",
+			Description: tr.T("cmd.pr.review.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
-				{Name: "status", Short: "s", Usage: "Review status: common, approved, rejected", Default: "common"},
-				{Name: "content", Short: "c", Usage: "Review content", Required: true},
-				{Name: "commit", Short: "m", Usage: "Commit SHA to attach the review to"},
-				{Name: "dry-run", Usage: "Preview the review request without creating it", Bool: true, Default: "false"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "status", Short: "s", Usage: tr.T("flag.pr.review_status"), Default: "common"},
+				{Name: "content", Short: "c", Usage: tr.T("flag.pr.review_content"), Required: true},
+				{Name: "commit", Short: "m", Usage: tr.T("flag.pr.review_commit")},
+				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -325,15 +381,29 @@ func Shortcuts() []*common.Shortcut {
 				if err != nil {
 					return err
 				}
+
+				// Also post a journal comment so the review is visible in the PR conversation.
+				prEnv, journalErr := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
+				if journalErr == nil {
+					if issueID, extractErr := extractIssueID(prEnv); extractErr == nil {
+						statusLabel := map[string]string{
+							"approved": "approved", "rejected": "rejected", "common": "commented",
+						}[status]
+						summary := fmt.Sprintf("## Review: %s\n\n%s", statusLabel, content)
+						ctx.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, issueID),
+							map[string]interface{}{"notes": summary})
+					}
+				}
+
 				return ctx.Output(env)
 			},
 		},
 		{
 			Name:        "comment",
-			Description: "Add a comment to a pull request",
+			Description: tr.T("cmd.pr.comment.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
-				{Name: "body", Short: "b", Usage: "Comment body", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -362,10 +432,11 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "commits",
-			Description: "List commits in a pull request",
+			Name:        "checks",
+			Description: tr.T("cmd.pr.checks.short"),
+			Long:        tr.T("cmd.pr.checks.long"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -375,59 +446,34 @@ func Shortcuts() []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("GET", prV1Path(ctx, id)+"/commits", nil)
+				prEnv, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
 				if err != nil {
 					return err
 				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "branches",
-			Description: "List branches for pull request creation",
-			Flags:       []common.Flag{},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/pulls/get_branches", nil)
+				headBranch, headSHA, err := extractPullRequestHead(prEnv)
 				if err != nil {
 					return err
 				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "check-merge",
-			Description: "Check if two branches can be merged",
-			Flags: []common.Flag{
-				{Name: "head", Usage: "Source branch", Required: true},
-				{Name: "base", Usage: "Target branch", Required: true},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				head, err := ctx.RequireArg("head")
+				buildsEnv, err := ctx.CallAPI("GET", ctx.RepoPath()+"/builds", nil)
 				if err != nil {
 					return err
 				}
-				base, err := ctx.RequireArg("base")
-				if err != nil {
-					return err
+				tr := ctx.Tr
+				if tr == nil {
+					tr = i18n.Default()
 				}
-				payload := map[string]interface{}{
-					"head": head,
-					"base": base,
-				}
-				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/pulls/check_can_merge", payload)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
+				result := selectPullRequestChecks(tr, id, headBranch, headSHA, buildsFromEnvelope(buildsEnv))
+				return ctx.OutputData(result)
 			},
 		},
 	}
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }
 
 func prV1Path(ctx *common.RuntimeContext, id string) string {
@@ -547,147 +593,4 @@ func numberField(m map[string]interface{}, key string) (float64, bool) {
 	default:
 		return 0, false
 	}
-}
-
-type prHeadSpec struct {
-	Branch      string
-	ForkOwner   string
-	ForkRepo    string
-	IsFork      bool
-	CompareHead string
-}
-
-func buildCreatePRPayload(ctx *common.RuntimeContext, title, head, base, body string) (map[string]interface{}, error) {
-	spec, err := parsePRHead(head)
-	if err != nil {
-		return nil, err
-	}
-
-	payload := map[string]interface{}{
-		"title":            title,
-		"head":             spec.Branch,
-		"base":             base,
-		"assigned_to_id":   "",
-		"fixed_version_id": "",
-		"issue_tag_ids":    []string{},
-		"reviewer_ids":     []string{},
-		"receivers_login":  []string{},
-		"priority_id":      "2",
-		"is_original":      spec.IsFork,
-	}
-	if body != "" {
-		payload["body"] = body
-	}
-
-	if spec.IsFork {
-		repoInfo, err := fetchProjectInfo(ctx, spec.ForkOwner, spec.ForkRepo)
-		if err != nil {
-			return nil, err
-		}
-		projectID, err := extractFloatField(repoInfo, "project_id", "id")
-		if err != nil {
-			return nil, fmt.Errorf("resolve fork project id: %w", err)
-		}
-		identifier, err := extractStringField(repoInfo, "project_identifier", "identifier")
-		if err != nil {
-			return nil, fmt.Errorf("resolve fork project identifier: %w", err)
-		}
-		payload["merge_user_login"] = spec.ForkOwner
-		payload["merge_project_identifier"] = identifier
-		payload["fork_project_id"] = int(projectID)
-	}
-
-	compareCounts, err := fetchPRCompareCounts(ctx, spec.CompareHead, base)
-	if err == nil {
-		if commits, ok := compareCounts["commits_count"]; ok {
-			payload["commits_count"] = commits
-		}
-		if files, ok := compareCounts["files_count"]; ok {
-			payload["files_count"] = files
-		}
-	}
-
-	return payload, nil
-}
-
-func parsePRHead(head string) (*prHeadSpec, error) {
-	if head == "" {
-		return nil, fmt.Errorf("source branch cannot be empty")
-	}
-	if !strings.Contains(head, ":") {
-		return &prHeadSpec{
-			Branch:      head,
-			IsFork:      false,
-			CompareHead: head,
-		}, nil
-	}
-
-	parts := strings.SplitN(head, ":", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return nil, fmt.Errorf("invalid --head %q, expected owner/repo:branch", head)
-	}
-
-	repoParts := strings.Split(parts[0], "/")
-	if len(repoParts) != 2 || repoParts[0] == "" || repoParts[1] == "" {
-		return nil, fmt.Errorf("invalid --head %q, expected owner/repo:branch", head)
-	}
-
-	return &prHeadSpec{
-		Branch:      parts[1],
-		ForkOwner:   repoParts[0],
-		ForkRepo:    repoParts[1],
-		IsFork:      true,
-		CompareHead: repoParts[0] + ":" + parts[1],
-	}, nil
-}
-
-func fetchProjectInfo(ctx *common.RuntimeContext, owner, repo string) (map[string]interface{}, error) {
-	env, err := ctx.CallAPI("GET", fmt.Sprintf("/%s/%s", owner, repo), nil)
-	if err != nil {
-		return nil, fmt.Errorf("fetch project info: %w", err)
-	}
-	data, ok := env.Data.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected project info response format")
-	}
-	return data, nil
-}
-
-func fetchPRCompareCounts(ctx *common.RuntimeContext, head, base string) (map[string]int, error) {
-	encodedHead := base64.RawURLEncoding.EncodeToString([]byte(head))
-	encodedBase := base64.RawURLEncoding.EncodeToString([]byte(base))
-	env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/compare/%s...%s", ctx.RepoPath(), encodedHead, encodedBase), nil)
-	if err != nil {
-		return nil, err
-	}
-	data, ok := env.Data.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected compare response format")
-	}
-	result := map[string]int{}
-	if v, ok := data["commits_count"].(float64); ok {
-		result["commits_count"] = int(v)
-	}
-	if v, ok := data["files_count"].(float64); ok {
-		result["files_count"] = int(v)
-	}
-	return result, nil
-}
-
-func extractFloatField(data map[string]interface{}, keys ...string) (float64, error) {
-	for _, key := range keys {
-		if v, ok := data[key].(float64); ok {
-			return v, nil
-		}
-	}
-	return 0, fmt.Errorf("missing numeric field %v", keys)
-}
-
-func extractStringField(data map[string]interface{}, keys ...string) (string, error) {
-	for _, key := range keys {
-		if v, ok := data[key].(string); ok && v != "" {
-			return v, nil
-		}
-	}
-	return "", fmt.Errorf("missing string field %v", keys)
 }
