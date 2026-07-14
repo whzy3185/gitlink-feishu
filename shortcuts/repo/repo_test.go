@@ -1,12 +1,11 @@
 package repo
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"reflect"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -154,39 +153,65 @@ func TestRepoReadmeUsesRepositoryReadmeEndpoint(t *testing.T) {
 	}
 }
 
-func TestRepoFileUsesSubEntriesFileEndpoint(t *testing.T) {
+func TestRepoUnitsUsesProjectUnitsEndpoint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
-		assertEqual(t, r.URL.Query().Get("filepath"), "README.md")
-		assertEqual(t, r.URL.Query().Get("ref"), "main")
+		assertRequest(t, r, "GET", "/owner/repo/project_units.json")
+		writeJSON(t, w, []string{"code", "issues", "pulls"})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "units", nil); err != nil {
+		t.Fatalf("units shortcut failed: %v", err)
+	}
+}
+
+func TestRepoSetUnitsSendsValidatedUnitTypes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/owner/repo/project_units.json")
+		var body struct {
+			UnitTypes []string `json:"unit_types"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		want := []string{"code", "issues", "pulls"}
+		if !reflect.DeepEqual(body.UnitTypes, want) {
+			t.Fatalf("unit_types = %#v, want %#v", body.UnitTypes, want)
+		}
 		writeJSON(t, w, map[string]interface{}{
-			"entries": map[string]interface{}{
-				"name":    "README.md",
-				"path":    "README.md",
-				"type":    "file",
-				"content": "# docs\n",
-			},
+			"status":  0,
+			"message": "success",
 		})
 	}))
 	defer server.Close()
 
-	err := runShortcut(t, server, "file", map[string]string{
-		"path": "README.md",
-		"ref":  "main",
+	err := runShortcut(t, server, "set-units", map[string]string{
+		"units": " code,issues,pulls,issues ",
 	})
 	if err != nil {
-		t.Fatalf("file shortcut failed: %v", err)
+		t.Fatalf("set-units shortcut failed: %v", err)
 	}
 }
 
-func TestRepoFileRequiresPath(t *testing.T) {
+func TestRepoSetUnitsRejectsInvalidUnitBeforeRequest(t *testing.T) {
+	called := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("missing path should not call API, got: %s %s", r.Method, r.URL.Path)
+		called = true
 	}))
 	defer server.Close()
 
-	if err := runShortcut(t, server, "file", map[string]string{"ref": "main"}); err == nil {
-		t.Fatal("expected missing path error")
+	err := runShortcut(t, server, "set-units", map[string]string{"units": "code,invalid"})
+	if err == nil {
+		t.Fatalf("expected invalid unit error")
+	}
+	if called {
+		t.Fatalf("server was called for invalid unit")
+	}
+}
+
+func TestParseRepoUnitsRejectsEmptyInput(t *testing.T) {
+	if _, err := parseRepoUnits(" , "); err == nil {
+		t.Fatalf("expected empty unit list error")
 	}
 }
 
@@ -253,198 +278,6 @@ func TestRepoTreeShortcutRegistersHelpFlags(t *testing.T) {
 	}
 	if refFlag.Short != "r" || refFlag.Default != "master" || refFlag.Usage == "" {
 		t.Fatalf("unexpected ref flag: %+v", refFlag)
-	}
-}
-
-func TestRepoFilesBuildsSearchAndRefQuery(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/owner/repo/files.json")
-		assertEqual(t, r.URL.Query().Get("search"), "README")
-		assertEqual(t, r.URL.Query().Get("ref"), "release/v1")
-		writeJSON(t, w, []map[string]interface{}{
-			{"name": "README.md", "path": "README.md", "type": "file"},
-		})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "files", map[string]string{
-		"search": " README ",
-		"ref":    " release/v1 ",
-	})
-	if err != nil {
-		t.Fatalf("files shortcut failed: %v", err)
-	}
-}
-
-func TestRepoCommitFilesSingleInlineUpdatePostsBatch(t *testing.T) {
-	var body repoBatchCommitRequest
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "POST", "/v1/owner/repo/contents/batch.json")
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		writeJSON(t, w, map[string]interface{}{"commit": map[string]interface{}{"sha": "abc123"}})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "commit-files", map[string]string{
-		"branch":          "main",
-		"new-branch":      "docs/update-readme",
-		"message":         "update README",
-		"path":            "README.md",
-		"content":         "# hello\n",
-		"author-name":     "Alice",
-		"author-email":    "alice@example.com",
-		"committer-name":  "Bob",
-		"committer-email": "bob@example.com",
-	})
-	if err != nil {
-		t.Fatalf("commit-files shortcut failed: %v", err)
-	}
-	assertEqual(t, body.Branch, "main")
-	assertEqual(t, body.NewBranch, "docs/update-readme")
-	assertEqual(t, body.Message, "update README")
-	assertEqual(t, body.AuthorName, "Alice")
-	assertEqual(t, body.AuthorEmail, "alice@example.com")
-	assertEqual(t, len(body.Files), 1)
-	assertEqual(t, body.Files[0].ActionType, "update")
-	assertEqual(t, body.Files[0].FilePath, "README.md")
-	assertEqual(t, body.Files[0].Encoding, "text")
-	if body.Files[0].Content == nil || *body.Files[0].Content != "# hello\n" {
-		t.Fatalf("unexpected content: %#v", body.Files[0].Content)
-	}
-}
-
-func TestRepoCommitFilesReadsLocalFileAsBase64(t *testing.T) {
-	tempFile := writeTempFile(t, []byte{0x00, 0x01, 0x02, 0xff})
-
-	var body repoBatchCommitRequest
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "POST", "/v1/owner/repo/contents/batch.json")
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		writeJSON(t, w, map[string]interface{}{"commit": map[string]interface{}{"sha": "def456"}})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "commit-files", map[string]string{
-		"branch":   "main",
-		"message":  "add binary",
-		"action":   "create",
-		"path":     "assets/logo.bin",
-		"from":     tempFile,
-		"encoding": "base64",
-	})
-	if err != nil {
-		t.Fatalf("commit-files shortcut failed: %v", err)
-	}
-	assertEqual(t, body.Files[0].ActionType, "create")
-	assertEqual(t, body.Files[0].Encoding, "base64")
-	want := base64.StdEncoding.EncodeToString([]byte{0x00, 0x01, 0x02, 0xff})
-	if body.Files[0].Content == nil || *body.Files[0].Content != want {
-		t.Fatalf("content = %#v, want %q", body.Files[0].Content, want)
-	}
-}
-
-func TestRepoCommitFilesReadsBatchOpsFile(t *testing.T) {
-	opsFile := writeTempFile(t, []byte(`[
-		{"action_type":"create","file_path":"docs/a.md","content":"hello","encoding":"text"},
-		{"action_type":"delete","file_path":"docs/old.md"}
-	]`))
-
-	var body repoBatchCommitRequest
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "POST", "/v1/owner/repo/contents/batch.json")
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		writeJSON(t, w, map[string]interface{}{"commit": map[string]interface{}{"sha": "789"}})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "commit-files", map[string]string{
-		"branch":  "main",
-		"message": "batch docs",
-		"ops":     opsFile,
-	})
-	if err != nil {
-		t.Fatalf("commit-files shortcut failed: %v", err)
-	}
-	assertEqual(t, len(body.Files), 2)
-	assertEqual(t, body.Files[0].ActionType, "create")
-	assertEqual(t, body.Files[0].Encoding, "text")
-	assertEqual(t, body.Files[1].ActionType, "delete")
-	if body.Files[1].Content != nil || body.Files[1].Encoding != "" {
-		t.Fatalf("delete operation should omit content and encoding: %+v", body.Files[1])
-	}
-}
-
-func TestRepoCommitFilesDryRunDoesNotCallAPI(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "commit-files", map[string]string{
-		"branch":  "main",
-		"message": "preview",
-		"path":    "README.md",
-		"content": "hello",
-		"dry-run": "true",
-	})
-	if err != nil {
-		t.Fatalf("dry-run shortcut failed: %v", err)
-	}
-}
-
-func TestRepoCommitFilesValidation(t *testing.T) {
-	opsFile := writeTempFile(t, []byte(`[{"action_type":"create","file_path":"docs/a.md","content":"hello"}]`))
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("invalid input should not call API, got: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	cases := []struct {
-		name string
-		args map[string]string
-	}{
-		{
-			name: "missing path",
-			args: map[string]string{"branch": "main", "message": "msg", "content": "hello"},
-		},
-		{
-			name: "missing content for update",
-			args: map[string]string{"branch": "main", "message": "msg", "path": "README.md"},
-		},
-		{
-			name: "content and from together",
-			args: map[string]string{"branch": "main", "message": "msg", "path": "README.md", "content": "hello", "from": opsFile},
-		},
-		{
-			name: "delete with content",
-			args: map[string]string{"branch": "main", "message": "msg", "action": "delete", "path": "README.md", "content": "hello"},
-		},
-		{
-			name: "invalid encoding",
-			args: map[string]string{"branch": "main", "message": "msg", "path": "README.md", "content": "hello", "encoding": "gzip"},
-		},
-		{
-			name: "ops with single-file args",
-			args: map[string]string{"branch": "main", "message": "msg", "ops": opsFile, "path": "README.md"},
-		},
-		{
-			name: "partial author identity",
-			args: map[string]string{"branch": "main", "message": "msg", "path": "README.md", "content": "hello", "author-name": "Alice"},
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if err := runShortcut(t, server, "commit-files", tc.args); err == nil {
-				t.Fatal("expected validation error")
-			}
-		})
 	}
 }
 
@@ -849,21 +682,6 @@ func TestRepoCreateUserNoLogin(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when user response has no login")
 	}
-}
-
-func writeTempFile(t *testing.T, data []byte) string {
-	t.Helper()
-	file, err := os.CreateTemp(t.TempDir(), "repo-file-*")
-	if err != nil {
-		t.Fatalf("create temp file: %v", err)
-	}
-	if _, err := file.Write(data); err != nil {
-		t.Fatalf("write temp file: %v", err)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatalf("close temp file: %v", err)
-	}
-	return file.Name()
 }
 
 func assertRequest(t *testing.T, r *http.Request, method, path string) {

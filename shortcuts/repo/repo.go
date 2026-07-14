@@ -1,11 +1,8 @@
 package repo
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 
@@ -85,13 +82,39 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "file",
-			Description: "Show repository file content and metadata",
-			Flags: []common.Flag{
-				{Name: "path", Short: "p", Usage: "Repository file path", Required: true},
-				{Name: "ref", Short: "r", Usage: "Branch, tag, or commit SHA", Default: "master"},
+			Name:        "units",
+			Description: tr.T("cmd.repo.units.short"),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", repoUnitsPath(ctx), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
 			},
-			Run: runFile,
+		},
+		{
+			Name:        "set-units",
+			Description: tr.T("cmd.repo.set_units.short"),
+			Flags: []common.Flag{
+				{Name: "units", Short: "u", Usage: tr.T("flag.repo.units"), Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				units, err := parseRepoUnits(ctx.Arg("units"))
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("POST", repoUnitsPath(ctx), map[string]interface{}{"unit_types": units})
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
 		},
 		{
 			Name:        "tree",
@@ -104,43 +127,21 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				q := repoSubEntriesQuery(ctx.Arg("path"), ctx.Arg("ref"))
+				q := url.Values{}
+				ref := ctx.Arg("ref")
+				if ref == "" {
+					ref = "master"
+				}
+				if path := ctx.Arg("path"); path != "" {
+					q.Set("filepath", path)
+				}
+				q.Set("ref", ref)
 				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
 				if err != nil {
 					return err
 				}
 				return ctx.Output(env)
 			},
-		},
-		{
-			Name:        "files",
-			Description: "Search repository files by name",
-			Flags: []common.Flag{
-				{Name: "search", Short: "s", Usage: "File name keyword"},
-				{Name: "ref", Short: "r", Usage: "Branch, tag, or commit SHA"},
-			},
-			Run: runFiles,
-		},
-		{
-			Name:        "commit-files",
-			Description: "Commit one file operation or a batch JSON file through contents/batch",
-			Flags: []common.Flag{
-				{Name: "branch", Short: "b", Usage: "Target branch", Required: true},
-				{Name: "message", Short: "m", Usage: "Commit message", Required: true},
-				{Name: "new-branch", Usage: "Create and commit to a new branch"},
-				{Name: "action", Short: "a", Usage: "Single-file action: create, update, or delete; defaults to update"},
-				{Name: "path", Short: "p", Usage: "Repository file path for single-file mode"},
-				{Name: "content", Short: "c", Usage: "Inline file content for single-file mode"},
-				{Name: "from", Usage: "Read single-file content from a local file"},
-				{Name: "encoding", Usage: "Content encoding for single-file mode: text or base64; defaults to text"},
-				{Name: "ops", Usage: "Read batch file operations from a JSON file"},
-				{Name: "author-name", Usage: "Commit author name"},
-				{Name: "author-email", Usage: "Commit author email"},
-				{Name: "committer-name", Usage: "Committer name"},
-				{Name: "committer-email", Usage: "Committer email"},
-				{Name: "dry-run", Usage: "Preview the request without committing files", Bool: true, Default: "false"},
-			},
-			Run: runCommitFiles,
 		},
 		{
 			Name:        "languages",
@@ -295,271 +296,6 @@ func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
 		return translators[0]
 	}
 	return i18n.Default()
-}
-
-type repoBatchCommitRequest struct {
-	Files          []repoFileOperation `json:"files"`
-	AuthorEmail    string              `json:"author_email,omitempty"`
-	AuthorName     string              `json:"author_name,omitempty"`
-	CommitterEmail string              `json:"committer_email,omitempty"`
-	CommitterName  string              `json:"committer_name,omitempty"`
-	Branch         string              `json:"branch"`
-	NewBranch      string              `json:"new_branch,omitempty"`
-	Message        string              `json:"message"`
-}
-
-type repoFileOperation struct {
-	ActionType string  `json:"action_type"`
-	Content    *string `json:"content,omitempty"`
-	Encoding   string  `json:"encoding,omitempty"`
-	FilePath   string  `json:"file_path"`
-}
-
-func runFile(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	filePath, err := requiredRepoString(ctx, "path")
-	if err != nil {
-		return err
-	}
-	q := repoSubEntriesQuery(filePath, ctx.Arg("ref"))
-	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func runFiles(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	q := url.Values{}
-	setRepoQueryIfPresent(q, "search", ctx.Arg("search"))
-	setRepoQueryIfPresent(q, "ref", ctx.Arg("ref"))
-	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/files", q)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func runCommitFiles(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	req, err := buildRepoBatchCommitRequest(ctx)
-	if err != nil {
-		return err
-	}
-	if ctx.Arg("dry-run") == "true" {
-		return ctx.OutputData(map[string]interface{}{
-			"dry_run": true,
-			"method":  "POST",
-			"path":    "/v1" + ctx.RepoPath() + "/contents/batch",
-			"request": req,
-		})
-	}
-	env, err := ctx.CallAPI("POST", "/v1"+ctx.RepoPath()+"/contents/batch", req)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func buildRepoBatchCommitRequest(ctx *common.RuntimeContext) (repoBatchCommitRequest, error) {
-	branch, err := requiredRepoString(ctx, "branch")
-	if err != nil {
-		return repoBatchCommitRequest{}, err
-	}
-	message, err := requiredRepoString(ctx, "message")
-	if err != nil {
-		return repoBatchCommitRequest{}, err
-	}
-
-	opsFile := strings.TrimSpace(ctx.Arg("ops"))
-	files, err := repoCommitFileOperations(ctx, opsFile)
-	if err != nil {
-		return repoBatchCommitRequest{}, err
-	}
-
-	req := repoBatchCommitRequest{
-		Files:          files,
-		Branch:         branch,
-		Message:        message,
-		NewBranch:      strings.TrimSpace(ctx.Arg("new-branch")),
-		AuthorName:     strings.TrimSpace(ctx.Arg("author-name")),
-		AuthorEmail:    strings.TrimSpace(ctx.Arg("author-email")),
-		CommitterName:  strings.TrimSpace(ctx.Arg("committer-name")),
-		CommitterEmail: strings.TrimSpace(ctx.Arg("committer-email")),
-	}
-	if err := validateRepoIdentityPair("author", req.AuthorName, req.AuthorEmail); err != nil {
-		return repoBatchCommitRequest{}, err
-	}
-	if err := validateRepoIdentityPair("committer", req.CommitterName, req.CommitterEmail); err != nil {
-		return repoBatchCommitRequest{}, err
-	}
-	return req, nil
-}
-
-func repoCommitFileOperations(ctx *common.RuntimeContext, opsFile string) ([]repoFileOperation, error) {
-	if opsFile != "" {
-		if repoHasSingleFileArgs(ctx) {
-			return nil, fmt.Errorf("--ops cannot be combined with --path, --content, --from, --action, or --encoding")
-		}
-		return readRepoFileOperations(opsFile)
-	}
-	op, err := singleRepoFileOperation(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return []repoFileOperation{op}, nil
-}
-
-func repoHasSingleFileArgs(ctx *common.RuntimeContext) bool {
-	for _, name := range []string{"path", "content", "from", "action", "encoding"} {
-		if strings.TrimSpace(ctx.Arg(name)) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-func readRepoFileOperations(path string) ([]repoFileOperation, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read --ops file: %w", err)
-	}
-	var files []repoFileOperation
-	if err := json.Unmarshal(data, &files); err == nil {
-		return validateRepoFileOperations(files)
-	}
-	var req repoBatchCommitRequest
-	if err := json.Unmarshal(data, &req); err != nil {
-		return nil, fmt.Errorf("parse --ops JSON: expected an array of file operations or an object with files: %w", err)
-	}
-	return validateRepoFileOperations(req.Files)
-}
-
-func singleRepoFileOperation(ctx *common.RuntimeContext) (repoFileOperation, error) {
-	filePath, err := requiredRepoString(ctx, "path")
-	if err != nil {
-		return repoFileOperation{}, err
-	}
-	action := strings.TrimSpace(ctx.Arg("action"))
-	if action == "" {
-		action = "update"
-	}
-	op := repoFileOperation{
-		ActionType: action,
-		FilePath:   filePath,
-		Encoding:   strings.TrimSpace(ctx.Arg("encoding")),
-	}
-
-	hasContent := ctx.Arg("content") != ""
-	fromPath := strings.TrimSpace(ctx.Arg("from"))
-	hasFrom := fromPath != ""
-	if hasContent && hasFrom {
-		return repoFileOperation{}, fmt.Errorf("--content and --from cannot be used together")
-	}
-	if hasContent {
-		content := ctx.Arg("content")
-		op.Content = &content
-	}
-	if hasFrom {
-		content, err := readRepoFileContent(fromPath, op.Encoding)
-		if err != nil {
-			return repoFileOperation{}, err
-		}
-		op.Content = &content
-	}
-	return validateRepoFileOperation(op, 0)
-}
-
-func readRepoFileContent(path, encoding string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read --from file: %w", err)
-	}
-	if strings.TrimSpace(encoding) == "base64" {
-		return base64.StdEncoding.EncodeToString(data), nil
-	}
-	return string(data), nil
-}
-
-func validateRepoFileOperations(files []repoFileOperation) ([]repoFileOperation, error) {
-	if len(files) == 0 {
-		return nil, fmt.Errorf("at least one file operation is required")
-	}
-	for i := range files {
-		op, err := validateRepoFileOperation(files[i], i)
-		if err != nil {
-			return nil, err
-		}
-		files[i] = op
-	}
-	return files, nil
-}
-
-func validateRepoFileOperation(op repoFileOperation, index int) (repoFileOperation, error) {
-	prefix := fmt.Sprintf("files[%d]", index)
-	op.ActionType = strings.TrimSpace(op.ActionType)
-	op.FilePath = strings.TrimSpace(op.FilePath)
-	op.Encoding = strings.TrimSpace(op.Encoding)
-
-	switch op.ActionType {
-	case "create", "update", "delete":
-	default:
-		return repoFileOperation{}, fmt.Errorf("%s.action_type must be create, update, or delete", prefix)
-	}
-	if op.FilePath == "" {
-		return repoFileOperation{}, fmt.Errorf("%s.file_path is required", prefix)
-	}
-	if op.ActionType == "delete" {
-		if op.Content != nil || op.Encoding != "" {
-			return repoFileOperation{}, fmt.Errorf("%s delete operation must not include content or encoding", prefix)
-		}
-		return op, nil
-	}
-	if op.Content == nil {
-		return repoFileOperation{}, fmt.Errorf("%s content is required for create and update operations", prefix)
-	}
-	if op.Encoding == "" {
-		op.Encoding = "text"
-	}
-	if op.Encoding != "text" && op.Encoding != "base64" {
-		return repoFileOperation{}, fmt.Errorf("%s.encoding must be text or base64", prefix)
-	}
-	return op, nil
-}
-
-func validateRepoIdentityPair(name, personName, email string) error {
-	if (personName == "") != (email == "") {
-		return fmt.Errorf("--%s-name and --%s-email must be provided together", name, name)
-	}
-	return nil
-}
-
-func requiredRepoString(ctx *common.RuntimeContext, name string) (string, error) {
-	value := strings.TrimSpace(ctx.Arg(name))
-	if value == "" {
-		return "", fmt.Errorf("missing required flag: --%s", name)
-	}
-	return value, nil
-}
-
-func repoSubEntriesQuery(path, ref string) url.Values {
-	q := url.Values{}
-	if path = strings.TrimSpace(path); path != "" {
-		q.Set("filepath", path)
-	}
-	ref = strings.TrimSpace(ref)
-	if ref == "" {
-		ref = "master"
-	}
-	q.Set("ref", ref)
-	return q
 }
 
 func runLanguages(ctx *common.RuntimeContext) error {
@@ -798,4 +534,42 @@ func parseRepoPositiveInt(value, name string) (int, error) {
 		return 0, fmt.Errorf("invalid --%s %q: use a positive integer", name, value)
 	}
 	return parsed, nil
+}
+
+func repoUnitsPath(ctx *common.RuntimeContext) string {
+	return ctx.RepoPath() + "/project_units"
+}
+
+func parseRepoUnits(raw string) ([]string, error) {
+	allowed := map[string]bool{
+		"code":      true,
+		"issues":    true,
+		"pulls":     true,
+		"devops":    true,
+		"versions":  true,
+		"wiki":      true,
+		"services":  true,
+		"resources": true,
+	}
+
+	seen := map[string]bool{}
+	units := []string{}
+	for _, part := range strings.Split(raw, ",") {
+		unit := strings.ToLower(strings.TrimSpace(part))
+		if unit == "" {
+			continue
+		}
+		if !allowed[unit] {
+			return nil, fmt.Errorf("invalid repository unit %q; allowed values: code,issues,pulls,devops,versions,wiki,services,resources", unit)
+		}
+		if seen[unit] {
+			continue
+		}
+		seen[unit] = true
+		units = append(units, unit)
+	}
+	if len(units) == 0 {
+		return nil, fmt.Errorf("at least one repository unit is required")
+	}
+	return units, nil
 }

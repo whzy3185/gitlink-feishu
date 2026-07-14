@@ -251,6 +251,10 @@ gitlink-cli repo +unfollow --owner Gitlink --repo forgeplus --project-id 123
 gitlink-cli repo +like --owner Gitlink --repo forgeplus
 gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 
+# List and update repository navigation units
+gitlink-cli repo +units --owner Gitlink --repo forgeplus
+gitlink-cli repo +set-units --owner Gitlink --repo forgeplus --units code,issues,pulls,wiki
+
 # Create a repository
 gitlink-cli repo +create -n my-project -d "Project description"
 

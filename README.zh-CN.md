@@ -262,6 +262,10 @@ gitlink-cli repo +unfollow --owner Gitlink --repo forgeplus --project-id 123
 gitlink-cli repo +like --owner Gitlink --repo forgeplus
 gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 
+# 查看和更新仓库导航模块
+gitlink-cli repo +units --owner Gitlink --repo forgeplus
+gitlink-cli repo +set-units --owner Gitlink --repo forgeplus --units code,issues,pulls,wiki
+
 # 创建仓库
 gitlink-cli repo +create -n my-project -d "项目描述"
 
