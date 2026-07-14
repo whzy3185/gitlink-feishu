@@ -2,11 +2,15 @@ package auth
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -34,21 +38,17 @@ func NewAuthCmd(translators ...*i18n.Translator) *cobra.Command {
 	cmd.AddCommand(newLoginCmd(tr))
 	cmd.AddCommand(newLogoutCmd(tr))
 	cmd.AddCommand(newStatusCmd(tr))
-	cmd.AddCommand(newTokenCmd(tr))
+	cmd.AddCommand(newCheckinCmd(tr))
 	return cmd
 }
 
 func newLoginCmd(tr *i18n.Translator) *cobra.Command {
 	var tokenMode bool
-	var withToken bool
 
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: tr.T("cmd.auth.login.short"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if withToken {
-				return loginWithTokenStdin(cmd.InOrStdin(), cmd.OutOrStdout(), tr)
-			}
 			if tokenMode {
 				return loginWithToken(cmd.InOrStdin(), cmd.OutOrStdout(), tr)
 			}
@@ -56,7 +56,6 @@ func newLoginCmd(tr *i18n.Translator) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&tokenMode, "token", false, tr.T("flag.auth.token"))
-	cmd.Flags().BoolVar(&withToken, "with-token", false, tr.T("flag.auth.with_token"))
 	return cmd
 }
 
@@ -123,26 +122,6 @@ func loginWithToken(in io.Reader, out io.Writer, tr *i18n.Translator) error {
 	return err
 }
 
-// loginWithTokenStdin reads a token from stdin without prompting, mirroring
-// `gh auth login --with-token` for non-interactive use (CI, scripts):
-//
-//	echo $TOKEN | gitlink-cli auth login --with-token
-func loginWithTokenStdin(in io.Reader, out io.Writer, tr *i18n.Translator) error {
-	data, err := io.ReadAll(io.LimitReader(in, 4096))
-	if err != nil {
-		return err
-	}
-	token := strings.TrimSpace(string(data))
-	if token == "" {
-		return errors.New(tr.T("error.auth.token_empty"))
-	}
-	if err := storeToken(token); err != nil {
-		return errors.New(tr.Tf("error.auth.store_token_failed", i18n.Args{"message": err.Error()}))
-	}
-	_, err = fmt.Fprintln(out, tr.T("success.auth.token_saved"))
-	return err
-}
-
 func newLogoutCmd(tr *i18n.Translator) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
@@ -158,9 +137,7 @@ func newLogoutCmd(tr *i18n.Translator) *cobra.Command {
 }
 
 func newStatusCmd(tr *i18n.Translator) *cobra.Command {
-	var showToken bool
-
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "status",
 		Short: tr.T("cmd.auth.status.short"),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -170,19 +147,9 @@ func newStatusCmd(tr *i18n.Translator) *cobra.Command {
 				if _, err := fmt.Fprintln(out, tr.Tf("success.auth.logged_in_via_env", i18n.Args{"env": envTokenVar})); err != nil {
 					return err
 				}
-				if showToken {
-					if _, err := fmt.Fprintln(out, tr.Tf("output.auth.token_value", i18n.Args{"token": envToken})); err != nil {
-						return err
-					}
-				}
 			}
 
 			token, err := loadToken()
-			if err == nil && token != "" && showToken {
-				if _, err := fmt.Fprintln(out, tr.Tf("output.auth.token_value", i18n.Args{"token": token})); err != nil {
-					return err
-				}
-			}
 			if err != nil || token == "" {
 				if os.Getenv(envTokenVar) == "" {
 					if _, err := fmt.Fprintln(out, tr.T("warning.auth.not_logged_in")); err != nil {
@@ -218,29 +185,100 @@ func newStatusCmd(tr *i18n.Translator) *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().BoolVar(&showToken, "show-token", false, tr.T("flag.auth.show_token"))
+}
+
+func newCheckinCmd(tr *i18n.Translator) *cobra.Command {
+	var intervalMinutes int
+
+	cmd := &cobra.Command{
+		Use:   "checkin",
+		Short: tr.T("cmd.auth.checkin.short"),
+		Long:  tr.T("cmd.auth.checkin.long"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runCheckin(cmd.OutOrStdout(), intervalMinutes, tr)
+		},
+	}
+	cmd.Flags().IntVarP(&intervalMinutes, "time", "t", 30, tr.T("flag.auth.checkin.time"))
 	return cmd
 }
 
-// newTokenCmd prints the active token to stdout for scripting, mirroring
-// `gh auth token`. Resolution order matches API calls: GITLINK_TOKEN env
-// var first, then the stored keyring/file token.
-func newTokenCmd(tr *i18n.Translator) *cobra.Command {
-	return &cobra.Command{
-		Use:   "token",
-		Short: tr.T("cmd.auth.token.short"),
-		Long:  tr.T("cmd.auth.token.long"),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			token := os.Getenv(envTokenVar)
-			if token == "" {
-				stored, err := loadToken()
-				if err != nil || stored == "" {
-					return errors.New(tr.T("error.auth.no_token"))
-				}
-				token = stored
-			}
-			_, err := fmt.Fprintln(cmd.OutOrStdout(), token)
-			return err
-		},
+func runCheckin(out io.Writer, intervalMinutes int, tr *i18n.Translator) error {
+	// Check if user is logged in
+	token, err := loadToken()
+	if err != nil || token == "" {
+		if os.Getenv(envTokenVar) == "" {
+			return errors.New(tr.T("error.auth.not_logged_in"))
+		}
 	}
+
+	// Convert minutes to duration
+	interval := time.Duration(intervalMinutes) * time.Minute
+
+	// Print startup message
+	fmt.Fprintln(out, tr.Tf("output.auth.checkin.start", i18n.Args{"interval": intervalMinutes}))
+	fmt.Fprintln(out, tr.T("output.auth.checkin.stop_hint"))
+
+	// Setup signal handling for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		fmt.Fprintln(out, "\n"+tr.T("output.auth.checkin.stopping"))
+		cancel()
+	}()
+
+	// Create ticker
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	// Do first check immediately
+	if err := doCheckin(out, tr, interval); err != nil {
+		fmt.Fprintln(out, tr.Tf("error.auth.checkin.failed", i18n.Args{"message": err.Error()}))
+	}
+
+	// Then check periodically
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Fprintln(out, tr.T("output.auth.checkin.stopped"))
+			return nil
+		case <-ticker.C:
+			if err := doCheckin(out, tr, interval); err != nil {
+				fmt.Fprintln(out, tr.Tf("error.auth.checkin.failed", i18n.Args{"message": err.Error()}))
+			}
+		}
+	}
+}
+
+func doCheckin(out io.Writer, tr *i18n.Translator, interval time.Duration) error {
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	fmt.Fprintf(out, "[%s] "+tr.T("output.auth.checkin.checking")+"\n", timestamp)
+
+	user, err := internalAuth.GetCurrentUser()
+	if err != nil {
+		return err
+	}
+
+	login, _ := user["login"].(string)
+	name, _ := user["name"].(string)
+
+	if login != "" {
+		msg := tr.Tf("output.auth.checkin.success", i18n.Args{"login": login})
+		if name != "" {
+			msg = fmt.Sprintf("%s (%s)", msg, name)
+		}
+		fmt.Fprintf(out, "[%s] %s\n", timestamp, msg)
+	} else {
+		fmt.Fprintf(out, "[%s] "+tr.T("output.auth.checkin.success_no_user")+"\n", timestamp)
+	}
+
+	// Print next refresh time
+	nextTime := time.Now().Add(interval).Format("2006-01-02 15:04:05")
+	fmt.Fprintln(out, tr.Tf("output.auth.checkin.interval", i18n.Args{"time": nextTime}))
+
+	return nil
 }

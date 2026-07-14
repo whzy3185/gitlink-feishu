@@ -119,6 +119,7 @@
 | 👤 用户 | 查看用户资料和信息 |
 | 📊 画像 | 用户开发能力、角色定位、专业定位、近期活动、贡献热力图统计 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
+| 📝 模板 | 管理 Issue 和 Pull Request 项目模板 |
 | 🤖 工作流 | AI 驱动的 Issue 分类、PR Review、Release Notes |
 
 ## 安装与快速上手
@@ -425,6 +426,30 @@ gitlink-cli label +update --owner Gitlink --repo forgeplus -i 42 -c "#00FF00"
 
 # 删除标签
 gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
+```
+
+### 模板管理
+
+```bash
+# 列出项目模板
+gitlink-cli template +list --owner Gitlink --repo forgeplus
+
+# 获取模板详情
+gitlink-cli template +get --owner Gitlink --repo forgeplus -i 1
+
+# 创建 Issue 模板
+gitlink-cli template +create --owner Gitlink --repo forgeplus \
+  -t "ProjectTemplates::Issue" -n "Bug 报告" -c "## 描述\n..."
+
+# 创建 Pull Request 模板
+gitlink-cli template +create --owner Gitlink --repo forgeplus \
+  -t "ProjectTemplates::PullRequest" -n "功能 PR" -c "## 概述\n..."
+
+# 更新模板
+gitlink-cli template +update --owner Gitlink --repo forgeplus -i 1 -n "新名称"
+
+# 删除模板
+gitlink-cli template +delete --owner Gitlink --repo forgeplus -i 1
 ```
 
 ### Pull Request
