@@ -102,6 +102,7 @@ func Shortcuts() []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		newMilestoneReportShortcut(),
 		{
 			Name:        "update",
 			Description: "Update a milestone",
