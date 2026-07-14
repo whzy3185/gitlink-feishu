@@ -47,6 +47,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "assignee-id", Usage: tr.T("flag.pr.assignee_id")},
 				{Name: "sort-by", Usage: tr.T("flag.sort_by")},
 				{Name: "sort-direction", Usage: tr.T("flag.sort_direction")},
+				{Name: "login", Usage: "Filter pull requests by issue author login"},
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
@@ -87,6 +88,9 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx)+"/pulls", q)
 				if err != nil {
 					return err
+				}
+				if login := ctx.Arg("login"); login != "" {
+					filterPullsByLogin(env, login)
 				}
 				return ctx.Output(env)
 			},
@@ -1035,5 +1039,51 @@ func numberField(m map[string]interface{}, key string) (float64, bool) {
 		return float64(v), true
 	default:
 		return 0, false
+	}
+}
+
+// filterPullsByLogin filters the pulls list in-place, keeping only items
+// whose issue.author.login matches the given login (case-insensitive).
+func filterPullsByLogin(env *output.Envelope, login string) {
+	if env == nil || env.Data == nil {
+		return
+	}
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return
+	}
+	rawPulls, ok := data["pulls"]
+	if !ok {
+		return
+	}
+	pulls, ok := rawPulls.([]interface{})
+	if !ok {
+		return
+	}
+	loginLower := strings.ToLower(login)
+	filtered := make([]interface{}, 0, len(pulls))
+	for _, item := range pulls {
+		pull, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		issue, ok := pull["issue"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		author, ok := issue["author"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		authorLogin, _ := author["login"].(string)
+		if strings.ToLower(authorLogin) == loginLower {
+			filtered = append(filtered, item)
+		}
+	}
+	data["pulls"] = filtered
+	// Update total_count in data to reflect filtered count
+	data["total_count"] = float64(len(filtered))
+	if env.Meta != nil {
+		env.Meta.TotalCount = len(filtered)
 	}
 }
