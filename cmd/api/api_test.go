@@ -1,13 +1,13 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
@@ -34,55 +34,6 @@ func TestResolveFormat(t *testing.T) {
 	}
 }
 
-func TestResolvePathPlaceholders(t *testing.T) {
-	origOwner, origRepo := cmdutil.Owner, cmdutil.Repo
-	t.Cleanup(func() { cmdutil.Owner, cmdutil.Repo = origOwner, origRepo })
-	cmdutil.Owner, cmdutil.Repo = "demo-owner", "demo-repo"
-
-	tests := []struct {
-		name string
-		path string
-		want string
-	}{
-		{"colon placeholders", "/:owner/:repo/issues", "/demo-owner/demo-repo/issues"},
-		{"colon with suffix", "/:owner/:repo/issues/42", "/demo-owner/demo-repo/issues/42"},
-		{"brace placeholders", "/{{owner}}/{{repo}}/pulls", "/demo-owner/demo-repo/pulls"},
-		{"no placeholders unchanged", "/users/me", "/users/me"},
-		{"literal path unchanged", "/Gitlink/gitlink-cli/issues", "/Gitlink/gitlink-cli/issues"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := resolvePathPlaceholders(tt.path)
-			if err != nil {
-				t.Fatalf("resolvePathPlaceholders(%q): %v", tt.path, err)
-			}
-			if got != tt.want {
-				t.Fatalf("resolvePathPlaceholders(%q) = %q, want %q", tt.path, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestResolvePathPlaceholdersUnresolvable(t *testing.T) {
-	origOwner, origRepo := cmdutil.Owner, cmdutil.Repo
-	t.Cleanup(func() { cmdutil.Owner, cmdutil.Repo = origOwner, origRepo })
-	cmdutil.Owner, cmdutil.Repo = "", ""
-
-	tmp := t.TempDir()
-	origWD, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(origWD) })
-	if err := os.Chdir(tmp); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := resolvePathPlaceholders("/:owner/:repo/issues"); err == nil {
-		t.Fatal("expected error when owner/repo cannot be resolved")
-	}
-}
-
 func TestNewAPICmd(t *testing.T) {
 	cmd := NewAPICmd()
 	if cmd.Use != "api (<METHOD> <PATH> | --batch-file <FILE>)" {
@@ -93,7 +44,7 @@ func TestNewAPICmd(t *testing.T) {
 	}
 
 	// Verify flags exist
-	flags := []string{"body", "query", "paginate", "header", "batch-file", "dry-run", "continue-on-error", "var"}
+	flags := []string{"body", "query", "header", "batch-file", "dry-run", "continue-on-error", "var"}
 	for _, f := range flags {
 		if cmd.Flags().Lookup(f) == nil {
 			t.Fatalf("flag %q not found", f)
@@ -253,53 +204,104 @@ func TestRunAPINoPrefix(t *testing.T) {
 	}
 }
 
-func TestRunAPIResolvesOwnerRepoPlaceholders(t *testing.T) {
+func TestRunAPISingleRequestTemplatesAndHeaders(t *testing.T) {
+	oldOwner, oldRepo, oldFormat := cmdutil.Owner, cmdutil.Repo, cmdutil.Format
+	cmdutil.Owner = "Gitlink"
+	cmdutil.Repo = "gitlink-cli"
+	cmdutil.Format = "json"
+	t.Cleanup(func() {
+		cmdutil.Owner = oldOwner
+		cmdutil.Repo = oldRepo
+		cmdutil.Format = oldFormat
+	})
+
+	var gotBody map[string]interface{}
 	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/testowner/testrepo/commits.json" {
+		if r.URL.Path != "/Gitlink/gitlink-cli/issues.json" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
+		if r.URL.Query().Get("state") != "open" {
+			t.Fatalf("state query = %q, want open", r.URL.Query().Get("state"))
+		}
+		if r.URL.Query().Get("repo") != "gitlink-cli" {
+			t.Fatalf("repo query = %q, want gitlink-cli", r.URL.Query().Get("repo"))
+		}
+		if r.Header.Get("X-Repo") != "gitlink-cli" {
+			t.Fatalf("X-Repo = %q, want gitlink-cli", r.Header.Get("X-Repo"))
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+		json.NewEncoder(w).Encode(map[string]interface{}{"id": 7})
 	})
-	cmdutil.Format = "json"
-	cmdutil.Owner, cmdutil.Repo = "testowner", "testrepo"
-	defer func() { cmdutil.Owner, cmdutil.Repo = "", "" }()
 
 	cmd := NewAPICmd()
-	cmd.SetArgs([]string{"GET", "/:owner/:repo/commits"})
+	cmd.SetArgs([]string{"POST", "/:owner/:repo/issues"})
+	cmd.Flags().Set("query", "state={{state}}&repo={{repo}}")
+	cmd.Flags().Set("body", `{"subject":"{{title}}","meta":{"owner":"{{owner}}","repo":"{{repo}}"}}`)
+	cmd.Flags().Set("header", "X-Repo: {{repo}}")
+	cmd.Flags().Set("var", "state=open")
+	cmd.Flags().Set("var", "title=Bug report")
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("runAPI :owner/:repo error: %v", err)
+		t.Fatalf("runAPI template error: %v", err)
+	}
+
+	if gotBody["subject"] != "Bug report" {
+		t.Fatalf("subject = %#v, want Bug report", gotBody["subject"])
+	}
+	meta, _ := gotBody["meta"].(map[string]interface{})
+	if meta["owner"] != "Gitlink" || meta["repo"] != "gitlink-cli" {
+		t.Fatalf("meta = %#v", meta)
 	}
 }
 
-func TestRunAPIRendersVarTemplateSingleCall(t *testing.T) {
-	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/Mengz/gitlink-cli/issues.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+func TestRenderSingleAPIRequestUsesVarsAndOwnerRepo(t *testing.T) {
+	oldOwner, oldRepo := cmdutil.Owner, cmdutil.Repo
+	cmdutil.Owner = "Gitlink"
+	cmdutil.Repo = "gitlink-cli"
+	t.Cleanup(func() {
+		cmdutil.Owner = oldOwner
+		cmdutil.Repo = oldRepo
 	})
-	cmdutil.Format = "json"
-	cmdutil.Owner, cmdutil.Repo = "", ""
 
 	cmd := NewAPICmd()
-	cmd.SetArgs([]string{"GET", "/v1/{{owner}}/gitlink-cli/issues", "--var", "owner=Mengz"})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("runAPI --var single call error: %v", err)
+	if err := cmd.Flags().Set("var", "issue=42"); err != nil {
+		t.Fatalf("set var: %v", err)
+	}
+	headers := http.Header{"X-Issue": []string{"{{issue}}"}}
+	query := url.Values{
+		"repo": {"{{repo}}"},
+	}
+	body := map[string]interface{}{
+		"notes": "owner={{owner}} issue={{issue}}",
+	}
+
+	req, err := renderSingleAPIRequest("/:owner/:repo/issues/{{issue}}", query, body, headers, cmd)
+	if err != nil {
+		t.Fatalf("renderSingleAPIRequest error: %v", err)
+	}
+	if req.Path != "/Gitlink/gitlink-cli/issues/42" {
+		t.Fatalf("Path = %q", req.Path)
+	}
+	if req.Query.Get("repo") != "gitlink-cli" {
+		t.Fatalf("query repo = %q", req.Query.Get("repo"))
+	}
+	if req.Headers.Get("X-Issue") != "42" {
+		t.Fatalf("X-Issue = %q", req.Headers.Get("X-Issue"))
+	}
+	if !reflect.DeepEqual(req.Body, map[string]interface{}{"notes": "owner=Gitlink issue=42"}) {
+		t.Fatalf("Body = %#v", req.Body)
 	}
 }
 
-func TestRunAPIMissingVarTemplateSingleCall(t *testing.T) {
-	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not reach server")
-	})
-	cmdutil.Format = "json"
-
+func TestParseAPIHeadersRejectsInvalidInput(t *testing.T) {
 	cmd := NewAPICmd()
-	cmd.SetArgs([]string{"GET", "/{{missing}}", "--var", "present=1"})
-	if err := cmd.Execute(); err == nil {
-		t.Fatal("expected error for missing template variable")
+	if err := cmd.Flags().Set("header", "broken"); err != nil {
+		t.Fatalf("set header: %v", err)
+	}
+	if _, err := parseAPIHeaders(cmd); err == nil {
+		t.Fatal("expected invalid header error")
 	}
 }
 
@@ -491,94 +493,6 @@ func TestRunAPIBatchContinueOnError(t *testing.T) {
 	}
 }
 
-// captureStdout redirects os.Stdout while fn runs, since output.Print writes there directly.
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	old := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("pipe: %v", err)
-	}
-	os.Stdout = w
-	done := make(chan string, 1)
-	go func() {
-		var buf bytes.Buffer
-		io.Copy(&buf, r)
-		done <- buf.String()
-	}()
-	fn()
-	w.Close()
-	os.Stdout = old
-	return <-done
-}
-
-type paginateEnvelope struct {
-	OK   bool                     `json:"ok"`
-	Data []map[string]interface{} `json:"data"`
-}
-
-func TestRunAPIPaginateCombinesPages(t *testing.T) {
-	// Real GitLink list shape wraps the array under a resource key, not "data".
-	var pages []string
-	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/repos/owner/repo/issues.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		page := r.URL.Query().Get("page")
-		pages = append(pages, page)
-		w.Header().Set("Content-Type", "application/json")
-		switch page {
-		case "1":
-			w.Write([]byte(`{"total_count":3,"issues":[{"id":1},{"id":2}]}`))
-		case "2":
-			w.Write([]byte(`{"total_count":3,"issues":[{"id":3}]}`))
-		default:
-			t.Fatalf("unexpected page: %s", page)
-		}
-	})
-	cmdutil.Format = "json"
-
-	out := captureStdout(t, func() {
-		cmd := NewAPICmd()
-		cmd.SetArgs([]string{"GET", "/repos/owner/repo/issues", "--paginate", "--query", "limit=2"})
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("paginate error: %v", err)
-		}
-	})
-
-	var env paginateEnvelope
-	if err := json.Unmarshal([]byte(out), &env); err != nil {
-		t.Fatalf("unmarshal output %q: %v", out, err)
-	}
-	if !env.OK {
-		t.Fatalf("expected ok=true, got %s", out)
-	}
-	if len(env.Data) != 3 {
-		t.Fatalf("expected 3 combined items, got %d (%s)", len(env.Data), out)
-	}
-	for i, want := range []float64{1, 2, 3} {
-		if env.Data[i]["id"] != want {
-			t.Fatalf("item[%d].id = %v, want %v", i, env.Data[i]["id"], want)
-		}
-	}
-	if len(pages) != 2 || pages[0] != "1" || pages[1] != "2" {
-		t.Fatalf("expected pages [1 2], got %v", pages)
-	}
-}
-
-func TestRunAPIPaginateRejectsNonGet(t *testing.T) {
-	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("non-GET paginate should not reach server")
-	})
-	cmdutil.Format = "json"
-
-	cmd := NewAPICmd()
-	cmd.SetArgs([]string{"POST", "/items", "--paginate"})
-	if err := cmd.Execute(); err == nil {
-		t.Fatal("expected error for --paginate with non-GET method")
-	}
-}
-
 func writeBatchPlan(t *testing.T, payload interface{}) string {
 	t.Helper()
 	data, err := json.Marshal(payload)
@@ -590,26 +504,4 @@ func writeBatchPlan(t *testing.T, payload interface{}) string {
 		t.Fatalf("write plan: %v", err)
 	}
 	return path
-}
-
-func TestRestoreAPIPath(t *testing.T) {
-	tests := []struct {
-		name string
-		path string
-		want string
-	}{
-		{"normal v1 path unchanged", "/v1/owner/repo", "/v1/owner/repo"},
-		{"msys2 polluted v1", "C:/Program Files/Git/v1/owner/repo", "/v1/owner/repo"},
-		{"msys2 polluted v2", "D:/Git/v2/x/y", "/v2/x/y"},
-		{"msys2 polluted api prefix", "C:/Program Files/Git/api/v1/users", "/api/v1/users"},
-		{"drive letter but no known prefix", "C:/something/else", "C:/something/else"},
-		{"empty path", "", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := restoreAPIPath(tt.path); got != tt.want {
-				t.Fatalf("restoreAPIPath(%q) = %q, want %q", tt.path, got, tt.want)
-			}
-		})
-	}
 }

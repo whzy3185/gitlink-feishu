@@ -48,6 +48,10 @@ func New() (*Client, error) {
 }
 
 func (c *Client) Do(method, path string, body interface{}, query url.Values) (*output.Envelope, error) {
+	return c.DoWithHeaders(method, path, body, query, nil)
+}
+
+func (c *Client) DoWithHeaders(method, path string, body interface{}, query url.Values, headers http.Header) (*output.Envelope, error) {
 	path = normalizeAPIPath(c.BaseURL, path)
 
 	// Append .json suffix if not already present (GitLink API convention)
@@ -83,6 +87,11 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 	req, err := http.NewRequest(method, fullURL, bodyReader)
 	if err != nil {
 		return nil, err
+	}
+	for key, values := range headers {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
 	}
 
 	if c.Debug {
