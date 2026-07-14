@@ -5,7 +5,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue.svg)](https://golang.org)
 [![npm version](https://img.shields.io/npm/v/@gitlink-ai/cli.svg)](https://www.npmjs.com/package/@gitlink-ai/cli)
 
-The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans and AI Agents. Supports **macOS, Linux, and Windows**. Covers repository management, issue tracking, pull requests, webhooks, member collaboration, CI/CD, and AI-powered workflows, with 40+ commands and AI Agent [Skills](./skills/).
+The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans and AI Agents. Supports **macOS, Linux, and Windows**. Covers repository management, wiki pages, issue tracking, pull requests, webhooks, member collaboration, CI/CD, and AI-powered workflows, with 40+ commands and AI Agent [Skills](./skills/).
 
 **[中文文档](./README.zh-CN.md)**
 
@@ -83,7 +83,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 ## Why gitlink-cli?
 
 - **Agent-Native Design** — Structured [Skills](./skills/) out of the box, compatible with Claude Code, OpenClaw, and other AI platforms — Agents can operate GitLink with zero extra setup
-- **Wide Coverage** — Repository, Issue, PR, Webhook, Member, Branch, Release, CI, Pipeline, Org, Search, and User workflows are covered by high-level commands
+- **Wide Coverage** — Repository, Wiki, Issue, PR, Webhook, Member, Branch, Release, CI, Pipeline, Org, Search, and User workflows are covered by high-level commands
 - **AI-Friendly & Optimized** — Every command is tested with real Agents, featuring concise parameters, smart defaults, and structured output
 - **Cross-Platform** — Runs on macOS, Linux, and Windows (x64/arm64), install via `npm install -g @gitlink-ai/cli` in one command, binary auto-downloaded
 - **Open Source, Zero Barriers** — MulanPSL-2.0 license, ready to use, just `npm install`
@@ -96,7 +96,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | Category | Capabilities |
 |----------|-------------|
 | 📦 Repo | List, create, fork, delete repositories, view repo info, insights, and interactions |
-| ⭐ Reaction | Follow, unfollow, like, unlike, list watchers and stargazers |
+| 📚 Wiki | List, view, create, update, and delete wiki pages |
 | 🐛 Issue | Create, update, close, batch close, comment on issues |
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
@@ -107,7 +107,6 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔧 CI | View builds, logs, CI/CD operations |
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
-| 📖 Wiki | List, view, create, update, delete, and export wiki pages |
 | 🔍 Search | Search repositories, users |
 | 👤 User | View user profiles and info |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
@@ -248,22 +247,25 @@ gitlink-cli repo +create -n my-project -d "Project description"
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
 ```
 
-### Repository Reactions
+### Wiki Management
 
 ```bash
-# List repository watchers
-gitlink-cli reaction +watchers --owner Gitlink --repo forgeplus
+# List wiki pages
+gitlink-cli wiki +list --owner Gitlink --repo forgeplus
 
-# List repository stargazers
-gitlink-cli reaction +stargazers --owner Gitlink --repo forgeplus
+# View a wiki page
+gitlink-cli wiki +view --owner Gitlink --repo forgeplus --page Home
 
-# Follow or unfollow a repository
-gitlink-cli reaction +follow --owner Gitlink --repo forgeplus
-gitlink-cli reaction +unfollow --owner Gitlink --repo forgeplus
+# Create a wiki page from inline content
+gitlink-cli wiki +create --owner Gitlink --repo forgeplus \
+  --page Home --title Home --content "Welcome to the project wiki"
 
-# Like or unlike a repository
-gitlink-cli reaction +like --owner Gitlink --repo forgeplus
-gitlink-cli reaction +unlike --owner Gitlink --repo forgeplus
+# Update a wiki page from a Markdown file
+gitlink-cli wiki +update --owner Gitlink --repo forgeplus \
+  --page Home --file docs/wiki-home.md --message "Update Home"
+
+# Delete a wiki page
+gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --page Home
 ```
 
 ### Webhook Management
@@ -310,22 +312,6 @@ gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role develope
 ```bash
 # List issues
 gitlink-cli issue +list --owner Gitlink --repo forgeplus
-
-# Fetch all pages automatically (works on all paginated list commands:
-# issue/pr/branch/release/milestone/org/repo/label/member/webhook/tag/commit +list,
-# issue +comments, repo +watchers/+stargazers/+forks, search +repos/+users)
-gitlink-cli issue +list --owner Gitlink --repo forgeplus --all
-
-# Commit history and single commit details
-gitlink-cli commit +list --owner Gitlink --repo forgeplus --ref develop --all
-gitlink-cli commit +view --owner Gitlink --repo forgeplus --sha <sha>
-
-# Git tags
-gitlink-cli tag +list --owner Gitlink --repo forgeplus --all
-
-# Show a single tag by name (falls back to a list scan when the
-# show endpoint's existence precheck misfires)
-gitlink-cli tag +view --owner Gitlink --repo forgeplus -n v4.0.0
 
 # Create an issue
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: Login failed" -b "Steps to reproduce..."
@@ -594,14 +580,6 @@ gitlink-cli workflow +pr-summary --from shortcuts/workflow/testdata/pr_summary.j
 # Repository workflow report by read-only GitLink fetch
 gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
 
-# Optional full PR review attribution. This deep-fetches formal reviews and
-# PR-associated Issue journals for analyzed PRs, so keep it explicit.
-gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --include-pr-review-audit --format json > report.review-audit.json
-
-# Limit analysis only when an intentional sample is needed.
-# By default, repo-report paginates through all open issues and pull requests.
-gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --issue-limit 20 --pr-limit 50 --format markdown
-
 # Repository workflow report from a local JSON file
 gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format json
 ```
@@ -619,86 +597,6 @@ Safety:
 - They do not depend on LLM APIs.
 - `workflow +pr-summary` does not comment, approve, reject, or merge pull requests.
 - `workflow +repo-report` aggregates health, issue triage, and PR review summary signals without remote writes.
-- `workflow +repo-report --include-pr-review-audit` remains read-only. It treats formal review objects as authoritative review evidence and keeps submitter, reviewer, participant, and system journal activity separate.
-
-### Feishu Collaboration Export
-
-`feishu` turns `workflow +repo-report` JSON into Feishu collaboration outputs.
-
-`workflow +repo-report` paginates through all open issues and pull requests by
-default. Feishu cards label these values as analyzed counts. Passing
-`--issue-limit` or `--pr-limit` intentionally limits the analysis and the
-resulting values must not be interpreted as repository totals.
-
-Stable usage:
-
-```bash
-gitlink-cli workflow +repo-report --owner "$GITLINK_OWNER" --repo "$GITLINK_REPO" --format json > report.json
-gitlink-cli workflow +repo-report --owner "$GITLINK_OWNER" --repo "$GITLINK_REPO" --include-pr-review-audit --format json > report.review-audit.json
-
-gitlink-cli feishu +notify --from-workflow-json report.json --format json
-gitlink-cli feishu +notify --from-workflow-json report.json --send --format table
-gitlink-cli feishu +owner-digest --from-workflow-json report.review-audit.json --format table
-
-gitlink-cli feishu +weekly-report --from-workflow-json report.json --format markdown
-gitlink-cli feishu +owner-digest --from-workflow-json report.json --format markdown
-gitlink-cli feishu +contributor-digest --from-workflow-json report.json --format markdown
-gitlink-cli feishu +bitable-records --from-workflow-json report.json --format json
-gitlink-cli feishu +task-preview --from-workflow-json report.json --format markdown
-```
-
-Experimental Open Platform usage:
-
-```bash
-gitlink-cli feishu +doc-export --from-workflow-json report.json --wiki-url "$FEISHU_WIKI_URL" --send --format table
-gitlink-cli feishu +bitable-sync --from-workflow-json report.json --tables reports,issues,prs,tasks --send --format table
-gitlink-cli feishu +task-create --from-workflow-json report.json --send --format table
-```
-
-GitLink write operations are not implemented in this branch. Feishu card buttons are navigation-only. Open Platform commands require explicit `--send` and a self-built app with resource permissions. Whether these experimental capabilities should be enabled in official deployments is left to GitLink maintainers and deployment administrators.
-
-Details:
-
-- [Feishu integration](./docs/feishu-integration.md)
-- [Feishu capability layers](./docs/FEISHU_CAPABILITY_LAYERS.md)
-- [Feishu environment variables](./docs/FEISHU_ENVIRONMENT.md)
-- [Feishu permission matrix](./reports/FEISHU_PERMISSION_MATRIX.md)
-
-Local setup and smoke testing:
-
-```powershell
-.\scripts\feishu-gitlink-setup.ps1
-.\scripts\feishu-gitlink-env-check.ps1 -Layer stable
-.\scripts\feishu-gitlink-smoke.ps1 -Mode preview
-```
-
-The setup script stores real values only in `.local/feishu-gitlink.env.ps1`, which is ignored.
-
-### Wiki
-
-`wiki` manages a repository's wiki pages. The numeric GitLink project ID is
-resolved from `--owner/--repo` automatically, or pass `--project-id`.
-
-```bash
-# List and view wiki pages
-gitlink-cli wiki +list --owner Gitlink --repo gitlink-cli
-gitlink-cli wiki +view --owner Gitlink --repo gitlink-cli --page Home
-
-# Create a page (content is base64-encoded automatically)
-gitlink-cli wiki +create --owner Gitlink --repo gitlink-cli --page Home --title Home --content "# Welcome"
-
-# Create from a file
-gitlink-cli wiki +create --owner Gitlink --repo gitlink-cli --page Guide --content-file guide.md
-
-# Update (content optional) and preview with --dry-run
-gitlink-cli wiki +update --owner Gitlink --repo gitlink-cli --page Home --title "Home Page" --dry-run
-
-# Delete a page
-gitlink-cli wiki +delete --owner Gitlink --repo gitlink-cli --page Home
-
-# Export the wiki (markdown, pdf, or html)
-gitlink-cli wiki +export --owner Gitlink --repo gitlink-cli --type markdown
-```
 
 ### Raw API
 
@@ -762,7 +660,7 @@ See [skills/README.md](skills/README.md) for details.
 |-------|-------------|
 | `gitlink-shared` | Authentication, global parameters, safety rules, API notes |
 | `gitlink-repo` | Repository operations (create, view, delete, fork, insights, etc.) |
-| `gitlink-reaction` | Repository reactions (follow, like, watchers, stargazers) |
+| `gitlink-wiki` | Wiki operations (list, view, create, update, delete) |
 | `gitlink-issue` | Issue operations (create, update, close, comment, etc.) |
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
 | `gitlink-member` | Repository member and invite link management |

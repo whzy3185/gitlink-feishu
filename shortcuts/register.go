@@ -54,6 +54,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"webhook":   webhook.Shortcuts(tr),
 		"wiki":      wiki.Shortcuts(),
 		"workflow":  workflow.Shortcuts(),
+		"wiki":      wiki.Shortcuts(tr),
 	}
 
 	descriptions := map[string]string{
@@ -77,6 +78,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"webhook":   tr.T("cmd.webhook.short"),
 		"wiki":      "Wiki page operations",
 		"workflow":  "AI agent workflow analysis",
+		"wiki":      tr.T("cmd.wiki.short"),
 	}
 
 	for name, shortcuts := range groups {
