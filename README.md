@@ -424,6 +424,16 @@ gitlink-cli pr +reviews --owner Gitlink --repo forgeplus -i 42
 # Create a PR review (with dry-run preview)
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM" --dry-run
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
+
+# List review comments and unresolved discussion threads
+gitlink-cli pr +review-comments --owner Gitlink --repo forgeplus -i 42 --state opened --need-respond true --full
+
+# Create a line-level review comment or reply
+gitlink-cli pr +review-comment --owner Gitlink --repo forgeplus -i 42 -b "Please handle this edge case" --type problem --review-id 7 --line-code abc_1_2 --commit deadbeef --path main.go --dry-run
+
+# Resolve, edit, or delete a review comment
+gitlink-cli pr +review-comment-update --owner Gitlink --repo forgeplus -i 42 --comment-id 99 --state resolved
+gitlink-cli pr +review-comment-delete --owner Gitlink --repo forgeplus -i 42 --comment-id 99
 ```
 
 ### Branch Management

@@ -92,6 +92,155 @@ func TestPRCommentFailsWhenIssueFieldMissing(t *testing.T) {
 	}
 }
 
+func TestPRReviewCommentsListSendsFilters(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/pulls/13/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		q := r.URL.Query()
+		assertEqual(t, q.Get("keyword"), "race")
+		assertEqual(t, q.Get("review_id"), "5")
+		assertEqual(t, q.Get("need_respond"), "true")
+		assertEqual(t, q.Get("state"), "opened")
+		assertEqual(t, q.Get("parent_id"), "7")
+		assertEqual(t, q.Get("path"), "main.go")
+		assertEqual(t, q.Get("is_full"), "true")
+		assertEqual(t, q.Get("sort_by"), "updated_on")
+		assertEqual(t, q.Get("sort_direction"), "desc")
+		writeJSON(t, w, map[string]interface{}{
+			"total_count": float64(1),
+			"journals": []interface{}{
+				map[string]interface{}{"id": float64(9), "note": "race"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comments", map[string]string{
+		"id":             "13",
+		"keyword":        "race",
+		"review-id":      "5",
+		"need-respond":   "true",
+		"state":          "opened",
+		"parent-id":      "7",
+		"path":           "main.go",
+		"full":           "true",
+		"sort-by":        "updated_on",
+		"sort-direction": "desc",
+	})
+	if err != nil {
+		t.Fatalf("review-comments failed: %v", err)
+	}
+}
+
+func TestPRReviewCommentCreateSendsPayload(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/pulls/13/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, payload)
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comment", map[string]string{
+		"id":        "13",
+		"body":      "Please handle this edge case",
+		"type":      "problem",
+		"review-id": "5",
+		"line-code": "abc_1_2",
+		"commit":    "deadbeef",
+		"path":      "main.go",
+		"parent-id": "7",
+		"diff-json": `{"name":"main.go","addition":1}`,
+	})
+	if err != nil {
+		t.Fatalf("review-comment failed: %v", err)
+	}
+	assertEqual(t, payload["type"], "problem")
+	assertEqual(t, payload["note"], "Please handle this edge case")
+	assertEqual(t, payload["review_id"], float64(5))
+	assertEqual(t, payload["line_code"], "abc_1_2")
+	assertEqual(t, payload["commit_id"], "deadbeef")
+	assertEqual(t, payload["path"], "main.go")
+	assertEqual(t, payload["parent_id"], float64(7))
+	diff, ok := payload["diff"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("diff = %v, want object", payload["diff"])
+	}
+	assertEqual(t, diff["name"], "main.go")
+	assertEqual(t, diff["addition"], float64(1))
+}
+
+func TestPRReviewCommentUpdateSendsPayload(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PUT" || r.URL.Path != "/v1/owner/repo/pulls/13/journals/9.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, payload)
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comment-update", map[string]string{
+		"id":         "13",
+		"comment-id": "9",
+		"body":       "Resolved after follow-up",
+		"commit":     "cafebabe",
+		"state":      "resolved",
+	})
+	if err != nil {
+		t.Fatalf("review-comment-update failed: %v", err)
+	}
+	assertEqual(t, payload["note"], "Resolved after follow-up")
+	assertEqual(t, payload["commit_id"], "cafebabe")
+	assertEqual(t, payload["state"], "resolved")
+}
+
+func TestPRReviewCommentDelete(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/pulls/13/journals/9.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"status": float64(0), "message": "success"})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comment-delete", map[string]string{"id": "13", "comment-id": "9"})
+	if err != nil {
+		t.Fatalf("review-comment-delete failed: %v", err)
+	}
+}
+
+func TestPRReviewCommentRejectsInvalidArgs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("invalid args should not call API, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	cases := []struct {
+		name string
+		cmd  string
+		args map[string]string
+	}{
+		{name: "bad list state", cmd: "review-comments", args: map[string]string{"id": "13", "state": "done"}},
+		{name: "bad bool", cmd: "review-comments", args: map[string]string{"id": "13", "need-respond": "maybe"}},
+		{name: "bad type", cmd: "review-comment", args: map[string]string{"id": "13", "body": "x", "type": "note"}},
+		{name: "bad diff json", cmd: "review-comment", args: map[string]string{"id": "13", "body": "x", "diff-json": "{"}},
+		{name: "missing update fields", cmd: "review-comment-update", args: map[string]string{"id": "13", "comment-id": "9"}},
+		{name: "bad comment id", cmd: "review-comment-delete", args: map[string]string{"id": "13", "comment-id": "abc"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := runPRShortcut(t, server, tc.cmd, tc.args); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
+	}
+}
+
 // --- list ---
 
 func TestPRList(t *testing.T) {

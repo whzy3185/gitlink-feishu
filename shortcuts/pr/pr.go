@@ -1,18 +1,16 @@
 package pr
 
 import (
+	"encoding/json"
 	"fmt"
-	"html"
 	"net/url"
-	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
-
-var pullRequestJournalHTMLTagPattern = regexp.MustCompile(`<[^>]+>`)
 
 func v1RepoPath(ctx *common.RuntimeContext) string {
 	return fmt.Sprintf("/v1/%s/%s", ctx.Owner, ctx.Repo)
@@ -142,7 +140,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				if err := enrichPullRequestTimestamps(ctx, env); err != nil {
+				if err := enrichPullRequestClosedAt(ctx, env); err != nil {
 					return err
 				}
 				return ctx.Output(env)
@@ -435,6 +433,62 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "review-comments",
+			Description: "List pull request review comments and discussion threads",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "keyword", Short: "k", Usage: "Search review comment content"},
+				{Name: "review-id", Usage: "Filter by review ID"},
+				{Name: "need-respond", Usage: "Filter comments that need response: true or false"},
+				{Name: "state", Short: "s", Usage: "Filter by opened, resolved, or disabled"},
+				{Name: "parent-id", Usage: "Filter replies under a parent comment ID"},
+				{Name: "path", Usage: "Filter by file path"},
+				{Name: "full", Usage: "Include replies in the response", Bool: true, Default: "false"},
+				{Name: "sort-by", Usage: "Sort field: created_on or updated_on"},
+				{Name: "sort-direction", Usage: "Sort direction: asc or desc"},
+			},
+			Run: runPRReviewComments,
+		},
+		{
+			Name:        "review-comment",
+			Description: "Create a pull request review comment or reply",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
+				{Name: "type", Usage: "Comment type: comment or problem", Default: "comment"},
+				{Name: "review-id", Usage: "Review ID"},
+				{Name: "line-code", Usage: "GitLink diff line code"},
+				{Name: "commit", Usage: "Commit SHA for the commented diff"},
+				{Name: "path", Usage: "Commented file path"},
+				{Name: "parent-id", Usage: "Parent review comment ID for a reply"},
+				{Name: "diff-json", Usage: "Raw diff JSON object for line comments"},
+				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
+			},
+			Run: runPRReviewCommentCreate,
+		},
+		{
+			Name:        "review-comment-update",
+			Description: "Update a pull request review comment note, commit, or state",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "comment-id", Usage: "Review comment ID", Required: true},
+				{Name: "body", Short: "b", Usage: tr.T("flag.comment.body")},
+				{Name: "commit", Usage: "Commit SHA"},
+				{Name: "state", Short: "s", Usage: "New state: opened, resolved, or disabled"},
+				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
+			},
+			Run: runPRReviewCommentUpdate,
+		},
+		{
+			Name:        "review-comment-delete",
+			Description: "Delete a pull request review comment",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "comment-id", Usage: "Review comment ID", Required: true},
+			},
+			Run: runPRReviewCommentDelete,
+		},
 	}
 }
 
@@ -447,6 +501,265 @@ func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
 
 func prV1Path(ctx *common.RuntimeContext, id string) string {
 	return fmt.Sprintf("/v1/%s/%s/pulls/%s", ctx.Owner, ctx.Repo, id)
+}
+
+func prReviewCommentPath(ctx *common.RuntimeContext, prID string) string {
+	return fmt.Sprintf("%s/journals", prV1Path(ctx, url.PathEscape(prID)))
+}
+
+func prReviewCommentItemPath(ctx *common.RuntimeContext, prID, commentID string) string {
+	return fmt.Sprintf("%s/%s", prReviewCommentPath(ctx, prID), url.PathEscape(commentID))
+}
+
+func runPRReviewComments(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	id, err := ctx.RequireArg("id")
+	if err != nil {
+		return err
+	}
+	q := url.Values{}
+	setPRQueryIfPresent(q, "keyword", ctx.Arg("keyword"))
+	if reviewID := ctx.Arg("review-id"); reviewID != "" {
+		if _, err := parsePRPositiveID(reviewID, "review-id"); err != nil {
+			return err
+		}
+		q.Set("review_id", strings.TrimSpace(reviewID))
+	}
+	if needRespond := ctx.Arg("need-respond"); needRespond != "" {
+		if err := validatePRBoolString("need-respond", needRespond); err != nil {
+			return err
+		}
+		q.Set("need_respond", strings.ToLower(strings.TrimSpace(needRespond)))
+	}
+	if state := ctx.Arg("state"); state != "" {
+		if err := validatePRReviewCommentState(state); err != nil {
+			return err
+		}
+		q.Set("state", strings.TrimSpace(state))
+	}
+	if parentID := ctx.Arg("parent-id"); parentID != "" {
+		if _, err := parsePRPositiveID(parentID, "parent-id"); err != nil {
+			return err
+		}
+		q.Set("parent_id", strings.TrimSpace(parentID))
+	}
+	setPRQueryIfPresent(q, "path", ctx.Arg("path"))
+	if ctx.Arg("full") == "true" {
+		q.Set("is_full", "true")
+	}
+	setPRQueryIfPresent(q, "sort_by", ctx.Arg("sort-by"))
+	setPRQueryIfPresent(q, "sort_direction", ctx.Arg("sort-direction"))
+	env, err := ctx.CallAPIWithQuery("GET", prReviewCommentPath(ctx, id), q)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runPRReviewCommentCreate(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	id, err := ctx.RequireArg("id")
+	if err != nil {
+		return err
+	}
+	body, err := ctx.RequireArg("body")
+	if err != nil {
+		return err
+	}
+	payload, err := prReviewCommentCreatePayload(ctx, body)
+	if err != nil {
+		return err
+	}
+	if ctx.Arg("dry-run") == "true" {
+		return ctx.OutputData(map[string]interface{}{
+			"repository":   fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+			"pull_request": id,
+			"dry_run":      true,
+			"action":       "create_review_comment",
+			"payload":      payload,
+		})
+	}
+	env, err := ctx.CallAPI("POST", prReviewCommentPath(ctx, id), payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runPRReviewCommentUpdate(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	prID, commentID, err := prReviewCommentTarget(ctx)
+	if err != nil {
+		return err
+	}
+	payload, err := prReviewCommentUpdatePayload(ctx)
+	if err != nil {
+		return err
+	}
+	if ctx.Arg("dry-run") == "true" {
+		return ctx.OutputData(map[string]interface{}{
+			"repository":     fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+			"pull_request":   prID,
+			"review_comment": commentID,
+			"dry_run":        true,
+			"action":         "update_review_comment",
+			"payload":        payload,
+		})
+	}
+	env, err := ctx.CallAPI("PUT", prReviewCommentItemPath(ctx, prID, commentID), payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runPRReviewCommentDelete(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	prID, commentID, err := prReviewCommentTarget(ctx)
+	if err != nil {
+		return err
+	}
+	env, err := ctx.CallAPI("DELETE", prReviewCommentItemPath(ctx, prID, commentID), nil)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func prReviewCommentCreatePayload(ctx *common.RuntimeContext, body string) (map[string]interface{}, error) {
+	commentType := firstPRNonEmpty(ctx.Arg("type"), "comment")
+	if err := validatePRReviewCommentType(commentType); err != nil {
+		return nil, err
+	}
+	payload := map[string]interface{}{
+		"type": commentType,
+		"note": body,
+	}
+	for _, field := range []struct {
+		flag string
+		key  string
+	}{
+		{"review-id", "review_id"},
+		{"parent-id", "parent_id"},
+	} {
+		if value := ctx.Arg(field.flag); value != "" {
+			id, err := parsePRPositiveID(value, field.flag)
+			if err != nil {
+				return nil, err
+			}
+			payload[field.key] = id
+		}
+	}
+	setPayloadStringIfPresent(payload, "line_code", ctx.Arg("line-code"))
+	setPayloadStringIfPresent(payload, "commit_id", ctx.Arg("commit"))
+	setPayloadStringIfPresent(payload, "path", ctx.Arg("path"))
+	if rawDiff := strings.TrimSpace(ctx.Arg("diff-json")); rawDiff != "" {
+		var diff map[string]interface{}
+		if err := json.Unmarshal([]byte(rawDiff), &diff); err != nil {
+			return nil, fmt.Errorf("invalid --diff-json: %w", err)
+		}
+		payload["diff"] = diff
+	}
+	return payload, nil
+}
+
+func prReviewCommentUpdatePayload(ctx *common.RuntimeContext) (map[string]interface{}, error) {
+	payload := map[string]interface{}{}
+	setPayloadStringIfPresent(payload, "note", ctx.Arg("body"))
+	setPayloadStringIfPresent(payload, "commit_id", ctx.Arg("commit"))
+	if state := ctx.Arg("state"); state != "" {
+		if err := validatePRReviewCommentState(state); err != nil {
+			return nil, err
+		}
+		payload["state"] = strings.TrimSpace(state)
+	}
+	if len(payload) == 0 {
+		return nil, fmt.Errorf("at least one of --body, --commit, or --state is required")
+	}
+	return payload, nil
+}
+
+func prReviewCommentTarget(ctx *common.RuntimeContext) (string, string, error) {
+	prID, err := ctx.RequireArg("id")
+	if err != nil {
+		return "", "", err
+	}
+	commentID, err := ctx.RequireArg("comment-id")
+	if err != nil {
+		return "", "", err
+	}
+	if _, err := parsePRPositiveID(commentID, "comment-id"); err != nil {
+		return "", "", err
+	}
+	return strings.TrimSpace(prID), strings.TrimSpace(commentID), nil
+}
+
+func validatePRReviewCommentType(value string) error {
+	switch strings.TrimSpace(value) {
+	case "comment", "problem":
+		return nil
+	default:
+		return fmt.Errorf("invalid --type value %q: use comment or problem", value)
+	}
+}
+
+func validatePRReviewCommentState(value string) error {
+	switch strings.TrimSpace(value) {
+	case "opened", "resolved", "disabled":
+		return nil
+	default:
+		return fmt.Errorf("invalid --state value %q: use opened, resolved, or disabled", value)
+	}
+}
+
+func validatePRBoolString(flagName, value string) error {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true", "false":
+		return nil
+	default:
+		return fmt.Errorf("invalid --%s value %q: use true or false", flagName, value)
+	}
+}
+
+func parsePRPositiveID(value, flagName string) (int, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0, fmt.Errorf("--%s contains an empty ID", flagName)
+	}
+	id, err := strconv.Atoi(trimmed)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("--%s must be a positive numeric ID", flagName)
+	}
+	return id, nil
+}
+
+func setPRQueryIfPresent(q url.Values, key, value string) {
+	if strings.TrimSpace(value) != "" {
+		q.Set(key, strings.TrimSpace(value))
+	}
+}
+
+func setPayloadStringIfPresent(payload map[string]interface{}, key, value string) {
+	if strings.TrimSpace(value) != "" {
+		payload[key] = strings.TrimSpace(value)
+	}
+}
+
+func firstPRNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func validatePRReviewStatus(status string) error {
@@ -474,187 +787,79 @@ func extractIssueID(env *output.Envelope) (int64, error) {
 	return int64(idFloat), nil
 }
 
-func enrichPullRequestTimestamps(ctx *common.RuntimeContext, env *output.Envelope) error {
+func enrichPullRequestClosedAt(ctx *common.RuntimeContext, env *output.Envelope) error {
 	data, ok := env.Data.(map[string]interface{})
 	if !ok {
 		return nil
 	}
 	pr, ok := data["pull_request"].(map[string]interface{})
-	if !ok {
+	if !ok || !isClosedPullRequest(pr) || stringField(pr, "closed_at") != "" {
 		return nil
 	}
 	issue, ok := data["issue"].(map[string]interface{})
-	if createdAt := firstNonEmptyString(
-		stringField(data, "created_at"),
-		stringField(pr, "created_at"),
-		stringField(issue, "created_at"),
-	); createdAt != "" {
-		data["created_at"] = createdAt
+	if !ok {
+		return nil
 	}
-
-	mergedAt := firstNonEmptyString(
-		stringField(data, "merged_at"),
-		stringField(pr, "merged_at"),
-		stringField(issue, "merged_at"),
-	)
-	closedAt := firstNonEmptyString(
-		stringField(data, "closed_at"),
-		stringField(data, "closed_on"),
-		stringField(pr, "closed_at"),
-		stringField(issue, "closed_on"),
-	)
-
-	if shouldFetchPullRequestTimestamps(pr, mergedAt, closedAt) {
-		issueID, ok := numberField(issue, "id")
-		if ok {
-			journalsEnv, err := ctx.CallAPI("GET", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, int64(issueID)), nil)
-			if err != nil {
-				return err
-			}
-			journalMergedAt, journalClosedAt := extractPullRequestJournalTimes(journalsEnv)
-			mergedAt = firstNonEmptyString(mergedAt, journalMergedAt)
-			closedAt = firstNonEmptyString(closedAt, journalClosedAt)
-		}
+	issueID, ok := numberField(issue, "id")
+	if !ok {
+		return nil
 	}
-
-	if closedAt == "" && isMergedPullRequest(pr) {
-		closedAt = mergedAt
+	journalsEnv, err := ctx.CallAPI("GET", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, int64(issueID)), nil)
+	if err != nil {
+		return err
 	}
-
-	if mergedAt != "" {
-		pr["merged_at"] = mergedAt
-		data["merged_at"] = mergedAt
+	closedAt := extractPullRequestClosedAt(journalsEnv)
+	if closedAt == "" {
+		return nil
 	}
-	if closedAt != "" {
-		pr["closed_at"] = closedAt
-		data["closed_at"] = closedAt
-		data["closed_on"] = closedAt
-		if issue != nil {
-			issue["closed_on"] = closedAt
-		}
-	}
+	pr["closed_at"] = closedAt
+	data["closed_at"] = closedAt
 	return nil
 }
 
 func isClosedPullRequest(pr map[string]interface{}) bool {
-	if isMergedPullRequest(pr) {
-		return true
-	}
 	if stringField(pr, "pull_request_staus") == "closed" || stringField(pr, "state") == "closed" {
 		return true
 	}
-	status, ok := numberField(pr, "pull_request_status")
-	if ok {
-		return int(status) == 2
-	}
-	status, ok = numberField(pr, "status")
+	status, ok := numberField(pr, "status")
 	return ok && int(status) == 2
 }
 
-func isMergedPullRequest(pr map[string]interface{}) bool {
-	if merged, ok := pr["merged"].(bool); ok && merged {
-		return true
-	}
-	if stringField(pr, "pull_request_staus") == "merged" || stringField(pr, "state") == "merged" {
-		return true
-	}
-	status, ok := numberField(pr, "pull_request_status")
-	if ok {
-		return int(status) == 1
-	}
-	status, ok = numberField(pr, "status")
-	return ok && int(status) == 1
-}
-
-func shouldFetchPullRequestTimestamps(pr map[string]interface{}, mergedAt, closedAt string) bool {
-	if !isClosedPullRequest(pr) {
-		return false
-	}
-	if isMergedPullRequest(pr) {
-		return mergedAt == "" || closedAt == ""
-	}
-	return closedAt == ""
-}
-
-func extractPullRequestJournalTimes(env *output.Envelope) (string, string) {
+func extractPullRequestClosedAt(env *output.Envelope) string {
 	data, ok := env.Data.(map[string]interface{})
 	if !ok {
-		return "", ""
+		return ""
 	}
 	rawJournals, ok := data["journals"].([]interface{})
 	if !ok {
-		return "", ""
+		return ""
 	}
-	var mergedAt string
-	var closedAt string
 	for i := len(rawJournals) - 1; i >= 0; i-- {
 		journal, ok := rawJournals[i].(map[string]interface{})
 		if !ok || stringField(journal, "operate_category") != "status" {
 			continue
 		}
 		content := stringField(journal, "operate_content")
-		timestamp := firstNonEmptyString(
-			stringField(journal, "updated_at"),
-			stringField(journal, "created_at"),
-		)
-		if timestamp == "" {
+		if !isPullRequestCloseOperation(content) {
 			continue
 		}
-		if mergedAt == "" && isPullRequestMergeOperation(content) {
-			mergedAt = timestamp
+		if updatedAt := stringField(journal, "updated_at"); updatedAt != "" {
+			return updatedAt
 		}
-		if closedAt == "" && isPullRequestCloseOperation(content) {
-			closedAt = timestamp
-		}
-		if mergedAt != "" && closedAt != "" {
-			break
-		}
-	}
-	return mergedAt, closedAt
-}
-
-func isPullRequestMergeOperation(content string) bool {
-	content = normalizePullRequestJournalContent(content)
-	return containsPullRequestMarker(content) &&
-		(strings.Contains(content, "\u5408\u5e76\u4e86") ||
-			strings.Contains(content, "\u5df2\u5408\u5e76") ||
-			strings.Contains(content, "merged"))
-}
-
-func isPullRequestCloseOperation(content string) bool {
-	content = normalizePullRequestJournalContent(content)
-	return containsPullRequestMarker(content) &&
-		(strings.Contains(content, "\u62d2\u7edd") ||
-			strings.Contains(content, "rejected") ||
-			strings.Contains(content, "refused") ||
-			strings.Contains(content, "\u5173\u95ed") ||
-			strings.Contains(content, "closed"))
-}
-
-func normalizePullRequestJournalContent(content string) string {
-	content = html.UnescapeString(content)
-	content = pullRequestJournalHTMLTagPattern.ReplaceAllString(content, "")
-	content = strings.ToLower(strings.TrimSpace(content))
-	return strings.Join(strings.Fields(content), "")
-}
-
-func containsPullRequestMarker(content string) bool {
-	return strings.Contains(content, "\u5408\u5e76\u8bf7\u6c42") || strings.Contains(content, "pullrequest")
-}
-
-func firstNonEmptyString(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
+		if createdAt := stringField(journal, "created_at"); createdAt != "" {
+			return createdAt
 		}
 	}
 	return ""
 }
 
+func isPullRequestCloseOperation(content string) bool {
+	content = strings.ToLower(content)
+	return strings.Contains(content, "合并请求") &&
+		(strings.Contains(content, "拒绝") || strings.Contains(content, "关闭") || strings.Contains(content, "closed"))
+}
+
 func stringField(m map[string]interface{}, key string) string {
-	if m == nil {
-		return ""
-	}
 	v, _ := m[key].(string)
 	return v
 }
