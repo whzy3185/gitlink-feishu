@@ -10,6 +10,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/compare"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/dataset"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/export"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/health"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/ignore"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/issue"
@@ -58,6 +59,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"ci":        ci.Shortcuts(tr),
 		"compare":   compare.Shortcuts(),
 		"dataset":   dataset.Shortcuts(tr),
+		"export":    export.Shortcuts(),
 		"webhook":   webhook.Shortcuts(tr),
 		"wiki":      wiki.Shortcuts(),
 		"health":    health.Shortcuts(tr),
@@ -86,6 +88,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"ci":        tr.T("cmd.ci.short"),
 		"compare":   "Compare branches, tags, or commits",
 		"dataset":   tr.T("cmd.dataset.short"),
+		"export":    "Data export to CSV/JSON",
 		"webhook":   tr.T("cmd.webhook.short"),
 		"wiki":      "Wiki page management",
 		"health":    "Project health data collection",
