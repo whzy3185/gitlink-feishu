@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -104,6 +105,72 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
 				if err != nil {
 					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "git-tree",
+			Description: tr.T("cmd.repo.git_tree.short"),
+			Flags: []common.Flag{
+				{Name: "sha", Short: "s", Usage: tr.T("flag.repo.git.sha"), Required: true},
+				{Name: "recursive", Short: "r", Usage: tr.T("flag.repo.git.recursive"), Bool: true},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				sha, err := ctx.RequireArg("sha")
+				if err != nil {
+					return err
+				}
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				if ctx.Arg("recursive") == "true" {
+					q.Set("recursive", "true")
+				}
+				env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("/v1%s/git/trees/%s", ctx.RepoPath(), url.PathEscape(sha)), q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "blob",
+			Description: tr.T("cmd.repo.blob.short"),
+			Flags: []common.Flag{
+				{Name: "sha", Short: "s", Usage: tr.T("flag.repo.git.sha"), Required: true},
+				{Name: "decode", Short: "d", Usage: tr.T("flag.repo.git.decode"), Bool: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				sha, err := ctx.RequireArg("sha")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("/v1%s/git/blobs/%s", ctx.RepoPath(), url.PathEscape(sha)), nil)
+				if err != nil {
+					return err
+				}
+				if ctx.Arg("decode") == "true" {
+					if data, ok := env.Data.(map[string]interface{}); ok {
+						if enc, _ := data["encoding"].(string); enc == "base64" {
+							if content, _ := data["content"].(string); content != "" {
+								decoded, err := base64.StdEncoding.DecodeString(content)
+								if err != nil {
+									return fmt.Errorf("decode blob content: %w", err)
+								}
+								fmt.Print(string(decoded))
+								return nil
+							}
+						}
+					}
 				}
 				return ctx.Output(env)
 			},
