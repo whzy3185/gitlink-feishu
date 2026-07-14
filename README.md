@@ -441,6 +441,12 @@ gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved 
 # List branches
 gitlink-cli branch +list --owner Gitlink --repo forgeplus
 
+# Filter branches by name keyword
+gitlink-cli branch +list --owner Gitlink --repo forgeplus -k feature
+
+# List all branch names without pagination
+gitlink-cli branch +all --owner Gitlink --repo forgeplus
+
 # Create a branch
 gitlink-cli branch +create --name feature/new-feature
 
