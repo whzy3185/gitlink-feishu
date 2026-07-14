@@ -317,6 +317,13 @@ gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role D
 
 # Create an invite link
 gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
+
+# Apply to join a project by invite code
+gitlink-cli member +apply --code MPzQgH --role developer --dry-run
+
+# Quit a repository membership
+gitlink-cli member +quit --owner Gitlink --repo forgeplus --dry-run
+gitlink-cli member +quit --owner Gitlink --repo forgeplus --yes
 ```
 
 ### Issue Management
