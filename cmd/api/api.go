@@ -14,8 +14,16 @@ import (
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/client"
+	"github.com/gitlink-org/gitlink-cli/internal/context"
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
+)
+
+// apiOwnerPlaceholder and apiRepoPlaceholder match the REST-style :owner / :repo
+// path placeholders used throughout the GitLink API docs and shortcut commands.
+var (
+	apiOwnerPlaceholder = regexp.MustCompile(`:owner\b`)
+	apiRepoPlaceholder  = regexp.MustCompile(`:repo\b`)
 )
 
 func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
@@ -94,14 +102,14 @@ func runAPI(c *cobra.Command, args []string) error {
 	}
 
 	method := strings.ToUpper(args[0])
-	path := args[1]
 
-	// Fix MSYS2/Git Bash path auto-conversion on Windows:
+	// Fix MSYS2/Git Bash path auto-conversion on Windows first:
 	// "/v1/owner/repo" is rewritten to "C:/Program Files/Git/v1/owner/repo".
-	path = restoreAPIPath(path)
+	rawPath := restoreAPIPath(args[1])
 
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
+	path, err := resolveAPIPath(c, rawPath)
+	if err != nil {
+		return err
 	}
 
 	cli, err := client.New()
@@ -136,6 +144,40 @@ func runAPI(c *cobra.Command, args []string) error {
 	}
 
 	return output.Print(env, resolveFormat())
+}
+
+// resolveAPIPath prepares a single-call path: it renders {{var}} templates
+// supplied via --var (consistent with batch mode), substitutes the REST-style
+// :owner / :repo placeholders (resolved from --owner/--repo or the git remote,
+// exactly like the shortcut commands), and ensures a leading slash.
+func resolveAPIPath(c *cobra.Command, rawPath string) (string, error) {
+	path := rawPath
+
+	overrides, err := parseBatchVars(c)
+	if err != nil {
+		return "", err
+	}
+	if len(overrides) > 0 {
+		rendered, rerr := renderTemplate(path, overrides)
+		if rerr != nil {
+			return "", rerr
+		}
+		path = rendered
+	}
+
+	if apiOwnerPlaceholder.MatchString(path) || apiRepoPlaceholder.MatchString(path) {
+		owner, repo, rerr := context.ResolveOwnerRepo(cmdutil.Owner, cmdutil.Repo)
+		if rerr != nil {
+			return "", fmt.Errorf("path contains :owner/:repo placeholders but they could not be resolved: %w", rerr)
+		}
+		path = apiOwnerPlaceholder.ReplaceAllLiteralString(path, owner)
+		path = apiRepoPlaceholder.ReplaceAllLiteralString(path, repo)
+	}
+
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return path, nil
 }
 
 func readJSONBody(c *cobra.Command) (interface{}, error) {
