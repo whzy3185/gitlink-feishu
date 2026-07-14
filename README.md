@@ -172,6 +172,29 @@ export GITLINK_TOKEN="your-token" # Or set env var (for CI/CD, non-interactive e
 gitlink-cli repo +list
 ```
 
+#### Shell Completion
+
+Generate completion scripts for your shell after installation:
+
+```bash
+# Bash
+mkdir -p ~/.local/share/bash-completion/completions
+gitlink-cli completion bash > ~/.local/share/bash-completion/completions/gitlink-cli
+
+# Zsh
+gitlink-cli completion zsh > "${fpath[1]}/_gitlink-cli"
+
+# Fish
+mkdir -p ~/.config/fish/completions
+gitlink-cli completion fish > ~/.config/fish/completions/gitlink-cli.fish
+
+# PowerShell
+gitlink-cli completion powershell > gitlink-cli.ps1
+. ./gitlink-cli.ps1
+```
+
+Use `--no-descriptions` if your shell setup prefers compact completion output.
+
 ### Quick Start (AI Agent)
 
 > The following steps are for AI Agents. Some steps require the user to complete actions in a browser.

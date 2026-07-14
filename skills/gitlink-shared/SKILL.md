@@ -63,6 +63,27 @@ gitlink-cli auth login
 - HTTPS: `https://www.gitlink.org.cn/owner/repo.git`
 - SSH: `git@www.gitlink.org.cn:owner/repo.git`
 
+## Shell 自动补全
+
+安装后可以按用户当前 shell 生成补全脚本，帮助用户发现 Shortcut 子命令和参数：
+
+```bash
+# Bash
+gitlink-cli completion bash > ~/.local/share/bash-completion/completions/gitlink-cli
+
+# Zsh
+gitlink-cli completion zsh > "${fpath[1]}/_gitlink-cli"
+
+# Fish
+gitlink-cli completion fish > ~/.config/fish/completions/gitlink-cli.fish
+
+# PowerShell
+gitlink-cli completion powershell > gitlink-cli.ps1
+. ./gitlink-cli.ps1
+```
+
+如果终端补全不需要描述文本，可以追加 `--no-descriptions`。
+
 ## 输出格式
 
 所有命令输出遵循统一 Envelope 格式：

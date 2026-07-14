@@ -181,6 +181,29 @@ export GITLINK_TOKEN="your-token" # 或设置环境变量（适用于 CI/CD、�
 gitlink-cli repo +list
 ```
 
+#### Shell 自动补全
+
+安装后可以为常用 shell 生成自动补全脚本：
+
+```bash
+# Bash
+mkdir -p ~/.local/share/bash-completion/completions
+gitlink-cli completion bash > ~/.local/share/bash-completion/completions/gitlink-cli
+
+# Zsh
+gitlink-cli completion zsh > "${fpath[1]}/_gitlink-cli"
+
+# Fish
+mkdir -p ~/.config/fish/completions
+gitlink-cli completion fish > ~/.config/fish/completions/gitlink-cli.fish
+
+# PowerShell
+gitlink-cli completion powershell > gitlink-cli.ps1
+. ./gitlink-cli.ps1
+```
+
+如果当前终端不需要补全说明文本，可以追加 `--no-descriptions` 生成更精简的脚本。
+
 ### 快速上手（AI Agent）
 
 > 以下步骤面向 AI Agent。部分步骤需要用户在浏览器中完成操作。
