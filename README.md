@@ -115,7 +115,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
 | 📖 Wiki | List, view, create, update, and delete wiki pages |
-| 🧭 Trace | Initialize code trace analysis, start scans, list results, fetch reports |
+| 🔔 Notification | List, read, and delete user messages |
 | 🔍 Search | Search repositories, users |
 | 📊 Dataset | Query research datasets by project |
 | 👤 User | View user profiles and info |
@@ -251,10 +251,6 @@ gitlink-cli repo +unfollow --owner Gitlink --repo forgeplus --project-id 123
 gitlink-cli repo +like --owner Gitlink --repo forgeplus
 gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 
-# List and update repository navigation units
-gitlink-cli repo +units --owner Gitlink --repo forgeplus
-gitlink-cli repo +set-units --owner Gitlink --repo forgeplus --units code,issues,pulls,wiki
-
 # Create a repository
 gitlink-cli repo +create -n my-project -d "Project description"
 
@@ -301,22 +297,23 @@ gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n 
 gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 12345 -n old-page
 ```
 
-### Code Trace Analysis
+### Notifications
 
 ```bash
-# Initialize code trace analysis for the current account
-gitlink-cli trace +init
+# List current user's unread notifications
+gitlink-cli notification +list --type notification --status unread
 
-# Start a trace scan for a repository branch
-gitlink-cli trace +start --owner Gitlink --repo forgeplus --branch master --dry-run
-gitlink-cli trace +start --owner Gitlink --repo forgeplus --branch master
+# List @me messages for an explicit user
+gitlink-cli notification +list --user Mengz --type atme
 
-# List scan results and fetch a generated report
-gitlink-cli trace +results --owner Gitlink --repo forgeplus --page 1 --limit 20
-gitlink-cli trace +report --owner Gitlink --repo forgeplus --task-id 12345
+# Mark messages as read
+gitlink-cli notification +read --type atme --ids 101,102
 
-# Re-run analysis for an existing project result
-gitlink-cli trace +rescan --owner Gitlink --repo forgeplus --project-id 67890 --dry-run
+# Mark all unread notifications as read
+gitlink-cli notification +read --type notification --ids -1
+
+# Delete messages
+gitlink-cli notification +delete --type notification --ids 101,102
 ```
 
 ### Member Management
@@ -375,9 +372,6 @@ gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --ids 101,102 -
 # Destructive batch delete requires both dry-run first and --yes for real execution
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --dry-run
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --yes
-
-# Export filtered issues to CSV for offline triage or reports
-gitlink-cli issue +export --owner Gitlink --repo forgeplus --state open --keyword bug --export-format csv --output issues.csv
 
 # Add a comment
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "Fixed"
@@ -771,7 +765,7 @@ See [skills/README.md](./skills/README.md) for details.
 | `gitlink-release` | Release management (create, edit, update, view, delete, etc.) |
 | `gitlink-ci` | CI/CD operations (builds, logs, etc.) |
 | `gitlink-pipeline` | Pipeline workflow operations (runs, logs, enable, disable, delete, etc.) |
-| `gitlink-trace` | Code trace analysis (initialize account, start scans, results, reports) |
+| `gitlink-notification` | User messages (list, mark read, delete) |
 | `gitlink-search` | Search (repositories, users, etc.) |
 | `gitlink-org` | Organization management (members, teams, etc.) |
 | `gitlink-user` | User management (profile info, etc.) |
@@ -806,7 +800,6 @@ gitlink-cli/
 │   ├── org/                  # Organization shortcuts
 │   ├── ci/                   # CI shortcuts
 │   ├── pipeline/             # Pipeline shortcuts
-│   ├── trace/                # Code trace analysis shortcuts
 │   ├── search/               # Search shortcuts
 │   ├── user/                 # User shortcuts
 │   └── register.go           # Registration entry point

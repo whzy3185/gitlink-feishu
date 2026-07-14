@@ -114,7 +114,7 @@
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
 | 📖 Wiki | 列出、查看、创建、更新、删除 Wiki 页面 |
-| 🧭 代码溯源 | 初始化代码溯源分析、发起扫描、查看结果并获取报告 |
+| 🔔 通知 | 列出、已读、删除用户消息 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 📊 数据集 | 按项目查询科研数据集 |
 | 👤 用户 | 查看用户资料和信息 |
@@ -262,10 +262,6 @@ gitlink-cli repo +unfollow --owner Gitlink --repo forgeplus --project-id 123
 gitlink-cli repo +like --owner Gitlink --repo forgeplus
 gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 
-# 查看和更新仓库导航模块
-gitlink-cli repo +units --owner Gitlink --repo forgeplus
-gitlink-cli repo +set-units --owner Gitlink --repo forgeplus --units code,issues,pulls,wiki
-
 # 创建仓库
 gitlink-cli repo +create -n my-project -d "项目描述"
 
@@ -312,22 +308,23 @@ gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n 
 gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 12345 -n old-page
 ```
 
-### 代码溯源分析
+### 通知管理
 
 ```bash
-# 初始化当前账号的代码溯源分析能力
-gitlink-cli trace +init
+# 列出当前用户未读系统消息
+gitlink-cli notification +list --type notification --status unread
 
-# 对仓库分支发起代码溯源扫描
-gitlink-cli trace +start --owner Gitlink --repo forgeplus --branch master --dry-run
-gitlink-cli trace +start --owner Gitlink --repo forgeplus --branch master
+# 列出指定用户的 @我消息
+gitlink-cli notification +list --user Mengz --type atme
 
-# 查看扫描结果并获取报告
-gitlink-cli trace +results --owner Gitlink --repo forgeplus --page 1 --limit 20
-gitlink-cli trace +report --owner Gitlink --repo forgeplus --task-id 12345
+# 标记消息为已读
+gitlink-cli notification +read --type atme --ids 101,102
 
-# 对已有项目结果重新扫描
-gitlink-cli trace +rescan --owner Gitlink --repo forgeplus --project-id 67890 --dry-run
+# 将全部未读系统消息标记为已读
+gitlink-cli notification +read --type notification --ids -1
+
+# 删除消息
+gitlink-cli notification +delete --type notification --ids 101,102
 ```
 
 ### 成员管理
@@ -386,9 +383,6 @@ gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --ids 101,102 -
 # 危险批量删除必须先 dry-run，真实执行还要显式 --yes
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --dry-run
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --yes
-
-# 将筛选后的 Issue 导出为 CSV，便于离线分析或生成周报
-gitlink-cli issue +export --owner Gitlink --repo forgeplus --state open --keyword bug --export-format csv --output issues.csv
 
 # 添加评论
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "已修复"
@@ -645,7 +639,7 @@ git push gitlink
 | `gitlink-org` | 组织管理（成员、团队等） |
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |
 | `gitlink-pipeline` | 流水线工作流操作（运行、日志、启停、删除等） |
-| `gitlink-trace` | 代码溯源分析（初始化、发起扫描、查看结果、获取报告） |
+| `gitlink-notification` | 用户消息（列表、标记已读、删除） |
 | `gitlink-search` | 搜索功能（仓库、用户等） |
 | `gitlink-user` | 用户管理（个人信息等） |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |
@@ -678,7 +672,6 @@ gitlink-cli/
 │   ├── org/                  # 组织 shortcuts
 │   ├── ci/                   # CI shortcuts
 │   ├── pipeline/             # Pipeline shortcuts
-│   ├── trace/                # 代码溯源 shortcuts
 │   ├── search/               # 搜索 shortcuts
 │   ├── user/                 # 用户 shortcuts
 │   └── register.go           # 注册入口
