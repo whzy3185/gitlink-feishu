@@ -23,6 +23,7 @@ metadata:
 | `repo +list` | 仓库列表 | 否（公开项目） |
 | `repo +info` | 仓库详情 | 否（公开项目） |
 | `repo +readme` | README 内容 | 否（公开项目） |
+| `repo +file` | 任意仓库文件内容 | 否（公开项目） |
 | `repo +tree` | 仓库文件树 | 否（公开项目） |
 | `repo +languages` | 仓库语言统计 | 否（公开项目） |
 | `repo +contributors` | 仓库贡献者列表 | 否（公开项目） |
@@ -54,6 +55,8 @@ gitlink-cli repo +list --user zhangsan
 # 查看文件树、语言占比和贡献者
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
+gitlink-cli repo +file --owner Gitlink --repo forgeplus --path go.mod --ref master
+gitlink-cli repo +file --owner Gitlink --repo forgeplus --path .gitignore --content-only
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 gitlink-cli repo +contributors --owner Gitlink --repo forgeplus
 
@@ -93,11 +96,15 @@ gitlink-cli api GET /:owner/:repo/commits --query 'page=1&limit=20'
 # 获取标签列表
 gitlink-cli api GET /:owner/:repo/tags
 
-# 获取文件内容
-gitlink-cli api GET /:owner/:repo/raw/main/README.md
+# 获取文件内容（Shortcut 优先）
+gitlink-cli repo +file --owner Gitlink --repo forgeplus --path README.md --ref master
+
+# Raw API 仍可用于未封装场景
+gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=README.md&ref=master'
 ```
 
 ## 注意事项
 
 - `repo +delete` 是不可逆操作，执行前必须确认用户意图
 - 创建仓库默认为公开，使用 `--private true` 创建私有仓库
+- `repo +file` 只接受文件路径；如果目标是目录，请改用 `repo +tree`
