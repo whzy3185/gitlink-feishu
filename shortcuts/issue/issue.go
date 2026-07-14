@@ -1,6 +1,7 @@
 package issue
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -30,15 +31,27 @@ func normalizeIssueListState(state string) string {
 }
 
 type existingIssue struct {
-	Subject     string
-	Description string
-	StatusID    interface{}
-	PriorityID  interface{}
-	TagIDs      []interface{}
-	AssignerIDs []interface{}
-	BranchName  string
-	StartDate   string
-	DueDate     string
+	Subject        string
+	Description    string
+	StatusID       interface{}
+	PriorityID     interface{}
+	TagIDs         []interface{}
+	AssignerIDs    []interface{}
+	AssignedToID   interface{}
+	FixedVersionID interface{}
+	TrackerID      interface{}
+	IssueType      interface{}
+	BranchName     string
+	StartDate      string
+	DueDate        string
+}
+
+func legacyIssuePath(ctx *common.RuntimeContext, number string) string {
+	return fmt.Sprintf("%s/issues/%s", ctx.RepoPath(), number)
+}
+
+func legacyIssueEditPath(ctx *common.RuntimeContext, number string) string {
+	return legacyIssuePath(ctx, number) + "/edit"
 }
 
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
@@ -176,6 +189,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
+				enrichIssueView(ctx, number, env)
 				return ctx.Output(env)
 			},
 		},
@@ -617,16 +631,24 @@ func fetchExistingIssue(ctx *common.RuntimeContext, number string) (*existingIss
 		return nil, fmt.Errorf("failed to parse issue subject")
 	}
 	description, _ := issueData["description"].(string)
+	editData, err := fetchLegacyIssueEdit(ctx, number)
+	if err != nil {
+		return nil, fmt.Errorf("fetch issue edit metadata: %w", err)
+	}
 	return &existingIssue{
-		Subject:     subject,
-		Description: description,
-		StatusID:    nestedIssueID(issueData, "status"),
-		PriorityID:  nestedIssueID(issueData, "priority"),
-		TagIDs:      issueObjectIDs(issueData, "tags", "issue_tags"),
-		AssignerIDs: issueObjectIDs(issueData, "assigners"),
-		BranchName:  stringField(issueData, "branch_name"),
-		StartDate:   stringField(issueData, "start_date"),
-		DueDate:     stringField(issueData, "due_date"),
+		Subject:        subject,
+		Description:    description,
+		StatusID:       firstNonNil(nestedIssueID(issueData, "status"), editData["status_id"]),
+		PriorityID:     firstNonNil(nestedIssueID(issueData, "priority"), editData["priority_id"]),
+		TagIDs:         firstNonEmptyIDs(issueObjectIDs(issueData, "tags", "issue_tags"), issueValueIDs(editData, "issue_tags")),
+		AssignerIDs:    issueObjectIDs(issueData, "assigners"),
+		AssignedToID:   firstNonNil(issueData["assigned_to_id"], editData["assigned_to_id"]),
+		FixedVersionID: firstNonNil(issueData["fixed_version_id"], editData["fixed_version_id"]),
+		TrackerID:      firstNonNil(issueData["tracker_id"], editData["tracker_id"], nestedIssueID(issueData, "tracker")),
+		IssueType:      firstNonNil(issueData["issue_type"], editData["issue_type"]),
+		BranchName:     firstNonEmptyString(stringField(issueData, "branch_name"), stringField(editData, "branch_name")),
+		StartDate:      firstNonEmptyString(stringField(issueData, "start_date"), stringField(editData, "start_date")),
+		DueDate:        firstNonEmptyString(stringField(issueData, "due_date"), stringField(editData, "due_date")),
 	}, nil
 }
 
@@ -642,6 +664,18 @@ func preserveIssueMetadata(body map[string]interface{}, issue *existingIssue) {
 	}
 	if len(issue.AssignerIDs) > 0 {
 		body["assigner_ids"] = issue.AssignerIDs
+	}
+	if issue.AssignedToID != nil {
+		body["assigned_to_id"] = issue.AssignedToID
+	}
+	if issue.FixedVersionID != nil {
+		body["fixed_version_id"] = issue.FixedVersionID
+	}
+	if issue.TrackerID != nil {
+		body["tracker_id"] = issue.TrackerID
+	}
+	if issue.IssueType != nil {
+		body["issue_type"] = issue.IssueType
 	}
 	if issue.BranchName != "" {
 		body["branch_name"] = issue.BranchName
@@ -664,12 +698,17 @@ func nestedIssueID(data map[string]interface{}, key string) interface{} {
 
 func issueObjectIDs(data map[string]interface{}, keys ...string) []interface{} {
 	for _, key := range keys {
-		items, ok := data[key].([]interface{})
+		items, ok := interfaceSlice(data[key])
 		if !ok {
 			continue
 		}
 		ids := make([]interface{}, 0, len(items))
 		for _, item := range items {
+			switch value := item.(type) {
+			case float64, int, int64, string:
+				ids = append(ids, value)
+				continue
+			}
 			obj, ok := item.(map[string]interface{})
 			if !ok {
 				continue
@@ -685,9 +724,197 @@ func issueObjectIDs(data map[string]interface{}, keys ...string) []interface{} {
 	return nil
 }
 
+func issueObjectNames(data map[string]interface{}, key string) []string {
+	items, ok := interfaceSlice(data[key])
+	if !ok {
+		return nil
+	}
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		obj, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if name, ok := obj["name"].(string); ok && name != "" {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	return names
+}
+
 func stringField(data map[string]interface{}, key string) string {
 	value, _ := data[key].(string)
 	return value
+}
+
+func mapField(data map[string]interface{}, key string) map[string]interface{} {
+	item, _ := data[key].(map[string]interface{})
+	return item
+}
+
+func interfaceSlice(value interface{}) ([]interface{}, bool) {
+	items, ok := value.([]interface{})
+	if ok {
+		return items, true
+	}
+	switch typed := value.(type) {
+	case []map[string]interface{}:
+		items = make([]interface{}, 0, len(typed))
+		for _, item := range typed {
+			items = append(items, item)
+		}
+		return items, true
+	}
+	return nil, false
+}
+
+func issueValueIDs(data map[string]interface{}, keys ...string) []interface{} {
+	return issueObjectIDs(data, keys...)
+}
+
+func firstNonNil(values ...interface{}) interface{} {
+	for _, value := range values {
+		if !isNilValue(value) {
+			return value
+		}
+	}
+	return nil
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstNonEmptyIDs(values ...[]interface{}) []interface{} {
+	for _, ids := range values {
+		if len(ids) > 0 {
+			return ids
+		}
+	}
+	return nil
+}
+
+func isNilValue(value interface{}) bool {
+	if value == nil {
+		return true
+	}
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		return len(typed) == 0
+	}
+	return false
+}
+
+func fetchLegacyIssueDetail(ctx *common.RuntimeContext, number string) (map[string]interface{}, error) {
+	return fetchIssueMap(ctx, legacyIssuePath(ctx, number), "failed to parse legacy issue detail")
+}
+
+func fetchLegacyIssueEdit(ctx *common.RuntimeContext, number string) (map[string]interface{}, error) {
+	return fetchIssueMap(ctx, legacyIssueEditPath(ctx, number), "failed to parse legacy issue edit data")
+}
+
+func fetchIssueMap(ctx *common.RuntimeContext, path, parseErr string) (map[string]interface{}, error) {
+	env, err := ctx.CallAPI("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return nil, errors.New(parseErr)
+	}
+	return data, nil
+}
+
+func enrichIssueView(ctx *common.RuntimeContext, number string, env *output.Envelope) {
+	if env == nil {
+		return
+	}
+	issueData, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return
+	}
+	legacyDetail, _ := fetchLegacyIssueDetail(ctx, number)
+	legacyEdit, _ := fetchLegacyIssueEdit(ctx, number)
+	env.Data = mergeIssueViewData(issueData, legacyDetail, legacyEdit)
+}
+
+func mergeIssueViewData(v1Data, legacyDetail, legacyEdit map[string]interface{}) map[string]interface{} {
+	issue := cloneIssueMap(v1Data)
+	if issue == nil {
+		return v1Data
+	}
+
+	if number := firstNonNil(issue["number"], issue["project_issues_index"], legacyDetail["project_issues_index"]); number != nil {
+		issue["number"] = number
+	}
+	if databaseID := firstNonNil(issue["id"], legacyDetail["id"]); databaseID != nil {
+		issue["database_id"] = databaseID
+		delete(issue, "id")
+	}
+
+	status := firstNonNil(mapField(issue, "status"), mapField(legacyDetail, "issue_status"))
+	if status != nil {
+		issue["status"] = status
+		if statusMap, ok := status.(map[string]interface{}); ok {
+			if name := stringField(statusMap, "name"); name != "" {
+				issue["status_name"] = name
+			}
+		}
+	}
+	if priority := firstNonNil(mapField(issue, "priority"), mapField(legacyDetail, "priority")); priority != nil {
+		issue["priority"] = priority
+		if priorityMap, ok := priority.(map[string]interface{}); ok {
+			if name := stringField(priorityMap, "name"); name != "" {
+				issue["priority_name"] = name
+			}
+		}
+	}
+	if tracker := firstNonNil(mapField(issue, "tracker"), mapField(legacyDetail, "tracker")); tracker != nil {
+		issue["tracker"] = tracker
+	}
+	if trackerID := firstNonNil(issue["tracker_id"], nestedIssueID(issue, "tracker"), nestedIssueID(legacyDetail, "tracker"), legacyEdit["tracker_id"]); trackerID != nil {
+		issue["tracker_id"] = trackerID
+	}
+	if issueType := firstNonNil(issue["issue_type"], legacyDetail["issue_type"], legacyEdit["issue_type"]); issueType != nil {
+		issue["issue_type"] = issueType
+	}
+	if assignedToID := firstNonNil(issue["assigned_to_id"], legacyDetail["assigned_to_id"], legacyEdit["assigned_to_id"]); assignedToID != nil {
+		issue["assigned_to_id"] = assignedToID
+	}
+	if fixedVersionID := firstNonNil(issue["fixed_version_id"], legacyDetail["fixed_version_id"], legacyDetail["version_id"], legacyEdit["fixed_version_id"]); fixedVersionID != nil {
+		issue["fixed_version_id"] = fixedVersionID
+	}
+	if versionID := firstNonNil(issue["version_id"], legacyDetail["version_id"], legacyEdit["fixed_version_id"]); versionID != nil {
+		issue["version_id"] = versionID
+	}
+
+	if tagIDs := firstNonEmptyIDs(issueObjectIDs(issue, "tags", "issue_tags"), issueObjectIDs(legacyDetail, "issue_tags"), issueValueIDs(legacyEdit, "issue_tags")); len(tagIDs) > 0 {
+		issue["issue_tag_ids"] = tagIDs
+	}
+	if tagNames := issueObjectNames(legacyDetail, "issue_tags"); len(tagNames) > 0 {
+		issue["issue_tag_names"] = tagNames
+	}
+
+	return issue
+}
+
+func cloneIssueMap(data map[string]interface{}) map[string]interface{} {
+	if data == nil {
+		return nil
+	}
+	cloned := make(map[string]interface{}, len(data))
+	for key, value := range data {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func normalizeIssueStatus(state string) (interface{}, error) {
@@ -741,6 +968,9 @@ func applyIssueMetadataArgs(ctx *common.RuntimeContext, body map[string]interfac
 			return err
 		}
 		body["assigner_ids"] = ids
+		if len(ids) == 1 {
+			body["assigned_to_id"] = ids[0]
+		}
 	}
 	if branch := ctx.Arg("branch"); branch != "" {
 		body["branch_name"] = branch

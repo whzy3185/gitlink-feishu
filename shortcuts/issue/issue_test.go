@@ -80,8 +80,26 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 
 func assertNumberSlice(t *testing.T, got interface{}, want []float64) {
 	t.Helper()
-	values, ok := got.([]interface{})
-	if !ok {
+	var values []float64
+	switch typed := got.(type) {
+	case []interface{}:
+		values = make([]float64, 0, len(typed))
+		for _, value := range typed {
+			switch number := value.(type) {
+			case float64:
+				values = append(values, number)
+			case int:
+				values = append(values, float64(number))
+			default:
+				t.Fatalf("got %v (%T), want numeric slice", got, got)
+			}
+		}
+	case []int:
+		values = make([]float64, 0, len(typed))
+		for _, value := range typed {
+			values = append(values, float64(value))
+		}
+	default:
 		t.Fatalf("got %v (%T), want numeric slice", got, got)
 	}
 	if len(values) != len(want) {
@@ -92,6 +110,48 @@ func assertNumberSlice(t *testing.T, got interface{}, want []float64) {
 			t.Fatalf("got %v, want %v", values, want)
 		}
 	}
+}
+
+func issueLegacyPath(number string) string {
+	return "/owner/repo/issues/" + number + ".json"
+}
+
+func issueLegacyEditPath(number string) string {
+	return "/owner/repo/issues/" + number + "/edit.json"
+}
+
+func writeLegacyIssueDetail(t *testing.T, w http.ResponseWriter, number string) {
+	t.Helper()
+	writeJSON(t, w, map[string]interface{}{
+		"id":                   9001,
+		"project_issues_index": 42,
+		"tracker":              map[string]interface{}{"id": 11, "name": "Bug"},
+		"priority":             map[string]interface{}{"id": 2, "name": "Normal"},
+		"issue_status":         map[string]interface{}{"id": 1, "name": "Open"},
+		"issue_tags": []map[string]interface{}{
+			{"id": 7, "name": "backend"},
+		},
+		"version_id":  13,
+		"branch_name": "main",
+		"start_date":  "2026-05-01",
+		"due_date":    "2026-05-31",
+	})
+}
+
+func writeLegacyIssueEdit(t *testing.T, w http.ResponseWriter) {
+	t.Helper()
+	writeJSON(t, w, map[string]interface{}{
+		"status_id":        1,
+		"priority_id":      2,
+		"tracker_id":       11,
+		"issue_type":       "bug",
+		"issue_tags":       []interface{}{7, 8},
+		"assigned_to_id":   9,
+		"fixed_version_id": 13,
+		"branch_name":      "main",
+		"start_date":       "2026-05-01",
+		"due_date":         "2026-05-31",
+	})
 }
 
 // --- list ---
@@ -251,13 +311,21 @@ func TestIssueCreateMissingTitle(t *testing.T) {
 
 func TestIssueView(t *testing.T) {
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Fatalf("expected GET, got %s", r.Method)
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
+				"id":                   float64(42),
+				"project_issues_index": float64(42),
+				"subject":              "bug",
+				"status":               nil,
+			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyPath("42"):
+			writeLegacyIssueDetail(t, w, "42")
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
+		default:
+			t.Fatalf("unexpected path: %s %s", r.Method, r.URL.Path)
 		}
-		if r.URL.Path != "/v1/owner/repo/issues/42.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(t, w, map[string]interface{}{"id": float64(42), "subject": "bug"})
 	})
 	defer server.Close()
 
@@ -282,14 +350,20 @@ func TestIssueViewMissingNumber(t *testing.T) {
 func TestIssueViewAcceptsIDAlias(t *testing.T) {
 	var requestedPath string
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		requestedPath = r.URL.Path
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42.json" {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			requestedPath = r.URL.Path
+			writeJSON(t, w, map[string]interface{}{
+				"project_issues_index": 42,
+				"subject":              "Issue from web URL",
+			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyPath("42"):
+			writeLegacyIssueDetail(t, w, "42")
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
+		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		writeJSON(t, w, map[string]interface{}{
-			"project_issues_index": 42,
-			"subject":              "Issue from web URL",
-		})
 	})
 	defer server.Close()
 
@@ -302,10 +376,16 @@ func TestIssueViewAcceptsIDAlias(t *testing.T) {
 
 func TestIssueNumberTakesPrecedenceOverIDAlias(t *testing.T) {
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42.json" {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{"subject": "Existing title"})
+		case r.Method == "GET" && r.URL.Path == issueLegacyPath("42"):
+			writeLegacyIssueDetail(t, w, "42")
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
+		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		writeJSON(t, w, map[string]interface{}{"subject": "Existing title"})
 	})
 	defer server.Close()
 
@@ -330,6 +410,8 @@ func TestIssueClose(t *testing.T) {
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			patchPayload = decodeJSON(t, r)
 			writeJSON(t, w, patchPayload)
@@ -357,6 +439,8 @@ func TestIssueCloseAcceptsIDAlias(t *testing.T) {
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			updatePayload = decodeJSON(t, r)
 			writeJSON(t, w, updatePayload)
@@ -385,6 +469,19 @@ func TestIssueClosePreservesCurrentMetadata(t *testing.T) {
 					{"id": 4},
 				},
 			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeJSON(t, w, map[string]interface{}{
+				"status_id":        1,
+				"priority_id":      3,
+				"tracker_id":       11,
+				"issue_type":       "bug",
+				"issue_tags":       []interface{}{4},
+				"assigned_to_id":   9,
+				"fixed_version_id": 13,
+				"branch_name":      "main",
+				"start_date":       "2026-05-01",
+				"due_date":         "2026-05-31",
+			})
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			updatePayload = decodeJSON(t, r)
 			writeJSON(t, w, updatePayload)
@@ -402,6 +499,10 @@ func TestIssueClosePreservesCurrentMetadata(t *testing.T) {
 	assertEqual(t, updatePayload["status_id"], float64(5))
 	assertEqual(t, updatePayload["priority_id"], float64(3))
 	assertNumberSlice(t, updatePayload["issue_tag_ids"], []float64{4})
+	assertEqual(t, updatePayload["tracker_id"], float64(11))
+	assertEqual(t, updatePayload["issue_type"], "bug")
+	assertEqual(t, updatePayload["assigned_to_id"], float64(9))
+	assertEqual(t, updatePayload["fixed_version_id"], float64(13))
 }
 
 func TestIssueCloseFetchFails(t *testing.T) {
@@ -461,6 +562,8 @@ func TestIssueUpdateTitle(t *testing.T) {
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			patchPayload = decodeJSON(t, r)
 			writeJSON(t, w, patchPayload)
@@ -489,6 +592,8 @@ func TestIssueUpdateDescription(t *testing.T) {
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			patchPayload = decodeJSON(t, r)
 			writeJSON(t, w, patchPayload)
@@ -516,6 +621,8 @@ func TestIssueUpdateNumericState(t *testing.T) {
 				"subject":     "bug",
 				"description": "desc",
 			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			patchPayload = decodeJSON(t, r)
 			writeJSON(t, w, map[string]interface{}{"id": float64(42)})
@@ -541,6 +648,8 @@ func TestIssueUpdateAcceptsIDAlias(t *testing.T) {
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			updatePayload = decodeJSON(t, r)
 			writeJSON(t, w, updatePayload)
@@ -582,6 +691,19 @@ func TestIssueUpdatePreservesCurrentMetadata(t *testing.T) {
 				"start_date":  "2026-05-01",
 				"due_date":    "2026-05-31",
 			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeJSON(t, w, map[string]interface{}{
+				"status_id":        1,
+				"priority_id":      2,
+				"tracker_id":       11,
+				"issue_type":       "bug",
+				"issue_tags":       []interface{}{7, 8},
+				"assigned_to_id":   9,
+				"fixed_version_id": 13,
+				"branch_name":      "main",
+				"start_date":       "2026-05-01",
+				"due_date":         "2026-05-31",
+			})
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			updatePayload = decodeJSON(t, r)
 			writeJSON(t, w, updatePayload)
@@ -607,6 +729,10 @@ func TestIssueUpdatePreservesCurrentMetadata(t *testing.T) {
 	assertEqual(t, updatePayload["branch_name"], "main")
 	assertEqual(t, updatePayload["start_date"], "2026-05-01")
 	assertEqual(t, updatePayload["due_date"], "2026-05-31")
+	assertEqual(t, updatePayload["tracker_id"], float64(11))
+	assertEqual(t, updatePayload["issue_type"], "bug")
+	assertEqual(t, updatePayload["assigned_to_id"], float64(9))
+	assertEqual(t, updatePayload["fixed_version_id"], float64(13))
 }
 
 func TestIssueUpdateSupportsMetadataFields(t *testing.T) {
@@ -618,6 +744,8 @@ func TestIssueUpdateSupportsMetadataFields(t *testing.T) {
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			updatePayload = decodeJSON(t, r)
 			writeJSON(t, w, updatePayload)
@@ -644,6 +772,7 @@ func TestIssueUpdateSupportsMetadataFields(t *testing.T) {
 	assertEqual(t, updatePayload["priority_id"], float64(4))
 	assertNumberSlice(t, updatePayload["issue_tag_ids"], []float64{6, 7})
 	assertNumberSlice(t, updatePayload["assigner_ids"], []float64{8})
+	assertEqual(t, updatePayload["assigned_to_id"], float64(8))
 	assertEqual(t, updatePayload["branch_name"], "bugfix/metadata")
 	assertEqual(t, updatePayload["start_date"], "2026-06-01")
 	assertEqual(t, updatePayload["due_date"], "2026-06-15")
@@ -658,6 +787,8 @@ func TestIssueUpdateInvalidState(t *testing.T) {
 				"subject":     "bug",
 				"description": "desc",
 			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
@@ -800,6 +931,8 @@ func TestBatchClosePreservesCurrentDescription(t *testing.T) {
 				"subject":     "Existing title",
 				"description": "Existing description",
 			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			updatePayload = decodeJSON(t, r)
 			writeJSON(t, w, updatePayload)
@@ -865,8 +998,12 @@ func TestBatchCloseWithFailedClose(t *testing.T) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/1.json":
 			writeJSON(t, w, map[string]interface{}{"subject": "Issue 1", "description": "desc1"})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("1"):
+			writeLegacyIssueEdit(t, w)
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/2.json":
 			writeJSON(t, w, map[string]interface{}{"subject": "Issue 2", "description": "desc2"})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("2"):
+			writeLegacyIssueEdit(t, w)
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/1.json":
 			writeJSON(t, w, map[string]interface{}{"subject": "Issue 1", "description": "desc1", "status_id": float64(5)})
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/2.json":
@@ -1037,6 +1174,54 @@ func TestIssueViewHTTPError(t *testing.T) {
 	}
 }
 
+func TestMergeIssueViewDataAddsLegacyFields(t *testing.T) {
+	merged := mergeIssueViewData(
+		map[string]interface{}{
+			"id":                   float64(42),
+			"project_issues_index": float64(18),
+			"subject":              "Issue from v1",
+			"status":               nil,
+		},
+		map[string]interface{}{
+			"id":                   float64(2048),
+			"project_issues_index": float64(18),
+			"tracker":              map[string]interface{}{"id": 5, "name": "Feature"},
+			"priority":             map[string]interface{}{"id": 2, "name": "Normal"},
+			"issue_status":         map[string]interface{}{"id": 1, "name": "Open"},
+			"issue_tags": []map[string]interface{}{
+				{"id": 7, "name": "backend"},
+				{"id": 8, "name": "urgent"},
+			},
+			"version_id": 13,
+		},
+		map[string]interface{}{
+			"tracker_id":       5,
+			"issue_type":       "feature",
+			"assigned_to_id":   9,
+			"fixed_version_id": 13,
+			"issue_tags":       []interface{}{7, 8},
+		},
+	)
+
+	assertEqual(t, merged["number"], float64(18))
+	assertEqual(t, merged["database_id"], float64(42))
+	assertEqual(t, merged["tracker_id"], 5)
+	assertEqual(t, merged["issue_type"], "feature")
+	assertEqual(t, merged["assigned_to_id"], 9)
+	assertEqual(t, merged["fixed_version_id"], 13)
+	assertEqual(t, merged["version_id"], 13)
+	assertEqual(t, merged["status_name"], "Open")
+	assertEqual(t, merged["priority_name"], "Normal")
+	assertNumberSlice(t, merged["issue_tag_ids"], []float64{7, 8})
+	tagNames, ok := merged["issue_tag_names"].([]string)
+	if !ok {
+		t.Fatalf("expected issue_tag_names, got %T", merged["issue_tag_names"])
+	}
+	if len(tagNames) != 2 || tagNames[0] != "backend" || tagNames[1] != "urgent" {
+		t.Fatalf("unexpected issue_tag_names: %v", tagNames)
+	}
+}
+
 func TestIssueCommentHTTPError(t *testing.T) {
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		writeText(t, w, http.StatusInternalServerError, "server error")
@@ -1056,6 +1241,8 @@ func TestIssueUpdateHTTPError(t *testing.T) {
 			writeJSON(t, w, map[string]interface{}{
 				"id": float64(42), "subject": "bug", "description": "desc",
 			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			writeText(t, w, http.StatusInternalServerError, "server error")
 		default:
@@ -1077,6 +1264,8 @@ func TestIssueCloseHTTPError(t *testing.T) {
 			writeJSON(t, w, map[string]interface{}{
 				"id": float64(42), "subject": "bug", "description": "desc",
 			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeLegacyIssueEdit(t, w)
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			writeText(t, w, http.StatusInternalServerError, "server error")
 		default:
@@ -1093,7 +1282,14 @@ func TestIssueCloseHTTPError(t *testing.T) {
 
 func TestFetchExistingIssueBadData(t *testing.T) {
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, "not a map")
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/1.json":
+			writeJSON(t, w, "not a map")
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("1"):
+			writeLegacyIssueEdit(t, w)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	})
 	defer server.Close()
 
@@ -1110,7 +1306,14 @@ func TestFetchExistingIssueBadData(t *testing.T) {
 
 func TestFetchExistingIssueNoSubject(t *testing.T) {
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, map[string]interface{}{"id": float64(1)})
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/1.json":
+			writeJSON(t, w, map[string]interface{}{"id": float64(1)})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("1"):
+			writeLegacyIssueEdit(t, w)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	})
 	defer server.Close()
 
@@ -1122,6 +1325,91 @@ func TestFetchExistingIssueNoSubject(t *testing.T) {
 	_, err := fetchExistingIssue(ctx, "1")
 	if err == nil {
 		t.Fatal("expected error for missing subject")
+	}
+}
+
+func TestFetchExistingIssueRequiresEditMetadata(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/1.json":
+			writeJSON(t, w, map[string]interface{}{
+				"subject":     "issue",
+				"description": "desc",
+			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("1"):
+			writeText(t, w, http.StatusInternalServerError, "boom")
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+		Owner:  "owner",
+		Repo:   "repo",
+	}
+	_, err := fetchExistingIssue(ctx, "1")
+	if err == nil || !strings.Contains(err.Error(), "edit metadata") {
+		t.Fatalf("expected edit metadata error, got %v", err)
+	}
+}
+
+func TestIssueUpdateStopsWhenEditMetadataFails(t *testing.T) {
+	patchCalled := false
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
+				"subject":     "Existing title",
+				"description": "Existing description",
+			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeText(t, w, http.StatusInternalServerError, "server error")
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			patchCalled = true
+			t.Fatal("PATCH should not be sent when edit metadata fetch fails")
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "update", map[string]string{"number": "42", "title": "New title"})
+	if err == nil {
+		t.Fatal("expected error when edit metadata fetch fails")
+	}
+	if patchCalled {
+		t.Fatal("patch should not have been called")
+	}
+}
+
+func TestIssueCloseStopsWhenEditMetadataFails(t *testing.T) {
+	patchCalled := false
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
+				"subject":     "Existing title",
+				"description": "Existing description",
+			})
+		case r.Method == "GET" && r.URL.Path == issueLegacyEditPath("42"):
+			writeText(t, w, http.StatusInternalServerError, "server error")
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			patchCalled = true
+			t.Fatal("PATCH should not be sent when edit metadata fetch fails")
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "close", map[string]string{"number": "42"})
+	if err == nil {
+		t.Fatal("expected error when edit metadata fetch fails")
+	}
+	if patchCalled {
+		t.Fatal("patch should not have been called")
 	}
 }
 
