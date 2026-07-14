@@ -455,25 +455,28 @@ gitlink-cli search +repos -k "machine learning"
 gitlink-cli search +users -k "zhangsan"
 ```
 
-### 工作流命令
+### Workflow 自动化
 
-`workflow` 提供面向维护者和 AI Agent 的只读分析能力，可用于 Issue 分流、仓库健康度评估、PR 审查摘要、仓库工作流报告和 PR 审查队列排序。
+`workflow` 提供只读的规则化分析命令，适合维护者和 AI Agent 在不写入远端数据的情况下整理 Issue、PR、仓库健康度和发布材料。
 
 ```bash
-# 生成单个 PR 的审查摘要
+# 根据本地参数分析 Issue
+gitlink-cli workflow +triage --title "Install failed on Windows" --body "go install failed with error" --format table
+
+# 只读拉取远端数据生成 PR 审查摘要
 gitlink-cli workflow +pr-summary --owner Gitlink --repo gitlink-cli --number 1 --format markdown
 
-# 生成仓库工作流报告
+# 只读拉取远端数据生成仓库工作流报告
 gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
 
-# 根据风险、变更类型、diff 规模和测试信号生成 PR 审查队列
-gitlink-cli workflow +review-queue --owner Gitlink --repo gitlink-cli --limit 20 --format table
+# 根据已合并 PR 生成发布说明
+gitlink-cli workflow +release-notes --owner Gitlink --repo gitlink-cli --version v1.2.0 --limit 20 --format markdown
 
-# 从本地 JSON 输入生成 PR 审查队列
-gitlink-cli workflow +review-queue --from review_queue.json --format markdown
+# 根据本地 JSON 生成发布说明
+gitlink-cli workflow +release-notes --from release-prs.json --from-ref v1.1.0 --to-ref v1.2.0 --format json
 ```
 
-`workflow +review-queue` 默认使用 `table` 输出，适合维护者快速决定先审哪个 PR；它只读取 PR 元数据并进行本地规则分析，不会评论、审批、拒绝或合并 PR。
+`workflow +pr-summary` 默认输出 table，`workflow +repo-report` 和 `workflow +release-notes` 默认输出 markdown。当前 workflow 命令只做本地分析或只读拉取，不会评论、审批、关闭、合并或修改远端数据。
 
 ### Raw API
 

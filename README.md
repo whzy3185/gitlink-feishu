@@ -485,11 +485,11 @@ gitlink-cli search +users -k "zhangsan"
 - `workflow +health`
 - `workflow +pr-summary`
 - `workflow +repo-report`
-- `workflow +review-queue`
+- `workflow +release-notes`
 
 `workflow +pr-summary` defaults to `table` when `--format` is omitted.
 `workflow +repo-report` defaults to `markdown` when `--format` is omitted.
-`workflow +review-queue` defaults to `table` when `--format` is omitted.
+`workflow +release-notes` defaults to `markdown` when `--format` is omitted.
 
 Examples:
 
@@ -563,11 +563,11 @@ gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format ma
 # Repository workflow report from a local JSON file
 gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format json
 
-# Pull request review queue by read-only GitLink fetch
-gitlink-cli workflow +review-queue --owner Gitlink --repo gitlink-cli --limit 20 --format table
+# Release notes from merged pull requests fetched in read-only mode
+gitlink-cli workflow +release-notes --owner Gitlink --repo gitlink-cli --version v1.2.0 --limit 20 --format markdown
 
-# Pull request review queue from local PR summary inputs
-gitlink-cli workflow +review-queue --from review_queue.json --format markdown
+# Release notes from a local JSON file
+gitlink-cli workflow +release-notes --from release-prs.json --from-ref v1.1.0 --to-ref v1.2.0 --format json
 ```
 
 Output formats:
@@ -583,7 +583,7 @@ Safety:
 - They do not depend on LLM APIs.
 - `workflow +pr-summary` does not comment, approve, reject, or merge pull requests.
 - `workflow +repo-report` aggregates health, issue triage, and PR review summary signals without remote writes.
-- `workflow +review-queue` only sorts and explains the review queue; it does not comment, approve, reject, or merge pull requests.
+- `workflow +release-notes` reads merged PR metadata and generates local release notes only.
 
 ### Raw API
 
