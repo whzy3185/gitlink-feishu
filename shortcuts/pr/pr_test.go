@@ -1258,3 +1258,46 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
 	}
 }
+
+func TestPRCommitsUsesCommitsEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/owner/repo/pulls/355/commits.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"commits_count": float64(1), "commits": []interface{}{}})
+	}))
+	defer server.Close()
+
+	if err := runPRShortcut(t, server, "commits", map[string]string{"id": "355"}); err != nil {
+		t.Fatalf("commits failed: %v", err)
+	}
+}
+
+func TestPRCheckMergePostsBranchesAndForkTuple(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/owner/repo/pulls/check_can_merge.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"status": float64(0), "message": "可以合并"})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "check-merge", map[string]string{
+		"head": "feat/x", "base": "master", "fork-project-id": "1549132",
+	})
+	if err != nil {
+		t.Fatalf("check-merge failed: %v", err)
+	}
+	assertEqual(t, payload["head"], "feat/x")
+	assertEqual(t, payload["base"], "master")
+	assertEqual(t, payload["fork_project_id"], float64(1549132))
+	assertEqual(t, payload["is_original"], true)
+
+	if err := runPRShortcut(t, server, "check-merge", map[string]string{
+		"head": "a", "base": "b", "fork-project-id": "abc",
+	}); err == nil {
+		t.Fatal("expected error for non-integer --fork-project-id")
+	}
+}
