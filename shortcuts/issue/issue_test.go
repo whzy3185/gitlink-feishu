@@ -759,7 +759,7 @@ func TestIssueNumberOrIDIsRequired(t *testing.T) {
 
 // --- batch-close ---
 
-func TestBatchClosePreservesCurrentDescription(t *testing.T) {
+func TestBatchClosePreservesCurrentMetadata(t *testing.T) {
 	var updatePayload map[string]interface{}
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -767,6 +767,16 @@ func TestBatchClosePreservesCurrentDescription(t *testing.T) {
 			writeJSON(t, w, map[string]interface{}{
 				"subject":     "Existing title",
 				"description": "Existing description",
+				"priority":    map[string]interface{}{"id": 3},
+				"tags": []map[string]interface{}{
+					{"id": 4},
+				},
+				"assigners": []map[string]interface{}{
+					{"id": 5},
+				},
+				"branch_name": "release/next",
+				"start_date":  "2026-05-01",
+				"due_date":    "2026-05-31",
 			})
 		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
 			updatePayload = decodeJSON(t, r)
@@ -787,6 +797,12 @@ func TestBatchClosePreservesCurrentDescription(t *testing.T) {
 	assertEqual(t, updatePayload["subject"], "Existing title")
 	assertEqual(t, updatePayload["description"], "Existing description")
 	assertEqual(t, updatePayload["status_id"], float64(5))
+	assertEqual(t, updatePayload["priority_id"], float64(3))
+	assertNumberSlice(t, updatePayload["issue_tag_ids"], []float64{4})
+	assertNumberSlice(t, updatePayload["assigner_ids"], []float64{5})
+	assertEqual(t, updatePayload["branch_name"], "release/next")
+	assertEqual(t, updatePayload["start_date"], "2026-05-01")
+	assertEqual(t, updatePayload["due_date"], "2026-05-31")
 }
 
 func TestBatchCloseDryRun(t *testing.T) {
