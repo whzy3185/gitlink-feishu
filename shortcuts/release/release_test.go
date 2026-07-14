@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -97,147 +95,6 @@ func TestReleaseView(t *testing.T) {
 
 	if err := runReleaseShortcut(t, server, "view", map[string]string{"id": "v1.0"}); err != nil {
 		t.Fatalf("view failed: %v", err)
-	}
-}
-
-func TestReleaseAssets(t *testing.T) {
-	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertReleaseRequest(t, r, "GET", "/owner/repo/releases/7.json")
-		writeReleaseJSON(t, w, releaseDetail(serverURL(r), []map[string]interface{}{
-			{"id": float64(10), "title": "app.zip", "filesize": "12 KB", "url": "/api/attachments/10"},
-		}))
-	})
-	defer server.Close()
-
-	if err := runReleaseShortcut(t, server, "assets", map[string]string{"id": "7"}); err != nil {
-		t.Fatalf("assets failed: %v", err)
-	}
-}
-
-func TestReleaseDownloadAssetByName(t *testing.T) {
-	dir := t.TempDir()
-	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/owner/repo/releases/7.json":
-			writeReleaseJSON(t, w, releaseDetail(serverURL(r), []map[string]interface{}{
-				{"id": float64(10), "title": "app.zip", "filesize": "12 KB", "url": "/api/attachments/10"},
-			}))
-		case "/api/attachments/10":
-			w.Header().Set("Content-Type", "application/zip")
-			_, _ = w.Write([]byte("asset bytes"))
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-	})
-	defer server.Close()
-
-	err := runReleaseShortcut(t, server, "download", map[string]string{
-		"id":     "7",
-		"asset":  "app.zip",
-		"output": dir,
-	})
-	if err != nil {
-		t.Fatalf("download asset failed: %v", err)
-	}
-	data, err := os.ReadFile(filepath.Join(dir, "app.zip"))
-	if err != nil {
-		t.Fatalf("read downloaded file: %v", err)
-	}
-	if string(data) != "asset bytes" {
-		t.Fatalf("downloaded data = %q", data)
-	}
-}
-
-func TestReleaseDownloadSingleAssetByDefault(t *testing.T) {
-	dir := t.TempDir()
-	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/owner/repo/releases/7.json":
-			writeReleaseJSON(t, w, releaseDetail(serverURL(r), []map[string]interface{}{
-				{"id": float64(10), "title": "../unsafe.txt", "url": "/owner/repo/releases/download/v1/unsafe.txt"},
-			}))
-		case "/owner/repo/releases/download/v1/unsafe.txt":
-			_, _ = w.Write([]byte("safe"))
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-	})
-	defer server.Close()
-
-	err := runReleaseShortcut(t, server, "download", map[string]string{
-		"id":     "7",
-		"output": dir,
-	})
-	if err != nil {
-		t.Fatalf("download default asset failed: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "unsafe.txt")); err != nil {
-		t.Fatalf("expected sanitized file: %v", err)
-	}
-}
-
-func TestReleaseDownloadArchiveZip(t *testing.T) {
-	out := filepath.Join(t.TempDir(), "source.zip")
-	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/owner/repo/releases/7.json":
-			writeReleaseJSON(t, w, releaseDetail(serverURL(r), nil))
-		case "/archive/v1.0.zip":
-			_, _ = w.Write([]byte("zip bytes"))
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-	})
-	defer server.Close()
-
-	err := runReleaseShortcut(t, server, "download", map[string]string{
-		"id":      "7",
-		"archive": "zip",
-		"output":  out,
-	})
-	if err != nil {
-		t.Fatalf("download archive failed: %v", err)
-	}
-	data, err := os.ReadFile(out)
-	if err != nil {
-		t.Fatalf("read archive: %v", err)
-	}
-	if string(data) != "zip bytes" {
-		t.Fatalf("archive data = %q", data)
-	}
-}
-
-func TestReleaseDownloadRequiresAssetWhenMultipleAttachments(t *testing.T) {
-	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		writeReleaseJSON(t, w, releaseDetail(serverURL(r), []map[string]interface{}{
-			{"id": float64(10), "title": "a.zip", "url": "/api/attachments/10"},
-			{"id": float64(11), "title": "b.zip", "url": "/api/attachments/11"},
-		}))
-	})
-	defer server.Close()
-
-	err := runReleaseShortcut(t, server, "download", map[string]string{"id": "7", "output": t.TempDir()})
-	if err == nil {
-		t.Fatal("expected error when multiple attachments need --asset")
-	}
-}
-
-func TestReleaseDownloadDoesNotOverwriteWithoutForce(t *testing.T) {
-	dir := t.TempDir()
-	out := filepath.Join(dir, "app.zip")
-	if err := os.WriteFile(out, []byte("exists"), 0644); err != nil {
-		t.Fatalf("seed output file: %v", err)
-	}
-	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		writeReleaseJSON(t, w, releaseDetail(serverURL(r), []map[string]interface{}{
-			{"id": float64(10), "title": "app.zip", "url": "/api/attachments/10"},
-		}))
-	})
-	defer server.Close()
-
-	err := runReleaseShortcut(t, server, "download", map[string]string{"id": "7", "output": dir})
-	if err == nil {
-		t.Fatal("expected overwrite protection error")
 	}
 }
 
@@ -472,7 +329,7 @@ func TestReleaseShortcutNames(t *testing.T) {
 	for _, shortcut := range Shortcuts() {
 		got[shortcut.Name] = true
 	}
-	want := []string{"list", "create", "edit", "view", "assets", "download", "update", "delete"}
+	want := []string{"list", "create", "edit", "view", "update", "delete", "assets", "attach", "detach", "upload"}
 	for _, name := range want {
 		if !got[name] {
 			t.Fatalf("missing shortcut %q in %v", name, got)
@@ -534,25 +391,6 @@ func releaseEditFixture() map[string]interface{} {
 	}
 }
 
-func releaseDetail(baseURL string, attachments []map[string]interface{}) map[string]interface{} {
-	rawAttachments := make([]interface{}, 0, len(attachments))
-	for _, attachment := range attachments {
-		rawAttachments = append(rawAttachments, attachment)
-	}
-	return map[string]interface{}{
-		"version_id":  float64(7),
-		"tag_name":    "v1.0",
-		"name":        "v1.0",
-		"tarball_url": baseURL + "/archive/v1.0.tar.gz",
-		"zipball_url": baseURL + "/archive/v1.0.zip",
-		"attachments": rawAttachments,
-	}
-}
-
-func serverURL(r *http.Request) string {
-	return "http://" + r.Host
-}
-
 func assertReleaseRequest(t *testing.T, r *http.Request, method, path string) {
 	t.Helper()
 	if r.Method != method || r.URL.Path != path {
@@ -612,8 +450,10 @@ func ExampleShortcuts() {
 	// create
 	// edit
 	// view
-	// assets
-	// download
 	// update
 	// delete
+	// assets
+	// attach
+	// detach
+	// upload
 }

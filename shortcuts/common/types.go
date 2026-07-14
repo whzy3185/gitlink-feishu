@@ -90,19 +90,14 @@ func (ctx *RuntimeContext) CallAPIWithQuery(method, path string, query url.Value
 	return ctx.Client.Do(method, path, nil, query)
 }
 
-// PostMultipart uploads a file with multipart/form-data through the shared client.
-func (ctx *RuntimeContext) PostMultipart(path, fileField, filePath string, fields map[string]string) (*output.Envelope, error) {
-	return ctx.Client.PostMultipart(path, fileField, filePath, fields)
+// PostMultipart uploads multipart/form-data through the shared runtime client.
+func (ctx *RuntimeContext) PostMultipart(path string, fields map[string]string, files []client.MultipartFile) (*output.Envelope, error) {
+	return ctx.Client.PostMultipart(path, fields, files)
 }
 
 // PaginateAll fetches all pages.
 func (ctx *RuntimeContext) PaginateAll(path string, params url.Values) ([]json.RawMessage, error) {
 	return ctx.Client.PaginateAll(path, params)
-}
-
-// Download fetches raw bytes from an API, attachment, or archive URL.
-func (ctx *RuntimeContext) Download(path string) (*client.DownloadResult, error) {
-	return ctx.Client.Download(path)
 }
 
 // Output prints the envelope in the configured format.
@@ -113,20 +108,6 @@ func (ctx *RuntimeContext) Output(env *output.Envelope) error {
 // OutputData wraps data in a success envelope and prints it.
 func (ctx *RuntimeContext) OutputData(data interface{}) error {
 	return output.Print(output.SuccessEnvelope(data, nil), ctx.Format)
-}
-
-// DefaultBranch fetches the repository's default branch, falling back to "master".
-func (ctx *RuntimeContext) DefaultBranch() (string, error) {
-	env, err := ctx.CallAPI("GET", ctx.RepoPath(), nil)
-	if err != nil {
-		return "", err
-	}
-	if data, ok := env.Data.(map[string]interface{}); ok {
-		if branch, ok := data["default_branch"].(string); ok && branch != "" {
-			return branch, nil
-		}
-	}
-	return "master", nil
 }
 
 // RepoPath returns the API path prefix for the current owner/repo.

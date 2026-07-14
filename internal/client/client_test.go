@@ -2,11 +2,14 @@ package client
 
 import (
 	"encoding/json"
+	"io"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -309,6 +312,87 @@ func TestClientDoWithBody(t *testing.T) {
 	}
 	if !env.OK {
 		t.Fatal("expected OK=true")
+	}
+}
+
+func TestClientPostMultipart(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/attachments.json" {
+			t.Fatalf("expected path /api/attachments.json, got %s", r.URL.Path)
+		}
+
+		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if err != nil {
+			t.Fatalf("parse media type: %v", err)
+		}
+		if mediaType != "multipart/form-data" {
+			t.Fatalf("Content-Type = %q, want multipart/form-data", mediaType)
+		}
+
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			t.Fatalf("ParseMultipartForm: %v", err)
+		}
+		if got := r.FormValue("description"); got != "release asset" {
+			t.Fatalf("description = %q, want %q", got, "release asset")
+		}
+
+		files := r.MultipartForm.File["file"]
+		if len(files) != 1 {
+			t.Fatalf("expected 1 uploaded file, got %d", len(files))
+		}
+		if files[0].Filename != "asset.zip" {
+			t.Fatalf("filename = %q, want %q", files[0].Filename, "asset.zip")
+		}
+		if got := files[0].Header.Get("Content-Type"); got != "application/octet-stream" {
+			t.Fatalf("part Content-Type = %q, want %q", got, "application/octet-stream")
+		}
+
+		file, err := files[0].Open()
+		if err != nil {
+			t.Fatalf("open multipart file: %v", err)
+		}
+		defer file.Close()
+
+		data, err := io.ReadAll(file)
+		if err != nil {
+			t.Fatalf("read multipart file: %v", err)
+		}
+		if string(data) != "binary content" {
+			t.Fatalf("file body = %q, want %q", string(data), "binary content")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"id":"asset-1"}`))
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
+	env, err := c.PostMultipart("/api/attachments", map[string]string{
+		"description": "release asset",
+	}, []MultipartFile{
+		{
+			FieldName:   "file",
+			FileName:    "asset.zip",
+			ContentType: "application/octet-stream",
+			Reader:      strings.NewReader("binary content"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !env.OK {
+		t.Fatal("expected OK=true")
+	}
+}
+
+func TestClientPostMultipartRequiresFile(t *testing.T) {
+	c := &Client{HTTP: &http.Client{}, BaseURL: "https://gitlink.example.com"}
+	_, err := c.PostMultipart("/attachments", nil, nil)
+	if err == nil {
+		t.Fatal("expected error when no multipart file is provided")
 	}
 }
 

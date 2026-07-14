@@ -109,7 +109,7 @@
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
 | 👥 成员 | 列出、添加、移除仓库成员，调整角色，生成和接受邀请链接 |
 | 🌿 分支 | 创建、删除、保护分支 |
-| 🏷️ 发布 | 创建、编辑、更新、查看、删除 Release |
+| 🏷️ 发布 | 创建、编辑、更新、查看、删除 Release，并管理发布资产 |
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
@@ -475,6 +475,16 @@ gitlink-cli release +create --owner Gitlink --repo forgeplus -t v1.0.0 -n "v1.0.
 
 # 查看 Release
 gitlink-cli release +view --owner Gitlink --repo forgeplus -i <version_id>
+
+# 列出 Release 已绑定的资产
+gitlink-cli release +assets --owner Gitlink --repo forgeplus -i <version_id>
+
+# 绑定或移除已有附件 ID，同时保留 Release 其他字段
+gitlink-cli release +attach --owner Gitlink --repo forgeplus -i <version_id> --attachment-ids 12,34 --dry-run
+gitlink-cli release +detach --owner Gitlink --repo forgeplus -i <version_id> --attachment-ids 34 --dry-run
+
+# 上传本地文件并一步绑定到 Release
+gitlink-cli release +upload --owner Gitlink --repo forgeplus -i <version_id> --file dist/gitlink-cli_linux_amd64.tar.gz --asset-name gitlink-cli-linux-amd64.tar.gz --description "Linux 二进制包" --dry-run
 
 # 获取编辑数据并保留未传字段更新
 gitlink-cli release +edit --owner Gitlink --repo forgeplus -i <version_id>
