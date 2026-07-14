@@ -14,6 +14,10 @@ import (
 // defaultLabelColor is used when the caller does not provide a color.
 const defaultLabelColor = "#1E90FF"
 
+// labelListPageSize is the page size fetchLabel requests while paging the list
+// endpoint. A short page that returns fewer rows than this marks the last page.
+const labelListPageSize = 50
+
 // hexColorPattern matches #RGB and #RRGGBB hex color values.
 var hexColorPattern = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
 
@@ -142,7 +146,7 @@ func runUpdate(ctx *common.RuntimeContext) error {
 	if name == "" {
 		return fmt.Errorf("could not resolve label name for id %s; pass --name explicitly", id)
 	}
-	color := firstNonEmpty(ctx.Arg("color"), stringFromMap(current, "color"), defaultLabelColor)
+	color := firstNonEmpty(ctx.Arg("color"), stringFromMap(current, "color"))
 	if err := validateColor(color); err != nil {
 		return err
 	}
@@ -164,32 +168,41 @@ func runUpdate(ctx *common.RuntimeContext) error {
 }
 
 // fetchLabel looks up a single label by id from the list endpoint. GitLink does
-// not expose a single-label GET, so we page through the list and match by id.
-// A nil result (label not found) is not an error: the caller falls back to the
-// flags it was given.
+// not expose a single-label GET, so we page through the list and match by id. A
+// label beyond the first page must still be found, otherwise update would PATCH
+// the server's real name/description/color away with defaults, so an id that is
+// absent after the whole list is exhausted is reported as an error.
 func fetchLabel(ctx *common.RuntimeContext, id string) (map[string]interface{}, error) {
-	env, err := ctx.CallAPI("GET", labelPath(ctx), nil)
-	if err != nil {
-		return nil, err
-	}
-	data, ok := env.Data.(map[string]interface{})
-	if !ok {
-		return nil, nil
-	}
-	rawTags, ok := data["issue_tags"].([]interface{})
-	if !ok {
-		return nil, nil
-	}
-	for _, raw := range rawTags {
-		tag, ok := raw.(map[string]interface{})
+	for page := 1; ; page++ {
+		q := url.Values{}
+		q.Set("page", strconv.Itoa(page))
+		q.Set("limit", strconv.Itoa(labelListPageSize))
+		env, err := ctx.CallAPIWithQuery("GET", labelPath(ctx), q)
+		if err != nil {
+			return nil, err
+		}
+		data, ok := env.Data.(map[string]interface{})
 		if !ok {
-			continue
+			break
 		}
-		if labelIDString(tag["id"]) == id {
-			return tag, nil
+		rawTags, ok := data["issue_tags"].([]interface{})
+		if !ok {
+			break
+		}
+		for _, raw := range rawTags {
+			tag, ok := raw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if labelIDString(tag["id"]) == id {
+				return tag, nil
+			}
+		}
+		if len(rawTags) < labelListPageSize {
+			break
 		}
 	}
-	return nil, nil
+	return nil, fmt.Errorf("label id %s not found in this repository's issue labels", id)
 }
 
 func labelPath(ctx *common.RuntimeContext) string {
