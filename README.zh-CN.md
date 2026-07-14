@@ -120,6 +120,7 @@
 | 📊 画像 | 用户开发能力、角色定位、专业定位、近期活动、贡献热力图统计 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
 | 🤖 工作流 | AI 驱动的 Issue 分类、PR Review、Release Notes |
+| 🩺 Doctor | 一键体检配置、认证、仓库上下文与 API 连通性 |
 
 ## 安装与快速上手
 
@@ -550,6 +551,21 @@ gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --ye
 ```
 
 > 注意：`dataset +list`（平台数据集查询）已在生产 gitlink.org.cn 验证可用。按仓库的 `+view`/`+create`/`+update` 遵循已发布的 OpenAPI 契约，但生产环境尚未部署（当前返回 404），待平台上线后即可生效。
+### 环境自诊断（Doctor）
+
+```bash
+# 运行全部检查：配置文件、配置取值、认证、仓库上下文、API 连通性
+gitlink-cli doctor
+
+# 结构化输出，适合脚本 / AI Agent 使用
+gitlink-cli doctor --format json
+
+# 离线模式：跳过需认证的 API 连通性检查
+gitlink-cli doctor --skip-network
+```
+
+每项检查返回 `ok` / `warning` / `error` 及修复建议（suggestion）；warning 不影响使用。
+
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：
