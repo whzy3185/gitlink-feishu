@@ -121,7 +121,6 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 📊 Profile | User ability, role, major, activity, and contribution statistics |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
 | 🤖 Workflow | AI-powered issue triage, PR review, release notes |
-| 🩺 Doctor | Diagnose configuration, authentication, repo context, and API connectivity |
 
 ## Installation & Quick Start
 
@@ -228,10 +227,8 @@ gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
 
-# Search topics, then attach/detach one on a repository
-gitlink-cli repo +topics -k golang
-gitlink-cli repo +topic-add --owner Gitlink --repo forgeplus -n golang
-gitlink-cli repo +topic-remove --owner Gitlink --repo forgeplus -t 627
+# Line-by-line blame for a file
+gitlink-cli repo +blame --owner Gitlink --repo forgeplus -p README.md --ref master
 
 # Show language breakdown
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
@@ -283,13 +280,10 @@ gitlink-cli webhook +tasks --owner Gitlink --repo forgeplus --id 68
 ### Wiki Management
 
 ```bash
-# List wiki pages (table of contents); --project-id is auto-resolved from the repository when omitted
-gitlink-cli wiki +list --owner Gitlink --repo forgeplus
+# List wiki pages (table of contents)
+gitlink-cli wiki +list --owner Gitlink --repo forgeplus --project-id 12345
 
 # View a wiki page by page name
-gitlink-cli wiki +view --owner Gitlink --repo forgeplus -n home
-
-# Pass --project-id explicitly to skip the extra lookup request
 gitlink-cli wiki +view --owner Gitlink --repo forgeplus --project-id 12345 -n home
 
 # Create a wiki page
@@ -325,13 +319,6 @@ gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role D
 
 # Create an invite link
 gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
-
-# Apply to join a project by invite code
-gitlink-cli member +apply --code MPzQgH --role developer --dry-run
-
-# Quit a repository membership
-gitlink-cli member +quit --owner Gitlink --repo forgeplus --dry-run
-gitlink-cli member +quit --owner Gitlink --repo forgeplus --yes
 ```
 
 ### Issue Management
@@ -354,9 +341,6 @@ gitlink-cli issue +update --owner Gitlink --repo forgeplus --number 123 --priori
 
 # Close an issue
 gitlink-cli issue +close --owner Gitlink --repo forgeplus -i 123
-
-# Delete an issue (destructive; requires --yes)
-gitlink-cli issue +delete --owner Gitlink --repo forgeplus --number 123 --yes
 
 # Preview batch close without changing data
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,124 --dry-run
@@ -430,10 +414,6 @@ gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: New feature" -
 # View a PR
 gitlink-cli pr +view --owner Gitlink --repo forgeplus -i 42
 
-# Check out a pull request branch locally (mirrors `gh pr checkout`; run inside a git clone)
-gitlink-cli pr +checkout --owner Gitlink --repo forgeplus -i 42
-gitlink-cli pr +checkout --owner Gitlink --repo forgeplus -i 42 -b review-42
-
 # Merge a PR
 gitlink-cli pr +merge --owner Gitlink --repo forgeplus -i 42
 
@@ -462,12 +442,6 @@ gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved 
 ```bash
 # List branches
 gitlink-cli branch +list --owner Gitlink --repo forgeplus
-
-# Filter branches by name keyword
-gitlink-cli branch +list --owner Gitlink --repo forgeplus -k feature
-
-# List all branch names without pagination
-gitlink-cli branch +all --owner Gitlink --repo forgeplus
 
 # Create a branch
 gitlink-cli branch +create --name feature/new-feature
@@ -705,21 +679,6 @@ gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --ye
 > published OpenAPI contract but are not yet deployed on production (they return
 > 404 there); they will work once the platform enables them.
 
-### Doctor (Self-Diagnostics)
-
-```bash
-# Run all checks: config file, config values, auth, repo context, API connectivity
-gitlink-cli doctor
-
-# Structured output for scripts / AI agents
-gitlink-cli doctor --format json
-
-# Offline mode: skip authenticated API connectivity checks
-gitlink-cli doctor --skip-network
-```
-
-Each check reports `ok` / `warning` / `error` with a fix `suggestion`. Warnings do not block usage.
-
 ### Raw API
 
 For endpoints not covered by shortcuts, use the Raw API directly:
@@ -740,26 +699,6 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 # With query parameters
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
 ```
-
-### Shell Completion
-
-`gitlink-cli` ships with built-in shell completion (bash / zsh / fish / PowerShell):
-
-```bash
-# Bash (add to ~/.bashrc)
-source <(gitlink-cli completion bash)
-
-# Zsh (add to ~/.zshrc)
-source <(gitlink-cli completion zsh)
-
-# Fish
-gitlink-cli completion fish | source
-
-# PowerShell
-gitlink-cli completion powershell | Out-String | Invoke-Expression
-```
-
-Run `gitlink-cli completion <shell> --help` for install-once instructions per shell.
 
 ## Global Parameters
 
@@ -936,7 +875,3 @@ See [skills/gitlink-shared/references/api-reference.md](./skills/gitlink-shared/
 ## License
 
 [MulanPSL-2.0](https://license.coscl.org.cn/MulanPSL2)
-
-# Low-level git objects: tree entries and blob content by SHA
-gitlink-cli repo +git-tree --owner myname --repo myrepo -s master --recursive
-gitlink-cli repo +blob --owner myname --repo myrepo -s <blob-sha> --decode

@@ -42,15 +42,6 @@ func findShortcut(t *testing.T, name string) *common.Shortcut {
 	return nil
 }
 
-func decodeJSON(t *testing.T, r *http.Request) map[string]interface{} {
-	t.Helper()
-	var payload map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode request body: %v", err)
-	}
-	return payload
-}
-
 func writeJSON(t *testing.T, w http.ResponseWriter, v interface{}) {
 	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
@@ -645,58 +636,34 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	}
 }
 
-func TestRepoTopicsListsWithKeyword(t *testing.T) {
+func TestRepoBlameUsesBlameEndpoint(t *testing.T) {
 	var query string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/project_topics.json" {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/blame.json" {
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		query = r.URL.RawQuery
-		writeJSON(t, w, map[string]interface{}{"total_count": 1, "project_topics": []interface{}{}})
+		writeJSON(t, w, map[string]interface{}{"file_name": "README.md", "blame_parts": []interface{}{}})
 	}))
 	defer server.Close()
 
-	err := runShortcut(t, server, "topics", map[string]string{"page": "1", "limit": "20", "keyword": "go"})
+	err := runShortcut(t, server, "blame", map[string]string{"path": "README.md", "ref": "develop"})
 	if err != nil {
-		t.Fatalf("topics failed: %v", err)
+		t.Fatalf("blame failed: %v", err)
 	}
-	if !strings.Contains(query, "keyword=go") {
-		t.Fatalf("expected keyword in query, got %q", query)
+	if !strings.Contains(query, "filepath=README.md") || !strings.Contains(query, "sha=develop") {
+		t.Fatalf("unexpected query: %q", query)
 	}
 }
 
-func TestRepoTopicAddResolvesProjectID(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
-			writeJSON(t, w, map[string]interface{}{"id": float64(42)})
-		case r.Method == "POST" && r.URL.Path == "/v1/project_topics.json":
-			payload = decodeJSON(t, r)
-			writeJSON(t, w, map[string]interface{}{"status": float64(0)})
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "topic-add", map[string]string{"name": "golang"})
-	if err != nil {
-		t.Fatalf("topic-add failed: %v", err)
-	}
-	if payload["name"] != "golang" || payload["project_id"] != "42" {
-		t.Fatalf("unexpected payload: %#v", payload)
-	}
-}
-
-func TestRepoTopicRemoveRejectsNonIntegerID(t *testing.T) {
+func TestRepoBlameRequiresPath(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 	}))
 	defer server.Close()
 
-	err := runShortcut(t, server, "topic-remove", map[string]string{"topic-id": "abc"})
+	err := runShortcut(t, server, "blame", map[string]string{})
 	if err == nil {
-		t.Fatal("expected error for non-integer --topic-id")
+		t.Fatal("expected error when --path missing")
 	}
 }
