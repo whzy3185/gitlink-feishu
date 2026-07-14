@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -41,6 +40,15 @@ func findShortcut(t *testing.T, name string) *common.Shortcut {
 	}
 	t.Fatalf("shortcut %q not found", name)
 	return nil
+}
+
+func decodeJSON(t *testing.T, r *http.Request) map[string]interface{} {
+	t.Helper()
+	var payload map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode request body: %v", err)
+	}
+	return payload
 }
 
 func writeJSON(t *testing.T, w http.ResponseWriter, v interface{}) {
@@ -490,58 +498,6 @@ func TestRepoCreateWithOptions(t *testing.T) {
 	}
 }
 
-// --- rename ---
-
-func TestRepoRename(t *testing.T) {
-	cases := []struct {
-		name     string
-		arg      string
-		wantName string
-	}{
-		{name: "simple name", arg: "new-repo", wantName: "new-repo"},
-		{name: "trims surrounding whitespace", arg: "  renamed  ", wantName: "renamed"},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			var body map[string]interface{}
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				assertRequest(t, r, "PATCH", "/owner/repo.json")
-				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-					t.Fatalf("decode request body: %v", err)
-				}
-				writeJSON(t, w, map[string]interface{}{
-					"id":         float64(21),
-					"name":       tc.wantName,
-					"identifier": tc.wantName,
-				})
-			}))
-			defer server.Close()
-
-			if err := runShortcut(t, server, "rename", map[string]string{"name": tc.arg}); err != nil {
-				t.Fatalf("rename failed: %v", err)
-			}
-			// Renaming updates both the display name and the URL identifier, so the
-			// PATCH payload must carry the new name in each field.
-			assertEqual(t, body["name"], tc.wantName)
-			assertEqual(t, body["identifier"], tc.wantName)
-		})
-	}
-}
-
-func TestRepoRenameRejectsBlankName(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("blank name should not call API, got: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	for _, args := range []map[string]string{nil, {"name": "   "}} {
-		if err := runShortcut(t, server, "rename", args); err == nil {
-			t.Fatal("expected validation error for missing or blank name")
-		}
-	}
-}
-
 // --- validation/error paths ---
 
 func TestRepoInsightValidation(t *testing.T) {
@@ -689,41 +645,58 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	}
 }
 
-func TestRepoGitTreeBuildsPathAndRecursive(t *testing.T) {
+func TestRepoTopicsListsWithKeyword(t *testing.T) {
 	var query string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/git/trees/master.json" {
+		if r.Method != "GET" || r.URL.Path != "/v1/project_topics.json" {
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		query = r.URL.RawQuery
-		writeJSON(t, w, map[string]interface{}{"total_count": float64(2), "entries": []interface{}{}})
+		writeJSON(t, w, map[string]interface{}{"total_count": 1, "project_topics": []interface{}{}})
 	}))
 	defer server.Close()
 
-	if err := runShortcut(t, server, "git-tree", map[string]string{"sha": "master", "recursive": "true", "page": "1", "limit": "20"}); err != nil {
-		t.Fatalf("git-tree failed: %v", err)
+	err := runShortcut(t, server, "topics", map[string]string{"page": "1", "limit": "20", "keyword": "go"})
+	if err != nil {
+		t.Fatalf("topics failed: %v", err)
 	}
-	if !strings.Contains(query, "recursive=true") {
-		t.Fatalf("expected recursive=true in query, got %q", query)
+	if !strings.Contains(query, "keyword=go") {
+		t.Fatalf("expected keyword in query, got %q", query)
 	}
 }
 
-func TestRepoBlobDecode(t *testing.T) {
+func TestRepoTopicAddResolvesProjectID(t *testing.T) {
+	var payload map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/git/blobs/abc123.json" {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{"id": float64(42)})
+		case r.Method == "POST" && r.URL.Path == "/v1/project_topics.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"status": float64(0)})
+		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		writeJSON(t, w, map[string]interface{}{
-			"sha": "abc123", "encoding": "base64",
-			"content": base64.StdEncoding.EncodeToString([]byte("hello blob")),
-		})
 	}))
 	defer server.Close()
 
-	if err := runShortcut(t, server, "blob", map[string]string{"sha": "abc123", "decode": "true"}); err != nil {
-		t.Fatalf("blob failed: %v", err)
+	err := runShortcut(t, server, "topic-add", map[string]string{"name": "golang"})
+	if err != nil {
+		t.Fatalf("topic-add failed: %v", err)
 	}
-	if err := runShortcut(t, server, "blob", map[string]string{"sha": "abc123"}); err != nil {
-		t.Fatalf("blob without decode failed: %v", err)
+	if payload["name"] != "golang" || payload["project_id"] != "42" {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
+
+func TestRepoTopicRemoveRejectsNonIntegerID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "topic-remove", map[string]string{"topic-id": "abc"})
+	if err == nil {
+		t.Fatal("expected error for non-integer --topic-id")
 	}
 }

@@ -228,6 +228,11 @@ gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
 
+# Search topics, then attach/detach one on a repository
+gitlink-cli repo +topics -k golang
+gitlink-cli repo +topic-add --owner Gitlink --repo forgeplus -n golang
+gitlink-cli repo +topic-remove --owner Gitlink --repo forgeplus -t 627
+
 # Show language breakdown
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 

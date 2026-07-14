@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"encoding/base64"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -110,29 +109,21 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "git-tree",
-			Description: tr.T("cmd.repo.git_tree.short"),
+			Name:        "topics",
+			Description: tr.T("cmd.repo.topics.short"),
 			Flags: []common.Flag{
-				{Name: "sha", Short: "s", Usage: tr.T("flag.repo.git.sha"), Required: true},
-				{Name: "recursive", Short: "r", Usage: tr.T("flag.repo.git.recursive"), Bool: true},
+				{Name: "keyword", Short: "k", Usage: tr.T("flag.repo.topics.keyword")},
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				sha, err := ctx.RequireArg("sha")
-				if err != nil {
-					return err
-				}
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
-				if ctx.Arg("recursive") == "true" {
-					q.Set("recursive", "true")
+				if keyword := ctx.Arg("keyword"); keyword != "" {
+					q.Set("keyword", keyword)
 				}
-				env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("/v1%s/git/trees/%s", ctx.RepoPath(), url.PathEscape(sha)), q)
+				env, err := ctx.CallAPIWithQuery("GET", "/v1/project_topics", q)
 				if err != nil {
 					return err
 				}
@@ -140,37 +131,62 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "blob",
-			Description: tr.T("cmd.repo.blob.short"),
+			Name:        "topic-add",
+			Description: tr.T("cmd.repo.topic_add.short"),
 			Flags: []common.Flag{
-				{Name: "sha", Short: "s", Usage: tr.T("flag.repo.git.sha"), Required: true},
-				{Name: "decode", Short: "d", Usage: tr.T("flag.repo.git.decode"), Bool: true},
+				{Name: "name", Short: "n", Usage: tr.T("flag.repo.topic.name"), Required: true},
+				{Name: "project-id", Usage: tr.T("flag.repo.project_id")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				sha, err := ctx.RequireArg("sha")
+				name, err := ctx.RequireArg("name")
 				if err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("GET", fmt.Sprintf("/v1%s/git/blobs/%s", ctx.RepoPath(), url.PathEscape(sha)), nil)
+				projectID, err := resolveRepoProjectID(ctx)
 				if err != nil {
 					return err
 				}
-				if ctx.Arg("decode") == "true" {
-					if data, ok := env.Data.(map[string]interface{}); ok {
-						if enc, _ := data["encoding"].(string); enc == "base64" {
-							if content, _ := data["content"].(string); content != "" {
-								decoded, err := base64.StdEncoding.DecodeString(content)
-								if err != nil {
-									return fmt.Errorf("decode blob content: %w", err)
-								}
-								fmt.Print(string(decoded))
-								return nil
-							}
-						}
-					}
+				payload := map[string]interface{}{
+					"name":       name,
+					"project_id": projectID,
+				}
+				env, err := ctx.CallAPI("POST", "/v1/project_topics", payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "topic-remove",
+			Description: tr.T("cmd.repo.topic_remove.short"),
+			Flags: []common.Flag{
+				{Name: "topic-id", Short: "t", Usage: tr.T("flag.repo.topic.id"), Required: true},
+				{Name: "project-id", Usage: tr.T("flag.repo.project_id")},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				topicID, err := ctx.RequireArg("topic-id")
+				if err != nil {
+					return err
+				}
+				if _, err := strconv.Atoi(topicID); err != nil {
+					return fmt.Errorf("--topic-id must be an integer, got %q", topicID)
+				}
+				projectID, err := resolveRepoProjectID(ctx)
+				if err != nil {
+					return err
+				}
+				q := url.Values{}
+				q.Set("project_id", projectID)
+				env, err := ctx.CallAPIWithQuery("DELETE", "/v1/project_topics/"+topicID, q)
+				if err != nil {
+					return err
 				}
 				return ctx.Output(env)
 			},
@@ -293,14 +309,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "rename",
-			Description: tr.T("cmd.repo.rename.short"),
-			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: tr.T("flag.repo.rename.name"), Required: true},
-			},
-			Run: runRename,
-		},
-		{
 			Name:        "fork",
 			Description: tr.T("cmd.repo.fork.short"),
 			Run: func(ctx *common.RuntimeContext) error {
@@ -336,31 +344,6 @@ func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
 		return translators[0]
 	}
 	return i18n.Default()
-}
-
-func runRename(ctx *common.RuntimeContext) error {
-	if _, err := ctx.RequireArg("name"); err != nil {
-		return err
-	}
-	name := strings.TrimSpace(ctx.Arg("name"))
-	if name == "" {
-		return fmt.Errorf("invalid --name: repository name must not be empty")
-	}
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	// The update endpoint requires both the display name and the identifier; the
-	// identifier is the URL slug, so renaming it also changes the repository's
-	// remote clone URL, mirroring `gh repo rename`.
-	body := map[string]interface{}{
-		"name":       name,
-		"identifier": name,
-	}
-	env, err := ctx.CallAPI("PATCH", ctx.RepoPath(), body)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
 }
 
 func runLanguages(ctx *common.RuntimeContext) error {
