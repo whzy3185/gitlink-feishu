@@ -22,11 +22,23 @@ func TestFetchHealthInputCollectsSignals(t *testing.T) {
 				"has_contributing": true,
 			})
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues.json":
+			if got := r.URL.Query().Get("category"); got != "opened" {
+				t.Fatalf("issue category query = %q, want opened", got)
+			}
+			if got := r.URL.Query().Get("state"); got != "" {
+				t.Fatalf("issue list must not send state, got %q", got)
+			}
 			writeWorkflowJSON(t, w, map[string]interface{}{"issues": []map[string]interface{}{
 				{"id": 1, "subject": "fresh issue", "updated_at": now.AddDate(0, 0, -1).Format(time.RFC3339)},
 				{"id": 2, "subject": "stale issue", "updated_at": old.Format(time.RFC3339)},
 			}})
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/pulls.json":
+			if got := r.URL.Query().Get("status"); got != "0" {
+				t.Fatalf("pull status query = %q, want 0", got)
+			}
+			if got := r.URL.Query().Get("state"); got != "" {
+				t.Fatalf("pull list must not send state, got %q", got)
+			}
 			writeWorkflowJSON(t, w, map[string]interface{}{"pulls": []map[string]interface{}{
 				{"id": 3, "title": "stale pr", "updated_at": old.Format(time.RFC3339)},
 			}})

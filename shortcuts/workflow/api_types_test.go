@@ -495,8 +495,36 @@ func TestQueryWithPageLimit(t *testing.T) {
 
 func TestIssueListQuery(t *testing.T) {
 	q := issueListQuery("open")
-	if q.Get("state") != "open" {
-		t.Fatalf("issueListQuery state = %q", q.Get("state"))
+	if q.Get("state") != "" {
+		t.Fatalf("issueListQuery must not send state, got %q", q.Get("state"))
+	}
+	if q.Get("category") != "opened" {
+		t.Fatalf("issueListQuery category = %q, want opened", q.Get("category"))
+	}
+	if got := issueListQuery("closed").Get("category"); got != "closed" {
+		t.Fatalf("issueListQuery(closed) category = %q, want closed", got)
+	}
+	if got := issueListQuery("all").Get("category"); got != "all" {
+		t.Fatalf("issueListQuery(all) category = %q, want all", got)
+	}
+}
+
+func TestPullListQuery(t *testing.T) {
+	q := pullListQuery("open")
+	if q.Get("state") != "" {
+		t.Fatalf("pullListQuery must not send state, got %q", q.Get("state"))
+	}
+	if q.Get("status") != "0" {
+		t.Fatalf("pullListQuery status = %q, want 0", q.Get("status"))
+	}
+	if got := pullListQuery("merged").Get("status"); got != "1" {
+		t.Fatalf("pullListQuery(merged) status = %q, want 1", got)
+	}
+	if got := pullListQuery("closed").Get("status"); got != "2" {
+		t.Fatalf("pullListQuery(closed) status = %q, want 2", got)
+	}
+	if _, ok := pullListQuery("all")["status"]; ok {
+		t.Fatal("pullListQuery(all) should omit status so the API returns every state")
 	}
 }
 
@@ -581,6 +609,14 @@ func TestUpdateRecentActivity(t *testing.T) {
 	known2, days2, _ := updateRecentActivity(input, time.Time{})
 	if !known2 || days2 != days {
 		t.Fatalf("zero time update should not change: known=%v days=%d", known2, days2)
+	}
+
+	// A signal from today (days==0) must not be overwritten by an older one.
+	today := HealthInput{RecentActivityKnown: true, RecentActivityDays: 0}
+	old := time.Now().Add(-45 * 24 * time.Hour)
+	_, keptDays, _ := updateRecentActivity(today, old)
+	if keptDays != 0 {
+		t.Fatalf("today signal overwritten by older one: days=%d, want 0", keptDays)
 	}
 }
 

@@ -39,7 +39,7 @@ func FetchHealthInput(ctx *common.RuntimeContext, opts HealthFetchOptions) (Heal
 		input.RecentActivityKnown, input.RecentActivityDays, input = updateRecentActivity(input, latestTimeFromItems(issues))
 	}
 
-	if prs, err := fetchAllListItems(ctx, workflowRepoPath(owner, repo)+"/pulls", issueListQuery("open"), 100); err != nil {
+	if prs, err := fetchAllListItems(ctx, workflowRepoPath(owner, repo)+"/pulls", pullListQuery("open"), 100); err != nil {
 		notes = append(notes, ScoringNote{Metric: "open_prs", Note: fmt.Sprintf("pull request probe failed: %v", err)})
 	} else {
 		input.OpenPRs = len(prs)
@@ -200,7 +200,7 @@ func updateRecentActivity(input HealthInput, latest time.Time) (bool, int, Healt
 		return input.RecentActivityKnown, input.RecentActivityDays, input
 	}
 	days := apiAgeInDays(latest)
-	if !input.RecentActivityKnown || days < input.RecentActivityDays || input.RecentActivityDays == 0 {
+	if !input.RecentActivityKnown || days < input.RecentActivityDays {
 		input.RecentActivityKnown = true
 		input.RecentActivityDays = days
 	}
@@ -220,10 +220,44 @@ func queryWithPageLimit(base url.Values, page, limit int) url.Values {
 	return base
 }
 
+// The GitLink v1 list API filters issues by category and pulls by status; a
+// stray "state" param is silently ignored and every state is returned.
 func issueListQuery(state string) url.Values {
 	q := url.Values{}
-	q.Set("state", state)
+	q.Set("category", normalizeIssueListCategory(state))
 	return q
+}
+
+func pullListQuery(state string) url.Values {
+	q := url.Values{}
+	if status := normalizePullListStatus(state); status != "" {
+		q.Set("status", status)
+	}
+	return q
+}
+
+func normalizeIssueListCategory(state string) string {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "open", "opened":
+		return "opened"
+	case "closed":
+		return "closed"
+	default:
+		return "all"
+	}
+}
+
+func normalizePullListStatus(state string) string {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "open", "opened":
+		return "0"
+	case "merged":
+		return "1"
+	case "closed":
+		return "2"
+	default:
+		return ""
+	}
 }
 
 func fetchAllListItems(ctx *common.RuntimeContext, path string, baseQuery url.Values, pageSize int) ([]map[string]interface{}, error) {
