@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -89,6 +91,269 @@ func TestPRCommentFailsWhenIssueFieldMissing(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error when issue field is missing, got nil")
+	}
+}
+
+func TestPRReviewCommentsListWithFilters(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/owner/repo/pulls/42/journals.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		query := r.URL.Query()
+		assertEqual(t, query.Get("review_id"), "12")
+		assertEqual(t, query.Get("need_respond"), "true")
+		assertEqual(t, query.Get("state"), "resolved")
+		assertEqual(t, query.Get("parent_id"), "3")
+		assertEqual(t, query.Get("path"), "cmd/api/api.go")
+		assertEqual(t, query.Get("is_full"), "true")
+		assertEqual(t, query.Get("sort_by"), "updated_on")
+		assertEqual(t, query.Get("sort_direction"), "desc")
+		writeJSON(t, w, map[string]interface{}{"total_count": float64(0), "journals": []interface{}{}})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comments", map[string]string{
+		"id":             "42",
+		"review-id":      "12",
+		"need-respond":   "true",
+		"state":          "resolved",
+		"parent-id":      "3",
+		"path":           "cmd/api/api.go",
+		"is-full":        "true",
+		"sort-by":        "updated_on",
+		"sort-direction": "desc",
+	})
+	if err != nil {
+		t.Fatalf("review-comments failed: %v", err)
+	}
+}
+
+func TestPRReviewCommentCreateAutoDiff(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/pulls/42/files.json":
+			writeJSON(t, w, map[string]interface{}{
+				"files": []interface{}{
+					map[string]interface{}{
+						"name":        "cmd/api/api.go",
+						"old_name":    "cmd/api/api.go",
+						"addition":    float64(1),
+						"deletion":    float64(0),
+						"type":        float64(2),
+						"isCreated":   false,
+						"isDeleted":   false,
+						"isBin":       false,
+						"isLFSFile":   false,
+						"isRenamed":   false,
+						"isSubmodule": false,
+						"sections": []interface{}{
+							map[string]interface{}{
+								"fileName": "cmd/api/api.go",
+								"name":     "",
+								"lines": []interface{}{
+									map[string]interface{}{
+										"leftIdx":  float64(0),
+										"rightIdx": float64(0),
+										"type":     float64(4),
+										"content":  "@@ -1 +1 @@",
+										"sectionInfo": map[string]interface{}{
+											"path":          "cmd/api/api.go",
+											"lastLeftIdx":   float64(0),
+											"lastRightIdx":  float64(0),
+											"leftIdx":       float64(1),
+											"rightIdx":      float64(1),
+											"leftHunkSize":  float64(1),
+											"rightHunkSize": float64(1),
+										},
+									},
+									map[string]interface{}{
+										"leftIdx":     float64(0),
+										"rightIdx":    float64(1),
+										"type":        float64(2),
+										"content":     "+package api",
+										"sectionInfo": nil,
+									},
+								},
+							},
+						},
+					},
+				},
+			})
+		case r.Method == "POST" && r.URL.Path == "/v1/owner/repo/pulls/42/journals.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"id": float64(301), "note": "needs work"})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comment", map[string]string{
+		"id":        "42",
+		"review-id": "12",
+		"path":      "cmd/api/api.go",
+		"line-code": "abc_0_1",
+		"note":      "needs work",
+		"type":      "problem",
+		"commit":    "deadbeef",
+	})
+	if err != nil {
+		t.Fatalf("review-comment failed: %v", err)
+	}
+
+	assertEqual(t, payload["type"], "problem")
+	assertEqual(t, payload["review_id"], "12")
+	assertEqual(t, payload["line_code"], "abc_0_1")
+	assertEqual(t, payload["commit_id"], "deadbeef")
+	diff, ok := payload["diff"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("diff missing or wrong type: %#v", payload["diff"])
+	}
+	assertEqual(t, diff["name"], "cmd/api/api.go")
+	assertEqual(t, diff["oldname"], "cmd/api/api.go")
+	assertEqual(t, diff["is_created"], false)
+	sections, ok := diff["sections"].([]interface{})
+	if !ok || len(sections) != 1 {
+		t.Fatalf("sections = %#v", diff["sections"])
+	}
+	section := sections[0].(map[string]interface{})
+	assertEqual(t, section["file_name"], "cmd/api/api.go")
+	lines := section["lines"].([]interface{})
+	firstLine := lines[0].(map[string]interface{})
+	assertEqual(t, firstLine["left_index"], float64(0))
+	assertEqual(t, firstLine["right_index"], float64(0))
+	assertEqual(t, firstLine["section_path"], "cmd/api/api.go")
+	secondLine := lines[1].(map[string]interface{})
+	assertEqual(t, secondLine["match"], float64(1))
+}
+
+func TestPRReviewCommentCreateDryRunWithDiffFile(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run with diff file should not call API, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	diffPath := filepath.Join(t.TempDir(), "diff.json")
+	if err := os.WriteFile(diffPath, []byte(`{
+		"name":"cmd/api/api.go",
+		"old_name":"cmd/api/api.go",
+		"addition":1,
+		"deletion":0,
+		"type":2,
+		"sections":[{"fileName":"cmd/api/api.go","name":"","lines":[{"leftIdx":0,"rightIdx":1,"type":2,"content":"+package api","sectionInfo":null}]}]
+	}`), 0o600); err != nil {
+		t.Fatalf("write diff file: %v", err)
+	}
+
+	err := runPRShortcut(t, server, "review-comment", map[string]string{
+		"id":        "42",
+		"review-id": "12",
+		"path":      "cmd/api/api.go",
+		"line-code": "abc_0_1",
+		"note":      "needs work",
+		"diff-file": diffPath,
+		"dry-run":   "true",
+	})
+	if err != nil {
+		t.Fatalf("review-comment dry-run failed: %v", err)
+	}
+}
+
+func TestPRReviewCommentCreateFailsWhenDiffMissing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/owner/repo/pulls/42/files.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"files": []interface{}{
+				map[string]interface{}{
+					"name":     "README.md",
+					"sections": []interface{}{},
+					"addition": float64(1),
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comment", map[string]string{
+		"id":        "42",
+		"review-id": "12",
+		"path":      "cmd/api/api.go",
+		"line-code": "abc_0_1",
+		"note":      "needs work",
+	})
+	if err == nil {
+		t.Fatal("expected missing diff error")
+	}
+}
+
+func TestPRUpdateReviewComment(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PUT" {
+			t.Fatalf("expected PUT, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/owner/repo/pulls/42/journals/301.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"id": float64(301), "state": "resolved"})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "update-review-comment", map[string]string{
+		"id":         "42",
+		"comment-id": "301",
+		"note":       "fixed",
+		"state":      "resolved",
+		"commit":     "deadbeef",
+	})
+	if err != nil {
+		t.Fatalf("update-review-comment failed: %v", err)
+	}
+	assertEqual(t, payload["note"], "fixed")
+	assertEqual(t, payload["state"], "resolved")
+	assertEqual(t, payload["commit_id"], "deadbeef")
+}
+
+func TestPRUpdateReviewCommentRequiresChanges(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("should not call API when no update fields are provided")
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "update-review-comment", map[string]string{
+		"id":         "42",
+		"comment-id": "301",
+	})
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+}
+
+func TestPRDeleteReviewComment(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" {
+			t.Fatalf("expected DELETE, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/owner/repo/pulls/42/journals/301.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"message": "deleted"})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "delete-review-comment", map[string]string{
+		"id":         "42",
+		"comment-id": "301",
+	})
+	if err != nil {
+		t.Fatalf("delete-review-comment failed: %v", err)
 	}
 }
 

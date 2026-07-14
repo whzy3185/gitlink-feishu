@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"strconv"
+	"os"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
@@ -141,52 +141,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					return err
 				}
 				if err := enrichPullRequestClosedAt(ctx, env); err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "edit",
-			Description: tr.T("cmd.pr.edit.short"),
-			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
-				{Name: "title", Short: "t", Usage: tr.T("flag.pr.title")},
-				{Name: "body", Short: "b", Usage: tr.T("flag.pr.body")},
-				{Name: "base", Usage: tr.T("flag.pr.base")},
-				{Name: "head", Usage: tr.T("flag.pr.head")},
-				{Name: "tag-ids", Usage: tr.T("flag.pr.tag_ids")},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				id, err := ctx.RequireArg("id")
-				if err != nil {
-					return err
-				}
-				if ctx.Arg("title") == "" && ctx.Arg("body") == "" && ctx.Arg("base") == "" &&
-					ctx.Arg("head") == "" && ctx.Arg("tag-ids") == "" {
-					return fmt.Errorf("at least one of --title, --body, --base, --head, or --tag-ids is required")
-				}
-
-				// The update endpoint requires title, body, head and base together,
-				// so merge the requested changes onto the PR's current values to
-				// avoid clobbering fields the caller did not pass.
-				path := fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id)
-				current, err := ctx.CallAPI("GET", path, nil)
-				if err != nil {
-					return fmt.Errorf("fetch PR: %w", err)
-				}
-				payload := pullRequestEditPayload(ctx, current)
-				if payload["title"] == "" {
-					return fmt.Errorf("could not resolve PR title for #%s; pass --title explicitly", id)
-				}
-				if payload["head"] == "" || payload["base"] == "" {
-					return fmt.Errorf("could not resolve PR head/base branch for #%s; pass --head and --base explicitly", id)
-				}
-				env, err := ctx.CallAPI("PUT", path, payload)
-				if err != nil {
 					return err
 				}
 				return ctx.Output(env)
@@ -447,6 +401,235 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "review-comments",
+			Description: "List inline review comments on a pull request",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "review-id", Usage: "Review ID"},
+				{Name: "need-respond", Usage: "Filter by whether comments still need a response: true or false"},
+				{Name: "state", Short: "s", Usage: "Comment state: opened, resolved, or disabled"},
+				{Name: "parent-id", Usage: "Parent comment ID"},
+				{Name: "path", Short: "f", Usage: "Filter by file path"},
+				{Name: "is-full", Usage: "Whether to include reply comments: true or false"},
+				{Name: "sort-by", Usage: "Sort field: created_on or updated_on"},
+				{Name: "sort-direction", Usage: "Sort direction: asc or desc"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				q := url.Values{}
+				if reviewID := ctx.Arg("review-id"); reviewID != "" {
+					q.Set("review_id", reviewID)
+				}
+				if needRespond := ctx.Arg("need-respond"); needRespond != "" {
+					q.Set("need_respond", needRespond)
+				}
+				if state := ctx.Arg("state"); state != "" {
+					normalizedState, err := normalizePRReviewCommentState(state)
+					if err != nil {
+						return err
+					}
+					q.Set("state", normalizedState)
+				}
+				if parentID := ctx.Arg("parent-id"); parentID != "" {
+					q.Set("parent_id", parentID)
+				}
+				if path := ctx.Arg("path"); path != "" {
+					q.Set("path", path)
+				}
+				if isFull := ctx.Arg("is-full"); isFull != "" {
+					q.Set("is_full", isFull)
+				}
+				if sortBy := ctx.Arg("sort-by"); sortBy != "" {
+					q.Set("sort_by", sortBy)
+				}
+				if sortDirection := ctx.Arg("sort-direction"); sortDirection != "" {
+					q.Set("sort_direction", sortDirection)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", prV1Path(ctx, id)+"/journals", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "review-comment",
+			Description: "Create an inline review comment on a pull request",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "review-id", Usage: "Review ID", Required: true},
+				{Name: "path", Short: "f", Usage: "File path to comment on", Required: true},
+				{Name: "line-code", Usage: "Line code returned by the diff API", Required: true},
+				{Name: "note", Short: "n", Usage: "Comment body", Required: true},
+				{Name: "type", Short: "t", Usage: "Comment type: comment or problem", Default: "comment"},
+				{Name: "commit", Short: "m", Usage: "Commit SHA for the comment"},
+				{Name: "parent-id", Usage: "Parent comment ID for replies"},
+				{Name: "diff-file", Usage: "Load diff JSON from a file instead of fetching PR files automatically"},
+				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				reviewID, err := ctx.RequireArg("review-id")
+				if err != nil {
+					return err
+				}
+				path, err := ctx.RequireArg("path")
+				if err != nil {
+					return err
+				}
+				lineCode, err := ctx.RequireArg("line-code")
+				if err != nil {
+					return err
+				}
+				note, err := ctx.RequireArg("note")
+				if err != nil {
+					return err
+				}
+				commentType, err := normalizePRReviewCommentType(ctx.Arg("type"))
+				if err != nil {
+					return err
+				}
+				diff, diffSource, err := loadPRReviewCommentDiff(ctx, id, path, ctx.Arg("diff-file"))
+				if err != nil {
+					return err
+				}
+				payload := map[string]interface{}{
+					"type":      commentType,
+					"note":      note,
+					"review_id": reviewID,
+					"line_code": lineCode,
+					"path":      path,
+					"diff":      diff,
+				}
+				if commit := ctx.Arg("commit"); commit != "" {
+					payload["commit_id"] = commit
+				}
+				if parentID := ctx.Arg("parent-id"); parentID != "" {
+					payload["parent_id"] = parentID
+				}
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"repository":   fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+						"pull_request": id,
+						"dry_run":      true,
+						"action":       "create_review_comment",
+						"diff_source":  diffSource,
+						"payload":      payload,
+					})
+				}
+				env, err := ctx.CallAPI("POST", prV1Path(ctx, id)+"/journals", payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "update-review-comment",
+			Description: "Update an inline review comment on a pull request",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "comment-id", Usage: "Review comment ID", Required: true},
+				{Name: "note", Short: "n", Usage: "Updated comment body"},
+				{Name: "state", Short: "s", Usage: "Comment state: opened, resolved, or disabled"},
+				{Name: "commit", Short: "m", Usage: "Commit SHA to attach to the update"},
+				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				commentID, err := ctx.RequireArg("comment-id")
+				if err != nil {
+					return err
+				}
+				payload := map[string]interface{}{}
+				if note := ctx.Arg("note"); note != "" {
+					payload["note"] = note
+				}
+				if state := ctx.Arg("state"); state != "" {
+					normalizedState, err := normalizePRReviewCommentState(state)
+					if err != nil {
+						return err
+					}
+					payload["state"] = normalizedState
+				}
+				if commit := ctx.Arg("commit"); commit != "" {
+					payload["commit_id"] = commit
+				}
+				if len(payload) == 0 {
+					return fmt.Errorf("at least one of --note, --state, or --commit is required")
+				}
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"repository":   fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+						"pull_request": id,
+						"dry_run":      true,
+						"action":       "update_review_comment",
+						"comment_id":   commentID,
+						"payload":      payload,
+					})
+				}
+				env, err := ctx.CallAPI("PUT", prV1Path(ctx, id)+"/journals/"+commentID, payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "delete-review-comment",
+			Description: "Delete an inline review comment from a pull request",
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "comment-id", Usage: "Review comment ID", Required: true},
+				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				commentID, err := ctx.RequireArg("comment-id")
+				if err != nil {
+					return err
+				}
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"repository":   fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+						"pull_request": id,
+						"dry_run":      true,
+						"action":       "delete_review_comment",
+						"comment_id":   commentID,
+					})
+				}
+				env, err := ctx.CallAPI("DELETE", prV1Path(ctx, id)+"/journals/"+commentID, nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "comment",
 			Description: tr.T("cmd.pr.comment.short"),
 			Flags: []common.Flag{
@@ -502,6 +685,253 @@ func validatePRReviewStatus(status string) error {
 	}
 }
 
+func normalizePRReviewCommentType(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "comment":
+		return "comment", nil
+	case "problem":
+		return "problem", nil
+	default:
+		return "", fmt.Errorf("invalid --type value %q: use comment or problem", value)
+	}
+}
+
+func normalizePRReviewCommentState(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "opened", "resolved", "disabled":
+		return strings.ToLower(strings.TrimSpace(value)), nil
+	default:
+		return "", fmt.Errorf("invalid --state value %q: use opened, resolved, or disabled", value)
+	}
+}
+
+func loadPRReviewCommentDiff(ctx *common.RuntimeContext, prID string, path string, diffFile string) (map[string]interface{}, string, error) {
+	if diffFile != "" {
+		raw, err := os.ReadFile(diffFile)
+		if err != nil {
+			return nil, "", fmt.Errorf("read --diff-file %q: %w", diffFile, err)
+		}
+		var payload interface{}
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			return nil, "", fmt.Errorf("parse --diff-file %q: %w", diffFile, err)
+		}
+		diff, err := extractPRReviewCommentDiff(payload, path)
+		if err != nil {
+			return nil, "", err
+		}
+		return diff, diffFile, nil
+	}
+
+	env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s/files", ctx.RepoPath(), prID), nil)
+	if err != nil {
+		return nil, "", err
+	}
+	diff, err := extractPRReviewCommentDiff(env.Data, path)
+	if err != nil {
+		return nil, "", err
+	}
+	return diff, "pr_files_api", nil
+}
+
+func extractPRReviewCommentDiff(data interface{}, path string) (map[string]interface{}, error) {
+	diff, ok := findPRReviewCommentDiff(data, path)
+	if !ok {
+		return nil, fmt.Errorf("no diff found for path %q; use --diff-file to provide the exact diff JSON", path)
+	}
+	return normalizePRReviewCommentDiff(diff, path), nil
+}
+
+func findPRReviewCommentDiff(data interface{}, path string) (map[string]interface{}, bool) {
+	switch v := data.(type) {
+	case *output.Envelope:
+		return findPRReviewCommentDiff(v.Data, path)
+	case map[string]interface{}:
+		if nested, ok := v["data"]; ok {
+			if diff, found := findPRReviewCommentDiff(nested, path); found {
+				return diff, true
+			}
+		}
+		if diff, ok := v["diff"].(map[string]interface{}); ok {
+			if files, ok := diff["files"]; ok {
+				if found, ok := findPRReviewCommentDiff(files, path); ok {
+					return found, true
+				}
+			}
+		}
+		if files, ok := v["files"]; ok {
+			if found, ok := findPRReviewCommentDiff(files, path); ok {
+				return found, true
+			}
+		}
+		if looksLikePRReviewCommentDiff(v) && matchesPRReviewCommentPath(v, path) {
+			return v, true
+		}
+	case []interface{}:
+		for _, item := range v {
+			diff, ok := findPRReviewCommentDiff(item, path)
+			if ok {
+				return diff, true
+			}
+		}
+	}
+	return nil, false
+}
+
+func looksLikePRReviewCommentDiff(diff map[string]interface{}) bool {
+	_, hasName := diff["name"]
+	_, hasSections := diff["sections"]
+	_, hasAddition := diff["addition"]
+	return (hasName || hasAddition) && hasSections
+}
+
+func matchesPRReviewCommentPath(diff map[string]interface{}, path string) bool {
+	for _, key := range []string{"name", "path", "filename", "fileName", "old_name", "oldname"} {
+		if stringField(diff, key) == path {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizePRReviewCommentDiff(diff map[string]interface{}, path string) map[string]interface{} {
+	normalized := cloneMap(diff)
+	normalized["name"] = firstStringField(diff, "name", "path", "filename", "fileName")
+	normalized["oldname"] = firstStringField(diff, "oldname", "old_name")
+	if normalized["oldname"] == "" {
+		normalized["oldname"] = normalized["name"]
+	}
+	copyBoolAlias(normalized, diff, "is_created", "isCreated", "is_created")
+	copyBoolAlias(normalized, diff, "is_deleted", "isDeleted", "is_deleted")
+	copyBoolAlias(normalized, diff, "is_bin", "isBin", "is_bin")
+	copyBoolAlias(normalized, diff, "is_lfs_file", "isLFSFile", "is_lfs_file")
+	copyBoolAlias(normalized, diff, "is_renamed", "isRenamed", "is_renamed")
+	copyBoolAlias(normalized, diff, "is_ambiguous", "isAmbiguous", "is_ambiguous")
+	copyBoolAlias(normalized, diff, "is_submodule", "isSubmodule", "is_submodule")
+	if path != "" {
+		normalized["path"] = path
+	}
+	if sections, ok := diff["sections"].([]interface{}); ok {
+		normalized["sections"] = normalizePRReviewCommentSections(sections, normalized["name"])
+	}
+	return normalized
+}
+
+func normalizePRReviewCommentSections(sections []interface{}, fallbackPath interface{}) []interface{} {
+	normalized := make([]interface{}, 0, len(sections))
+	for _, rawSection := range sections {
+		section, ok := rawSection.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		next := cloneMap(section)
+		next["file_name"] = firstStringField(section, "file_name", "fileName")
+		if next["file_name"] == "" {
+			next["file_name"] = fallbackPath
+		}
+		if lines, ok := section["lines"].([]interface{}); ok {
+			next["lines"] = normalizePRReviewCommentLines(lines, next["file_name"])
+		}
+		normalized = append(normalized, next)
+	}
+	return normalized
+}
+
+func normalizePRReviewCommentLines(lines []interface{}, fallbackPath interface{}) []interface{} {
+	normalized := make([]interface{}, 0, len(lines))
+	for _, rawLine := range lines {
+		line, ok := rawLine.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		next := cloneMap(line)
+		if left, ok := firstNumberField(line, "left_index", "leftIdx"); ok {
+			next["left_index"] = left
+		}
+		if right, ok := firstNumberField(line, "right_index", "rightIdx"); ok {
+			next["right_index"] = right
+		}
+		if _, ok := next["match"]; !ok {
+			next["match"] = inferPRReviewCommentLineMatch(line)
+		}
+		if sectionInfo, ok := line["sectionInfo"].(map[string]interface{}); ok {
+			next["section_path"] = firstStringField(sectionInfo, "section_path", "path")
+			if next["section_path"] == "" {
+				next["section_path"] = fallbackPath
+			}
+			if v, ok := firstNumberField(sectionInfo, "section_last_left_index", "lastLeftIdx"); ok {
+				next["section_last_left_index"] = v
+			}
+			if v, ok := firstNumberField(sectionInfo, "section_last_right_index", "lastRightIdx"); ok {
+				next["section_last_right_index"] = v
+			}
+			if v, ok := firstNumberField(sectionInfo, "section_left_index", "leftIdx"); ok {
+				next["section_left_index"] = v
+			}
+			if v, ok := firstNumberField(sectionInfo, "section_right_index", "rightIdx"); ok {
+				next["section_right_index"] = v
+			}
+			if v, ok := firstNumberField(sectionInfo, "section_left_hunk_size", "leftHunkSize"); ok {
+				next["section_left_hunk_size"] = v
+			}
+			if v, ok := firstNumberField(sectionInfo, "section_right_hunk_size", "rightHunkSize"); ok {
+				next["section_right_hunk_size"] = v
+			}
+		}
+		normalized = append(normalized, next)
+	}
+	return normalized
+}
+
+func inferPRReviewCommentLineMatch(line map[string]interface{}) float64 {
+	if match, ok := numberField(line, "match"); ok {
+		return match
+	}
+	lineType, _ := numberField(line, "type")
+	switch int(lineType) {
+	case 2:
+		return 1
+	case 3:
+		return 3
+	default:
+		return 0
+	}
+}
+
+func cloneMap(src map[string]interface{}) map[string]interface{} {
+	dst := make(map[string]interface{}, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+func copyBoolAlias(dst map[string]interface{}, src map[string]interface{}, dstKey string, candidates ...string) {
+	for _, key := range candidates {
+		if v, ok := src[key].(bool); ok {
+			dst[dstKey] = v
+			return
+		}
+	}
+}
+
+func firstStringField(m map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if v := stringField(m, key); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func firstNumberField(m map[string]interface{}, keys ...string) (float64, bool) {
+	for _, key := range keys {
+		if v, ok := numberField(m, key); ok {
+			return v, true
+		}
+	}
+	return 0, false
+}
+
 func extractIssueID(env *output.Envelope) (int64, error) {
 	data, ok := env.Data.(map[string]interface{})
 	if !ok {
@@ -516,100 +946,6 @@ func extractIssueID(env *output.Envelope) (int64, error) {
 		return 0, fmt.Errorf("PR response missing issue.id field")
 	}
 	return int64(idFloat), nil
-}
-
-// pullRequestEditPayload merges the caller's flags over the PR's current values.
-// The PUT endpoint requires every field, so unspecified flags fall back to the
-// values read from the prior GET to avoid wiping them.
-func pullRequestEditPayload(ctx *common.RuntimeContext, current *output.Envelope) map[string]interface{} {
-	data, _ := current.Data.(map[string]interface{})
-	return map[string]interface{}{
-		"title":           firstNonEmpty(ctx.Arg("title"), pullRequestField(data, "title", "subject", "name")),
-		"body":            firstNonEmpty(ctx.Arg("body"), pullRequestField(data, "body", "description")),
-		"head":            firstNonEmpty(ctx.Arg("head"), pullRequestField(data, "head", "pull_request_head")),
-		"base":            firstNonEmpty(ctx.Arg("base"), pullRequestField(data, "base", "pull_request_base")),
-		"issue_tag_ids":   pullRequestEditTagIDs(ctx, data),
-		"receivers_login": []string{},
-	}
-}
-
-// pullRequestEditTagIDs uses the explicitly requested --tag-ids when present,
-// otherwise preserves the tag IDs already attached to the PR.
-func pullRequestEditTagIDs(ctx *common.RuntimeContext, data map[string]interface{}) []string {
-	if raw := ctx.Arg("tag-ids"); raw != "" {
-		ids := make([]string, 0)
-		for _, part := range strings.Split(raw, ",") {
-			if trimmed := strings.TrimSpace(part); trimmed != "" {
-				ids = append(ids, trimmed)
-			}
-		}
-		return ids
-	}
-	for _, scope := range pullRequestFieldScopes(data) {
-		tags, ok := scope["issue_tags"].([]interface{})
-		if !ok {
-			continue
-		}
-		ids := make([]string, 0, len(tags))
-		for _, raw := range tags {
-			tag, ok := raw.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			if id := tagIDString(tag["id"]); id != "" {
-				ids = append(ids, id)
-			}
-		}
-		return ids
-	}
-	return []string{}
-}
-
-// pullRequestField reads the first non-empty string among the given keys across
-// the possible response scopes. The detail endpoint sometimes nests PR fields
-// under pull_request/issue rather than at the top level.
-func pullRequestField(data map[string]interface{}, keys ...string) string {
-	for _, scope := range pullRequestFieldScopes(data) {
-		for _, key := range keys {
-			if v := stringField(scope, key); v != "" {
-				return v
-			}
-		}
-	}
-	return ""
-}
-
-func pullRequestFieldScopes(data map[string]interface{}) []map[string]interface{} {
-	scopes := []map[string]interface{}{data}
-	if pr, ok := data["pull_request"].(map[string]interface{}); ok {
-		scopes = append(scopes, pr)
-	}
-	if issue, ok := data["issue"].(map[string]interface{}); ok {
-		scopes = append(scopes, issue)
-	}
-	return scopes
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-func tagIDString(v interface{}) string {
-	switch id := v.(type) {
-	case string:
-		return id
-	case float64:
-		return strconv.FormatInt(int64(id), 10)
-	case json.Number:
-		return id.String()
-	default:
-		return ""
-	}
 }
 
 func enrichPullRequestClosedAt(ctx *common.RuntimeContext, env *output.Envelope) error {
