@@ -107,6 +107,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔧 CI | View builds, logs, CI/CD operations |
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
+| 📖 Wiki | List, view, create, update, delete, and export wiki pages |
 | 🔍 Search | Search repositories, users |
 | 👤 User | View user profiles and info |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
@@ -594,6 +595,32 @@ Safety:
 - They do not depend on LLM APIs.
 - `workflow +pr-summary` does not comment, approve, reject, or merge pull requests.
 - `workflow +repo-report` aggregates health, issue triage, and PR review summary signals without remote writes.
+
+### Wiki
+
+`wiki` manages a repository's wiki pages. The numeric GitLink project ID is
+resolved from `--owner/--repo` automatically, or pass `--project-id`.
+
+```bash
+# List and view wiki pages
+gitlink-cli wiki +list --owner Gitlink --repo gitlink-cli
+gitlink-cli wiki +view --owner Gitlink --repo gitlink-cli --page Home
+
+# Create a page (content is base64-encoded automatically)
+gitlink-cli wiki +create --owner Gitlink --repo gitlink-cli --page Home --title Home --content "# Welcome"
+
+# Create from a file
+gitlink-cli wiki +create --owner Gitlink --repo gitlink-cli --page Guide --content-file guide.md
+
+# Update (content optional) and preview with --dry-run
+gitlink-cli wiki +update --owner Gitlink --repo gitlink-cli --page Home --title "Home Page" --dry-run
+
+# Delete a page
+gitlink-cli wiki +delete --owner Gitlink --repo gitlink-cli --page Home
+
+# Export the wiki (markdown, pdf, or html)
+gitlink-cli wiki +export --owner Gitlink --repo gitlink-cli --type markdown
+```
 
 ### Raw API
 

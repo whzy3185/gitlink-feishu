@@ -106,6 +106,7 @@
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
+| 📖 Wiki | 列出、查看、创建、更新、删除、导出 Wiki 页面 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 👤 用户 | 查看用户资料和信息 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
@@ -472,6 +473,31 @@ gitlink-cli search +repos -k "machine learning"
 
 # 搜索用户
 gitlink-cli search +users -k "zhangsan"
+```
+
+### Wiki 管理
+
+`wiki` 管理仓库的 Wiki 页面。GitLink 项目 ID 会自动从 `--owner/--repo` 解析，也可用 `--project-id` 指定。
+
+```bash
+# 列出并查看 Wiki 页面
+gitlink-cli wiki +list --owner Gitlink --repo gitlink-cli
+gitlink-cli wiki +view --owner Gitlink --repo gitlink-cli --page Home
+
+# 创建页面（内容自动 base64 编码）
+gitlink-cli wiki +create --owner Gitlink --repo gitlink-cli --page Home --title Home --content "# 欢迎"
+
+# 从文件创建
+gitlink-cli wiki +create --owner Gitlink --repo gitlink-cli --page Guide --content-file guide.md
+
+# 更新（内容可选），并用 --dry-run 预览
+gitlink-cli wiki +update --owner Gitlink --repo gitlink-cli --page Home --title "首页" --dry-run
+
+# 删除页面
+gitlink-cli wiki +delete --owner Gitlink --repo gitlink-cli --page Home
+
+# 导出 Wiki（markdown、pdf 或 html）
+gitlink-cli wiki +export --owner Gitlink --repo gitlink-cli --type markdown
 ```
 
 ### Raw API

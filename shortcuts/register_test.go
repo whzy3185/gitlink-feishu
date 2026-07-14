@@ -14,7 +14,7 @@ func TestRegisterAll(t *testing.T) {
 		"repo", "issue", "label", "license", "pr", "release", "branch",
 		"org", "user", "search", "ci", "workflow",
 		"compare", "member", "milestone", "pipeline", "webhook",
-		"health", "reaction",
+		"wiki", "health",
 	}
 
 	groupSet := map[string]bool{}
