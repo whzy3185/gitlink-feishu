@@ -89,6 +89,48 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}
 				return ctx.Output(env)
 			},
+			{
+				Name:        "activate",
+				Description: "为仓库激活 CI/CD 功能",
+				Run: func(ctx *common.RuntimeContext) error {
+					if err := ctx.ResolveOwnerRepo(); err != nil {
+						return err
+					}
+					env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/activate", nil)
+					if err != nil {
+						return err
+					}
+					return ctx.Output(env)
+				},
+			},
+			{
+				Name:        "deactivate",
+				Description: "停用仓库的 CI/CD 功能",
+				Run: func(ctx *common.RuntimeContext) error {
+					if err := ctx.ResolveOwnerRepo(); err != nil {
+						return err
+					}
+					env, err := ctx.CallAPI("DELETE", ctx.RepoPath()+"/deactivate", nil)
+					if err != nil {
+						return err
+					}
+					return ctx.Output(env)
+				},
+			},
+			{
+				Name:        "authorize",
+				Description: "检查仓库的 CI/CD 授权状态",
+				Run: func(ctx *common.RuntimeContext) error {
+					if err := ctx.ResolveOwnerRepo(); err != nil {
+						return err
+					}
+					env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/ci_authorize", nil)
+					if err != nil {
+						return err
+					}
+					return ctx.Output(env)
+				},
+			},
 		},
 		newCIToggleShortcut("enable", "Enable CI for a repository"),
 		newCIToggleShortcut("disable", "Disable CI for a repository"),

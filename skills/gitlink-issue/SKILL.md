@@ -88,10 +88,10 @@ gitlink-cli issue +authors --owner Gitlink --repo forgeplus --keyword bob
 
 ```bash
 # 获取 Issue 评论列表（使用 v1 API，按 issue number 查询）
-gitlink-cli api GET /v1/:owner/:repo/issues/:number/journals
+gitlink-cli issue +journals
 
 # 批量更新 Issue（仍使用旧版 API，需传数据库 ID）
-gitlink-cli api POST /:owner/:repo/issues/series_update --body '{"ids":[1,2,3],"status_id":"closed"}'
+gitlink-cli issue +series-update --body '{"ids":[1,2,3],"status_id":"closed"}'
 ```
 
 ## GitLink Issue 字段映射

@@ -132,6 +132,72 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}
 				return ctx.Output(env)
 			},
+			{
+				Name:        "teams",
+				Description: "列出组织下的所有团队",
+				Flags: []common.Flag{
+					{Name: "id", Usage: "组织 ID", Required: true},
+				},
+				Run: func(ctx *common.RuntimeContext) error {
+					id, err := ctx.RequireArg("id")
+					if err != nil {
+						return err
+					}
+					env, err := ctx.CallAPI("GET", fmt.Sprintf("/organizations/%s/teams", id), nil)
+					if err != nil {
+						return err
+					}
+					return ctx.Output(env)
+				},
+			},
+			{
+				Name:        "create-team",
+				Description: "在组织下创建新团队",
+				Flags: []common.Flag{
+					{Name: "id", Usage: "组织 ID", Required: true},
+					{Name: "name", Short: "n", Usage: "团队名称", Required: true},
+				},
+				Run: func(ctx *common.RuntimeContext) error {
+					id, err := ctx.RequireArg("id")
+					if err != nil {
+						return err
+					}
+					name, err := ctx.RequireArg("name")
+					if err != nil {
+						return err
+					}
+					body := map[string]interface{}{"name": name}
+					env, err := ctx.CallAPI("POST", fmt.Sprintf("/organizations/%s/teams", id), body)
+					if err != nil {
+						return err
+					}
+					return ctx.Output(env)
+				},
+			},
+			{
+				Name:        "remove-user",
+				Description: "从组织中移除成员",
+				Flags: []common.Flag{
+					{Name: "id", Usage: "组织 ID", Required: true},
+					{Name: "user", Short: "u", Usage: "要移除的用户 ID", Required: true},
+				},
+				Run: func(ctx *common.RuntimeContext) error {
+					orgID, err := ctx.RequireArg("id")
+					if err != nil {
+						return err
+					}
+					userID, err := ctx.RequireArg("user")
+					if err != nil {
+						return err
+					}
+					path := fmt.Sprintf("/organizations/%s/organization_users/%s", orgID, userID)
+					env, err := ctx.CallAPI("DELETE", path, nil)
+					if err != nil {
+						return err
+					}
+					return ctx.Output(env)
+				},
+			},
 		},
 		{
 			Name:        "teams",

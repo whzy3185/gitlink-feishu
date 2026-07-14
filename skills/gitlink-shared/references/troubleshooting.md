@@ -58,7 +58,7 @@ gitlink-cli repo +info --owner xxx --repo yyy
 gitlink-cli issue +create -t "标题" -b "描述"
 
 # 或使用 Raw API 时添加 done_ratio
-gitlink-cli api POST /:owner/:repo/issues --body '{
+gitlink-cli issue +create '{
   "subject": "标题",
   "description": "描述",
   "done_ratio": 0
@@ -75,7 +75,7 @@ gitlink-cli api POST /:owner/:repo/issues --body '{
 gitlink-cli issue +close -i 123
 
 # 或使用 Raw API 时先 GET 当前 Issue，再添加 subject 和 description
-gitlink-cli api PUT /:owner/:repo/issues/123 --body '{
+gitlink-cli issue +update --number 123 '{
   "subject": "当前标题",
   "description": "当前描述",
   "status_id": 5
@@ -152,7 +152,7 @@ gitlink-cli <command> --debug
 ### 查看完整 API 请求
 
 ```bash
-gitlink-cli api GET /users/me --debug
+gitlink-cli user +me --debug
 ```
 
 ### 检查认证状态

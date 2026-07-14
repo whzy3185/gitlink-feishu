@@ -1,7 +1,7 @@
 ---
 name: gitlink-issue-triage
-version: 1.0.0
-description: "Issue 智能分拣：扫描未分类 Issue，AI 按语义/关键词自动分类打标签、推荐并分配责任人，再用 notification 验证通知到位，最后批量产出分拣报告。当用户需要治理堆积 Issue、自动打标签、分配负责人或检查通知状态时触发。"
+version: 1.1.0
+description: "Issue 智能分拣：自动分析仓库 Issue 列表，按类型、紧急度、复杂度分类，生成分拣报告和维护建议。当用户需要整理 Issue、分类 Issue、Issue 分拣、Issue 优先级排序时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -11,274 +11,249 @@ metadata:
 # gitlink-issue-triage（Issue 智能分拣）
 
 **CRITICAL — 开始前必须先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)，其中包含认证、权限处理和 API 注意事项。**
-**CRITICAL — 所有写入/删除操作前（打标签、分配责任人、改状态），务必先确认用户意图。**
+**CRITICAL — `issue +series-update` 为写操作，会批量修改 Issue 状态。执行前需确认用户意图。**
 **CRITICAL — GitLink 操作只能用 `gitlink-cli`。禁止用 `gh`（GitHub CLI）操作 GitLink 资源。**
 
 > **前置条件：** 先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md) 了解认证和全局参数。
 
 ---
 
-## 工作流概览
+## 功能概述
 
-| 工作流 | 操作 | AI Agent 角色 | 写入 |
-|--------|------|--------------|:----:|
-| 工作流 1：自动分类打标签 | 扫描未分类 Issue → AI 判断类型 → 查/建标签 → 打标签 | 语义分类 + 标签创建 | 是 |
-| 工作流 2：自动分配 + 通知 | 推荐责任人 → 分配 → 用 notification 验证通知 | 责任人推荐 | 是 |
-| 工作流 3：批量分拣 + 报告 | 一次性处理所有未分类 Issue → 汇总报告 | 批处理 + 报告生成 | 是 |
+对仓库的开放 Issue 进行全量扫描和智能分类，输出结构化的分拣报告：
 
----
-
-## 分类规则表
-
-AI 读 Issue 标题 + 描述后按以下规则分类（关键词只是辅助，**最终以语义为准**，能识别关键词未覆盖的同义表述）：
-
-| Issue 关键词 / 语义 | 推荐标签 | 颜色 | 优先级 |
-|---------------------|---------|------|:------:|
-| bug / 错误 / 失败 / crash / 异常 / 报错 | bug | `#ee0701` | 🔴 高 |
-| feature / 新增 / 建议 / 希望 / 能否支持 | enhancement | `#84b6eb` | 🔵 低 |
-| 安全 / 漏洞 / 权限 / 泄露 / 注入 / XSS | security | `#b60205` | 🔴 高 |
-| 性能 / 慢 / 卡顿 / 优化 / 内存 / OOM | performance | `#fbca04` | 🟡 中 |
-| 文档 / README / 注释 / 示例 / 拼写 | documentation | `#0075ca` | 🔵 低 |
-| question / 如何 / 怎么 / 请问 / ？ | question | `#cc317c` | 🟡 中 |
-
-**默认/兜底标签：** `triage`（`#ededed`，灰）—— 无法明确归类时打上，等人工复核。
-
-**分类决策原则：**
-1. 安全类最高优先级（涉及漏洞即使同时是 bug 也归 security）
-2. bug 优先于 enhancement（描述同时含两者时按 bug 处理）
-3. 模糊的 feature/question 难以判断时归 question
-4. 完全无法理解 → `triage`
+1. **类型分类** — 判断每个 Issue 是 Bug、功能请求、文档问题还是使用咨询
+2. **紧急度评估** — 根据关键词和优先级字段标注紧急程度
+3. **复杂度预估** — 根据描述详尽程度评估修复难度
+4. **活动日志分析** — 通过 `issue +journals` 查看 Issue 活动历史
+5. **行动建议** — 给出具体处理建议（立即修复/需讨论/可关闭/适合作入门任务）
+6. **批量操作** — 支持通过 `issue +series-update` 批量更新 Issue 状态
 
 ---
 
-## 工作流 1：自动分类打标签
+## 工作流：Issue 全量分拣
 
-**触发场景：** "帮我自动分拣这个仓库的新 Issue" / "给所有没标签的 Issue 打标签"
+### Step 1：获取项目概览
 
-### Step 1：获取开放 Issue
+```bash
+gitlink-cli repo +info --owner <owner> --repo <repo> --format json
+```
+
+提取 `issues_count` 了解 Issue 池总量，`default_branch` 确认主分支。
+
+### Step 2：获取全部开放 Issue
 
 ```bash
 gitlink-cli issue +list --owner <owner> --repo <repo> --state open --format json
 ```
 
-### Step 2：AI 筛选"未分类"Issue
+> ⚠️ **已知问题**：`--state open` 过滤不准确，返回列表可能包含已关闭的 Issue。需在客户端按 `status_id` 二次过滤：保留 `status_id` = 1（新增）或 2（正在解决），排除 3（已解决）、5（关闭）。`status_id` = 0 纳入分析但标注"状态异常"。
 
-从返回结果中筛选出 `tags` 字段为空数组 `[]` 或缺失的 Issue（即没有任何标签）。已在 `gitlink-onboarding` 标过 `good first` 的 Issue 跳过，避免重复干预。
-
-> 字段说明：`issue +list` 返回的 Issue 对象里，标签字段名是 **`tags`**（注意 `label +list` 用的是 `issue_tags`，两者不同）。每个 Issue 的 `number` 是网页 URL 显示的编号。
-
-### Step 3：逐个读取详情用于分类
+如果返回数量 >20，追加分页参数获取全部：
 
 ```bash
-gitlink-cli issue +view --owner <owner> --repo <repo> --number <n> --format json
+gitlink-cli issue +list --owner <owner> --repo <repo> --state open --format json --page 2
 ```
 
-### Step 4：AI 按分类规则表判断类型
+### Step 3：逐条深入分析
 
-综合标题（`subject`）和描述（`description`）做语义分类，输出"类型 + 依据"。
-
-### Step 5：查找或创建对应标签
+对过滤后的每条 Issue，获取详情：
 
 ```bash
-# 先查现有标签，命中则复用 ID
-gitlink-cli label +list --owner <owner> --repo <repo> --format json
-
-# 仅当现有标签里没有对应分类时才创建（注意：GitLink 标签名限 15 字符）
-gitlink-cli label +create --owner <owner> --repo <repo> \
-  --name "bug" --color "#ee0701"
+gitlink-cli issue +view --owner <owner> --repo <repo> --number <project_issues_index> --format json
 ```
 
-> ⚠️ **优先复用现有标签（含中文同义词）**：GitLink 仓库通常自带中文标签——`缺陷`(bug) / `功能`(enhancement) / `文档`(documentation) / `疑问`(question) / `协助`(help wanted)。**先匹配这些再考虑新建英文标签**，避免一个仓库里同时存在 `bug` 和 `缺陷` 两套语义重复的标签。颜色建议沿用现有标签的色值，保持视觉一致。
+分析以下维度：
 
-### Step 6：自动打标签
+| 维度 | 关注字段 | 分析要点 |
+|------|----------|----------|
+| 类型 | `subject`, `description` | 标题和描述中的关键词 |
+| 紧急度 | `priority`, `subject` | 优先级字段 + 标题紧急信号 |
+| 复杂度 | `description` 长度 | 描述的详细程度、是否有复现步骤 |
+| 活跃度 | `comment_journals_count`, `updated_at` | 讨论热度和最后活跃时间 |
+| 分配状态 | `assigners` | 是否已有人负责 |
+
+### Step 3.5：活动日志分析（v1.1 新增）
+
+对高优先级 Issue（urgent/high），获取活动日志以了解处理进展：
 
 ```bash
-# --label 是"覆盖"语义：Issue 已有标签时必须把原 ID 一并传入
-gitlink-cli issue +update --owner <owner> --repo <repo> \
-  --number <n> --label <tag_id>[,<原标签id>...]
+gitlink-cli issue +journals --owner <owner> --repo <repo> --number <project_issues_index> --format json
 ```
 
-### Step 7：输出分类报告
+从 `journals` 数组中提取：
+- 最近一次状态变更时间和操作者
+- 最近一次评论时间和作者
+- 是否有 @提及等待回复
+- 是否有分配变更记录
+
+> ⚠️ **控制调用量**：仅对 urgent/high 级别的 Issue 获取活动日志。日志数据可能较大，只提取关键时间节点。
+
+### Step 4：分类规则
+
+#### 4.1 类型分类（type）
+
+| 类型 | 匹配规则 |
+|------|----------|
+| **bug** | 标题/描述含 `bug`、`错误`、`失败`、`崩溃`、`异常`、`修复`、`fix`、`修复`、`报错`、`不工作`、`问题`（上下文为故障时） |
+| **feature** | 标题/描述含 `feature`、`新增`、`添加`、`希望`、`建议`、`需要`、`支持`、`实现`，且非故障描述 |
+| **docs** | 标题/描述含 `文档`、`doc`、`README`、`说明`、`教程`、`注释` |
+| **question** | 标题/描述含 `如何`、`怎么`、`是否`、`能不能`、`请问`、`为什么`，且以问号结尾或明显为咨询语气 |
+| **refactor** | 标题/描述含 `重构`、`refactor`、`优化结构`、`代码清理`、`技术债` |
+| **ci** | 标题/描述含 `CI`、`CD`、`构建`、`部署`、`pipeline`、`自动化`、`测试环境` |
+| **meta** | 维护者创建的元讨论帖、反馈收集帖、公告，无具体技术任务指向 |
+| **other** | 不匹配以上任何类型时的兜底分类 |
+
+#### 4.2 紧急度评估（urgency）
+
+| 级别 | 判定条件 |
+|------|----------|
+| **urgent** | 标题含 `紧急`、`urgent`、`hotfix`、`生产`、`线上`、`崩溃`；或 `priority.name` = "紧急" |
+| **high** | `priority.name` = "高"；或标题含 `严重`、`阻塞`、`关键` |
+| **normal** | 默认级别；`priority.name` = "正常" 或无优先级 |
+| **low** | `priority.name` = "低"；或标题含 `优化`、`nice to have`、`小建议` |
+
+#### 4.3 复杂度预估（complexity）
+
+| 级别 | 判定条件 |
+|------|----------|
+| **easy** | 描述简洁明确，有清晰复现步骤或单一功能点；`description` < 300 字且范围明确 |
+| **medium** | 涉及多个文件/模块，需要一定背景了解；`description` 300~800 字，或虽有描述但需推断 |
+| **hard** | 涉及架构变更、新子系统、跨模块重构；`description` > 800 字或非常模糊 |
+
+> **特殊情况**：`description` 仅含图片附件链接而无可读文字 → 视为"描述缺失"，复杂度标记为 hard（因无法评估），建议标记为 discuss。
+
+#### 4.4 行动建议（action）
+
+| 建议 | 判定条件 |
+|------|----------|
+| **fix-now** | bug + urgent/high |
+| **investigate** | bug + normal/low，需先确认复现 |
+| **implement** | feature + 描述清晰 + 范围明确 |
+| **discuss** | 描述模糊、需求不清、或 question 类型 |
+| **close-candidate** | 超过 90 天无更新、无评论、无分配 |
+| **good-first-issue** | complexity=easy + 无人分配 + 范围明确 |
+
+### Step 5：生成分拣报告
+
+将所有分析结果组织输出。
+
+### Step 6：批量操作（v1.1 新增，可选，需确认）
+
+根据分拣结果，可批量更新 Issue 状态：
+
+```bash
+gitlink-cli issue +series-update --owner <owner> --repo <repo> --ids <id1,id2,id3> --status closed --format json
+```
+
+> ⚠️ **写操作**：执行前需向用户展示将要操作的 Issue 列表，获得确认后再执行。
+
+典型使用场景：
+- 批量关闭 `close-candidate` 列表中的 Issue
+- 批量将 `good-first-issue` 标记为 open（确保状态正确）
+
+---
+
+## 输出模板
 
 ```markdown
-## 🏷️ Issue 分类报告 — <owner>/<repo>
+# 📊 {{仓库名}} Issue 分拣报告
 
-📅 分拣时间：<YYYY-MM-DD HH:MM>
+> 分析时间：{{当前时间}}
+> Issue 总数：{{total}}，开放：{{open_count}}，本次分析：{{analyzed_count}} 条
 
-| Issue | 标题（节选） | 分类 | 依据 | 标签 ID |
-|-------|------------|:----:|------|:------:|
-| #12 | 登录后偶发 500 报错 | bug | "500 报错"语义 | 382700 |
-| #13 | 希望支持 webhook 自定义 header | enhancement | "希望支持" | 382701 |
+---
 
-### 📊 汇总
-- 处理：2 个未分类 Issue
-- bug × 1（🔴 高）｜enhancement × 1（🔵 低）
-- 兜底 triage：0 个
+## 总览
+
+| 指标 | 数量 |
+|------|------|
+| Bug | {{bug_count}} |
+| 功能请求 | {{feature_count}} |
+| 文档 | {{docs_count}} |
+| 咨询 | {{question_count}} |
+| 元讨论 | {{meta_count}} |
+| 其他 | {{other_count}} |
+| **需立即处理** | {{urgent_count}} |
+| **适合入门** | {{good_first_issue_count}} |
+
+---
+
+## 🔴 需立即处理
+
+> 如本段为空，输出：*当前无紧急 Issue，状态健康。*
+
+| # | 标题 | 类型 | 紧急度 | 复杂度 | 上次活动 | 建议 | 备注 |
+|---|------|------|--------|--------|----------|------|------|
+| {{number}} | {{subject}} | bug | urgent | medium | {{last_journal_time}} | fix-now | |
+| ... | ... | ... | ... | ... | ... | ... | ... |
+
+## 🟡 建议近期处理
+
+| # | 标题 | 类型 | 紧急度 | 复杂度 | 上次活动 | 建议 | 备注 |
+|---|------|------|--------|--------|----------|------|------|
+| ... | ... | bug/feature | high/normal | easy/medium | ... | investigate/implement | |
+
+## 🟢 可延迟 / 需讨论
+
+| # | 标题 | 类型 | 紧急度 | 复杂度 | 上次活动 | 建议 | 备注 |
+|---|------|------|--------|--------|----------|------|------|
+| ... | ... | question/feature | normal/low | medium/hard | ... | discuss | |
+
+## ⭐ 适合入门（Good First Issue）
+
+| # | 标题 | 类型 | 复杂度 | 推荐理由 |
+|---|------|------|--------|----------|
+| {{number}} | {{subject}} | bug/docs | easy | 范围明确，单文件修改 |
+
+## ⚠️ 候选关闭（90+ 天无活动）
+
+| # | 标题 | 最后更新 | 建议 |
+|---|------|----------|------|
+| {{number}} | {{subject}} | {{updated_at}} | 评论询问是否仍需要，如无回应可关闭 |
+
+---
+
+## 📋 维护建议
+
+1. **立即行动**：{{urgent_count}} 个紧急 Issue 需要优先处理
+2. **本周目标**：建议处理 {{suggested_this_week}} 个 Issue
+3. **社区引导**：{{good_first_issue_count}} 个 Issue 适合标记为 good first issue
+4. **清理计划**：{{close_candidate_count}} 个 Issue 长期无活动，建议批量关闭
+5. {{#if no_tags}}本仓库未使用 Issue 标签系统，建议建立标签体系{{/if}}
+6. {{#if status_anomalies}}本批次有 {{status_anomaly_count}} 个 Issue 状态异常（status_id=0）{{/if}}
+
+### 批量操作建议
+
+> 如无适用操作，输出：*当前无需批量操作。*
+
+以下 Issue 建议批量关闭（已确认超 90 天无活动）：
+`gitlink-cli issue +series-update --owner <owner> --repo <repo> --ids {{close_ids}} --status closed`
 ```
 
 ---
 
-## 工作流 2：自动分配 + 通知
+## 异常场景处理
 
-**触发场景：** "帮我给这些 Issue 分配责任人，并通知他们"
-
-### Step 1：获取可分配的成员列表
-
-```bash
-gitlink-cli issue +assigners --owner <owner> --repo <repo> --format json
-```
-
-返回仓库协作成员（含 `id` 和 `login`），AI 据此推荐责任人。
-
-> ⚠️ **个人仓库会返回空数组**（`"assigners": [], "total_count": 0`）。GitLink 的 `/issue_assigners` 只返回具有**显式项目角色**的成员（collaborator/manager 等），**不隐式包含 owner**。空数组不是命令失败，而是真实场景——此时按下方"列表为空"分支处理。
-
-### Step 2：AI 推荐责任人
-
-按 Issue 类型与成员专长做匹配（无成员画像时按公平轮询/按 Issue 类型分组）：
-
-| Issue 类型 | 推荐策略 |
-|-----------|---------|
-| bug / security | 优先派给最近修过相关模块的成员 |
-| documentation | 任意有空闲的成员 |
-| question | 仓库 owner 或 maintainer |
-| performance | 核心开发成员 |
-
-如可分配列表为空（个人仓库、无 collaborator），跳过分配并在报告中标注"无可分配成员"。
-
-### Step 3：分配责任人（Raw API）
-
-> ⚠️ `issue +update` 当前不支持 `--assignee`（见下方"已知限制"），分配必须走 Raw API PATCH，并保留原 `subject`/`description`。
-
-```bash
-# Step 3a：先 GET 拿到当前 subject 和 description（避免被清空）
-gitlink-cli issue +view --owner <owner> --repo <repo> --number <n> --format json
-
-# Step 3b：PATCH 分配（assigned_to_id 用 assigners 返回的用户 id）
-# ⚠️ Git Bash 用户必须加 MSYS_NO_PATHCONV=1 前缀，否则 / 开头路径会被 MSYS2 转成
-#    Windows 路径（debug 实测：/v1/... 变成 /api/F:/Git/Git/v1/...），导致 404
-# 注：api 命令会自动补 .json 后缀，路径无需手动加（已实测确认）
-MSYS_NO_PATHCONV=1 gitlink-cli api PATCH /v1/<owner>/<repo>/issues/<n> --body '{
-  "subject": "<原 subject 原样回传>",
-  "description": "<原 description 原样回传>",
-  "assigned_to_id": <user_id>
-}'
-```
-
-### Step 4：用 notification 验证通知到位
-
-GitLink 在分配责任人时会**自动**给被分配人发一条站内消息。读取该成员的通知列表确认：
-
-```bash
-# ⚠️ --owner 必须填【当前登录账号】自己的 login，不能填被分配人的
-# GitLink 平台限制：notification 只允许查自己的消息，跨用户查询会 403
-gitlink-cli notification +list --owner <当前登录账号 login> --format json
-```
-
-在返回里查找 `source: ProjectIssue` 且 `notification_url` 含对应 Issue 编号的条目，确认通知已生成。
-
-> ⚠️ **跨用户查询通知会被 403 拒绝**（实测：zhangqing23 查 ylly 的通知返回 `[403] 您没有权限进行该操作`）。所以**第三方无法代为验证**他人是否收到通知——这条限制在工作流 2 的报告中要如实告知用户："已分配给 X，X 是否收到通知需 X 本人 `notification +list --owner X` 自查"。
-
-### Step 5：输出分配结果
-
-```markdown
-## 👥 责任人分配报告 — <owner>/<repo>
-
-| Issue | 分类 | 责任人 | 通知状态 |
-|-------|:----:|--------|:------:|
-| #12 | bug | @zhangqing | ✅ 已通知 |
-| #13 | enhancement | @ylly | ✅ 已通知 |
-
-> 责任人可在 GitLink 网页对应 Issue 页右侧"负责人"栏查看。
-```
-
----
-
-## 工作流 3：批量分拣 + 报告
-
-**触发场景：** "把仓库里所有没分类的 Issue 一次性处理掉"
-
-### Step 1：批量拉取未分类 Issue
-
-```bash
-gitlink-cli issue +list --owner <owner> --repo <repo> --state open --format json
-# AI 客户端过滤 tags 为空的 Issue
-```
-
-### Step 2：对每个 Issue 执行"工作流 1 + 工作流 2"
-
-依次分类打标签 → 推荐并分配责任人。**批量写入前先给用户一份预览清单**，得到确认后再批量执行。
-
-### Step 3：生成分拣总报告
-
-```markdown
-## 📋 Issue 智能分拣总报告 — <owner>/<repo>
-
-📅 处理时间：<YYYY-MM-DD HH:MM>
-🎯 处理范围：所有开放且未分类的 Issue
-
-### 分类分布
-| 类型 | 数量 | 占比 |
-|------|:----:|:----:|
-| 🔴 bug | 3 | 30% |
-| 🔴 security | 1 | 10% |
-| 🟡 performance | 2 | 20% |
-| 🔵 enhancement | 3 | 30% |
-| 🔵 documentation | 1 | 10% |
-| ⚪ triage（待人工） | 0 | 0% |
-| **合计** | **10** | **100%** |
-
-### 责任人分配
-| 责任人 | 分到 | 涉及 Issue |
-|--------|:----:|-----------|
-| @zhangqing | 4 | #12 #15 #18 #20 |
-| @ylly | 3 | #13 #14 #17 |
-| 待分配 | 3 | #16 #19 #21（无可分配成员） |
-
-### ⚠️ 需人工跟进
-- #21 描述过于模糊 → 已打 `triage`，需 owner 复核
-- #19 涉及架构重构 → 已打 `enhancement` 但建议核心成员评估
-
-### 🔗 网页验证
-- Issue 列表：https://gitlink.org.cn/<owner>/<repo>/issues
-- 标签视图：https://gitlink.org.cn/<owner>/<repo>/issues/tags
-```
-
----
-
-## Raw API 参考
-
-```bash
-# 分配责任人（issue +update 当前不支持 --assignee，必须走 Raw API）
-# ⚠️ Git Bash 加 MSYS_NO_PATHCONV=1 前缀（见注意事项）；.json 由 api 自动补
-MSYS_NO_PATHCONV=1 gitlink-cli api PATCH /v1/<owner>/<repo>/issues/<n> --body '{
-  "subject": "<原标题>", "description": "<原描述>", "assigned_to_id": <user_id>
-}'
-
-# 查询可分配成员
-gitlink-cli issue +assigners --owner <owner> --repo <repo> --format json
-
-# 查询某用户的通知（--owner 填该用户自己的 login）
-gitlink-cli notification +list --owner <assignee_login> --format json
-
-# 把通知标记为已读（如需）
-gitlink-cli notification +read --owner <assignee_login> --id <notification_id>
-```
+| 场景 | 处理方式 |
+|------|----------|
+| 无开放 Issue | 输出 `repo +info` 概览后，恭喜维护者"Issue 池已清空" |
+| Issue 数量 >50 | 优先分析最近 30 天更新的 Issue，其余标记为"待分批处理" |
+| 全部 Issue 无标签/无优先级 | 分类完全依赖标题和描述关键词分析，并在报告末尾建议建立标签体系 |
+| `description` 为空或仅含图片/附件链接 | 标注"描述缺失"，类型仅根据标题判断，复杂度标为 hard，建议标记为 discuss |
+| `status_id` = 0（未知） | 纳入分析但标注"状态异常" |
+| `issue +journals` 返回空 | 标注"无活动日志"，不阻塞分析 |
 
 ---
 
 ## 注意事项
 
-- **写操作前确认：** 打标签（`issue +update --label`）和分配责任人（`api PATCH`）会真实修改 Issue，批量执行前先给预览清单等用户确认。
-- **--label 是覆盖语义：** `issue +update --label <id>` 会替换原有标签。若 Issue 已有标签（例如 `good first`），必须把原标签 ID 一并传入（如 `--label 382660,382700`），否则原标签会丢失。
-- **标签颜色格式：** `label +create --color` 必须带 `#` 号（如 `#ee0701`）。
-- **标签名长度限制：** GitLink 标签名上限 **15 字符**。中文标签（如"文档"）通常没问题，英文长名（如"enhancement" 11 字符 OK，"good first issue" 16 字符会被截断）需注意。
-- **`issue +update` 不支持 `--assignee`：** 当前 Shortcut 的 update 子命令仅支持 `--title/--body/--state/--label`。分配责任人需走 Raw API `PATCH /v1/:owner/:repo/issues/:n`，且必须带上原 `subject` 和 `description`（参考 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md) API 注意事项：Issue 更新不带 subject/description 可能被清空）。
-- **PowerShell 跑 Raw API --body JSON 会被吞双引号：** Windows PowerShell 5 把含 `"` 的字符串传给原生 exe 时会 strip 引号，导致 `encoding/json` 解析失败（报错 `invalid character 's' looking for beginning of object key string`）。**改用 Git Bash 或 cmd.exe 跑同一条命令可正常通过**（bash 单引号原样保留 JSON）。
-- **Git Bash（MSYS2）会转换 `/` 开头的路径参数（PATCH 404 的真正原因）：** 以 `/` 开头的 Raw API 路径（如 `/v1/owner/repo/issues/9`）会被 Git Bash 自动转成 Windows 路径（debug 实测：`/v1/...` 被改成 `/api/F:/Git/Git/v1/...`），请求 URL 错误、返回 404。**这是本机 PATCH 失败的唯一原因，与 .json 无关**（`api` 命令会自动补 `.json` 后缀，已用 `--debug` 实测确认：不带 `.json` 的请求最终 URL 仍是 `.../issues/9.json`）。**解决：命令前加 `MSYS_NO_PATHCONV=1`**（实测 `MSYS_NO_PATHCONV=1 gitlink-cli api PATCH /v1/.../issues/9 ...` 返回 `ok:true`）；或路径用双斜杠 `//v1/...`。cmd.exe 无此路径转换问题（PowerShell 的坑是引号，见上一条）。
-- **`assigned_to_id` 用数字 ID：** 不是 login 字符串。从 `issue +assigners` 返回里取 `id` 字段。⚠️ **实测：个人仓库 `assigners` 为空时，用 owner user_id 兜底分配也不生效**——GitLink 校验 `assigned_to_id` 必须在 assigners 候选列表内，PATCH 虽返回 `ok:true` 但 `assigned_to` 仍为空。个人仓库需先 `member +add` 添加 collaborator 才能分配，否则跳过分配并在报告标注"无可分配成员"。
-- **notification +list 是自查询限定：** 该命令查 `/users/<login>/messages`，**GitLink 平台只允许用户查询自己的通知**，跨用户查询返回 `[403] 您没有权限进行该操作`（实测：zhangqing23 查 ylly 的通知被拒）。因此无法第三方代为验证通知到达，只能由责任人本人自查。
-- **分配会自动触发通知：** GitLink 平台在 `assigned_to_id` 变更时会自动给被分配人发站内消息，**无需也不存在** "send notification" 命令。`notification +list` 只用于**验证**通知已生成（且只能自验证）。
-- **`assigners` 字段两个位置：** Issue 对象里 `assigners` 是已分配人列表（数组），`issue +assigners` 命令返回的是**可分配的候选人**列表。两者不同，别混淆。
-- **`--number` 是网页编号：** 用 GitLink 网页 URL 中显示的编号（`/issues/<n>`），不是数据库主键。
-- **不要和 `gitlink-onboarding` 冲突：** 已被 onboarding 标记为 `good first` 的 Issue 通常已分类，分拣时可跳过，避免覆盖标签。
-- **分类不是终审：** AI 分类有误判可能，对"模棱两可"或"高严重度"的 Issue 建议同时打 `triage` 让人工复核，或在报告中明确标注不确定项。
+- ✅ **所有命令使用 `--format json`**，确保可解析
+- ✅ **`issue +view` 和 `+journals` 使用 `--number`（网页编号）**，非数据库 ID
+- ✅ **本 Skill 以只读分析为主**，批量操作需确认后执行
+- ✅ **Owner/repo 优先从 `git remote` 自动解析**
+- ⚠️ **`issue +list --state open` 过滤不准确**，必须客户端按 `status_id` 二次过滤
+- ⚠️ **`issue +journals` 仅对 urgent/high Issue 调用**，控制 API 调用量
+- ⚠️ **`issue +series-update` 为写操作**，需用户确认，使用逗号分隔的 Issue ID
+- ⚠️ **分类规则是启发式的**，AI 应根据实际内容做判断，不要机械匹配关键词
+- ⚠️ **Issue 数量多时分批处理**，超过 50 条建议先按更新时间排序

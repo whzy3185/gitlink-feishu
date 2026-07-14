@@ -41,34 +41,19 @@ func New() (*Client, error) {
 	}, nil
 }
 
-// Do makes an API call with automatic .json suffix appended.
 func (c *Client) Do(method, path string, body interface{}, query url.Values) (*output.Envelope, error) {
 	path = normalizeAPIPath(c.BaseURL, path)
-	return c.do(method, path, body, query, true, "json")
-}
 
-// DoRaw makes an API call without appending .json suffix.
-func (c *Client) DoRaw(method, path string, body interface{}, query url.Values) (*output.Envelope, error) {
-	return c.do(method, path, body, query, false, "json")
-}
-
-// DoForm makes an API call with form-encoded body (no .json suffix).
-// Used for Wiki and other endpoints that expect application/x-www-form-urlencoded.
-func (c *Client) DoForm(method, path string, body url.Values, query url.Values) (*output.Envelope, error) {
-	return c.do(method, path, body, query, false, "form")
-}
-
-func (c *Client) do(method, path string, body interface{}, query url.Values, appendJSON bool, encoding string) (*output.Envelope, error) {
-	if appendJSON {
-		if idx := strings.Index(path, "?"); idx != -1 {
-			basePath := path[:idx]
-			queryStr := path[idx:]
-			if shouldAppendJSONSuffix(basePath) {
-				path = basePath + ".json" + queryStr
-			}
-		} else if shouldAppendJSONSuffix(path) {
-			path += ".json"
+	// Append .json suffix if not already present (GitLink API convention)
+	// Handle paths that may already contain query strings (e.g., /path?key=val)
+	if idx := strings.Index(path, "?"); idx != -1 {
+		basePath := path[:idx]
+		queryStr := path[idx:]
+		if shouldAppendJSONSuffix(basePath) {
+			path = basePath + ".json" + queryStr
 		}
+	} else if shouldAppendJSONSuffix(path) {
+		path += ".json"
 	}
 	fullURL := c.BaseURL + path
 	if len(query) > 0 {
@@ -79,169 +64,7 @@ func (c *Client) do(method, path string, body interface{}, query url.Values, app
 		fullURL += sep + query.Encode()
 	}
 
-	var bodyData []byte
-	var bodyReader io.Reader
-	var contentType string
-	if body != nil {
-		if encoding == "form" {
-			formValues, ok := body.(url.Values)
-			if !ok {
-				return nil, fmt.Errorf("DoForm requires url.Values body")
-			}
-			bodyData = []byte(formValues.Encode())
-			contentType = "application/x-www-form-urlencoded"
-		} else {
-			var err error
-			bodyData, err = json.Marshal(body)
-			if err != nil {
-				return nil, err
-			}
-			contentType = "application/json"
-		}
-		bodyReader = bytes.NewReader(bodyData)
-	}
-
-	req, err := http.NewRequest(method, fullURL, bodyReader)
-	if err != nil {
-		return nil, err
-	}
-
-	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
-	}
-
-	if c.Debug {
-		fmt.Printf("→ %s %s\n", method, fullURL)
-		if bodyData != nil {
-			fmt.Printf("  body: %s\n", string(bodyData))
-		}
-	}
-
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respData, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if c.Debug {
-		fmt.Printf("← %d %s\n", resp.StatusCode, string(respData[:min(len(respData), 200)]))
-	}
-
-	if resp.StatusCode >= 400 {
-		return nil, &APIError{
-			StatusCode: resp.StatusCode,
-			Code:       resp.StatusCode,
-			Message:    fmt.Sprintf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respData))),
-		}
-	}
-
-	var raw map[string]interface{}
-	if err := json.Unmarshal(respData, &raw); err != nil {
-		return output.SuccessEnvelope(string(respData), nil), nil
-	}
-
-	// Check GitLink error-in-body pattern
-	// Support both {"status":N, "message":"..."} and gateway {"code":N, "msg":"..."}
-	var bodyCode float64
-	var bodyMsg string
-	if status, ok := raw["status"]; ok {
-		switch v := status.(type) {
-		case float64:
-			bodyCode = v
-		case int:
-			bodyCode = float64(v)
-		}
-		bodyMsg, _ = raw["message"].(string)
-	} else if code, ok := raw["code"]; ok {
-		switch v := code.(type) {
-		case float64:
-			bodyCode = v
-		case int:
-			bodyCode = float64(v)
-		}
-		bodyMsg, _ = raw["msg"].(string)
-		if bodyMsg == "" {
-			bodyMsg, _ = raw["message"].(string)
-		}
-	}
-	if bodyCode != 0 && bodyCode != 200 && bodyCode != 201 && bodyCode != 204 && bodyCode != 1 {
-		suggestion := suggestFix(int(bodyCode))
-		return output.ErrorEnvelope(int(bodyCode), bodyMsg, suggestion), &APIError{
-			StatusCode: int(bodyCode),
-			Code:       int(bodyCode),
-			Message:    bodyMsg,
-		}
-	}
-
-	if dataStr, ok := raw["data"].(string); ok {
-		var parsedData interface{}
-		if err := json.Unmarshal([]byte(dataStr), &parsedData); err == nil {
-			raw["data"] = json.RawMessage(dataStr)
-		}
-	}
-
-	var meta *output.Meta
-	if tc, ok := raw["total_count"]; ok {
-		meta = &output.Meta{}
-		if v, ok := tc.(float64); ok {
-			meta.TotalCount = int(v)
-		}
-		if v, ok := raw["page"].(float64); ok {
-			meta.Page = int(v)
-		}
-		if v, ok := raw["limit"].(float64); ok {
-			meta.Limit = int(v)
-		}
-	}
-
-	return output.SuccessEnvelope(raw, meta), nil
-}
-
-func shouldAppendJSONSuffix(path string) bool {
-	if strings.HasSuffix(path, ".json") {
-		return false
-	}
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	for i, part := range parts {
-		if part == "raw" && i >= 2 && i+2 < len(parts) {
-			return false
-		}
-	}
-	// Wiki open API endpoints do not use .json suffix
-	if len(parts) >= 3 && parts[0] == "wiki" && parts[1] == "open" {
-		return false
-	}
-	return true
-}
-
-func normalizeAPIPath(baseURL, path string) string {
-	if strings.HasSuffix(strings.TrimRight(baseURL, "/"), "/api") {
-		switch {
-		case path == "/api":
-			return ""
-		case strings.HasPrefix(path, "/api/"):
-			return strings.TrimPrefix(path, "/api")
-		}
-	}
-	return path
-}
-
-// DoRaw makes an API call without appending .json to the path.
-func (c *Client) DoRaw(method, path string, body interface{}, query url.Values) (*output.Envelope, error) {
-	fullURL := c.BaseURL + path
-	if query != nil && len(query) > 0 {
-		sep := "?"
-		if strings.Contains(fullURL, "?") {
-			sep = "&"
-		}
-		fullURL += sep + query.Encode()
-	}
-
+	// Replace path params
 	var bodyReader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -275,6 +98,7 @@ func (c *Client) DoRaw(method, path string, body interface{}, query url.Values) 
 		fmt.Printf("← %d %s\n", resp.StatusCode, string(respData[:min(len(respData), 200)]))
 	}
 
+	// Check HTTP-level errors
 	if resp.StatusCode >= 400 {
 		return nil, &APIError{
 			StatusCode: resp.StatusCode,
@@ -283,11 +107,25 @@ func (c *Client) DoRaw(method, path string, body interface{}, query url.Values) 
 		}
 	}
 
+	// Detect HTML responses (GitLink returns login pages when auth is missing)
+	if detectHTMLResponse(respData) {
+		msg := "服务器返回了 HTML 页面而非 JSON 数据"
+		suggestion := suggestHTMLFix()
+		return output.ErrorEnvelope(resp.StatusCode, msg, suggestion),
+			&APIError{
+				StatusCode: resp.StatusCode,
+				Code:       "HTML_RESPONSE",
+				Message:    msg + "\n" + suggestion,
+			}
+	}
+
+	// Parse JSON
 	var raw map[string]interface{}
 	if err := json.Unmarshal(respData, &raw); err != nil {
 		return output.SuccessEnvelope(string(respData), nil), nil
 	}
 
+	// Check GitLink error-in-body pattern
 	if status, ok := raw["status"]; ok {
 		var statusCode float64
 		switch v := status.(type) {
@@ -307,6 +145,7 @@ func (c *Client) DoRaw(method, path string, body interface{}, query url.Values) 
 		}
 	}
 
+	// Auto-parse JSON string data (GitLink API quirk: some endpoints return data as JSON string)
 	if dataStr, ok := raw["data"].(string); ok {
 		var parsedData interface{}
 		if err := json.Unmarshal([]byte(dataStr), &parsedData); err == nil {
@@ -314,6 +153,7 @@ func (c *Client) DoRaw(method, path string, body interface{}, query url.Values) 
 		}
 	}
 
+	// Build meta from pagination info
 	var meta *output.Meta
 	if tc, ok := raw["total_count"]; ok {
 		meta = &output.Meta{}
@@ -329,6 +169,31 @@ func (c *Client) DoRaw(method, path string, body interface{}, query url.Values) 
 	}
 
 	return output.SuccessEnvelope(raw, meta), nil
+}
+
+func shouldAppendJSONSuffix(path string) bool {
+	if strings.HasSuffix(path, ".json") {
+		return false
+	}
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i, part := range parts {
+		if part == "raw" && i >= 2 && i+2 < len(parts) {
+			return false
+		}
+	}
+	return true
+}
+
+func normalizeAPIPath(baseURL, path string) string {
+	if strings.HasSuffix(strings.TrimRight(baseURL, "/"), "/api") {
+		switch {
+		case path == "/api":
+			return ""
+		case strings.HasPrefix(path, "/api/"):
+			return strings.TrimPrefix(path, "/api")
+		}
+	}
+	return path
 }
 
 func (c *Client) Get(path string, query url.Values) (*output.Envelope, error) {
@@ -347,6 +212,41 @@ func (c *Client) Delete(path string, query url.Values) (*output.Envelope, error)
 	return c.Do("DELETE", path, nil, query)
 }
 
+// detectHTMLResponse detects whether the response body is an HTML page instead of JSON.
+// It first strips any XML declaration (<?xml ...?>) before checking for HTML prefixes.
+func detectHTMLResponse(data []byte) bool {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
+		return false
+	}
+	// Skip leading XML declaration (e.g., <?xml version="1.0"?>)
+	if bytes.HasPrefix(trimmed, []byte("<?")) {
+		if idx := bytes.Index(trimmed, []byte("?>")); idx != -1 {
+			trimmed = bytes.TrimSpace(trimmed[idx+2:])
+		}
+	}
+	if len(trimmed) == 0 {
+		return false
+	}
+	// Check for HTML document prefixes
+	prefixes := []string{"<!DOCTYPE", "<html", "<HTML", "<!doctype"}
+	for _, p := range prefixes {
+		if bytes.HasPrefix(trimmed, []byte(p)) {
+			return true
+		}
+	}
+	return false
+}
+
+func suggestHTMLFix() string {
+	return "API 返回了 HTML 页面而非 JSON 数据。" +
+		"可能原因：\n" +
+		"  1. 未登录或 Token 已过期 → 运行 gitlink-cli auth login\n" +
+		"  2. Token 权限不足 → 在 GitLink 平台重新生成 Token\n" +
+		"  3. API 端点不存在 → 检查路径是否正确\n" +
+		"  4. 使用 Shortcut 命令替代 Raw API → 运行 gitlink-cli --help 查看可用命令"
+}
+
 func suggestFix(code int) string {
 	switch code {
 	case 401:
@@ -361,3 +261,4 @@ func suggestFix(code int) string {
 		return ""
 	}
 }
+

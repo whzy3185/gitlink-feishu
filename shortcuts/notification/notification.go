@@ -4,52 +4,31 @@ import (
 	"fmt"
 	"net/url"
 
-	"strconv"
-
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-// Shortcuts returns notification management shortcuts.
 func Shortcuts() []*common.Shortcut {
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List notifications",
+			Description: "列出通知",
 			Flags: []common.Flag{
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "all", Usage: "显示所有通知（含已读）", Bool: true, Default: "false"},
+				{Name: "participating", Usage: "仅显示参与的通知", Bool: true, Default: "false"},
+				{Name: "page", Short: "p", Usage: "页码", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "每页数量", Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
-				login, err := resolveLogin(ctx)
-				if err != nil {
-					return err
-				}
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
-				env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("/users/%s/messages", login), q)
-				if err != nil {
-					return err
+				if ctx.Arg("all") == "true" {
+					q.Set("all", "true")
 				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "view",
-			Description: "View notification details",
-			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Notification ID", Required: true},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				login, err := resolveLogin(ctx)
-				if err != nil {
-					return err
+				if ctx.Arg("participating") == "true" {
+					q.Set("participating", "true")
 				}
-				id, err := ctx.RequireArg("id")
-				if err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", fmt.Sprintf("/users/%s/messages/%s", login, id), nil)
+				env, err := ctx.CallAPIWithQuery("GET", "/notifications", q)
 				if err != nil {
 					return err
 				}
@@ -58,28 +37,16 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "read",
-			Description: "Mark a notification as read",
+			Description: "标记单条通知为已读",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Notification ID", Required: true},
+				{Name: "id", Short: "i", Usage: "通知 ID", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
-				login, err := resolveLogin(ctx)
-				if err != nil {
-					return err
-				}
 				id, err := ctx.RequireArg("id")
 				if err != nil {
 					return err
 				}
-				idInt, err := strconv.Atoi(id)
-				if err != nil {
-					return fmt.Errorf("invalid id: %s", id)
-				}
-				body := map[string]interface{}{
-					"type": "notification",
-					"ids": []int{idInt},
-				}
-				env, err := ctx.CallAPI("POST", fmt.Sprintf("/users/%s/messages/read", login), body)
+				env, err := ctx.CallAPI("PUT", fmt.Sprintf("/notifications/%s", id), nil)
 				if err != nil {
 					return err
 				}
@@ -87,29 +54,10 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "delete",
-			Description: "Delete a notification",
-			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Notification ID", Required: true},
-			},
+			Name:        "read-all",
+			Description: "标记所有通知为已读",
 			Run: func(ctx *common.RuntimeContext) error {
-				login, err := resolveLogin(ctx)
-				if err != nil {
-					return err
-				}
-				id, err := ctx.RequireArg("id")
-				if err != nil {
-					return err
-				}
-				idInt, err := strconv.Atoi(id)
-				if err != nil {
-					return fmt.Errorf("invalid id: %s", id)
-				}
-				body := map[string]interface{}{
-					"type": "notification",
-					"ids":  []int{idInt},
-				}
-				env, err := ctx.CallAPI("DELETE", fmt.Sprintf("/users/%s/messages", login), body)
+				env, err := ctx.CallAPI("PUT", "/notifications", nil)
 				if err != nil {
 					return err
 				}
@@ -117,12 +65,4 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 	}
-}
-
-// resolveLogin returns the user login from the runtime context.
-func resolveLogin(ctx *common.RuntimeContext) (string, error) {
-	if ctx.Owner == "" {
-		return "", fmt.Errorf("provide --owner (your login) or set it via config")
-	}
-	return ctx.Owner, nil
 }

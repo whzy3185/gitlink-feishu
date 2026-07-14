@@ -1,15 +1,16 @@
 package alias
 
 import (
-	"io"
+	"bytes"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
+	"github.com/spf13/cobra"
 )
 
 func TestLoadAliasesEmpty(t *testing.T) {
+	// 设置临时配置目录
 	tmpDir := t.TempDir()
 	t.Setenv("GITLINK_CONFIG_DIR", tmpDir)
 
@@ -26,6 +27,7 @@ func TestSaveAndLoadAliases(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("GITLINK_CONFIG_DIR", tmpDir)
 
+	// 保存
 	original := map[string]string{
 		"rl": "repo +list",
 		"ri": "repo +info",
@@ -34,6 +36,7 @@ func TestSaveAndLoadAliases(t *testing.T) {
 		t.Fatalf("saveAliases failed: %v", err)
 	}
 
+	// 加载
 	loaded, err := loadAliases()
 	if err != nil {
 		t.Fatalf("loadAliases failed: %v", err)
@@ -53,7 +56,10 @@ func TestSaveAliasesOverwrite(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("GITLINK_CONFIG_DIR", tmpDir)
 
+	// 第一次保存
 	saveAliases(map[string]string{"rl": "repo +list"})
+
+	// 覆盖保存
 	saveAliases(map[string]string{"rl": "repo +list --owner Gitlink"})
 
 	loaded, _ := loadAliases()
@@ -66,6 +72,7 @@ func TestLoadAliasesInvalidYAML(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("GITLINK_CONFIG_DIR", tmpDir)
 
+	// 写入无效 YAML
 	os.WriteFile(tmpDir+"/aliases.yaml", []byte("{{invalid yaml}}"), 0600)
 
 	aliases, err := loadAliases()
@@ -77,7 +84,7 @@ func TestLoadAliasesInvalidYAML(t *testing.T) {
 	}
 }
 
-func TestNewAliasCmdStructure(t *testing.T) {
+func TestNewAliasCmd(t *testing.T) {
 	cmd := NewAliasCmd()
 	if cmd.Use != "alias" {
 		t.Errorf("expected Use 'alias', got %s", cmd.Use)
@@ -85,59 +92,80 @@ func TestNewAliasCmdStructure(t *testing.T) {
 	if !cmd.HasSubCommands() {
 		t.Error("alias command should have subcommands")
 	}
-
 	subcmds := cmd.Commands()
-	if len(subcmds) != 4 {
-		t.Fatalf("expected 4 subcommands, got %d", len(subcmds))
-	}
-
-	expectedUses := map[string]bool{"+list": false, "+set <name> <command>": false, "+delete <name>": false, "+expand <name>": false}
-	for _, sub := range subcmds {
-		if _, ok := expectedUses[sub.Use]; ok {
-			expectedUses[sub.Use] = true
-		}
-	}
-	for use, found := range expectedUses {
-		if !found {
-			t.Errorf("subcommand %q not found", use)
-		}
+	if len(subcmds) != 3 {
+		t.Fatalf("expected 3 subcommands, got %d", len(subcmds))
 	}
 }
 
-func TestAliasSetAndDeleteFlow(t *testing.T) {
+func TestAliasListSubcommand(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("GITLINK_CONFIG_DIR", tmpDir)
 
-	// 模拟 +set 操作：直接调用 saveAliases
-	aliases := make(map[string]string)
-	aliases["rl"] = "repo +list"
-	aliases["ri"] = "repo +info"
-	if err := saveAliases(aliases); err != nil {
-		t.Fatalf("saveAliases failed: %v", err)
+	cmd := NewAliasCmd()
+	// 找到 +list 子命令
+	var listCmd *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if sub.Use == "+list" {
+			listCmd = sub
+			break
+		}
+	}
+	if listCmd == nil {
+		t.Fatal("+list subcommand not found")
 	}
 
-	// 验证保存成功
-	loaded, _ := loadAliases()
-	if loaded["rl"] != "repo +list" {
-		t.Fatalf("alias not saved correctly: %v", loaded)
+	// 无别名时运行
+	buf := new(bytes.Buffer)
+	listCmd.SetOut(buf)
+	listCmd.SetArgs([]string{})
+	if err := listCmd.Execute(); err != nil {
+		t.Fatalf("list failed: %v", err)
 	}
-	if loaded["ri"] != "repo +info" {
-		t.Fatalf("alias not saved correctly: %v", loaded)
+	if !strings.Contains(buf.String(), "未定义任何别名") {
+		t.Errorf("expected hint for no aliases, got: %s", buf.String())
+	}
+}
+
+func TestAliasSetAndDeleteSubcommands(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("GITLINK_CONFIG_DIR", tmpDir)
+
+	cmd := NewAliasCmd()
+
+	// 找到 +set 子命令
+	var setCmd, deleteCmd *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if strings.HasPrefix(sub.Use, "+set") {
+			setCmd = sub
+		}
+		if strings.HasPrefix(sub.Use, "+delete") {
+			deleteCmd = sub
+		}
 	}
 
-	// 模拟 +delete 操作：删除别名后保存
-	delete(loaded, "rl")
-	if err := saveAliases(loaded); err != nil {
-		t.Fatalf("saveAliases after delete failed: %v", err)
+	// +set
+	setCmd.SetArgs([]string{"rl", "repo +list"})
+	if err := setCmd.Execute(); err != nil {
+		t.Fatalf("set failed: %v", err)
 	}
 
-	// 验证删除成功
-	final, _ := loadAliases()
-	if _, ok := final["rl"]; ok {
-		t.Fatal("alias 'rl' should have been deleted")
+	// 验证文件写入
+	aliases, _ := loadAliases()
+	if aliases["rl"] != "repo +list" {
+		t.Fatalf("alias not saved correctly: %v", aliases)
 	}
-	if final["ri"] != "repo +info" {
-		t.Fatal("alias 'ri' should still exist")
+
+	// +delete
+	deleteCmd.SetArgs([]string{"rl"})
+	if err := deleteCmd.Execute(); err != nil {
+		t.Fatalf("delete failed: %v", err)
+	}
+
+	// 验证已删除
+	aliases, _ = loadAliases()
+	if _, ok := aliases["rl"]; ok {
+		t.Fatal("alias should have been deleted")
 	}
 }
 
@@ -145,80 +173,21 @@ func TestAliasDeleteNonExistent(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("GITLINK_CONFIG_DIR", tmpDir)
 
-	// 空别名列表，删除不存在的别名
-	aliases, _ := loadAliases()
-	if _, ok := aliases["nonexistent"]; ok {
-		t.Fatal("nonexistent alias should not exist")
-	}
-	// 验证逻辑：别名不存在时不应执行删除
-	// 这对应 alias.go 中 if _, ok := aliases[args[0]]; !ok 的检查
-}
-
-func TestAliasesFilePath(t *testing.T) {
-	tmpDir := t.TempDir()
-	t.Setenv("GITLINK_CONFIG_DIR", tmpDir)
-
-	expected := tmpDir + "/aliases.yaml"
-	got := aliasesPath()
-	if got != expected {
-		t.Errorf("expected path %s, got %s", expected, got)
-	}
-}
-
-func TestAliasExpandExisting(t *testing.T) {
-	tmpDir := t.TempDir()
-	t.Setenv("GITLINK_CONFIG_DIR", tmpDir)
-
-	saveAliases(map[string]string{
-		"rl": "repo +list",
-		"ri": "repo +info",
-	})
-
-	aliases, _ := loadAliases()
-	if expanded, ok := aliases["rl"]; !ok || expanded != "repo +list" {
-		t.Fatalf("expected rl → repo +list, got %s", expanded)
-	}
-	if expanded, ok := aliases["ri"]; !ok || expanded != "repo +info" {
-		t.Fatalf("expected ri → repo +info, got %s", expanded)
-	}
-}
-
-func TestAliasExpandNonExistent(t *testing.T) {
-	tmpDir := t.TempDir()
-	t.Setenv("GITLINK_CONFIG_DIR", tmpDir)
-
-	aliases, _ := loadAliases()
-	if _, ok := aliases["nonexistent"]; ok {
-		t.Fatal("nonexistent alias should not be found")
-	}
-}
-
-func TestAliasListJSONFormat(t *testing.T) {
-	tmpDir := t.TempDir()
-	t.Setenv("GITLINK_CONFIG_DIR", tmpDir)
-	if err := saveAliases(map[string]string{"rl": "repo +list", "ri": "repo +info"}); err != nil {
-		t.Fatalf("save: %v", err)
-	}
-	cmdutil.Format = "json"
-	defer func() { cmdutil.Format = "" }()
-
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-	root := NewAliasCmd()
-	root.SetArgs([]string{"+list"})
-	execErr := root.Execute()
-	w.Close()
-	os.Stdout = old
-	if execErr != nil {
-		t.Fatalf("execute: %v", execErr)
-	}
-	var buf strings.Builder
-	io.Copy(&buf, r)
-	out := buf.String()
-	for _, want := range []string{`"ok": true`, `"name"`, `"rl"`, `"repo +list"`} {
-		if !strings.Contains(out, want) {
-			t.Errorf("JSON output missing %q: %s", want, out)
+	cmd := NewAliasCmd()
+	var deleteCmd *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if strings.HasPrefix(sub.Use, "+delete") {
+			deleteCmd = sub
+			break
 		}
+	}
+
+	deleteCmd.SetArgs([]string{"nonexistent"})
+	err := deleteCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when deleting nonexistent alias")
+	}
+	if !strings.Contains(err.Error(), "不存在") {
+		t.Errorf("error should mention alias does not exist: %v", err)
 	}
 }

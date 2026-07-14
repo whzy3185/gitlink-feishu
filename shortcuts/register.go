@@ -6,26 +6,21 @@ import (
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/branch"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/ci"
-	"github.com/gitlink-org/gitlink-cli/shortcuts/commit"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/compare"
-	"github.com/gitlink-org/gitlink-cli/shortcuts/dataset"
-	"github.com/gitlink-org/gitlink-cli/shortcuts/feishu"
-	"github.com/gitlink-org/gitlink-cli/shortcuts/health"
-	"github.com/gitlink-org/gitlink-cli/shortcuts/ignore"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/export"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/issue"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/label"
-	"github.com/gitlink-org/gitlink-cli/shortcuts/license"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/member"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/milestone"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/notification"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/org"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/pm"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/pipeline"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/pr"
-	"github.com/gitlink-org/gitlink-cli/shortcuts/profile"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/release"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/repo"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/search"
-	"github.com/gitlink-org/gitlink-cli/shortcuts/tag"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/user"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/webhook"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/wiki"
@@ -42,27 +37,22 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"repo":      repo.Shortcuts(tr),
 		"issue":     issue.Shortcuts(tr),
 		"label":     label.Shortcuts(),
-		"license":   license.Shortcuts(),
 		"member":    member.Shortcuts(),
 		"milestone": milestone.Shortcuts(),
+		"notification": notification.Shortcuts(),
 		"pipeline":  pipeline.Shortcuts(),
+		"pm":        pm.Shortcuts(),
 		"pr":        pr.Shortcuts(tr),
-		"profile":   profile.Shortcuts(tr),
 		"release":   release.Shortcuts(tr),
 		"branch":    branch.Shortcuts(tr),
 		"org":       org.Shortcuts(tr),
 		"user":      user.Shortcuts(tr),
 		"search":    search.Shortcuts(tr),
-		"tag":       tag.Shortcuts(),
-		"commit":    commit.Shortcuts(),
 		"ci":        ci.Shortcuts(tr),
 		"compare":   compare.Shortcuts(),
-		"dataset":   dataset.Shortcuts(tr),
-		"feishu":    feishu.Shortcuts(tr),
+		"export":    export.Shortcuts(),
 		"webhook":   webhook.Shortcuts(tr),
 		"wiki":      wiki.Shortcuts(),
-		"health":    health.Shortcuts(tr),
-		"ignore":    ignore.Shortcuts(),
 		"workflow":  workflow.Shortcuts(),
 	}
 
@@ -70,27 +60,22 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"repo":      tr.T("cmd.repo.short"),
 		"issue":     tr.T("cmd.issue.short"),
 		"label":     "Issue label operations",
-		"license":   "License operations",
 		"member":    "Repository member operations",
 		"milestone": "Milestone operations",
+		"notification": "Notification operations",
 		"pipeline":  "Pipeline operations",
+		"pm":        "Project management operations",
 		"pr":        tr.T("cmd.pr.short"),
-		"profile":   tr.T("cmd.profile.short"),
 		"release":   tr.T("cmd.release.short"),
 		"branch":    tr.T("cmd.branch.short"),
 		"org":       tr.T("cmd.org.short"),
 		"user":      tr.T("cmd.user.short"),
 		"search":    tr.T("cmd.search.short"),
-		"tag":       "Git tag operations",
-		"commit":    "Commit history operations",
 		"ci":        tr.T("cmd.ci.short"),
 		"compare":   "Compare branches, tags, or commits",
-		"dataset":   tr.T("cmd.dataset.short"),
-		"feishu":    "Export GitLink workflow data to Feishu",
+		"export":    "Data export to CSV/JSON",
 		"webhook":   tr.T("cmd.webhook.short"),
-		"wiki":      "Wiki page management",
-		"health":    "Project health data collection",
-		"ignore":    tr.T("cmd.ignore.short"),
+		"wiki":      "Wiki page operations",
 		"workflow":  "AI agent workflow analysis",
 	}
 

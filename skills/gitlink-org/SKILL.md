@@ -18,15 +18,12 @@ metadata:
 
 ## Shortcuts
 
-| Shortcut | 说明 | 需要认证 |
-|----------|------|----------|
-| `org +list` | 组织列表 | 否 |
-| `org +info` | 组织详情 | 否 |
-| `org +members` | 成员列表 | 否 |
-| `org +create` | 创建组织 | 是 |
-| `org +teams` | 团队列表 | 否 |
-| `org +create-team` | 创建团队 | 是 |
-| `org +remove-member` | 移除成员 | 是 |
+| Shortcut | 说明 |
+|----------|------|
+| `org +list` | 组织列表 |
+| `org +info` | 组织详情 |
+| `org +members` | 成员列表 |
+| `org +create` | 创建组织 |
 
 ## 使用示例
 
@@ -35,14 +32,15 @@ gitlink-cli org +list
 gitlink-cli org +info --id Gitlink
 gitlink-cli org +members --id Gitlink
 gitlink-cli org +create --name my-org --description "我的组织"
-
-# 管理团队
-gitlink-cli org +teams --id 12345
-gitlink-cli org +create-team --id 12345 --name dev-team
-gitlink-cli org +remove-member --id 12345 --uid 67890
 ```
 
-## 注意事项
+## Raw API 补充
 
-- `org +create` 创建的组织默认为公开
-- 团队管理和成员移除需组织 owner 权限
+```bash
+# 组织团队管理
+gitlink-cli org +teams
+gitlink-cli org +create-team --body '{"name":"dev-team"}'
+
+# 移除成员
+gitlink-cli org +remove-user
+```

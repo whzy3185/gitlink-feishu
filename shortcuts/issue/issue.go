@@ -458,6 +458,76 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+			{
+				Name:        "journals",
+				Description: "查看 Issue 的活动日志（评论、状态变更等）",
+				Flags: []common.Flag{
+					{Name: "number", Short: "n", Usage: "Issue 编号（网页 URL 中的数字）", Required: true},
+				},
+				Run: func(ctx *common.RuntimeContext) error {
+					if err := ctx.ResolveOwnerRepo(); err != nil {
+						return err
+					}
+					number, err := ctx.RequireArg("number")
+					if err != nil {
+						return err
+					}
+					path := fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number)
+					env, err := ctx.CallAPI("GET", path, nil)
+					if err != nil {
+						return err
+					}
+					return ctx.Output(env)
+				},
+			},
+			{
+				Name:        "series-update",
+				Description: "批量更新多个 Issue 的状态（一键关闭/重开多个 Issue）",
+				Flags: []common.Flag{
+					{Name: "ids", Usage: "Issue ID 列表（逗号分隔，如 1,2,3）", Required: true},
+					{Name: "status", Short: "s", Usage: "目标状态: open / closed", Required: true},
+				},
+				Run: func(ctx *common.RuntimeContext) error {
+					if err := ctx.ResolveOwnerRepo(); err != nil {
+						return err
+					}
+					idsStr, err := ctx.RequireArg("ids")
+					if err != nil {
+						return err
+					}
+					status, err := ctx.RequireArg("status")
+					if err != nil {
+						return err
+					}
+
+					// 解析逗号分隔的 ID 列表
+					idParts := strings.Split(idsStr, ",")
+					ids := make([]int, 0, len(idParts))
+					for _, p := range idParts {
+						id, err := strconv.Atoi(strings.TrimSpace(p))
+						if err != nil {
+							return fmt.Errorf("无效的 Issue ID: %s", p)
+						}
+						ids = append(ids, id)
+					}
+
+					// 转换状态为数字
+					statusID, err := normalizeIssueStatus(status)
+					if err != nil {
+						return err
+					}
+
+					body := map[string]interface{}{
+						"ids":       ids,
+						"status_id": statusID,
+					}
+					env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/issues/series_update", body)
+					if err != nil {
+						return err
+					}
+					return ctx.Output(env)
+				},
+			},
 	}
 }
 

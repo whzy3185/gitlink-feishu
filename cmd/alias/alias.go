@@ -3,14 +3,11 @@ package alias
 import (
 	"fmt"
 	"os"
-	"sort"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/config"
-	"github.com/gitlink-org/gitlink-cli/internal/output"
 )
 
 // AliasConfig represents the aliases section of the CLI config.
@@ -43,32 +40,13 @@ func NewAliasCmd() *cobra.Command {
 			Long:  "列出所有已定义的命令别名。如果没有任何别名，会给出创建提示。",
 			RunE: func(cmd *cobra.Command, args []string) error {
 				aliases, _ := loadAliases()
-				// Structured formats (json/yaml/table) route through output.Print
-				// so alias +list integrates with scripts and AI Agents.
-				if cmdutil.Format == "json" || cmdutil.Format == "yaml" || cmdutil.Format == "table" {
-					rows := make([]map[string]string, 0, len(aliases))
-					names := make([]string, 0, len(aliases))
-					for k := range aliases {
-						names = append(names, k)
-					}
-					sort.Strings(names)
-					for _, k := range names {
-						rows = append(rows, map[string]string{"name": k, "command": aliases[k]})
-					}
-					return output.Print(output.SuccessEnvelope(rows, nil), cmdutil.Format)
-				}
 				if len(aliases) == 0 {
 					fmt.Println("（未定义任何别名）")
 					fmt.Println("使用 alias +set <名称> <命令> 来创建别名")
 					return nil
 				}
-				names := make([]string, 0, len(aliases))
-				for k := range aliases {
-					names = append(names, k)
-				}
-				sort.Strings(names)
-				for _, k := range names {
-					fmt.Printf("  %-15s → %s\n", k, aliases[k])
+				for k, v := range aliases {
+					fmt.Printf("  %-15s → %s\n", k, v)
 				}
 				return nil
 			},
@@ -105,23 +83,6 @@ func NewAliasCmd() *cobra.Command {
 					return err
 				}
 				fmt.Printf("别名已删除: %s\n", args[0])
-				return nil
-			},
-		},
-		&cobra.Command{
-			Use:   "+expand <name>",
-			Short: "展开别名查看原命令",
-			Long:  "查看一个别名对应的原始命令。如果别名不存在则报错。",
-			Args:  cobra.ExactArgs(1),
-			Example: `  gitlink-cli alias +expand rl
-	  输出: rl → repo +list`,
-			RunE: func(cmd *cobra.Command, args []string) error {
-				aliases, _ := loadAliases()
-				expanded, ok := aliases[args[0]]
-				if !ok {
-					return fmt.Errorf("别名 %s 不存在", args[0])
-				}
-				fmt.Printf("%s → %s\n", args[0], expanded)
 				return nil
 			},
 		},

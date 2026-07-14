@@ -106,7 +106,7 @@ gitlink-cli pr +create --owner TargetOrg --repo target-repo \
 gitlink-cli branch +create --name feature-branch --from master
 
 # 2. 在分支上创建/修改文件（content 必须 base64 编码）
-gitlink-cli api POST /:owner/:repo/create_file --body '{
+gitlink-cli repo +create-file --body '{
   "filepath": "new-file.md",
   "content": "<base64编码的内容>",
   "branch": "feature-branch",
@@ -121,31 +121,31 @@ gitlink-cli pr +create --title "feat: 新功能" --head feature-branch --base ma
 
 ```bash
 # 创建文件（content 必须 base64 编码）
-gitlink-cli api POST /:owner/:repo/create_file --body '{"filepath":"file.md","content":"<base64>","branch":"dev","message":"add file"}'
+gitlink-cli repo +create-file --body '{"filepath":"file.md","content":"<base64>","branch":"dev","message":"add file"}'
 
 # 更新文件（需要先通过 sub_entries 获取文件 SHA）
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=file.md&ref=dev'
+gitlink-cli repo +files --query 'filepath=file.md&ref=dev'
 # 从 entries.sha 获取 SHA，然后：
-gitlink-cli api PUT /:owner/:repo/update_file --body '{"filepath":"file.md","content":"<base64>","sha":"<sha>","branch":"dev","message":"update file"}'
+gitlink-cli repo +update-file --body '{"filepath":"file.md","content":"<base64>","sha":"<sha>","branch":"dev","message":"update file"}'
 
 # 检查是否可合并
-gitlink-cli api POST /:owner/:repo/pulls/check_can_merge --body '{"head":"dev","base":"main"}'
+gitlink-cli pr +check-merge --body '{"head":"dev","base":"main"}'
 
 # 创建 Review
-gitlink-cli api POST /v1/:owner/:repo/pulls/:id/reviews --body '{"content":"LGTM","status":"approved"}'
+gitlink-cli pr +review --body '{"content":"LGTM","status":"approved"}'
 
 # 查看 Review 列表（支持 status 过滤）
-gitlink-cli api GET /v1/:owner/:repo/pulls/:id/reviews
-gitlink-cli api GET /v1/:owner/:repo/pulls/:id/reviews?status=approved
+gitlink-cli pr +reviews
+gitlink-cli pr +reviews?status=approved
 
 # 获取可用分支
-gitlink-cli api GET /:owner/:repo/pulls/get_branches
+gitlink-cli pr +branches
 
 # 查看 PR patchset/version 列表（v1 API）
-gitlink-cli api GET /v1/:owner/:repo/pulls/:id/versions
+gitlink-cli pr +versions
 
 # 查看指定 patchset/version diff（可通过 filepath 过滤文件）
-gitlink-cli api GET /v1/:owner/:repo/pulls/:id/versions/:version_id/diff
+gitlink-cli pr +versions/:version_id/diff
 ```
 
 ## 注意事项

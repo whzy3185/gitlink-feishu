@@ -49,7 +49,7 @@ gitlink-cli release +list --owner <owner> --repo <repo> --format json
 # 取 data.releases[0].tag_name 作为当前版本
 
 # 获取标签列表
-gitlink-cli api GET /:owner/:repo/tags --format json
+gitlink-cli repo +tags --format json
 ```
 
 ### 步骤 2：获取自上次发版以来的提交
@@ -154,7 +154,7 @@ gitlink-cli pr +list --state merged --owner <owner> --repo <repo> --format json
 gitlink-cli release +list --owner <owner> --repo <repo> --format json
 
 # Step 2：获取变更内容（提交历史）
-gitlink-cli api GET /:owner/:repo/commits --query 'page=1&limit=30&ref=master' --format json
+gitlink-cli repo +commits --query 'page=1&limit=30&ref=master' --format json
 
 # Step 3：生成 Release Notes（AI 分析提交后组织内容）
 

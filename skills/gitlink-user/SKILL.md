@@ -22,12 +22,6 @@ metadata:
 |----------|------|----------|
 | `user +me` | 当前登录用户 | 是 |
 | `user +info` | 查看用户详情 | 否 |
-| `user +headmaps` | 贡献热力图 | 否 |
-| `user +stats-activity` | 活跃度统计 | 否 |
-| `user +stats-develop` | 开发能力统计 | 否 |
-| `user +stats-role` | 角色定位统计 | 否 |
-| `user +stats-major` | 专业定位统计 | 否 |
-| `user +trends` | 项目动态趋势 | 否 |
 
 ## 使用示例
 
@@ -37,20 +31,17 @@ gitlink-cli user +me
 
 # 查看其他用户
 gitlink-cli user +info --login zhangsan
-
-# 查看贡献热力图
-gitlink-cli user +headmaps --login zhangsan
-
-# 查看统计信息
-gitlink-cli user +stats-activity --login zhangsan
-gitlink-cli user +stats-develop --login zhangsan
-gitlink-cli user +stats-role --login zhangsan
-gitlink-cli user +stats-major --login zhangsan
-
-# 查看项目动态
-gitlink-cli user +trends --login zhangsan --limit 20
 ```
 
-## 注意事项
+## Raw API 补充
 
-- 查看其他用户信息需要提供 `--login` 参数
+```bash
+# 用户贡献热力图
+gitlink-cli user +heatmap
+
+# 用户统计
+gitlink-cli user +stats
+
+# 用户项目动态
+gitlink-cli user +trends
+```

@@ -34,7 +34,7 @@ gitlink-cli auth logout
 
 - GitLink Token 有效期 **7 天**，过期需重新登录
 - Token 存储在 OS Keychain（macOS Keychain / Linux Secret Service / Windows Credential Manager）
-- Fallback 存储：`$GITLINK_CONFIG_DIR/credentials`（未设置时为 `~/.config/gitlink-cli/credentials`）
+- Fallback 存储：`~/.config/gitlink-cli/credentials`
 
 ### 认证错误处理
 
@@ -63,27 +63,6 @@ gitlink-cli auth login
 - HTTPS: `https://www.gitlink.org.cn/owner/repo.git`
 - SSH: `git@www.gitlink.org.cn:owner/repo.git`
 
-## Shell 自动补全
-
-安装后可以按用户当前 shell 生成补全脚本，帮助用户发现 Shortcut 子命令和参数：
-
-```bash
-# Bash
-gitlink-cli completion bash > ~/.local/share/bash-completion/completions/gitlink-cli
-
-# Zsh
-gitlink-cli completion zsh > "${fpath[1]}/_gitlink-cli"
-
-# Fish
-gitlink-cli completion fish > ~/.config/fish/completions/gitlink-cli.fish
-
-# PowerShell
-gitlink-cli completion powershell > gitlink-cli.ps1
-. ./gitlink-cli.ps1
-```
-
-如果终端补全不需要描述文本，可以追加 `--no-descriptions`。
-
 ## 输出格式
 
 所有命令输出遵循统一 Envelope 格式：
@@ -111,8 +90,7 @@ gitlink-cli completion powershell > gitlink-cli.ps1
 | 层级 | 格式 | 示例 | 适用场景 |
 |------|------|------|----------|
 | Shortcuts | `gitlink-cli <domain> +<verb>` | `gitlink-cli repo +info` | 高频操作，推荐优先使用 |
-| Raw API | `gitlink-cli api <METHOD> <PATH>` | `gitlink-cli api GET /users/me` | Shortcuts 未覆盖的接口 |
-| Raw API 批处理 | `gitlink-cli api --batch-file <file>` | `gitlink-cli api --batch-file plan.json --dry-run` | 对未封装接口做可审计的批量自动化 |
+| Raw API | `gitlink-cli api <METHOD> <PATH>` | `gitlink-cli user +me` | Shortcuts 未覆盖的接口 |
 
 ## GitLink API 注意事项
 
@@ -129,11 +107,8 @@ gitlink-cli completion powershell > gitlink-cli.ps1
 | Create File 需要 base64 | `POST /:owner/:repo/create_file` 的 `content` 字段必须 base64 编码 | 不编码会返回"文件已存在"错误 |
 | Update File 需要 SHA | `PUT /:owner/:repo/update_file` 需要 `sha` 参数，通过 `sub_entries` 接口获取 | 见下方文件操作说明 |
 | PR 合并需要 `do` 参数 | `pr +merge` 需传 `do` 字段指定合并方式（merge/rebase/squash） | `pr +merge` 已内置处理 |
+| PR 列表 state 过滤 | `--state` 参数仅影响统计计数，返回列表可能包含所有状态 | 需通过 `pull_request_status` 字段客户端过滤：0=open, 1=merged, 2=closed |
 | PR 创建需要代码差异 | 分支内容必须与目标分支不同，否则拒绝创建 | 需要先在分支上有实际提交 |
-| **PR 列表可能返回空** | 部分仓库（如 fork、权限受限）`pr +list` 返回 `pulls:[]`，但 `repo +info` 的 `pull_requests_count` 非零 | 平台 quirk；用 `pull_requests_count`（总数）+ `git log --merges`（本地合并历史）兜底 |
-| **repo +contributor-stats 报错** | `repo +contributor-stats` 可能返回「获取贡献者(代码行)失败」 | API 不稳；改用 `repo +contributors`（含行数，但口径含纯邮箱提交者） |
-| **commits/tags/releases 无 JSON API** | 这些列表端点返回 SPA HTML（非 JSON），故**无 `repo +commits`/`+tags`/`+raw` 命令** | 平台未开放；提交/标签历史用 `git clone`+`git log`/`git tag` 本地获取；读文件内容用 `file +get` 替代 `repo +raw` |
-| **贡献者口径不一致** | `repo +info` 的 `contributor_users_count` 只数 GitLink 注册用户；`repo +contributors` 返回含纯邮箱提交者（数量更多） | 巴士因子/协作分析用 `repo +contributors` 列表；「注册贡献者数」用 `contributor_users_count` |
 
 ## 文件操作 API
 
@@ -144,7 +119,7 @@ gitlink-cli completion powershell > gitlink-cli.ps1
 ```bash
 # content 必须 base64 编码
 CONTENT=$(echo -n "文件内容" | base64)
-gitlink-cli api POST /:owner/:repo/create_file --body '{
+gitlink-cli repo +create-file --body '{
   "filepath": "path/to/file.md",
   "content": "<base64编码>",
   "branch": "feature-branch",
@@ -156,11 +131,11 @@ gitlink-cli api POST /:owner/:repo/create_file --body '{
 
 ```bash
 # Step 1: 获取文件 SHA
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=path/to/file.md&ref=branch-name'
+gitlink-cli repo +files --query 'filepath=path/to/file.md&ref=branch-name'
 # 从返回的 entries.sha 获取 SHA 值
 
 # Step 2: 更新文件（content 必须 base64 编码）
-gitlink-cli api PUT /:owner/:repo/update_file --body '{
+gitlink-cli repo +update-file --body '{
   "filepath": "path/to/file.md",
   "content": "<base64编码>",
   "sha": "<从sub_entries获取的sha>",
@@ -173,7 +148,7 @@ gitlink-cli api PUT /:owner/:repo/update_file --body '{
 
 ```bash
 # 需要文件 SHA
-gitlink-cli api DELETE /:owner/:repo/delete_file --body '{
+gitlink-cli repo +delete-file --body '{
   "filepath": "path/to/file.md",
   "sha": "<sha>",
   "branch": "master",

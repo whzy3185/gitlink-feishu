@@ -28,7 +28,7 @@ gitlink-cli issue +list --state open --format json
 gitlink-cli issue +view --id <issue_id> --format json
 
 # 3. 根据内容分析，通过 Raw API 添加标签
-gitlink-cli api POST /:owner/:repo/issues/:id --body '{"issue_tag_ids":[<tag_id>]}'
+gitlink-cli issue +update --number '{"issue_tag_ids":[<tag_id>]}'
 ```
 
 **分类规则建议**：
@@ -44,39 +44,30 @@ gitlink-cli api POST /:owner/:repo/issues/:id --body '{"issue_tag_ids":[<tag_id>
 # 1. 获取 PR 详情
 gitlink-cli pr +view --id <pr_id> --format json
 
-# 2. 获取完整审查上下文（仓库、PR、变更文件、Review、Issue、标签）
-gitlink-cli workflow +review-context --number <pr_id> --format json
+# 2. 获取变更文件列表
+gitlink-cli pr +files --id <pr_id> --format json
 
-# 3. 添加 Review 评论（写操作前需确认用户意图）
-gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{"body":"代码审查意见...","event":"COMMENT"}'
+# 3. 获取 PR 提交列表
+gitlink-cli pr +diff --id <pr_id> --format json
+
+# 4. 添加 Review 评论
+gitlink-cli pr +review --body '{"body":"代码审查意见...","event":"COMMENT"}'
 ```
 
 ## 工作流 3：Release Notes 生成
 
-**场景**：从提交历史和 PR 信号自动生成版本发布说明，适合维护者发版前检查、Agent 生成 changelog 草稿、竞赛材料展示等场景。
+**场景**：从提交历史自动生成版本发布说明。
 
 ```bash
-# 只读远程模式：从 GitLink compare 数据生成 Markdown
-gitlink-cli workflow +release-notes \
-  --owner Gitlink \
-  --repo gitlink-cli \
-  --from-ref v1.1.0 \
-  --to-ref master \
-  --version v1.2.0 \
-  --format markdown
+# 1. 获取两个版本之间的提交
+gitlink-cli repo +compare --format json
 
-# 本地 JSON 模式：供 Agent 流水线、测试夹具或离线复现使用
-gitlink-cli workflow +release-notes \
-  --from shortcuts/workflow/testdata/release_notes.json \
-  --format json
+# 2. 获取已关闭的 Issue
+gitlink-cli issue +list --state closed --format json
+
+# 3. 生成 Release Notes 并创建发布
+gitlink-cli release +create --tag v1.2.0 --name "v1.2.0" --body "## What's Changed\n- feat: 新功能 (#123)\n- fix: 修复问题 (#456)"
 ```
-
-规则：
-- 优先使用 `workflow +release-notes` 生成草稿，再由维护者决定是否创建 Release。
-- 使用 `--format json` 作为 Agent 间传递格式；使用 `--format markdown` 作为人类可读发布说明。
-- 远程模式只读取 compare 数据，不创建 Release，不评论、不打标签、不合并。
-- `--include-prs` 默认开启；当 compare 响应包含 PR 信号时会一起分类。
-- 分类规则是确定性的，不依赖 LLM API，便于审计和复现。
 
 ## 工作流 4：Repo Setup（仓库初始化）
 
@@ -106,8 +97,8 @@ gitlink-cli issue +list --state closed --format json
 gitlink-cli pr +list --state open --format json
 gitlink-cli pr +list --state merged --format json
 
-# 3. 获取仓库工作流报告
-gitlink-cli workflow +repo-report --format json
+# 3. 获取项目动态
+gitlink-cli repo +activity --format json
 ```
 
 ## Workflow: PR Summary (Read-only)
@@ -127,28 +118,6 @@ Rules:
 - Prefer `--format markdown` when a human maintainer needs a report.
 - This command is read-only: it does not comment, approve, reject, merge, label, or close pull requests.
 - Do not use LLM APIs for this workflow; it is rule-based and explainable.
-
-## Workflow: Review Context (Read-only)
-
-Use `workflow +review-context` when an Agent needs one deterministic JSON bundle for PR review or gatekeeping. It aggregates shortcut-backed read-only fetches for repository info, PR details, changed files, existing reviews, open issues, and labels.
-
-```bash
-gitlink-cli workflow +review-context --owner Gitlink --repo gitlink-cli --number 1 --format json
-
-# Trim context for large repositories
-gitlink-cli workflow +review-context --owner Gitlink --repo gitlink-cli --number 1 \
-  --issue-limit 10 --label-limit 30 --format json
-
-# Only fetch PR and changed files
-gitlink-cli workflow +review-context --owner Gitlink --repo gitlink-cli --number 1 \
-  --include-repo=false --include-reviews=false --include-issues=false --include-labels=false \
-  --format json
-```
-
-Rules:
-- This command is read-only and never comments, approves, rejects, merges, labels, or closes resources.
-- Prefer it before `workflow +pr-summary` when a review agent needs raw context plus existing review state.
-- The command records partial fetch failures in `notes` so Agents can proceed with available context.
 
 ## Workflow: Repo Report (Read-only)
 

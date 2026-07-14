@@ -25,9 +25,9 @@ gitlink-cli 的命令集在持续演进中。以下命令**当前版本可能不
 | 命令 | 状态 | 替代方案 |
 |------|------|----------|
 | `repo +contributors` | ❌ 不可用 | 从 `pr +list` 提取 `author_login` + `repo +info` 获取 `contributor_users_count` |
-| `user +heatmap` | ✅ 可用 | 贡献热力图 |
-| `user +stats` | ✅ 可用 | 用户聚合统计 |
-| `user +trends` | ✅ 可用 | 用户项目趋势 |
+| `user +heatmap` | ❌ 不可用 | 从 PR 时间戳手动推算活跃天数 |
+| `user +stats` | ❌ 不可用 | 从 `pr +list` 统计 PR 数；Issue 数通过 `issue +list` 获取 |
+| `user +trends` | ❌ 不可用 | 从 PR 时间分布手动判断趋势（上升/平稳/下降） |
 | `repo +info` | ✅ 可用 | — |
 | `pr +list` | ✅ 可用 | — |
 | `user +info` | ✅ 可用 | — |
@@ -90,16 +90,11 @@ gitlink-cli issue +list --owner <owner> --repo <repo> --format json
 ```bash
 # 用户基本信息
 gitlink-cli user +info --login <username> --format json
-
-# 贡献热力图、聚合统计、项目趋势
-gitlink-cli user +heatmap --user <username> --format json
-gitlink-cli user +stats --user <username> --format json
-gitlink-cli user +trends --user <username> --format json
 ```
 
 从 `user +info` 提取：`login`、`name`、`created_time`（注册时间）、`user_projects_count`、`user_org_count`、`user_identity`。
 
-从 `user +heatmap/+stats/+trends` 补充贡献频率、贡献产出和项目趋势。如果这些端点返回空或权限不足，再使用 PR/Issue 列表推算：
+**如果 `user +heatmap/+stats/+trends` 可用**（未来版本），补充执行。当前版本用以下替代方案：
 
 | 维度 | 替代数据源 | 分析要点 |
 |------|----------|----------|
@@ -228,9 +223,9 @@ gitlink-cli user +trends --user <username> --format json
 | PR 贡献数据 | `pr +list` 全量 | ✅ 可靠 |
 | Issue 数据 | `issue +list` | ✅ 可靠 |
 | 用户信息 | `user +info` | ✅ 可靠 |
-| 贡献热力图 | `user +heatmap` | ✅ 可靠 |
-| 统计信息 | `user +stats` | ✅ 可靠 |
-| 趋势数据 | `user +trends` | ✅ 可靠 |
+| 贡献热力图 | 不可用（命令未实现） | ❌ 缺失 |
+| 统计信息 | 不可用（命令未实现） | ❌ 缺失 |
+| 趋势数据 | 不可用（命令未实现） | ❌ 缺失 |
 
 > **局限性**：本报告仅反映 GitLink 平台活动，不包括其他平台（GitHub、GitLab 等）的数据。
 ```
@@ -242,7 +237,7 @@ gitlink-cli user +trends --user <username> --format json
 | 场景 | 处理方式 |
 |------|----------|
 | `repo +contributors` 不可用（当前版本常态） | 从 `pr +list` 的 `author_login` 提取贡献者列表 |
-| `user +heatmap` / `+stats` / `+trends` 返回空或权限不足 | 从 PR 时间戳推算活跃天数，PR 聚合得产出量，时间分布得趋势 |
+| `user +heatmap` / `+stats` / `+trends` 不可用 | 从 PR 时间戳推算活跃天数，PR 聚合得产出量，时间分布得趋势 |
 | `pr +list` 返回空 | 标注"仓库暂无 PR 数据"，仅展示 `repo +info` 基本信息 |
 | `user +info` 返回空 | 标注"用户信息不可用"，仅展示 PR 统计 |
 | 贡献者 > 15 人 | 仅分析 PR 数最高的前 10 位，报告中注明"基于 Top 10 分析" |
@@ -256,7 +251,7 @@ gitlink-cli user +trends --user <username> --format json
 - ✅ **所有命令使用 `--format json`**，确保可解析
 - ✅ **本 Skill 为纯只读分析**，不会修改任何仓库
 - ✅ **Owner/repo 优先从 `git remote` 自动解析**，无 git 上下文时询问用户
-- ✅ **优先使用用户统计快捷命令**：`user +heatmap/+stats/+trends` 可直接提供贡献热力图、聚合统计和项目趋势；PR/Issue 列表用于补充仓库内贡献明细
+- ⚠️ **核心数据来源为 `pr +list`**：当前版本 gitlink-cli 中 `user +heatmap/+stats/+trends` 不可用，分析主要依赖 PR 列表数据
 - ⚠️ **`repo +contributors` 不可用**：贡献者列表从 PR 作者提取，可能与实际 `contributor_users_count` 有差异（后者包含未提 PR 的参与者）
 - ⚠️ **数据仅反映 GitLink 平台活动**：不包括 GitHub 或其他平台的数据
 - ℹ️ **参照样例**：[`EXAMPLES.md`](EXAMPLES.md) 包含手动执行和 Agent 调用两种场景的完整样例，[`examples/jiangtx-gitlink-cli.md`](examples/jiangtx-gitlink-cli.md) 包含原始命令输出数据

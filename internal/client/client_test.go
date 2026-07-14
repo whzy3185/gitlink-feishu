@@ -2,8 +2,6 @@ package client
 
 import (
 	"encoding/json"
-	"io"
-	"mime"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -172,45 +170,6 @@ func TestClientDoStatusError(t *testing.T) {
 	}
 }
 
-func TestClientDoGatewayCodeError(t *testing.T) {
-	// Gateway returns {"code":N, "msg":"..."} instead of {"status":N, "message":"..."}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"code":400,"msg":"Bad Request"}`))
-	}))
-	defer server.Close()
-
-	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
-	env, err := c.Do("GET", "/api/test", nil, nil)
-	if err == nil {
-		t.Fatal("expected error for code=400")
-	}
-	if env == nil {
-		t.Fatal("expected envelope for code error")
-	}
-	if env.OK {
-		t.Fatal("expected OK=false for code=400")
-	}
-}
-
-func TestClientDoGatewayCode201Success(t *testing.T) {
-	// Gateway returns code=201 with JSON string data — should be treated as success
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"code":201,"msg":"","data":"{\"title\":\"test\"}"}`))
-	}))
-	defer server.Close()
-
-	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
-	env, err := c.Do("POST", "/api/test", map[string]string{"title": "test"}, nil)
-	if err != nil {
-		t.Fatalf("unexpected error for code=201: %v", err)
-	}
-	if !env.OK {
-		t.Fatal("expected OK=true for code=201")
-	}
-}
-
 func TestClientDoStatusZero(t *testing.T) {
 	// status=0, 200, 1 are treated as success
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -312,87 +271,6 @@ func TestClientDoWithBody(t *testing.T) {
 	}
 	if !env.OK {
 		t.Fatal("expected OK=true")
-	}
-}
-
-func TestClientPostMultipart(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Fatalf("expected POST, got %s", r.Method)
-		}
-		if r.URL.Path != "/api/attachments.json" {
-			t.Fatalf("expected path /api/attachments.json, got %s", r.URL.Path)
-		}
-
-		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-		if err != nil {
-			t.Fatalf("parse media type: %v", err)
-		}
-		if mediaType != "multipart/form-data" {
-			t.Fatalf("Content-Type = %q, want multipart/form-data", mediaType)
-		}
-
-		if err := r.ParseMultipartForm(1 << 20); err != nil {
-			t.Fatalf("ParseMultipartForm: %v", err)
-		}
-		if got := r.FormValue("description"); got != "release asset" {
-			t.Fatalf("description = %q, want %q", got, "release asset")
-		}
-
-		files := r.MultipartForm.File["file"]
-		if len(files) != 1 {
-			t.Fatalf("expected 1 uploaded file, got %d", len(files))
-		}
-		if files[0].Filename != "asset.zip" {
-			t.Fatalf("filename = %q, want %q", files[0].Filename, "asset.zip")
-		}
-		if got := files[0].Header.Get("Content-Type"); got != "application/octet-stream" {
-			t.Fatalf("part Content-Type = %q, want %q", got, "application/octet-stream")
-		}
-
-		file, err := files[0].Open()
-		if err != nil {
-			t.Fatalf("open multipart file: %v", err)
-		}
-		defer file.Close()
-
-		data, err := io.ReadAll(file)
-		if err != nil {
-			t.Fatalf("read multipart file: %v", err)
-		}
-		if string(data) != "binary content" {
-			t.Fatalf("file body = %q, want %q", string(data), "binary content")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"id":"asset-1"}`))
-	}))
-	defer server.Close()
-
-	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
-	env, err := c.PostMultipart("/api/attachments", map[string]string{
-		"description": "release asset",
-	}, []MultipartFile{
-		{
-			FieldName:   "file",
-			FileName:    "asset.zip",
-			ContentType: "application/octet-stream",
-			Reader:      strings.NewReader("binary content"),
-		},
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !env.OK {
-		t.Fatal("expected OK=true")
-	}
-}
-
-func TestClientPostMultipartRequiresFile(t *testing.T) {
-	c := &Client{HTTP: &http.Client{}, BaseURL: "https://gitlink.example.com"}
-	_, err := c.PostMultipart("/attachments", nil, nil)
-	if err == nil {
-		t.Fatal("expected error when no multipart file is provided")
 	}
 }
 
@@ -631,100 +509,6 @@ func TestPaginateAllNotOK(t *testing.T) {
 	}
 }
 
-func TestClientDownload(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/attachments/7" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Write([]byte("asset bytes"))
-	}))
-	defer server.Close()
-
-	c := &Client{HTTP: server.Client(), BaseURL: server.URL + "/api"}
-	result, err := c.Download("/api/attachments/7")
-	if err != nil {
-		t.Fatalf("Download error: %v", err)
-	}
-	if string(result.Data) != "asset bytes" {
-		t.Fatalf("data = %q", result.Data)
-	}
-	if result.ContentType != "application/octet-stream" {
-		t.Fatalf("content type = %q", result.ContentType)
-	}
-}
-
-func TestClientDownloadAPIPathWithV1BaseURL(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/attachments/7" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		w.Write([]byte("asset bytes"))
-	}))
-	defer server.Close()
-
-	c := &Client{HTTP: server.Client(), BaseURL: server.URL + "/api/v1"}
-	result, err := c.Download("/api/attachments/7")
-	if err != nil {
-		t.Fatalf("Download error: %v", err)
-	}
-	if string(result.Data) != "asset bytes" {
-		t.Fatalf("data = %q", result.Data)
-	}
-}
-
-func TestClientDownloadAbsoluteURL(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/files/release.zip" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		w.Write([]byte("zip bytes"))
-	}))
-	defer server.Close()
-
-	c := &Client{HTTP: server.Client(), BaseURL: "https://gitlink.example.com/api"}
-	result, err := c.Download(server.URL + "/files/release.zip")
-	if err != nil {
-		t.Fatalf("Download error: %v", err)
-	}
-	if string(result.Data) != "zip bytes" {
-		t.Fatalf("data = %q", result.Data)
-	}
-}
-
-func TestClientDownloadWebRelativeURL(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/owner/repo/releases/download/v1/app.zip" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		w.Write([]byte("asset bytes"))
-	}))
-	defer server.Close()
-
-	c := &Client{HTTP: server.Client(), BaseURL: server.URL + "/api"}
-	result, err := c.Download("/owner/repo/releases/download/v1/app.zip")
-	if err != nil {
-		t.Fatalf("Download error: %v", err)
-	}
-	if string(result.Data) != "asset bytes" {
-		t.Fatalf("data = %q", result.Data)
-	}
-}
-
-func TestClientDownloadHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("missing"))
-	}))
-	defer server.Close()
-
-	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
-	_, err := c.Download("/missing")
-	if err == nil {
-		t.Fatal("expected download error")
-	}
-}
-
 func TestShouldAppendJSONSuffixSkipsRawFilePath(t *testing.T) {
 	if shouldAppendJSONSuffix("/Gitlink/forgeplus/raw/master/README.md") {
 		t.Fatal("raw file path should not get .json suffix")
@@ -743,17 +527,66 @@ func TestShouldAppendJSONSuffixSkipsExistingJSONPath(t *testing.T) {
 	}
 }
 
-func TestShouldAppendJSONSuffixSkipsWikiOpenPaths(t *testing.T) {
-	paths := []string{
-		"/wiki/open/createWiki",
-		"/wiki/open/getWiki",
-		"/wiki/open/updateWiki",
-		"/wiki/open/deleteWiki",
-		"/wiki/open/wikiPages",
+func TestDetectHTMLResponse(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		wantHTML bool
+	}{
+		{"正常 JSON", `{"key":"value"}`, false},
+		{"DOCTYPE 开头", `<!DOCTYPE html><html>...</html>`, true},
+		{"html 小写开头", `<html><head>...</head></html>`, true},
+		{"HTML 大写开头", `<HTML><HEAD>...</HEAD></HTML>`, true},
+		{"doctype 小写开头", `<!doctype html><html lang="en">`, true},
+		{"空响应体", "", false},
+		{"纯文本", `just some text`, false},
+		{"空白后 HTML", `  <!DOCTYPE html>`, true},
+		{"JSON 数组", `[1,2,3]`, false},
+		{"HTML 片段（无前缀）", `<body>content</body>`, false},
+		{"XML 声明后跟 HTML", `<?xml version="1.0"?><!DOCTYPE html>`, true},
 	}
-	for _, p := range paths {
-		if shouldAppendJSONSuffix(p) {
-			t.Errorf("wiki/open path %q should not get .json suffix", p)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := detectHTMLResponse([]byte(tt.body)); got != tt.wantHTML {
+				t.Errorf("detectHTMLResponse(%q) = %v, want %v", tt.body, got, tt.wantHTML)
+			}
+		})
+	}
+}
+
+func TestClientDoHTMLResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`<!DOCTYPE html><html><head><title>Sign in</title></head><body>Please log in</body></html>`))
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
+	env, err := c.Do("GET", "/api/test", nil, nil)
+	if err == nil {
+		t.Fatal("expected error for HTML response")
+	}
+	if env == nil {
+		t.Fatal("expected envelope for HTML response")
+	}
+	if env.OK {
+		t.Fatal("expected OK=false for HTML response")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.Code != "HTML_RESPONSE" {
+		t.Fatalf("Code = %v, want HTML_RESPONSE", apiErr.Code)
+	}
+}
+
+func TestSuggestHTMLFix(t *testing.T) {
+	msg := suggestHTMLFix()
+	if msg == "" {
+		t.Fatal("suggestHTMLFix should return a non-empty message")
+	}
+	if !strings.Contains(msg, "gitlink-cli auth login") {
+		t.Fatal("suggestHTMLFix should mention auth login")
 	}
 }

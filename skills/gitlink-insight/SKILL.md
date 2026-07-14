@@ -49,13 +49,13 @@ gitlink-cli pr +list --state open --format json
 gitlink-cli pr +list --state merged --format json
 
 # 4. 获取仓库文件结构（检查文档、CI 配置）
-gitlink-cli repo +tree --owner <owner> --repo <repo> --ref master --format json
+gitlink-cli repo +files --query 'filepath=&ref=master'
 
 # 5. 获取语言统计
-gitlink-cli repo +languages --owner <owner> --repo <repo> --format json
+gitlink-cli repo +languages --format json
 
 # 6. 获取贡献者列表
-gitlink-cli repo +contributors --owner <owner> --repo <repo> --format json
+gitlink-cli repo +contributors --format json
 ```
 
 ### 分析指标
@@ -131,7 +131,7 @@ gitlink-cli release +list --format json
 gitlink-cli issue +list --state open --format json
 
 # 5. 获取项目动态
-gitlink-cli api GET /:owner/:repo/activity --format json
+gitlink-cli repo +activity --format json
 ```
 
 ### 输出格式
@@ -172,7 +172,7 @@ gitlink-cli api GET /:owner/:repo/activity --format json
 
 ```bash
 # 1. 获取贡献者列表
-gitlink-cli repo +contributors --owner <owner> --repo <repo> --format json
+gitlink-cli repo +contributors --format json
 
 # 2. 获取每个贡献者的 PR
 # 通过 PR 列表按 author 过滤
@@ -249,29 +249,29 @@ gitlink-cli issue +list --state open --format json
 
 ---
 
-## Shortcut 与 Raw API 参考
+## Raw API 参考
 
 ```bash
 # 仓库信息
-gitlink-cli repo +info --owner <owner> --repo <repo> --format json
+gitlink-cli repo +info --format json
 
 # 仓库语言统计
-gitlink-cli repo +languages --owner <owner> --repo <repo> --format json
+gitlink-cli repo +languages --format json
 
 # 贡献者列表
-gitlink-cli repo +contributors --owner <owner> --repo <repo> --format json
+gitlink-cli repo +contributors --format json
 
-# 仓库动态（当前未覆盖为 shortcut，保留 Raw API）
-gitlink-cli api GET /:owner/:repo/activity --format json
+# 仓库动态
+gitlink-cli repo +activity --format json
 
 # 文件列表（检查文档/配置完整性）
-gitlink-cli repo +tree --owner <owner> --repo <repo> --ref master --format json
+gitlink-cli repo +files --query 'filepath=&ref=master'
 
 # 获取用户信息
-gitlink-cli user +info --login <user_login> --format json
+gitlink-cli user +info --login --format json
 
 # 用户贡献热力图
-gitlink-cli user +heatmap --user <user_login> --format json
+gitlink-cli user +heatmap --format json
 ```
 
 ## 注意事项
