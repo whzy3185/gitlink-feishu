@@ -315,6 +315,19 @@ gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --from issues.cs
 # Add a comment
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "Fixed"
 
+# Reply to a comment with attachments and mentions
+gitlink-cli issue +comment --owner Gitlink --repo forgeplus --number 123 -b "Thanks, please check the log" --parent-id 456 --reply-id 456 --attachment-ids 7,8 --receivers alice,bob
+
+# List comments only, or include operation records with --category all
+gitlink-cli issue +comments --owner Gitlink --repo forgeplus --number 123 --category comment --keyword fixed
+
+# Update or delete a comment
+gitlink-cli issue +comment-update --owner Gitlink --repo forgeplus --number 123 --comment-id 456 -b "Updated comment"
+gitlink-cli issue +comment-delete --owner Gitlink --repo forgeplus --number 123 --comment-id 456
+
+# List replies under a comment
+gitlink-cli issue +comment-replies --owner Gitlink --repo forgeplus --number 123 --comment-id 456
+
 # List issue assigners
 gitlink-cli issue +assigners --owner Gitlink --repo forgeplus
 

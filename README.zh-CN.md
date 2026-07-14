@@ -326,6 +326,19 @@ gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --from issues.cs
 # 添加评论
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "已修复"
 
+# 回复评论并携带附件和 @ 用户
+gitlink-cli issue +comment --owner Gitlink --repo forgeplus --number 123 -b "请查看日志" --parent-id 456 --reply-id 456 --attachment-ids 7,8 --receivers alice,bob
+
+# 列出评论；需要操作记录时可传 --category all
+gitlink-cli issue +comments --owner Gitlink --repo forgeplus --number 123 --category comment --keyword fixed
+
+# 更新或删除评论
+gitlink-cli issue +comment-update --owner Gitlink --repo forgeplus --number 123 --comment-id 456 -b "更新后的评论"
+gitlink-cli issue +comment-delete --owner Gitlink --repo forgeplus --number 123 --comment-id 456
+
+# 列出评论下的回复
+gitlink-cli issue +comment-replies --owner Gitlink --repo forgeplus --number 123 --comment-id 456
+
 # 列出 Issue 负责人
 gitlink-cli issue +assigners --owner Gitlink --repo forgeplus
 
