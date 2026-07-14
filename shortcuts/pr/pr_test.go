@@ -440,6 +440,151 @@ func TestPRDiff(t *testing.T) {
 	}
 }
 
+// --- edit ---
+
+func editServer(t *testing.T, current map[string]interface{}, put *map[string]interface{}) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/owner/repo/pulls/42.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		switch r.Method {
+		case "GET":
+			writeJSON(t, w, current)
+		case "PUT":
+			*put = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{})
+		default:
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+	}))
+}
+
+func TestPREditPreservesUnspecifiedFields(t *testing.T) {
+	var put map[string]interface{}
+	server := editServer(t, map[string]interface{}{
+		"id":    float64(42),
+		"title": "original title",
+		"body":  "original body",
+		"head":  "feature/x",
+		"base":  "master",
+		"issue": map[string]interface{}{
+			"id": float64(105),
+			"issue_tags": []interface{}{
+				map[string]interface{}{"id": float64(7), "name": "bug"},
+				map[string]interface{}{"id": float64(9), "name": "urgent"},
+			},
+		},
+	}, &put)
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "edit", map[string]string{
+		"id":   "42",
+		"body": "updated body",
+		"base": "develop",
+	})
+	if err != nil {
+		t.Fatalf("edit failed: %v", err)
+	}
+	if put == nil {
+		t.Fatal("PUT was not called")
+	}
+	assertEqual(t, put["title"], "original title")
+	assertEqual(t, put["body"], "updated body")
+	assertEqual(t, put["head"], "feature/x")
+	assertEqual(t, put["base"], "develop")
+
+	tags, ok := put["issue_tag_ids"].([]interface{})
+	if !ok || len(tags) != 2 || fmt.Sprintf("%v", tags[0]) != "7" || fmt.Sprintf("%v", tags[1]) != "9" {
+		t.Fatalf("expected preserved tag ids [7 9], got %v", put["issue_tag_ids"])
+	}
+	if _, ok := put["receivers_login"].([]interface{}); !ok {
+		t.Fatalf("expected receivers_login array, got %v", put["receivers_login"])
+	}
+}
+
+func TestPREditTagIDsOverride(t *testing.T) {
+	var put map[string]interface{}
+	server := editServer(t, map[string]interface{}{
+		"title": "keep",
+		"body":  "keep",
+		"head":  "src",
+		"base":  "master",
+		"issue": map[string]interface{}{
+			"issue_tags": []interface{}{
+				map[string]interface{}{"id": float64(7)},
+			},
+		},
+	}, &put)
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "edit", map[string]string{
+		"id":      "42",
+		"tag-ids": "3, 5",
+	})
+	if err != nil {
+		t.Fatalf("edit failed: %v", err)
+	}
+	tags, ok := put["issue_tag_ids"].([]interface{})
+	if !ok || len(tags) != 2 || fmt.Sprintf("%v", tags[0]) != "3" || fmt.Sprintf("%v", tags[1]) != "5" {
+		t.Fatalf("expected tag ids [3 5], got %v", put["issue_tag_ids"])
+	}
+}
+
+// The non-v1 detail endpoint nests the branch names under pull_request.head /
+// pull_request.base (branch-name strings), which is the shape the live API
+// actually returns; editing title-only must still preserve them.
+func TestPREditReadsNestedPullRequestFields(t *testing.T) {
+	var put map[string]interface{}
+	server := editServer(t, map[string]interface{}{
+		"pull_request": map[string]interface{}{
+			"title": "nested title",
+			"body":  "nested body",
+			"head":  "topic",
+			"base":  "main",
+		},
+		"issue": map[string]interface{}{"id": float64(1)},
+	}, &put)
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "edit", map[string]string{
+		"id":    "42",
+		"title": "new title",
+	})
+	if err != nil {
+		t.Fatalf("edit failed: %v", err)
+	}
+	assertEqual(t, put["title"], "new title")
+	assertEqual(t, put["body"], "nested body")
+	assertEqual(t, put["head"], "topic")
+	assertEqual(t, put["base"], "main")
+}
+
+func TestPREditRequiresAtLeastOneField(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("no request expected, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "edit", map[string]string{"id": "42"})
+	if err == nil {
+		t.Fatal("expected error when no edit fields are provided")
+	}
+}
+
+func TestPREditHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "edit", map[string]string{"id": "42", "title": "x"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
 // --- extractIssueID ---
 
 func TestExtractIssueID(t *testing.T) {

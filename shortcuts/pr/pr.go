@@ -1,8 +1,10 @@
 package pr
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
@@ -138,7 +140,53 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				if err := enrichPullRequestTimestamps(ctx, env); err != nil {
+				if err := enrichPullRequestClosedAt(ctx, env); err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "edit",
+			Description: tr.T("cmd.pr.edit.short"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "title", Short: "t", Usage: tr.T("flag.pr.title")},
+				{Name: "body", Short: "b", Usage: tr.T("flag.pr.body")},
+				{Name: "base", Usage: tr.T("flag.pr.base")},
+				{Name: "head", Usage: tr.T("flag.pr.head")},
+				{Name: "tag-ids", Usage: tr.T("flag.pr.tag_ids")},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				if ctx.Arg("title") == "" && ctx.Arg("body") == "" && ctx.Arg("base") == "" &&
+					ctx.Arg("head") == "" && ctx.Arg("tag-ids") == "" {
+					return fmt.Errorf("at least one of --title, --body, --base, --head, or --tag-ids is required")
+				}
+
+				// The update endpoint requires title, body, head and base together,
+				// so merge the requested changes onto the PR's current values to
+				// avoid clobbering fields the caller did not pass.
+				path := fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id)
+				current, err := ctx.CallAPI("GET", path, nil)
+				if err != nil {
+					return fmt.Errorf("fetch PR: %w", err)
+				}
+				payload := pullRequestEditPayload(ctx, current)
+				if payload["title"] == "" {
+					return fmt.Errorf("could not resolve PR title for #%s; pass --title explicitly", id)
+				}
+				if payload["head"] == "" || payload["base"] == "" {
+					return fmt.Errorf("could not resolve PR head/base branch for #%s; pass --head and --base explicitly", id)
+				}
+				env, err := ctx.CallAPI("PUT", path, payload)
+				if err != nil {
 					return err
 				}
 				return ctx.Output(env)
@@ -470,22 +518,107 @@ func extractIssueID(env *output.Envelope) (int64, error) {
 	return int64(idFloat), nil
 }
 
-func enrichPullRequestTimestamps(ctx *common.RuntimeContext, env *output.Envelope) error {
+// pullRequestEditPayload merges the caller's flags over the PR's current values.
+// The PUT endpoint requires every field, so unspecified flags fall back to the
+// values read from the prior GET to avoid wiping them.
+func pullRequestEditPayload(ctx *common.RuntimeContext, current *output.Envelope) map[string]interface{} {
+	data, _ := current.Data.(map[string]interface{})
+	return map[string]interface{}{
+		"title":           firstNonEmpty(ctx.Arg("title"), pullRequestField(data, "title", "subject", "name")),
+		"body":            firstNonEmpty(ctx.Arg("body"), pullRequestField(data, "body", "description")),
+		"head":            firstNonEmpty(ctx.Arg("head"), pullRequestField(data, "head", "pull_request_head")),
+		"base":            firstNonEmpty(ctx.Arg("base"), pullRequestField(data, "base", "pull_request_base")),
+		"issue_tag_ids":   pullRequestEditTagIDs(ctx, data),
+		"receivers_login": []string{},
+	}
+}
+
+// pullRequestEditTagIDs uses the explicitly requested --tag-ids when present,
+// otherwise preserves the tag IDs already attached to the PR.
+func pullRequestEditTagIDs(ctx *common.RuntimeContext, data map[string]interface{}) []string {
+	if raw := ctx.Arg("tag-ids"); raw != "" {
+		ids := make([]string, 0)
+		for _, part := range strings.Split(raw, ",") {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				ids = append(ids, trimmed)
+			}
+		}
+		return ids
+	}
+	for _, scope := range pullRequestFieldScopes(data) {
+		tags, ok := scope["issue_tags"].([]interface{})
+		if !ok {
+			continue
+		}
+		ids := make([]string, 0, len(tags))
+		for _, raw := range tags {
+			tag, ok := raw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if id := tagIDString(tag["id"]); id != "" {
+				ids = append(ids, id)
+			}
+		}
+		return ids
+	}
+	return []string{}
+}
+
+// pullRequestField reads the first non-empty string among the given keys across
+// the possible response scopes. The detail endpoint sometimes nests PR fields
+// under pull_request/issue rather than at the top level.
+func pullRequestField(data map[string]interface{}, keys ...string) string {
+	for _, scope := range pullRequestFieldScopes(data) {
+		for _, key := range keys {
+			if v := stringField(scope, key); v != "" {
+				return v
+			}
+		}
+	}
+	return ""
+}
+
+func pullRequestFieldScopes(data map[string]interface{}) []map[string]interface{} {
+	scopes := []map[string]interface{}{data}
+	if pr, ok := data["pull_request"].(map[string]interface{}); ok {
+		scopes = append(scopes, pr)
+	}
+	if issue, ok := data["issue"].(map[string]interface{}); ok {
+		scopes = append(scopes, issue)
+	}
+	return scopes
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func tagIDString(v interface{}) string {
+	switch id := v.(type) {
+	case string:
+		return id
+	case float64:
+		return strconv.FormatInt(int64(id), 10)
+	case json.Number:
+		return id.String()
+	default:
+		return ""
+	}
+}
+
+func enrichPullRequestClosedAt(ctx *common.RuntimeContext, env *output.Envelope) error {
 	data, ok := env.Data.(map[string]interface{})
 	if !ok {
 		return nil
 	}
 	pr, ok := data["pull_request"].(map[string]interface{})
-	if !ok {
-		return nil
-	}
-	if mergedAt := stringField(pr, "merged_at"); mergedAt != "" {
-		data["merged_at"] = mergedAt
-		if merged, ok := pr["merged"].(bool); ok {
-			data["merged"] = merged
-		}
-	}
-	if !isClosedPullRequest(pr) || stringField(pr, "closed_at") != "" {
+	if !ok || !isClosedPullRequest(pr) || stringField(pr, "closed_at") != "" {
 		return nil
 	}
 	issue, ok := data["issue"].(map[string]interface{})
