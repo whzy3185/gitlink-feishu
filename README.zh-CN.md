@@ -545,6 +545,26 @@ gitlink-cli release +update --owner Gitlink --repo forgeplus -i <version_id> -b 
 gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --dry-run
 ```
 
+### CI/CD 操作
+
+```bash
+# 查看构建列表
+gitlink-cli ci +builds --owner Gitlink --repo forgeplus
+
+# 查看构建日志
+gitlink-cli ci +logs --owner Gitlink --repo forgeplus --build <build_id>
+
+# 重启或停止构建
+gitlink-cli ci +restart --owner Gitlink --repo forgeplus --build <build_id>
+gitlink-cli ci +stop --owner Gitlink --repo forgeplus --build <build_id>
+
+# 查看 CI 授权状态并安全启停仓库 CI
+gitlink-cli ci +authorize --owner Gitlink --repo forgeplus
+gitlink-cli ci +activate --owner Gitlink --repo forgeplus --dry-run
+gitlink-cli ci +activate --owner Gitlink --repo forgeplus --yes
+gitlink-cli ci +deactivate --owner Gitlink --repo forgeplus --dry-run
+```
+
 ### 流水线管理
 
 ```bash
