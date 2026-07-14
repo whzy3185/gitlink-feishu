@@ -457,7 +457,7 @@ gitlink-cli search +users -k "zhangsan"
 
 ### 工作流命令
 
-`workflow` 提供面向维护者和 AI Agent 的只读分析能力，可用于 Issue 分流、仓库健康度评估、PR 审查摘要、仓库工作流报告和重复 Issue 候选检测。
+`workflow` 提供面向维护者和 AI Agent 的只读分析能力，可用于 Issue 分流、仓库健康度评估、PR 审查摘要、仓库工作流报告和依赖风险审计。
 
 ```bash
 # 生成单个 PR 的审查摘要
@@ -466,14 +466,14 @@ gitlink-cli workflow +pr-summary --owner Gitlink --repo gitlink-cli --number 1 -
 # 生成仓库工作流报告
 gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
 
-# 从远端只读拉取 Issue 并检测重复候选
-gitlink-cli workflow +issue-dedupe --owner Gitlink --repo gitlink-cli --limit 50 --threshold 55 --format table
+# 审计 go.mod 中的依赖风险信号
+gitlink-cli workflow +dependency-audit --from go.mod --format table
 
-# 从本地 JSON 文件检测重复候选
-gitlink-cli workflow +issue-dedupe --from issues.json --threshold 60 --format markdown
+# 输出 markdown 格式的依赖审计报告
+gitlink-cli workflow +dependency-audit --repository Gitlink/gitlink-cli --from go.mod --format markdown
 ```
 
-`workflow +issue-dedupe` 默认使用 `table` 输出，会根据标题、正文和标签的共享关键词计算相似度，帮助维护者优先确认高置信重复候选；命令只输出候选对，不会关闭、评论或修改 Issue。
+`workflow +dependency-audit` 默认使用 `table` 输出，会检查本地 replace、pseudo version、预发布版本、主版本路径不匹配、go 指令缺失或过旧等风险；命令只读取本地 `go.mod` 或 JSON 输入，不会下载模块或访问远端服务。
 
 ### Raw API
 
