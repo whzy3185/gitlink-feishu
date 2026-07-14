@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	aliasCmd "github.com/gitlink-org/gitlink-cli/cmd/alias"
 	apiCmd "github.com/gitlink-org/gitlink-cli/cmd/api"
 	authCmd "github.com/gitlink-org/gitlink-cli/cmd/auth"
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
@@ -61,6 +62,7 @@ func NewRootCmd(opts RootOptions, tr *i18n.Translator) (*cobra.Command, error) {
 	rootCmd.AddCommand(authCmd.NewAuthCmd(tr))
 	rootCmd.AddCommand(apiCmd.NewAPICmd(tr))
 	rootCmd.AddCommand(configCmd.NewConfigCmd(tr))
+	rootCmd.AddCommand(aliasCmd.NewAliasCmd(tr))
 	rootCmd.AddCommand(doctorCmd.NewDoctorCmd(tr))
 	rootCmd.AddCommand(newCompletionCmd(tr))
 	rootCmd.AddCommand(newVersionCmd(version, tr))
@@ -130,6 +132,12 @@ func Execute() error {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return err
+	}
+
+	// Rewrite argv when the first token is a saved alias. Translator resolution
+	// above still sees the raw args, so --lang is unaffected by expansion.
+	if expanded, ok := expandAlias(rootCmd, args); ok {
+		rootCmd.SetArgs(expanded)
 	}
 
 	if err := rootCmd.Execute(); err != nil {
