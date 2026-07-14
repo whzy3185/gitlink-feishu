@@ -15,6 +15,7 @@ import (
 )
 
 type Client struct {
+	NoProgress bool
 	HTTP    *http.Client
 	BaseURL string
 	Debug   bool
@@ -107,41 +108,43 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 		}
 	}
 
-	// Detect HTML responses (GitLink returns login pages when auth is missing)
-	if detectHTMLResponse(respData) {
-		msg := "服务器返回了 HTML 页面而非 JSON 数据"
-		suggestion := suggestHTMLFix()
-		return output.ErrorEnvelope(resp.StatusCode, msg, suggestion),
-			&APIError{
-				StatusCode: resp.StatusCode,
-				Code:       "HTML_RESPONSE",
-				Message:    msg + "\n" + suggestion,
-			}
-	}
-
 	// Parse JSON
 	var raw map[string]interface{}
 	if err := json.Unmarshal(respData, &raw); err != nil {
+		// Not JSON, return as-is
 		return output.SuccessEnvelope(string(respData), nil), nil
 	}
 
 	// Check GitLink error-in-body pattern
+	// Support both {"status":N, "message":"..."} and gateway {"code":N, "msg":"..."}
+	var bodyCode float64
+	var bodyMsg string
 	if status, ok := raw["status"]; ok {
-		var statusCode float64
 		switch v := status.(type) {
 		case float64:
-			statusCode = v
+			bodyCode = v
 		case int:
-			statusCode = float64(v)
+			bodyCode = float64(v)
 		}
-		if statusCode != 0 && statusCode != 200 && statusCode != 1 {
-			msg, _ := raw["message"].(string)
-			suggestion := suggestFix(int(statusCode))
-			return output.ErrorEnvelope(int(statusCode), msg, suggestion), &APIError{
-				StatusCode: int(statusCode),
-				Code:       int(statusCode),
-				Message:    msg,
-			}
+		bodyMsg, _ = raw["message"].(string)
+	} else if code, ok := raw["code"]; ok {
+		switch v := code.(type) {
+		case float64:
+			bodyCode = v
+		case int:
+			bodyCode = float64(v)
+		}
+		bodyMsg, _ = raw["msg"].(string)
+		if bodyMsg == "" {
+			bodyMsg, _ = raw["message"].(string)
+		}
+	}
+	if bodyCode != 0 && bodyCode != 200 && bodyCode != 201 && bodyCode != 204 && bodyCode != 1 {
+		suggestion := suggestFix(int(bodyCode))
+		return output.ErrorEnvelope(int(bodyCode), bodyMsg, suggestion), &APIError{
+			StatusCode: int(bodyCode),
+			Code:       int(bodyCode),
+			Message:    bodyMsg,
 		}
 	}
 
@@ -181,6 +184,10 @@ func shouldAppendJSONSuffix(path string) bool {
 			return false
 		}
 	}
+	// Wiki open API endpoints do not use .json suffix
+	if len(parts) >= 3 && parts[0] == "wiki" && parts[1] == "open" {
+		return false
+	}
 	return true
 }
 
@@ -212,41 +219,6 @@ func (c *Client) Delete(path string, query url.Values) (*output.Envelope, error)
 	return c.Do("DELETE", path, nil, query)
 }
 
-// detectHTMLResponse detects whether the response body is an HTML page instead of JSON.
-// It first strips any XML declaration (<?xml ...?>) before checking for HTML prefixes.
-func detectHTMLResponse(data []byte) bool {
-	trimmed := bytes.TrimSpace(data)
-	if len(trimmed) == 0 {
-		return false
-	}
-	// Skip leading XML declaration (e.g., <?xml version="1.0"?>)
-	if bytes.HasPrefix(trimmed, []byte("<?")) {
-		if idx := bytes.Index(trimmed, []byte("?>")); idx != -1 {
-			trimmed = bytes.TrimSpace(trimmed[idx+2:])
-		}
-	}
-	if len(trimmed) == 0 {
-		return false
-	}
-	// Check for HTML document prefixes
-	prefixes := []string{"<!DOCTYPE", "<html", "<HTML", "<!doctype"}
-	for _, p := range prefixes {
-		if bytes.HasPrefix(trimmed, []byte(p)) {
-			return true
-		}
-	}
-	return false
-}
-
-func suggestHTMLFix() string {
-	return "API 返回了 HTML 页面而非 JSON 数据。" +
-		"可能原因：\n" +
-		"  1. 未登录或 Token 已过期 → 运行 gitlink-cli auth login\n" +
-		"  2. Token 权限不足 → 在 GitLink 平台重新生成 Token\n" +
-		"  3. API 端点不存在 → 检查路径是否正确\n" +
-		"  4. 使用 Shortcut 命令替代 Raw API → 运行 gitlink-cli --help 查看可用命令"
-}
-
 func suggestFix(code int) string {
 	switch code {
 	case 401:
@@ -261,4 +233,3 @@ func suggestFix(code int) string {
 		return ""
 	}
 }
-

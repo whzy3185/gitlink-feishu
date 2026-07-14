@@ -1,6 +1,7 @@
 package issue
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -30,21 +31,35 @@ func normalizeIssueListState(state string) string {
 }
 
 type existingIssue struct {
-	Subject     string
-	Description string
-	StatusID    interface{}
-	PriorityID  interface{}
-	TagIDs      []interface{}
-	AssignerIDs []interface{}
-	BranchName  string
-	StartDate   string
-	DueDate     string
+	Subject        string
+	Description    string
+	StatusID       interface{}
+	PriorityID     interface{}
+	TagIDs         []interface{}
+	AssignerIDs    []interface{}
+	AssignedToID   interface{}
+	FixedVersionID interface{}
+	TrackerID      interface{}
+	IssueType      interface{}
+	BranchName     string
+	StartDate      string
+	DueDate        string
+}
+
+func legacyIssuePath(ctx *common.RuntimeContext, number string) string {
+	return fmt.Sprintf("%s/issues/%s", ctx.RepoPath(), number)
+}
+
+func legacyIssueEditPath(ctx *common.RuntimeContext, number string) string {
+	return legacyIssuePath(ctx, number) + "/edit"
 }
 
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		newBatchCloseShortcut(),
+		newBatchReopenShortcut(),
+		newBatchCommentShortcut(),
 		newBatchUpdateShortcut(),
 		newBatchDeleteShortcut(),
 		{
@@ -63,7 +78,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "sort-direction", Usage: tr.T("flag.sort_direction")},
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
-				{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -101,15 +115,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}
 				if sortDirection := ctx.Arg("sort-direction"); sortDirection != "" {
 					q.Set("sort_direction", sortDirection)
-				}
-				if ctx.Arg("all") == "true" {
-					items, err := ctx.PaginateAllKey(v1RepoPath(ctx)+"/issues", q, "issues")
-					if err != nil {
-						return err
-					}
-					env := common.NewListEnvelope("issues", items)
-					normalizeIssueListIDs(env)
-					return ctx.Output(env)
 				}
 				env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx)+"/issues", q)
 				if err != nil {
@@ -184,6 +189,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
+				enrichIssueView(ctx, number, env)
 				return ctx.Output(env)
 			},
 		},
@@ -192,6 +198,24 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.issue.close.short"),
 			Flags:       issueNumberFlags(),
 			Run: func(ctx *common.RuntimeContext) error {
+				return setIssueStatus(ctx, 5) // 5 = closed
+			},
+		},
+		{
+			Name:        "reopen",
+			Description: tr.T("cmd.issue.reopen.short"),
+			Flags:       issueNumberFlags(),
+			Run: func(ctx *common.RuntimeContext) error {
+				return setIssueStatus(ctx, 1) // 1 = open
+			},
+		},
+		{
+			Name:        "delete",
+			Description: tr.T("cmd.issue.delete.short"),
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "yes", Usage: tr.T("flag.issue.delete.yes"), Bool: true, Default: "false"},
+			),
+			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
@@ -199,18 +223,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				current, err := fetchExistingIssue(ctx, number)
-				if err != nil {
-					return err
+				if !parseBool(ctx.Arg("yes")) {
+					return fmt.Errorf("delete is destructive; pass --yes to confirm deleting issue #%s", number)
 				}
-
-				body := map[string]interface{}{
-					"subject":     current.Subject,
-					"description": current.Description,
-				}
-				preserveIssueMetadata(body, current)
-				body["status_id"] = 5 // 5 = closed
-				env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), body)
+				env, err := ctx.CallAPI("DELETE", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), nil)
 				if err != nil {
 					return err
 				}
@@ -311,9 +327,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "comments",
 			Description: tr.T("cmd.issue.comments.short"),
 			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "keyword", Short: "k", Usage: tr.T("flag.issue.comments_keyword")},
+				common.Flag{Name: "category", Usage: tr.T("flag.issue.comments_category")},
 				common.Flag{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				common.Flag{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
-				common.Flag{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
 			),
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -323,18 +340,71 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				path := fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number)
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
-				if ctx.Arg("all") == "true" {
-					items, err := ctx.PaginateAllKey(path, q, "journals")
-					if err != nil {
-						return err
-					}
-					return ctx.Output(common.NewListEnvelope("journals", items))
+				if keyword := ctx.Arg("keyword"); keyword != "" {
+					q.Set("keyword", keyword)
 				}
-				env, err := ctx.CallAPIWithQuery("GET", path, q)
+				if category := ctx.Arg("category"); category != "" {
+					q.Set("category", category)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number), q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "comment-edit",
+			Description: tr.T("cmd.issue.comment_edit.short"),
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "comment-id", Short: "c", Usage: tr.T("flag.issue.comment_id"), Required: true},
+				common.Flag{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
+			),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				number, err := issueNumberArg(ctx)
+				if err != nil {
+					return err
+				}
+				commentID, err := parseIssueID(ctx.Arg("comment-id"), "comment-id")
+				if err != nil {
+					return err
+				}
+				body, err := ctx.RequireArg("body")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/issues/%s/journals/%d", v1RepoPath(ctx), number, commentID), map[string]interface{}{"notes": body})
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "comment-delete",
+			Description: tr.T("cmd.issue.comment_delete.short"),
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "comment-id", Short: "c", Usage: tr.T("flag.issue.comment_id"), Required: true},
+			),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				number, err := issueNumberArg(ctx)
+				if err != nil {
+					return err
+				}
+				commentID, err := parseIssueID(ctx.Arg("comment-id"), "comment-id")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("DELETE", fmt.Sprintf("%s/issues/%s/journals/%d", v1RepoPath(ctx), number, commentID), nil)
 				if err != nil {
 					return err
 				}
@@ -458,76 +528,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
-			{
-				Name:        "journals",
-				Description: "查看 Issue 的活动日志（评论、状态变更等）",
-				Flags: []common.Flag{
-					{Name: "number", Short: "n", Usage: "Issue 编号（网页 URL 中的数字）", Required: true},
-				},
-				Run: func(ctx *common.RuntimeContext) error {
-					if err := ctx.ResolveOwnerRepo(); err != nil {
-						return err
-					}
-					number, err := ctx.RequireArg("number")
-					if err != nil {
-						return err
-					}
-					path := fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number)
-					env, err := ctx.CallAPI("GET", path, nil)
-					if err != nil {
-						return err
-					}
-					return ctx.Output(env)
-				},
-			},
-			{
-				Name:        "series-update",
-				Description: "批量更新多个 Issue 的状态（一键关闭/重开多个 Issue）",
-				Flags: []common.Flag{
-					{Name: "ids", Usage: "Issue ID 列表（逗号分隔，如 1,2,3）", Required: true},
-					{Name: "status", Short: "s", Usage: "目标状态: open / closed", Required: true},
-				},
-				Run: func(ctx *common.RuntimeContext) error {
-					if err := ctx.ResolveOwnerRepo(); err != nil {
-						return err
-					}
-					idsStr, err := ctx.RequireArg("ids")
-					if err != nil {
-						return err
-					}
-					status, err := ctx.RequireArg("status")
-					if err != nil {
-						return err
-					}
-
-					// 解析逗号分隔的 ID 列表
-					idParts := strings.Split(idsStr, ",")
-					ids := make([]int, 0, len(idParts))
-					for _, p := range idParts {
-						id, err := strconv.Atoi(strings.TrimSpace(p))
-						if err != nil {
-							return fmt.Errorf("无效的 Issue ID: %s", p)
-						}
-						ids = append(ids, id)
-					}
-
-					// 转换状态为数字
-					statusID, err := normalizeIssueStatus(status)
-					if err != nil {
-						return err
-					}
-
-					body := map[string]interface{}{
-						"ids":       ids,
-						"status_id": statusID,
-					}
-					env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/issues/series_update", body)
-					if err != nil {
-						return err
-					}
-					return ctx.Output(env)
-				},
-			},
 	}
 }
 
@@ -589,6 +589,34 @@ func normalizeIssueListIDs(env *output.Envelope) {
 	}
 }
 
+// setIssueStatus flips an issue to statusID. The v1 PATCH is read-modify-write,
+// so the current issue is fetched and its metadata replayed to avoid clearing
+// fields that were not part of the status change.
+func setIssueStatus(ctx *common.RuntimeContext, statusID int) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	number, err := issueNumberArg(ctx)
+	if err != nil {
+		return err
+	}
+	current, err := fetchExistingIssue(ctx, number)
+	if err != nil {
+		return err
+	}
+	body := map[string]interface{}{
+		"subject":     current.Subject,
+		"description": current.Description,
+	}
+	preserveIssueMetadata(body, current)
+	body["status_id"] = statusID
+	env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), body)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
 func fetchExistingIssue(ctx *common.RuntimeContext, number string) (*existingIssue, error) {
 	getEnv, err := ctx.CallAPI("GET", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), nil)
 	if err != nil {
@@ -603,16 +631,24 @@ func fetchExistingIssue(ctx *common.RuntimeContext, number string) (*existingIss
 		return nil, fmt.Errorf("failed to parse issue subject")
 	}
 	description, _ := issueData["description"].(string)
+	editData, err := fetchLegacyIssueEdit(ctx, number)
+	if err != nil {
+		return nil, fmt.Errorf("fetch issue edit metadata: %w", err)
+	}
 	return &existingIssue{
-		Subject:     subject,
-		Description: description,
-		StatusID:    nestedIssueID(issueData, "status"),
-		PriorityID:  nestedIssueID(issueData, "priority"),
-		TagIDs:      issueObjectIDs(issueData, "tags", "issue_tags"),
-		AssignerIDs: issueObjectIDs(issueData, "assigners"),
-		BranchName:  stringField(issueData, "branch_name"),
-		StartDate:   stringField(issueData, "start_date"),
-		DueDate:     stringField(issueData, "due_date"),
+		Subject:        subject,
+		Description:    description,
+		StatusID:       firstNonNil(nestedIssueID(issueData, "status"), editData["status_id"]),
+		PriorityID:     firstNonNil(nestedIssueID(issueData, "priority"), editData["priority_id"]),
+		TagIDs:         firstNonEmptyIDs(issueObjectIDs(issueData, "tags", "issue_tags"), issueValueIDs(editData, "issue_tags")),
+		AssignerIDs:    issueObjectIDs(issueData, "assigners"),
+		AssignedToID:   firstNonNil(issueData["assigned_to_id"], editData["assigned_to_id"]),
+		FixedVersionID: firstNonNil(issueData["fixed_version_id"], editData["fixed_version_id"]),
+		TrackerID:      firstNonNil(issueData["tracker_id"], editData["tracker_id"], nestedIssueID(issueData, "tracker")),
+		IssueType:      firstNonNil(issueData["issue_type"], editData["issue_type"]),
+		BranchName:     firstNonEmptyString(stringField(issueData, "branch_name"), stringField(editData, "branch_name")),
+		StartDate:      firstNonEmptyString(stringField(issueData, "start_date"), stringField(editData, "start_date")),
+		DueDate:        firstNonEmptyString(stringField(issueData, "due_date"), stringField(editData, "due_date")),
 	}, nil
 }
 
@@ -628,6 +664,18 @@ func preserveIssueMetadata(body map[string]interface{}, issue *existingIssue) {
 	}
 	if len(issue.AssignerIDs) > 0 {
 		body["assigner_ids"] = issue.AssignerIDs
+	}
+	if issue.AssignedToID != nil {
+		body["assigned_to_id"] = issue.AssignedToID
+	}
+	if issue.FixedVersionID != nil {
+		body["fixed_version_id"] = issue.FixedVersionID
+	}
+	if issue.TrackerID != nil {
+		body["tracker_id"] = issue.TrackerID
+	}
+	if issue.IssueType != nil {
+		body["issue_type"] = issue.IssueType
 	}
 	if issue.BranchName != "" {
 		body["branch_name"] = issue.BranchName
@@ -650,12 +698,17 @@ func nestedIssueID(data map[string]interface{}, key string) interface{} {
 
 func issueObjectIDs(data map[string]interface{}, keys ...string) []interface{} {
 	for _, key := range keys {
-		items, ok := data[key].([]interface{})
+		items, ok := interfaceSlice(data[key])
 		if !ok {
 			continue
 		}
 		ids := make([]interface{}, 0, len(items))
 		for _, item := range items {
+			switch value := item.(type) {
+			case float64, int, int64, string:
+				ids = append(ids, value)
+				continue
+			}
 			obj, ok := item.(map[string]interface{})
 			if !ok {
 				continue
@@ -671,9 +724,197 @@ func issueObjectIDs(data map[string]interface{}, keys ...string) []interface{} {
 	return nil
 }
 
+func issueObjectNames(data map[string]interface{}, key string) []string {
+	items, ok := interfaceSlice(data[key])
+	if !ok {
+		return nil
+	}
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		obj, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if name, ok := obj["name"].(string); ok && name != "" {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	return names
+}
+
 func stringField(data map[string]interface{}, key string) string {
 	value, _ := data[key].(string)
 	return value
+}
+
+func mapField(data map[string]interface{}, key string) map[string]interface{} {
+	item, _ := data[key].(map[string]interface{})
+	return item
+}
+
+func interfaceSlice(value interface{}) ([]interface{}, bool) {
+	items, ok := value.([]interface{})
+	if ok {
+		return items, true
+	}
+	switch typed := value.(type) {
+	case []map[string]interface{}:
+		items = make([]interface{}, 0, len(typed))
+		for _, item := range typed {
+			items = append(items, item)
+		}
+		return items, true
+	}
+	return nil, false
+}
+
+func issueValueIDs(data map[string]interface{}, keys ...string) []interface{} {
+	return issueObjectIDs(data, keys...)
+}
+
+func firstNonNil(values ...interface{}) interface{} {
+	for _, value := range values {
+		if !isNilValue(value) {
+			return value
+		}
+	}
+	return nil
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstNonEmptyIDs(values ...[]interface{}) []interface{} {
+	for _, ids := range values {
+		if len(ids) > 0 {
+			return ids
+		}
+	}
+	return nil
+}
+
+func isNilValue(value interface{}) bool {
+	if value == nil {
+		return true
+	}
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		return len(typed) == 0
+	}
+	return false
+}
+
+func fetchLegacyIssueDetail(ctx *common.RuntimeContext, number string) (map[string]interface{}, error) {
+	return fetchIssueMap(ctx, legacyIssuePath(ctx, number), "failed to parse legacy issue detail")
+}
+
+func fetchLegacyIssueEdit(ctx *common.RuntimeContext, number string) (map[string]interface{}, error) {
+	return fetchIssueMap(ctx, legacyIssueEditPath(ctx, number), "failed to parse legacy issue edit data")
+}
+
+func fetchIssueMap(ctx *common.RuntimeContext, path, parseErr string) (map[string]interface{}, error) {
+	env, err := ctx.CallAPI("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return nil, errors.New(parseErr)
+	}
+	return data, nil
+}
+
+func enrichIssueView(ctx *common.RuntimeContext, number string, env *output.Envelope) {
+	if env == nil {
+		return
+	}
+	issueData, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return
+	}
+	legacyDetail, _ := fetchLegacyIssueDetail(ctx, number)
+	legacyEdit, _ := fetchLegacyIssueEdit(ctx, number)
+	env.Data = mergeIssueViewData(issueData, legacyDetail, legacyEdit)
+}
+
+func mergeIssueViewData(v1Data, legacyDetail, legacyEdit map[string]interface{}) map[string]interface{} {
+	issue := cloneIssueMap(v1Data)
+	if issue == nil {
+		return v1Data
+	}
+
+	if number := firstNonNil(issue["number"], issue["project_issues_index"], legacyDetail["project_issues_index"]); number != nil {
+		issue["number"] = number
+	}
+	if databaseID := firstNonNil(issue["id"], legacyDetail["id"]); databaseID != nil {
+		issue["database_id"] = databaseID
+		delete(issue, "id")
+	}
+
+	status := firstNonNil(mapField(issue, "status"), mapField(legacyDetail, "issue_status"))
+	if status != nil {
+		issue["status"] = status
+		if statusMap, ok := status.(map[string]interface{}); ok {
+			if name := stringField(statusMap, "name"); name != "" {
+				issue["status_name"] = name
+			}
+		}
+	}
+	if priority := firstNonNil(mapField(issue, "priority"), mapField(legacyDetail, "priority")); priority != nil {
+		issue["priority"] = priority
+		if priorityMap, ok := priority.(map[string]interface{}); ok {
+			if name := stringField(priorityMap, "name"); name != "" {
+				issue["priority_name"] = name
+			}
+		}
+	}
+	if tracker := firstNonNil(mapField(issue, "tracker"), mapField(legacyDetail, "tracker")); tracker != nil {
+		issue["tracker"] = tracker
+	}
+	if trackerID := firstNonNil(issue["tracker_id"], nestedIssueID(issue, "tracker"), nestedIssueID(legacyDetail, "tracker"), legacyEdit["tracker_id"]); trackerID != nil {
+		issue["tracker_id"] = trackerID
+	}
+	if issueType := firstNonNil(issue["issue_type"], legacyDetail["issue_type"], legacyEdit["issue_type"]); issueType != nil {
+		issue["issue_type"] = issueType
+	}
+	if assignedToID := firstNonNil(issue["assigned_to_id"], legacyDetail["assigned_to_id"], legacyEdit["assigned_to_id"]); assignedToID != nil {
+		issue["assigned_to_id"] = assignedToID
+	}
+	if fixedVersionID := firstNonNil(issue["fixed_version_id"], legacyDetail["fixed_version_id"], legacyDetail["version_id"], legacyEdit["fixed_version_id"]); fixedVersionID != nil {
+		issue["fixed_version_id"] = fixedVersionID
+	}
+	if versionID := firstNonNil(issue["version_id"], legacyDetail["version_id"], legacyEdit["fixed_version_id"]); versionID != nil {
+		issue["version_id"] = versionID
+	}
+
+	if tagIDs := firstNonEmptyIDs(issueObjectIDs(issue, "tags", "issue_tags"), issueObjectIDs(legacyDetail, "issue_tags"), issueValueIDs(legacyEdit, "issue_tags")); len(tagIDs) > 0 {
+		issue["issue_tag_ids"] = tagIDs
+	}
+	if tagNames := issueObjectNames(legacyDetail, "issue_tags"); len(tagNames) > 0 {
+		issue["issue_tag_names"] = tagNames
+	}
+
+	return issue
+}
+
+func cloneIssueMap(data map[string]interface{}) map[string]interface{} {
+	if data == nil {
+		return nil
+	}
+	cloned := make(map[string]interface{}, len(data))
+	for key, value := range data {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func normalizeIssueStatus(state string) (interface{}, error) {
@@ -727,6 +968,9 @@ func applyIssueMetadataArgs(ctx *common.RuntimeContext, body map[string]interfac
 			return err
 		}
 		body["assigner_ids"] = ids
+		if len(ids) == 1 {
+			body["assigned_to_id"] = ids[0]
+		}
 	}
 	if branch := ctx.Arg("branch"); branch != "" {
 		body["branch_name"] = branch

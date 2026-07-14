@@ -26,26 +26,11 @@ func Shortcuts() []*common.Shortcut {
 		{
 			Name:        "list",
 			Description: "List repository members",
-			Flags: []common.Flag{
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
-				{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
-			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				q := url.Values{}
-				q.Set("page", ctx.Arg("page"))
-				q.Set("limit", ctx.Arg("limit"))
-				if ctx.Arg("all") == "true" {
-					items, err := ctx.PaginateAllKey(collaboratorsV1Path(ctx), q, "collaborators")
-					if err != nil {
-						return err
-					}
-					return ctx.Output(common.NewListEnvelope("collaborators", items))
-				}
-				env, err := ctx.CallAPIWithQuery("GET", collaboratorsV1Path(ctx), q)
+				env, err := ctx.CallAPI("GET", collaboratorsPath(ctx), nil)
 				if err != nil {
 					return err
 				}
@@ -208,7 +193,86 @@ func Shortcuts() []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "apply",
+			Description: "Apply to join a repository by invite code",
+			Flags: []common.Flag{
+				{Name: "code", Short: "c", Usage: "Project invite code", Required: true},
+				{Name: "role", Short: "r", Usage: "Requested role: manager, developer, or reporter", Required: true},
+				{Name: "dry-run", Usage: "Preview the join application without submitting it", Bool: true, Default: "false"},
+			},
+			Run: runApply,
+		},
+		{
+			Name:        "quit",
+			Description: "Quit the current repository membership",
+			Flags: []common.Flag{
+				{Name: "yes", Usage: "Confirm quitting the repository", Bool: true, Default: "false"},
+				{Name: "dry-run", Usage: "Preview the quit request without leaving the repository", Bool: true, Default: "false"},
+			},
+			Run: runQuit,
+		},
 	}
+}
+
+func runApply(ctx *common.RuntimeContext) error {
+	code, err := ctx.RequireArg("code")
+	if err != nil {
+		return err
+	}
+	role, err := normalizeInviteRole(ctx.Arg("role"))
+	if err != nil {
+		return err
+	}
+	body := map[string]interface{}{
+		"applied_project": map[string]interface{}{
+			"code": code,
+			"role": role,
+		},
+	}
+	path := "/applied_projects"
+	if parseDryRun(ctx.Arg("dry-run")) {
+		return ctx.OutputData(map[string]interface{}{
+			"dry_run": true,
+			"action":  "apply_project",
+			"method":  "POST",
+			"path":    path,
+			"body":    body,
+		})
+	}
+	env, err := ctx.CallAPI("POST", path, body)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runQuit(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	path := ctx.RepoPath() + "/quit"
+	if parseDryRun(ctx.Arg("dry-run")) {
+		return ctx.OutputData(map[string]interface{}{
+			"dry_run":    true,
+			"action":     "quit_project",
+			"method":     "POST",
+			"path":       path,
+			"repository": fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+		})
+	}
+	yes, err := parseBoolArgDefaultFalse("yes", ctx.Arg("yes"))
+	if err != nil {
+		return err
+	}
+	if !yes {
+		return fmt.Errorf("quitting a repository requires --yes; use --dry-run to preview")
+	}
+	env, err := ctx.CallAPI("POST", path, nil)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
 }
 
 func runBatchAdd(ctx *common.RuntimeContext) error {
@@ -269,12 +333,6 @@ func collaboratorsPath(ctx *common.RuntimeContext) string {
 	return fmt.Sprintf("/%s/%s/collaborators", ctx.Owner, ctx.Repo)
 }
 
-// collaboratorsV1Path is the v1 read endpoint, which supports pagination and
-// does not require admin permission (the legacy path rejects non-admins).
-func collaboratorsV1Path(ctx *common.RuntimeContext) string {
-	return fmt.Sprintf("/v1/%s/%s/collaborators", ctx.Owner, ctx.Repo)
-}
-
 func collaboratorsRemovePath(ctx *common.RuntimeContext) string {
 	return fmt.Sprintf("%s/remove", collaboratorsPath(ctx))
 }
@@ -321,6 +379,13 @@ func parseBoolArg(name, value string) (bool, error) {
 	default:
 		return false, fmt.Errorf("invalid --%s value %q: use true or false", name, value)
 	}
+}
+
+func parseBoolArgDefaultFalse(name, value string) (bool, error) {
+	if strings.TrimSpace(value) == "" {
+		return false, nil
+	}
+	return parseBoolArg(name, value)
 }
 
 func parseDryRun(value string) bool {

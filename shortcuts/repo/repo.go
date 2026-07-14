@@ -1,12 +1,16 @@
 package repo
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
+	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -21,7 +25,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "category", Short: "c", Usage: tr.T("flag.repo.category"), Default: "manage"},
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
-				{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				user := ctx.Arg("user")
@@ -36,18 +39,56 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if user != "" {
 					path = fmt.Sprintf("/users/%s/projects", user)
 				}
-				if ctx.Arg("all") == "true" {
-					items, err := ctx.PaginateAllKey(path, q, "projects")
-					if err != nil {
-						return err
-					}
-					return ctx.Output(common.NewListEnvelope("projects", items))
-				}
 				env, err := ctx.CallAPIWithQuery("GET", path, q)
 				if err != nil {
 					return err
 				}
 				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "clone",
+			Description: tr.T("cmd.repo.clone.short"),
+			Long:        tr.T("cmd.repo.clone.long"),
+			Flags: []common.Flag{
+				{Name: "dir", Short: "d", Usage: tr.T("flag.repo.clone_dir")},
+				{Name: "branch", Short: "b", Usage: tr.T("flag.repo.clone_branch")},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath(), nil)
+				if err != nil {
+					return err
+				}
+				data, _ := env.Data.(map[string]interface{})
+				cloneURL, _ := data["clone_url"].(string)
+				if cloneURL == "" {
+					return errors.New(tr.T("error.repo.clone_url_missing"))
+				}
+				args := []string{"clone", cloneURL}
+				if branch := ctx.Arg("branch"); branch != "" {
+					args = append(args, "--branch", branch)
+				}
+				if dir := ctx.Arg("dir"); dir != "" {
+					args = append(args, dir)
+				}
+				gitCmd := exec.Command("git", args...)
+				gitCmd.Stdout = os.Stderr
+				gitCmd.Stderr = os.Stderr
+				if err := gitCmd.Run(); err != nil {
+					return fmt.Errorf("git clone failed: %w", err)
+				}
+				dest := ctx.Arg("dir")
+				if dest == "" {
+					dest = strings.TrimSuffix(cloneURL[strings.LastIndex(cloneURL, "/")+1:], ".git")
+				}
+				return ctx.Output(output.SuccessEnvelope(map[string]interface{}{
+					"message":   "cloned",
+					"clone_url": cloneURL,
+					"dir":       dest,
+				}, nil))
 			},
 		},
 		{
@@ -66,20 +107,20 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "readme",
-			Description: "Show repository README content",
+			Description: tr.T("cmd.repo.readme.short"),
 			Flags: []common.Flag{
-				{Name: "ref", Usage: "Branch, tag, or commit SHA"},
-				{Name: "path", Usage: "README directory path"},
+				{Name: "ref", Usage: tr.T("flag.repo.readme_ref")},
+				{Name: "path", Usage: tr.T("flag.repo.readme_path")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
 				q := url.Values{}
-				if ref := ctx.Arg("ref"); ref != "" {
+				if ref := strings.TrimSpace(ctx.Arg("ref")); ref != "" {
 					q.Set("ref", ref)
 				}
-				if path := ctx.Arg("path"); path != "" {
+				if path := strings.Trim(strings.TrimSpace(ctx.Arg("path")), "/"); path != "" {
 					q.Set("filepath", path)
 				}
 				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/readme", q)
@@ -90,25 +131,33 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "file",
+			Description: "Show repository file content",
+			Flags: []common.Flag{
+				{Name: "path", Short: "p", Usage: "Repository file path", Required: true},
+				{Name: "ref", Short: "r", Usage: "Branch, tag, or commit SHA", Default: "master"},
+				{Name: "content-only", Usage: "Output file content only", Bool: true, Default: "false"},
+			},
+			Run: runFile,
+		},
+		{
 			Name:        "tree",
 			Description: tr.T("cmd.repo.tree.short"),
 			Flags: []common.Flag{
 				{Name: "path", Short: "p", Usage: tr.T("flag.repo.tree.path")},
-				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.tree.ref"), Default: "master"},
+				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.tree.ref")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
 				q := url.Values{}
-				ref := ctx.Arg("ref")
-				if ref == "" {
-					ref = "master"
-				}
 				if path := ctx.Arg("path"); path != "" {
 					q.Set("filepath", path)
 				}
-				q.Set("ref", ref)
+				if ref := ctx.Arg("ref"); ref != "" {
+					q.Set("ref", ref)
+				}
 				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
 				if err != nil {
 					return err
@@ -117,89 +166,33 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "files",
-			Description: tr.T("cmd.repo.files.short"),
+			Name:        "blame",
+			Description: tr.T("cmd.repo.blame.short"),
 			Flags: []common.Flag{
-				{Name: "search", Short: "s", Usage: tr.T("flag.repo.files.search")},
-				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.ref")},
+				{Name: "path", Short: "p", Usage: tr.T("flag.repo.blame.path"), Required: true},
+				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.tree.ref"), Default: "master"},
 			},
-			Run: runFiles,
-		},
-		{
-			Name:        "commits",
-			Description: tr.T("cmd.repo.commits.short"),
-			Flags: []common.Flag{
-				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.ref")},
-				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
-				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				path, err := ctx.RequireArg("path")
+				if err != nil {
+					return err
+				}
+				ref := ctx.Arg("ref")
+				if ref == "" {
+					ref = "master"
+				}
+				q := url.Values{}
+				q.Set("filepath", path)
+				q.Set("sha", ref)
+				env, err := ctx.CallAPIWithQuery("GET", "/v1"+ctx.RepoPath()+"/blame", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
 			},
-			Run: runCommits,
-		},
-		{
-			Name:        "commit-files",
-			Description: tr.T("cmd.repo.commit_files.short"),
-			Flags: []common.Flag{
-				{Name: "sha", Short: "s", Usage: tr.T("flag.repo.commit_sha"), Required: true},
-				{Name: "file", Short: "f", Usage: tr.T("flag.repo.file")},
-				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
-				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
-			},
-			Run: runCommitFiles,
-		},
-		{
-			Name:        "commit-diff",
-			Description: tr.T("cmd.repo.commit_diff.short"),
-			Flags: []common.Flag{
-				{Name: "sha", Short: "s", Usage: tr.T("flag.repo.commit_sha"), Required: true},
-			},
-			Run: runCommitDiff,
-		},
-		{
-			Name:        "tags",
-			Description: tr.T("cmd.repo.tags.short"),
-			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: tr.T("flag.repo.tag_name_filter")},
-				{Name: "only-name", Usage: tr.T("flag.repo.only_name"), Default: "false"},
-				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
-				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
-			},
-			Run: runTags,
-		},
-		{
-			Name:        "tag",
-			Description: tr.T("cmd.repo.tag.short"),
-			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: tr.T("flag.repo.tag_name"), Required: true},
-			},
-			Run: runTag,
-		},
-		{
-			Name:        "delete-tag",
-			Description: tr.T("cmd.repo.delete_tag.short"),
-			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: tr.T("flag.repo.tag_name"), Required: true},
-				{Name: "dry-run", Usage: tr.T("flag.repo.delete_tag_dry_run"), Bool: true, Default: "false"},
-				{Name: "yes", Usage: tr.T("flag.repo.delete_tag_yes"), Bool: true, Default: "false"},
-			},
-			Run: runDeleteTag,
-		},
-		{
-			Name:        "batch-commit",
-			Description: tr.T("cmd.repo.batch_commit.short"),
-			Flags: []common.Flag{
-				{Name: "branch", Short: "b", Usage: tr.T("flag.repo.batch_branch"), Required: true},
-				{Name: "message", Short: "m", Usage: tr.T("flag.repo.batch_message"), Required: true},
-				{Name: "files", Short: "f", Usage: tr.T("flag.repo.batch_files"), Required: true},
-				{Name: "new-branch", Usage: tr.T("flag.repo.batch_new_branch")},
-				{Name: "encoding", Usage: tr.T("flag.repo.batch_encoding"), Default: "text"},
-				{Name: "author-name", Usage: tr.T("flag.repo.author_name")},
-				{Name: "author-email", Usage: tr.T("flag.repo.author_email")},
-				{Name: "committer-name", Usage: tr.T("flag.repo.committer_name")},
-				{Name: "committer-email", Usage: tr.T("flag.repo.committer_email")},
-				{Name: "dry-run", Usage: tr.T("flag.repo.batch_dry_run"), Bool: true, Default: "false"},
-				{Name: "yes", Usage: tr.T("flag.repo.batch_yes"), Bool: true, Default: "false"},
-			},
-			Run: runBatchCommit,
 		},
 		{
 			Name:        "languages",
@@ -210,6 +203,42 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "contributors",
 			Description: "List repository contributors",
 			Run:         runContributors,
+		},
+		{
+			Name:        "activity",
+			Description: tr.T("cmd.repo.activity.short"),
+			Flags: []common.Flag{
+				{Name: "type", Short: "t", Usage: tr.T("flag.repo.activity.type")},
+				{Name: "status", Short: "s", Usage: tr.T("flag.repo.activity.status")},
+				{Name: "time", Usage: tr.T("flag.repo.activity.time")},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				if trendType := ctx.Arg("type"); trendType != "" {
+					q.Set("type", trendType)
+				}
+				if status := ctx.Arg("status"); status != "" {
+					q.Set("status", status)
+				}
+				if timeDays := ctx.Arg("time"); timeDays != "" {
+					if _, err := strconv.Atoi(timeDays); err != nil {
+						return fmt.Errorf("--time must be an integer number of days, got %q", timeDays)
+					}
+					q.Set("time", timeDays)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/activity", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
 		},
 		{
 			Name:        "contributor-stats",
@@ -246,27 +275,20 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "forks",
-			Description: "List repository forks",
-			Flags: []common.Flag{
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
-				{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
+			Description: tr.T("cmd.repo.forks.short"),
+			Flags:       communityListFlags(),
+			Run: func(ctx *common.RuntimeContext) error {
+				return runCommunityList(ctx, "forks")
 			},
+		},
+		{
+			Name:        "top-counts",
+			Description: tr.T("cmd.repo.top_counts.short"),
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				q := url.Values{}
-				q.Set("page", ctx.Arg("page"))
-				q.Set("limit", ctx.Arg("limit"))
-				if ctx.Arg("all") == "true" {
-					items, err := ctx.PaginateAllKey(ctx.RepoPath()+"/forks", q, "users")
-					if err != nil {
-						return err
-					}
-					return ctx.Output(common.NewListEnvelope("users", items))
-				}
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/forks", q)
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/top_counts", nil)
 				if err != nil {
 					return err
 				}
@@ -321,12 +343,12 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				// Get current user login for the create path
 				userEnv, err := ctx.CallAPI("GET", "/users/me", nil)
 				if err != nil {
-					return fmt.Errorf("获取当前用户信息失败: %w", err)
+					return fmt.Errorf("failed to get current user: %w", err)
 				}
 				userData, _ := userEnv.Data.(map[string]interface{})
 				login, _ := userData["login"].(string)
 				if login == "" {
-					return fmt.Errorf("无法确定当前用户")
+					return fmt.Errorf("cannot determine current user login")
 				}
 				userID, _ := userData["user_id"].(float64)
 				body := map[string]interface{}{
@@ -361,6 +383,90 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+
+		{
+			Name:        "transfer-orgs",
+			Description: tr.T("cmd.repo.transfer_orgs.short"),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", repoTransferPath(ctx, "organizations"), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "transfer",
+			Description: tr.T("cmd.repo.transfer.short"),
+			Flags: []common.Flag{
+				{Name: "target-owner", Usage: tr.T("flag.repo.target_owner"), Required: true},
+				{Name: "dry-run", Usage: tr.T("flag.repo.transfer_dry_run"), Bool: true, Default: "false"},
+				{Name: "yes", Usage: tr.T("flag.repo.transfer_yes"), Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				targetOwner, err := ctx.RequireArg("target-owner")
+				if err != nil {
+					return err
+				}
+				targetOwner = strings.TrimSpace(targetOwner)
+				if targetOwner == "" {
+					return fmt.Errorf("required flag --target-owner is missing")
+				}
+				payload := map[string]interface{}{"owner_name": targetOwner}
+				path := repoTransferPath(ctx, "")
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"dry_run": true,
+						"method":  "POST",
+						"path":    path,
+						"payload": payload,
+					})
+				}
+				if err := requireRepoTransferConfirmation(ctx, "transfer"); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("POST", path, payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "transfer-cancel",
+			Description: tr.T("cmd.repo.transfer_cancel.short"),
+			Flags: []common.Flag{
+				{Name: "dry-run", Usage: tr.T("flag.repo.transfer_cancel_dry_run"), Bool: true, Default: "false"},
+				{Name: "yes", Usage: tr.T("flag.repo.transfer_yes"), Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				path := repoTransferPath(ctx, "cancel")
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"dry_run": true,
+						"method":  "POST",
+						"path":    path,
+					})
+				}
+				if err := requireRepoTransferConfirmation(ctx, "transfer-cancel"); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("POST", path, nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
 		{
 			Name:        "delete",
 			Description: tr.T("cmd.repo.delete.short"),
@@ -375,117 +481,22 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
-		{
-			Name:        "languages",
-			Description: "Show language breakdown of a repository",
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/languages", nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "contributors",
-			Description: "List contributors of a repository",
-			Flags: []common.Flag{
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("page", ctx.Arg("page"))
-				q.Set("limit", ctx.Arg("limit"))
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/contributors", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "files",
-			Description: "List files in a repository directory",
-			Flags: []common.Flag{
-				{Name: "ref", Short: "r", Usage: "Branch, tag, or commit SHA"},
-				{Name: "path", Short: "p", Usage: "Directory path (default: repository root)"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				q := url.Values{}
-				if ref := ctx.Arg("ref"); ref != "" {
-					q.Set("ref", ref)
-				}
-				if p := ctx.Arg("path"); p != "" {
-					q.Set("filepath", p)
-				}
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/files", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "tags",
-			Description: "List tags of a repository",
-			Flags: []common.Flag{
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("page", ctx.Arg("page"))
-				q.Set("limit", ctx.Arg("limit"))
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/tags", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "commits",
-			Description: "List commits of a repository",
-			Flags: []common.Flag{
-				{Name: "sha", Short: "s", Usage: "Branch name, tag, or commit SHA"},
-				{Name: "path", Short: "p", Usage: "Filter commits by file path"},
-				{Name: "page", Short: "P", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("page", ctx.Arg("page"))
-				q.Set("limit", ctx.Arg("limit"))
-				if sha := ctx.Arg("sha"); sha != "" {
-					q.Set("sha", sha)
-				}
-				if p := ctx.Arg("path"); p != "" {
-					q.Set("path", p)
-				}
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/commits", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
 	}
+}
+
+func repoTransferPath(ctx *common.RuntimeContext, action string) string {
+	base := ctx.RepoPath() + "/applied_transfer_projects"
+	if action == "" {
+		return base
+	}
+	return fmt.Sprintf("%s/%s", base, action)
+}
+
+func requireRepoTransferConfirmation(ctx *common.RuntimeContext, shortcut string) error {
+	if ctx.Arg("yes") == "true" {
+		return nil
+	}
+	return fmt.Errorf("refusing to run repo +%s without --yes; use --dry-run to preview the request first", shortcut)
 }
 
 func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
@@ -493,173 +504,6 @@ func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
 		return translators[0]
 	}
 	return i18n.Default()
-}
-
-func runFiles(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	q := url.Values{}
-	setRepoQueryIfPresent(q, "search", ctx.Arg("search"))
-	setRepoQueryIfPresent(q, "ref", ctx.Arg("ref"))
-	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/files", q)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func runCommits(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	q := url.Values{}
-	q.Set("page", firstRepoValue(ctx.Arg("page"), "1"))
-	q.Set("limit", firstRepoValue(ctx.Arg("limit"), "20"))
-	setRepoQueryIfPresent(q, "sha", ctx.Arg("ref"))
-	env, err := ctx.CallAPIWithQuery("GET", "/v1"+ctx.RepoPath()+"/commits", q)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func runCommitFiles(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	sha, err := ctx.RequireArg("sha")
-	if err != nil {
-		return err
-	}
-	q := url.Values{}
-	if file := strings.TrimSpace(ctx.Arg("file")); file != "" {
-		q.Set("filepath", file)
-	} else {
-		q.Set("page", firstRepoValue(ctx.Arg("page"), "1"))
-		q.Set("limit", firstRepoValue(ctx.Arg("limit"), "20"))
-	}
-	env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("/v1%s/commits/%s/files", ctx.RepoPath(), url.PathEscape(sha)), q)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func runCommitDiff(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	sha, err := ctx.RequireArg("sha")
-	if err != nil {
-		return err
-	}
-	env, err := ctx.CallAPI("GET", fmt.Sprintf("/v1%s/commits/%s/diff", ctx.RepoPath(), url.PathEscape(sha)), nil)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func runTags(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	q := url.Values{}
-	if name := strings.TrimSpace(ctx.Arg("name")); name != "" {
-		q.Set("name", name)
-	}
-	onlyName := strings.TrimSpace(ctx.Arg("only-name"))
-	if onlyName != "" && onlyName != "false" {
-		q.Set("only_name", onlyName)
-	}
-	if len(q) > 0 {
-		env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/tags", q)
-		if err != nil {
-			return err
-		}
-		return ctx.Output(env)
-	}
-	q.Set("page", firstRepoValue(ctx.Arg("page"), "1"))
-	q.Set("limit", firstRepoValue(ctx.Arg("limit"), "20"))
-	env, err := ctx.CallAPIWithQuery("GET", "/v1"+ctx.RepoPath()+"/tags", q)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func runTag(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	name, err := ctx.RequireArg("name")
-	if err != nil {
-		return err
-	}
-	env, err := ctx.CallAPI("GET", fmt.Sprintf("/v1%s/tags/%s", ctx.RepoPath(), url.PathEscape(name)), nil)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func runDeleteTag(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	name, err := ctx.RequireArg("name")
-	if err != nil {
-		return err
-	}
-	path := fmt.Sprintf("/v1%s/tags/%s", ctx.RepoPath(), url.PathEscape(name))
-	if ctx.Arg("dry-run") == "true" {
-		return ctx.OutputData(map[string]interface{}{
-			"dry_run":    true,
-			"action":     "delete_tag",
-			"method":     "DELETE",
-			"path":       path,
-			"repository": fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
-			"tag":        name,
-		})
-	}
-	if ctx.Arg("yes") != "true" {
-		return fmt.Errorf("tag deletion is destructive; run --dry-run first, then pass --yes to execute")
-	}
-	env, err := ctx.CallAPI("DELETE", path, nil)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func runBatchCommit(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	payload, err := batchCommitPayload(ctx)
-	if err != nil {
-		return err
-	}
-	path := "/v1" + ctx.RepoPath() + "/contents/batch"
-	if ctx.Arg("dry-run") == "true" {
-		return ctx.OutputData(map[string]interface{}{
-			"dry_run":    true,
-			"action":     "batch_commit",
-			"method":     "POST",
-			"path":       path,
-			"repository": fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
-			"payload":    payload,
-		})
-	}
-	if ctx.Arg("yes") != "true" {
-		return fmt.Errorf("batch file commit changes repository content; run --dry-run first, then pass --yes to execute")
-	}
-	env, err := ctx.CallAPI("POST", path, payload)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
 }
 
 func runLanguages(ctx *common.RuntimeContext) error {
@@ -682,6 +526,44 @@ func runContributors(ctx *common.RuntimeContext) error {
 		return err
 	}
 	return ctx.Output(env)
+}
+
+func runFile(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	path, err := normalizeRepoFilePath(ctx)
+	if err != nil {
+		return err
+	}
+
+	ref := strings.TrimSpace(ctx.Arg("ref"))
+	if ref == "" {
+		ref = "master"
+	}
+
+	q := url.Values{}
+	q.Set("filepath", path)
+	q.Set("ref", ref)
+
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
+	if err != nil {
+		return err
+	}
+
+	entry, err := extractRepoFileEntry(env.Data, path)
+	if err != nil {
+		return err
+	}
+	if ctx.Arg("content-only") == "true" {
+		content, _ := entry["content"].(string)
+		if content == "" {
+			return fmt.Errorf("file response did not include content for %q", path)
+		}
+		return ctx.OutputData(content)
+	}
+
+	return ctx.OutputData(buildRepoFileResult(entry, path, ref))
 }
 
 func runContributorStats(ctx *common.RuntimeContext) error {
@@ -725,15 +607,6 @@ func runCommunityList(ctx *common.RuntimeContext, path string) error {
 	if err != nil {
 		return err
 	}
-	q.Set("page", ctx.Arg("page"))
-	q.Set("limit", ctx.Arg("limit"))
-	if ctx.Arg("all") == "true" {
-		items, err := ctx.PaginateAllKey(ctx.RepoPath()+"/"+path, q, "users")
-		if err != nil {
-			return err
-		}
-		return ctx.Output(common.NewListEnvelope("users", items))
-	}
 	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/"+path, q)
 	if err != nil {
 		return err
@@ -745,9 +618,6 @@ func communityListFlags() []common.Flag {
 	return []common.Flag{
 		{Name: "start-at", Usage: "Start timestamp"},
 		{Name: "end-at", Usage: "End timestamp"},
-		{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-		{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
-		{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
 	}
 }
 
@@ -893,101 +763,56 @@ func setRepoQueryIfPresent(q url.Values, key, value string) {
 	}
 }
 
-func firstRepoValue(value, fallback string) string {
-	if value := strings.TrimSpace(value); value != "" {
-		return value
+func normalizeRepoFilePath(ctx *common.RuntimeContext) (string, error) {
+	path, err := ctx.RequireArg("path")
+	if err != nil {
+		return "", err
 	}
-	return fallback
+	path = strings.TrimLeft(strings.TrimSpace(path), "/")
+	if path == "" {
+		return "", fmt.Errorf("invalid --path %q: provide a repository file path", ctx.Arg("path"))
+	}
+	return path, nil
 }
 
-func batchCommitPayload(ctx *common.RuntimeContext) (map[string]interface{}, error) {
-	branch, err := ctx.RequireArg("branch")
-	if err != nil {
-		return nil, err
+func extractRepoFileEntry(data interface{}, path string) (map[string]interface{}, error) {
+	payload, ok := data.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected file response format")
 	}
-	message, err := ctx.RequireArg("message")
-	if err != nil {
-		return nil, err
+
+	entry, ok := payload["entries"]
+	if !ok {
+		return nil, fmt.Errorf("unexpected file response format")
 	}
-	rawFiles, err := ctx.RequireArg("files")
-	if err != nil {
-		return nil, err
+
+	if _, isDir := entry.([]interface{}); isDir {
+		return nil, fmt.Errorf("path %q is a directory; use repo +tree instead", path)
 	}
-	encoding := firstRepoValue(ctx.Arg("encoding"), "text")
-	if encoding != "text" && encoding != "base64" {
-		return nil, fmt.Errorf("invalid --encoding %q: use text or base64", encoding)
+
+	fileEntry, ok := entry.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected file response format")
 	}
-	files, err := parseBatchFileSpecs(rawFiles, encoding)
-	if err != nil {
-		return nil, err
+
+	if entryType, _ := fileEntry["type"].(string); entryType != "" && entryType != "file" {
+		return nil, fmt.Errorf("path %q is not a file; use repo +tree instead", path)
 	}
-	payload := map[string]interface{}{
-		"branch":  strings.TrimSpace(branch),
-		"message": message,
-		"files":   files,
-	}
-	if newBranch := strings.TrimSpace(ctx.Arg("new-branch")); newBranch != "" {
-		payload["new_branch"] = newBranch
-	}
-	setRepoPayloadIfPresent(payload, "author_name", ctx.Arg("author-name"))
-	setRepoPayloadIfPresent(payload, "author_email", ctx.Arg("author-email"))
-	setRepoPayloadIfPresent(payload, "committer_name", ctx.Arg("committer-name"))
-	setRepoPayloadIfPresent(payload, "committer_email", ctx.Arg("committer-email"))
-	return payload, nil
+
+	return fileEntry, nil
 }
 
-func parseBatchFileSpecs(raw, encoding string) ([]map[string]interface{}, error) {
-	specs := strings.Split(raw, ";")
-	files := make([]map[string]interface{}, 0, len(specs))
-	for _, spec := range specs {
-		spec = strings.TrimSpace(spec)
-		if spec == "" {
-			continue
-		}
-		parts := strings.SplitN(spec, ":", 3)
-		if len(parts) < 2 {
-			return nil, fmt.Errorf("invalid --files item %q: use action:path[:content]", spec)
-		}
-		action := strings.TrimSpace(parts[0])
-		path := strings.TrimSpace(parts[1])
-		if !isBatchFileAction(action) {
-			return nil, fmt.Errorf("invalid file action %q: use create, update, or delete", action)
-		}
-		if path == "" {
-			return nil, fmt.Errorf("invalid --files item %q: file path is required", spec)
-		}
-		item := map[string]interface{}{
-			"action_type": action,
-			"file_path":   path,
-		}
-		if action != "delete" {
-			if len(parts) != 3 {
-				return nil, fmt.Errorf("file action %q for %q requires content", action, path)
-			}
-			item["content"] = parts[2]
-			item["encoding"] = encoding
-		}
-		files = append(files, item)
+func buildRepoFileResult(entry map[string]interface{}, path, ref string) map[string]interface{} {
+	result := map[string]interface{}{
+		"path": path,
+		"ref":  ref,
 	}
-	if len(files) == 0 {
-		return nil, fmt.Errorf("--files must include at least one file operation")
+	for _, key := range []string{"name", "type", "size", "sha", "content"} {
+		if value, ok := entry[key]; ok {
+			result[key] = value
+		}
 	}
-	return files, nil
-}
-
-func isBatchFileAction(action string) bool {
-	switch action {
-	case "create", "update", "delete":
-		return true
-	default:
-		return false
-	}
-}
-
-func setRepoPayloadIfPresent(payload map[string]interface{}, key, value string) {
-	if value := strings.TrimSpace(value); value != "" {
-		payload[key] = value
-	}
+	return result
 }
 
 func parseOptionalRepoNonNegativeInt(value, name string) (int, bool, error) {

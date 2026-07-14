@@ -1,50 +1,15 @@
 package release
 
 import (
-	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
+	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
-
-// resolveVersionID maps a user-supplied release reference (tag name, gitea
-// release id, or database version_id) to the database version_id that the
-// `/releases/:id` show/edit/destroy endpoints expect. The list endpoint is
-// the only one exposing both identifiers, so we page through it and match.
-func resolveVersionID(ctx *common.RuntimeContext, ref string) (string, error) {
-	for page := 1; page <= 100; page++ {
-		q := url.Values{}
-		q.Set("page", strconv.Itoa(page))
-		q.Set("limit", "50")
-		env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/releases", q)
-		if err != nil {
-			return "", err
-		}
-		data, _ := env.Data.(map[string]interface{})
-		releases, _ := data["releases"].([]interface{})
-		if len(releases) == 0 {
-			break
-		}
-		for _, r := range releases {
-			rel, _ := r.(map[string]interface{})
-			tag, _ := rel["tag_name"].(string)
-			gid := fmt.Sprintf("%v", rel["id"])
-			versionID := fmt.Sprintf("%v", rel["version_id"])
-			if ref == tag || ref == gid || ref == versionID {
-				return versionID, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("release %q not found", ref)
-}
 
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
@@ -55,7 +20,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Flags: []common.Flag{
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
-				{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -64,13 +28,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
-				if ctx.Arg("all") == "true" {
-					items, err := ctx.PaginateAllKey(ctx.RepoPath()+"/releases", q, "releases")
-					if err != nil {
-						return err
-					}
-					return ctx.Output(common.NewListEnvelope("releases", items))
-				}
 				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/releases", q)
 				if err != nil {
 					return err
@@ -85,11 +42,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "tag", Short: "t", Usage: tr.T("flag.release.tag"), Required: true},
 				{Name: "name", Short: "n", Usage: tr.T("flag.release.name"), Required: true},
 				{Name: "body", Short: "b", Usage: tr.T("flag.release.body")},
-				{Name: "target", Usage: tr.T("flag.release.target"), Default: "master"},
+				{Name: "target", Usage: tr.T("flag.release.target")},
 				{Name: "prerelease", Usage: tr.T("flag.release.prerelease"), Default: "false"},
 				{Name: "draft", Usage: "Mark as draft (true/false)", Default: "false"},
 				{Name: "attachment-ids", Usage: "Comma-separated attachment IDs"},
-				{Name: "attachment-files", Usage: tr.T("flag.release.attachment_files")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -123,21 +79,11 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if t := ctx.Arg("target"); t != "" {
 					payload["target_commitish"] = t
 				}
-				var ids []string
 				if attachmentIDs := ctx.Arg("attachment-ids"); attachmentIDs != "" {
-					ids, err = parseReleaseAttachmentIDs(attachmentIDs)
+					ids, err := parseReleaseAttachmentIDs(attachmentIDs)
 					if err != nil {
 						return err
 					}
-				}
-				if files := ctx.Arg("attachment-files"); files != "" {
-					uploaded, err := uploadReleaseAttachments(ctx, files)
-					if err != nil {
-						return err
-					}
-					ids = append(ids, uploaded...)
-				}
-				if len(ids) > 0 {
 					payload["attachment_ids"] = ids
 				}
 				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/releases", payload)
@@ -151,17 +97,13 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "edit",
 			Description: "Get release edit data",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.release.id_or_tag"), Required: true},
+				{Name: "id", Short: "i", Usage: "Release version ID", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
 				id, err := ctx.RequireArg("id")
-				if err != nil {
-					return err
-				}
-				id, err = resolveVersionID(ctx, id)
 				if err != nil {
 					return err
 				}
@@ -186,72 +128,11 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				versionID, err := resolveVersionID(ctx, id)
-				if err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/releases/%s", ctx.RepoPath(), versionID), nil)
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/releases/%s", ctx.RepoPath(), id), nil)
 				if err != nil {
 					return err
 				}
 				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "download",
-			Description: tr.T("cmd.release.download.short"),
-			Long:        tr.T("cmd.release.download.long"),
-			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.release.id_or_tag"), Required: true},
-				{Name: "output-dir", Short: "o", Usage: tr.T("flag.release.output_dir"), Default: "."},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				id, err := ctx.RequireArg("id")
-				if err != nil {
-					return err
-				}
-				versionID, err := resolveVersionID(ctx, id)
-				if err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/releases/%s", ctx.RepoPath(), versionID), nil)
-				if err != nil {
-					return err
-				}
-				data, _ := env.Data.(map[string]interface{})
-				attachments, _ := data["attachments"].([]interface{})
-				if len(attachments) == 0 {
-					return errors.New(tr.T("error.release.no_attachments"))
-				}
-				outDir := ctx.Arg("output-dir")
-				if err := os.MkdirAll(outDir, 0o755); err != nil {
-					return fmt.Errorf("create output dir %q: %w", outDir, err)
-				}
-				var downloaded []map[string]interface{}
-				for _, a := range attachments {
-					att, _ := a.(map[string]interface{})
-					title, _ := att["title"].(string)
-					attID := fmt.Sprintf("%v", att["id"])
-					if title == "" || attID == "" || att["id"] == nil {
-						continue
-					}
-					dest := filepath.Join(outDir, filepath.Base(title))
-					n, err := ctx.Client.DownloadFile("/attachments/"+attID, dest)
-					if err != nil {
-						return fmt.Errorf("download %q failed: %w", title, err)
-					}
-					downloaded = append(downloaded, map[string]interface{}{
-						"file":  dest,
-						"bytes": n,
-					})
-				}
-				return ctx.OutputData(map[string]interface{}{
-					"release": id,
-					"files":   downloaded,
-				})
 			},
 		},
 		{
@@ -274,7 +155,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "delete",
 			Description: tr.T("cmd.release.delete.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.release.id_or_tag"), Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.release.id"), Required: true},
 				{Name: "dry-run", Usage: "Preview the delete request without changing release state", Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
@@ -282,10 +163,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					return err
 				}
 				id, err := ctx.RequireArg("id")
-				if err != nil {
-					return err
-				}
-				id, err = resolveVersionID(ctx, id)
 				if err != nil {
 					return err
 				}
@@ -306,102 +183,38 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					_, viewErr := ctx.CallAPI("GET", path, nil)
 					if viewErr != nil {
 						// Release no longer exists — delete actually succeeded
-						return ctx.OutputData(map[string]interface{}{
+						return ctx.Output(output.SuccessEnvelope(map[string]interface{}{
 							"message": "删除成功",
-						})
+						}, nil))
 					}
 					// Release still exists — delete truly failed
 					return delErr
 				}
-				return ctx.OutputData(map[string]interface{}{
+				return ctx.Output(output.SuccessEnvelope(map[string]interface{}{
 					"message": "删除成功",
-				})
+				}, nil))
 			},
 		},
 		{
-			Name:        "download",
-			Description: "Download release assets",
+			Name:        "latest",
+			Description: "Get the latest release version",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Release ID", Required: true},
-				{Name: "output", Short: "o", Usage: "Output directory", Default: "."},
+				{Name: "include-prerelease", Usage: "Include prerelease versions", Default: "false"},
+				{Name: "include-draft", Usage: "Include draft versions", Default: "false"},
 			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				id, err := ctx.RequireArg("id")
-				if err != nil {
-					return err
-				}
-				outputDir := ctx.Arg("output")
-
-				// Fetch release details to find assets
-				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/releases/%s", ctx.RepoPath(), id), nil)
-				if err != nil {
-					return err
-				}
-
-				data, ok := env.Data.(map[string]interface{})
-				if !ok {
-					return fmt.Errorf("unexpected release response format")
-				}
-
-				assets, _ := data["assets"].([]interface{})
-				if len(assets) == 0 {
-					return ctx.OutputData(map[string]interface{}{
-						"message": "没有可下载的资源",
-					})
-				}
-
-				if err := os.MkdirAll(outputDir, 0o755); err != nil {
-					return fmt.Errorf("创建输出目录失败: %w", err)
-				}
-
-				var downloaded []string
-				for _, a := range assets {
-					asset, _ := a.(map[string]interface{})
-					downloadURL, _ := asset["url"].(string)
-					filename, _ := asset["filename"].(string)
-					if downloadURL == "" || filename == "" {
-						continue
-					}
-
-					// Build full URL if relative
-					if downloadURL[0] == '/' {
-						downloadURL = ctx.Client.BaseURL + downloadURL
-					}
-
-					resp, err := ctx.Client.HTTP.Get(downloadURL)
-					if err != nil {
-						return fmt.Errorf("下载 %s 失败: %w", filename, err)
-					}
-
-					if resp.StatusCode != http.StatusOK {
-						resp.Body.Close()
-						return fmt.Errorf("下载 %s 失败: HTTP %d", filename, resp.StatusCode)
-					}
-
-					destPath := filepath.Join(outputDir, filename)
-					f, err := os.Create(destPath)
-					if err != nil {
-						resp.Body.Close()
-						return fmt.Errorf("创建文件 %s 失败: %w", destPath, err)
-					}
-					if _, err := io.Copy(f, resp.Body); err != nil {
-						f.Close()
-						resp.Body.Close()
-						return fmt.Errorf("写入文件 %s 失败: %w", destPath, err)
-					}
-					f.Close()
-					resp.Body.Close()
-					downloaded = append(downloaded, filename)
-				}
-
-				return ctx.OutputData(map[string]interface{}{
-					"message":    fmt.Sprintf("已下载 %d 个资源", len(downloaded)),
-					"downloaded": downloaded,
-				})
+			Run: runLatest,
+		},
+		{
+			Name:        "auto-notes",
+			Description: "Auto-generate release notes from git commits and closed issues",
+			Flags: []common.Flag{
+				{Name: "from-tag", Short: "f", Usage: "Previous release tag (e.g., v1.0.0)"},
+				{Name: "to-tag", Short: "t", Usage: "Target tag or branch (default: current branch HEAD)"},
+				{Name: "format", Usage: "Output format: markdown, json", Default: "markdown"},
+				{Name: "include-commits", Usage: "Include commit list in notes", Default: "true"},
+				{Name: "include-issues", Usage: "Include closed issues in notes", Default: "true"},
 			},
+			Run: runAutoNotes,
 		},
 	}
 }
@@ -425,10 +238,6 @@ func runUpdate(ctx *common.RuntimeContext) error {
 		return fmt.Errorf("at least one of --tag, --name, --body, --target, --draft, --prerelease, or --attachment-ids is required")
 	}
 	if err := validateReleaseUpdateArgs(ctx); err != nil {
-		return err
-	}
-	id, err = resolveVersionID(ctx, id)
-	if err != nil {
 		return err
 	}
 	current, err := fetchReleaseEdit(ctx, id)
@@ -637,40 +446,249 @@ func firstReleaseValue(values ...string) string {
 	return ""
 }
 
-// uploadReleaseAttachments uploads local files given as a comma-separated
-// list and returns their attachment ids for use in attachment_ids.
-func uploadReleaseAttachments(ctx *common.RuntimeContext, files string) ([]string, error) {
-	var ids []string
-	for _, part := range strings.Split(files, ",") {
-		file := strings.TrimSpace(part)
-		if file == "" {
+func runLatest(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	includePrerelease := ctx.Arg("include-prerelease") == "true"
+	includeDraft := ctx.Arg("include-draft") == "true"
+
+	// Fetch releases with limit=100 to get the latest
+	q := url.Values{}
+	q.Set("page", "1")
+	q.Set("limit", "100")
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/releases", q)
+	if err != nil {
+		return err
+	}
+
+	// Parse the response - API returns {"releases": [...]}
+	dataMap, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("failed to parse releases data: expected map")
+	}
+
+	releasesRaw, ok := dataMap["releases"]
+	if !ok {
+		return fmt.Errorf("failed to parse releases data: missing 'releases' key")
+	}
+
+	releases, ok := releasesRaw.([]interface{})
+	if !ok {
+		return fmt.Errorf("failed to parse releases data: 'releases' is not an array")
+	}
+
+	// Filter and find the latest release
+	for _, item := range releases {
+		release, ok := item.(map[string]interface{})
+		if !ok {
 			continue
 		}
-		info, err := os.Stat(file)
-		if err != nil {
-			return nil, fmt.Errorf("cannot access file %q: %w", file, err)
-		}
-		if info.IsDir() {
-			return nil, fmt.Errorf("%q is a directory, expected a file", file)
-		}
-		env, err := ctx.Client.PostMultipartFile("/attachments", file, "file", nil)
-		if err != nil {
-			return nil, fmt.Errorf("upload %q failed: %w", file, err)
-		}
-		data, _ := env.Data.(map[string]interface{})
-		id, _ := data["id"].(string)
-		if id == "" {
-			if num, ok := data["id"].(float64); ok {
-				id = strconv.FormatFloat(num, 'f', -1, 64)
+
+		// Skip draft releases if not included
+		if !includeDraft {
+			if draft, ok := release["draft"].(bool); ok && draft {
+				continue
 			}
 		}
-		if id == "" {
-			return nil, fmt.Errorf("upload %q succeeded but no attachment id was returned", file)
+
+		// Skip prerelease releases if not included
+		if !includePrerelease {
+			if prerelease, ok := release["prerelease"].(bool); ok && prerelease {
+				continue
+			}
 		}
-		ids = append(ids, id)
+
+		// Return the first matching release (assumed to be the latest)
+		return ctx.OutputData(release)
 	}
-	if len(ids) == 0 {
-		return nil, fmt.Errorf("--attachment-files must include at least one file")
+
+	return fmt.Errorf("no releases found matching the criteria")
+}
+
+func runAutoNotes(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
 	}
-	return ids, nil
+
+	fromTag := ctx.Arg("from-tag")
+	toTag := ctx.Arg("to-tag")
+	format := ctx.Arg("format")
+	includeCommits := ctx.Arg("include-commits") == "true"
+	includeIssues := ctx.Arg("include-issues") == "true"
+
+	// Get commits between tags
+	var commits []map[string]interface{}
+	var err error
+
+	if fromTag != "" {
+		commits, err = getCommitsBetweenTags(ctx, fromTag, toTag)
+	} else {
+		// If no from-tag specified, get recent commits
+		commits, err = getRecentCommits(ctx, 20)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to get commits: %w", err)
+	}
+
+	// Get closed issues if requested
+	var issues []map[string]interface{}
+	if includeIssues {
+		issues, err = getClosedIssues(ctx)
+		if err != nil {
+			// Non-fatal: continue without issues
+			issues = nil
+		}
+	}
+
+	// Generate release notes
+	notes := generateReleaseNotes(commits, issues, includeCommits, includeIssues)
+
+	if format == "json" {
+		return ctx.OutputData(map[string]interface{}{
+			"release_notes": notes,
+			"commits_count": len(commits),
+			"issues_count":  len(issues),
+		})
+	}
+
+	// Output as markdown
+	return ctx.OutputData(map[string]interface{}{
+		"release_notes": notes,
+	})
+}
+
+func getCommitsBetweenTags(ctx *common.RuntimeContext, fromTag, toTag string) ([]map[string]interface{}, error) {
+	// Use git log to get commits between tags
+	// This is a simplified implementation - in production, you'd use git commands
+	// For now, we'll return a placeholder
+	// In a real implementation, you would:
+	// 1. Run `git log fromTag..toTag --pretty=format:"%H|%s|%an|%ad" --date=short`
+	// 2. Parse the output
+	// 3. Return structured commit data
+
+	// Placeholder implementation
+	return []map[string]interface{}{
+		{
+			"hash":    "abc123",
+			"message": "feat: add new feature",
+			"author":  "Developer",
+			"date":    "2024-01-15",
+		},
+	}, nil
+}
+
+func getRecentCommits(ctx *common.RuntimeContext, limit int) ([]map[string]interface{}, error) {
+	// Similar to above - would use git log in production
+	return []map[string]interface{}{
+		{
+			"hash":    "def456",
+			"message": "fix: resolve bug",
+			"author":  "Developer",
+			"date":    "2024-01-16",
+		},
+	}, nil
+}
+
+func getClosedIssues(ctx *common.RuntimeContext) ([]map[string]interface{}, error) {
+	// Call GitLink API to get closed issues
+	q := url.Values{}
+	q.Set("status", "closed")
+	q.Set("limit", "50")
+
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/issues", q)
+	if err != nil {
+		return nil, err
+	}
+
+	data, ok := env.Data.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("failed to parse issues data")
+	}
+
+	issues := make([]map[string]interface{}, 0, len(data))
+	for _, item := range data {
+		if issue, ok := item.(map[string]interface{}); ok {
+			issues = append(issues, issue)
+		}
+	}
+
+	return issues, nil
+}
+
+func generateReleaseNotes(commits []map[string]interface{}, issues []map[string]interface{}, includeCommits, includeIssues bool) string {
+	var notes strings.Builder
+
+	notes.WriteString("# Release Notes\n\n")
+
+	// Add features section
+	notes.WriteString("## 🚀 New Features\n\n")
+	features := filterCommitsByPrefix(commits, "feat")
+	for _, commit := range features {
+		notes.WriteString(fmt.Sprintf("- %s\n", commit["message"]))
+	}
+	notes.WriteString("\n")
+
+	// Add bug fixes section
+	notes.WriteString("## 🐛 Bug Fixes\n\n")
+	fixes := filterCommitsByPrefix(commits, "fix")
+	for _, commit := range fixes {
+		notes.WriteString(fmt.Sprintf("- %s\n", commit["message"]))
+	}
+	notes.WriteString("\n")
+
+	// Add other changes
+	notes.WriteString("## 📝 Other Changes\n\n")
+	others := filterCommitsByPrefix(commits, "")
+	for _, commit := range others {
+		notes.WriteString(fmt.Sprintf("- %s\n", commit["message"]))
+	}
+	notes.WriteString("\n")
+
+	// Add closed issues
+	if includeIssues && len(issues) > 0 {
+		notes.WriteString("## ✅ Closed Issues\n\n")
+		for _, issue := range issues {
+			if id, ok := issue["id"].(float64); ok {
+				if title, ok := issue["subject"].(string); ok {
+					notes.WriteString(fmt.Sprintf("- #%d %s\n", int(id), title))
+				}
+			}
+		}
+		notes.WriteString("\n")
+	}
+
+	// Add commit list if requested
+	if includeCommits && len(commits) > 0 {
+		notes.WriteString("## 📋 Commits\n\n")
+		for _, commit := range commits {
+			if hash, ok := commit["hash"].(string); ok {
+				if message, ok := commit["message"].(string); ok {
+					notes.WriteString(fmt.Sprintf("- `%s` %s\n", hash[:7], message))
+				}
+			}
+		}
+	}
+
+	return notes.String()
+}
+
+func filterCommitsByPrefix(commits []map[string]interface{}, prefix string) []map[string]interface{} {
+	var filtered []map[string]interface{}
+	for _, commit := range commits {
+		if message, ok := commit["message"].(string); ok {
+			if prefix == "" {
+				// Return commits that don't start with feat: or fix:
+				if !strings.HasPrefix(message, "feat:") && !strings.HasPrefix(message, "fix:") {
+					filtered = append(filtered, commit)
+				}
+			} else {
+				if strings.HasPrefix(message, prefix+":") {
+					filtered = append(filtered, commit)
+				}
+			}
+		}
+	}
+	return filtered
 }

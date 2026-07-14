@@ -3,12 +3,32 @@ package pr
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
+
+func v1RepoPath(ctx *common.RuntimeContext) string {
+	return fmt.Sprintf("/v1/%s/%s", ctx.Owner, ctx.Repo)
+}
+
+func normalizePullRequestListState(state string) string {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "open", "opened":
+		return "0"
+	case "merged":
+		return "1"
+	case "closed":
+		return "2"
+	case "all", "":
+		return ""
+	default:
+		return state
+	}
+}
 
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
@@ -18,6 +38,14 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.pr.list.short"),
 			Flags: []common.Flag{
 				{Name: "state", Short: "s", Usage: tr.T("flag.pr.state"), Default: "open"},
+				{Name: "keyword", Short: "k", Usage: tr.T("flag.search.keyword")},
+				{Name: "priority-id", Usage: tr.T("flag.pr.priority_id")},
+				{Name: "tag-id", Usage: tr.T("flag.pr.tag_id")},
+				{Name: "milestone-id", Usage: tr.T("flag.pr.milestone_id")},
+				{Name: "reviewer-id", Usage: tr.T("flag.pr.reviewer_id")},
+				{Name: "assignee-id", Usage: tr.T("flag.pr.assignee_id")},
+				{Name: "sort-by", Usage: tr.T("flag.sort_by")},
+				{Name: "sort-direction", Usage: tr.T("flag.sort_direction")},
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
@@ -28,14 +56,54 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
-				if s := ctx.Arg("state"); s != "" {
-					q.Set("state", s)
+				if s := normalizePullRequestListState(ctx.Arg("state")); s != "" {
+					q.Set("status", s)
 				}
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/pulls", q)
+				if keyword := ctx.Arg("keyword"); keyword != "" {
+					q.Set("keyword", keyword)
+				}
+				if priorityID := ctx.Arg("priority-id"); priorityID != "" {
+					q.Set("priority_id", priorityID)
+				}
+				if tagID := ctx.Arg("tag-id"); tagID != "" {
+					q.Set("issue_tag_id", tagID)
+				}
+				if milestoneID := ctx.Arg("milestone-id"); milestoneID != "" {
+					q.Set("version_id", milestoneID)
+				}
+				if reviewerID := ctx.Arg("reviewer-id"); reviewerID != "" {
+					q.Set("reviewer_id", reviewerID)
+				}
+				if assigneeID := ctx.Arg("assignee-id"); assigneeID != "" {
+					q.Set("assign_user_id", assigneeID)
+				}
+				if sortBy := ctx.Arg("sort-by"); sortBy != "" {
+					q.Set("sort_by", sortBy)
+				}
+				if sortDirection := ctx.Arg("sort-direction"); sortDirection != "" {
+					q.Set("sort_direction", sortDirection)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx)+"/pulls", q)
 				if err != nil {
 					return err
 				}
+				normalizePullRequestListNumbers(env)
 				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "status",
+			Description: tr.T("cmd.pr.status.short"),
+			Long:        tr.T("cmd.pr.status.long"),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				result, err := collectPullStatus(ctx)
+				if err != nil {
+					return err
+				}
+				return ctx.OutputData(result)
 			},
 		},
 		{
@@ -45,7 +113,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "title", Short: "t", Usage: tr.T("flag.pr.title"), Required: true},
 				{Name: "body", Short: "b", Usage: tr.T("flag.pr.body")},
 				{Name: "head", Usage: tr.T("flag.pr.head"), Required: true},
-				{Name: "base", Usage: tr.T("flag.pr.base"), Default: "master"},
+				{Name: "base", Usage: tr.T("flag.pr.base")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -55,7 +123,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				head, _ := ctx.RequireArg("head")
 				base := ctx.Arg("base")
 				if base == "" {
-					base = "master"
+					var err error
+					if base, err = ctx.DefaultBranch(); err != nil {
+						return err
+					}
 				}
 				payload := map[string]interface{}{
 					"title": title,
@@ -120,8 +191,8 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "close",
-			Description: tr.T("cmd.pr.close.short"),
+			Name:        "refuse",
+			Description: "Refuse and close a pull request",
 			Flags: []common.Flag{
 				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
@@ -339,7 +410,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 							"approved": "approved", "rejected": "rejected", "common": "commented",
 						}[status]
 						summary := fmt.Sprintf("## Review: %s\n\n%s", statusLabel, content)
-						ctx.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, issueID),
+						_, _ = ctx.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, issueID),
 							map[string]interface{}{"notes": summary})
 					}
 				}
@@ -381,20 +452,17 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "commits",
-			Description: "List commits in a pull request",
+			Name:        "comments",
+			Description: tr.T("cmd.pr.comments.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				id, err := ctx.RequireArg("id")
-				if err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", prV1Path(ctx, id)+"/commits", nil)
+				id, _ := ctx.RequireArg("id")
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s/journals", v1RepoPath(ctx), id), nil)
 				if err != nil {
 					return err
 				}
@@ -402,14 +470,31 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "branches",
-			Description: "List branches for pull request creation",
-			Flags:       []common.Flag{},
+			Name:        "comment-edit",
+			Description: tr.T("cmd.pr.comment_edit.short"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "comment-id", Short: "c", Usage: tr.T("flag.pr.comment_id"), Required: true},
+				{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
+				{Name: "state", Short: "s", Usage: tr.T("flag.pr.comment_state"), Default: "opened"},
+			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/pulls/get_branches", nil)
+				id, _ := ctx.RequireArg("id")
+				commentID, err := requireIntFlag(ctx, "comment-id")
+				if err != nil {
+					return err
+				}
+				body, _ := ctx.RequireArg("body")
+				state := ctx.Arg("state")
+				switch state {
+				case "opened", "resolved", "disabled":
+				default:
+					return fmt.Errorf("--state must be one of opened, resolved, disabled; got %q", state)
+				}
+				env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/pulls/%s/journals/%s", v1RepoPath(ctx), id, commentID), map[string]interface{}{"note": body, "state": state})
 				if err != nil {
 					return err
 				}
@@ -417,29 +502,22 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "check-merge",
-			Description: "Check if two branches can be merged",
+			Name:        "comment-delete",
+			Description: tr.T("cmd.pr.comment_delete.short"),
 			Flags: []common.Flag{
-				{Name: "head", Usage: "Source branch", Required: true},
-				{Name: "base", Usage: "Target branch", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "comment-id", Short: "c", Usage: tr.T("flag.pr.comment_id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				head, err := ctx.RequireArg("head")
+				id, _ := ctx.RequireArg("id")
+				commentID, err := requireIntFlag(ctx, "comment-id")
 				if err != nil {
 					return err
 				}
-				base, err := ctx.RequireArg("base")
-				if err != nil {
-					return err
-				}
-				payload := map[string]interface{}{
-					"head": head,
-					"base": base,
-				}
-				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/pulls/check_can_merge", payload)
+				env, err := ctx.CallAPI("DELETE", fmt.Sprintf("%s/pulls/%s/journals/%s", v1RepoPath(ctx), id, commentID), nil)
 				if err != nil {
 					return err
 				}
@@ -447,6 +525,17 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func requireIntFlag(ctx *common.RuntimeContext, name string) (string, error) {
+	value, err := ctx.RequireArg(name)
+	if err != nil {
+		return "", err
+	}
+	if _, err := strconv.Atoi(value); err != nil {
+		return "", fmt.Errorf("--%s must be an integer, got %q", name, value)
+	}
+	return value, nil
 }
 
 func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
@@ -458,6 +547,101 @@ func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
 
 func prV1Path(ctx *common.RuntimeContext, id string) string {
 	return fmt.Sprintf("/v1/%s/%s/pulls/%s", ctx.Owner, ctx.Repo, id)
+}
+
+// collectPullStatus groups the current user's relevant open pull requests into
+// those they authored and those requesting their review. The pulls list
+// endpoint (api_ref "获取合并请求列表") exposes a reviewer_id filter but no author
+// filter, so review requests are narrowed server-side by the numeric user id
+// while authorship is matched client-side on the author login.
+func collectPullStatus(ctx *common.RuntimeContext) (map[string]interface{}, error) {
+	login, userID, err := currentUserIdentity(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	openQuery := url.Values{}
+	openQuery.Set("status", "0")
+	openPulls, err := fetchPulls(ctx, openQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	reviewQuery := url.Values{}
+	reviewQuery.Set("status", "0")
+	reviewQuery.Set("reviewer_id", userID)
+	reviewRequested, err := fetchPulls(ctx, reviewQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"login":            login,
+		"created":          filterPullsByAuthorLogin(openPulls, login),
+		"review_requested": reviewRequested,
+	}, nil
+}
+
+func currentUserIdentity(ctx *common.RuntimeContext) (login string, id string, err error) {
+	env, err := ctx.CallAPI("GET", "/users/me", nil)
+	if err != nil {
+		return "", "", err
+	}
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return "", "", fmt.Errorf("unexpected /users/me response format")
+	}
+	login = stringField(data, "login")
+	if login == "" {
+		return "", "", fmt.Errorf("/users/me response missing login")
+	}
+	idNum, ok := numberField(data, "id")
+	if !ok {
+		return "", "", fmt.Errorf("/users/me response missing id")
+	}
+	return login, strconv.FormatInt(int64(idNum), 10), nil
+}
+
+func fetchPulls(ctx *common.RuntimeContext, query url.Values) ([]interface{}, error) {
+	env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx)+"/pulls", query)
+	if err != nil {
+		return nil, err
+	}
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return []interface{}{}, nil
+	}
+	pulls, ok := data["pulls"].([]interface{})
+	if !ok {
+		return []interface{}{}, nil
+	}
+	return pulls, nil
+}
+
+func filterPullsByAuthorLogin(pulls []interface{}, login string) []interface{} {
+	matched := make([]interface{}, 0, len(pulls))
+	for _, raw := range pulls {
+		pull, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if pullAuthorLogin(pull) == login {
+			matched = append(matched, raw)
+		}
+	}
+	return matched
+}
+
+func pullAuthorLogin(pull map[string]interface{}) string {
+	issue, ok := pull["issue"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	author, ok := issue["author"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	return stringField(author, "login")
 }
 
 func validatePRReviewStatus(status string) error {
@@ -483,6 +667,33 @@ func extractIssueID(env *output.Envelope) (int64, error) {
 		return 0, fmt.Errorf("PR response missing issue.id field")
 	}
 	return int64(idFloat), nil
+}
+
+func normalizePullRequestListNumbers(env *output.Envelope) {
+	if env == nil {
+		return
+	}
+
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	pulls, ok := data["pulls"].([]interface{})
+	if !ok {
+		return
+	}
+
+	for i, item := range pulls {
+		pr, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if number := firstPullRequestNumber(pr); number != nil {
+			pr["number"] = number
+		}
+		pulls[i] = pr
+	}
 }
 
 func enrichPullRequestClosedAt(ctx *common.RuntimeContext, env *output.Envelope) error {
@@ -573,4 +784,13 @@ func numberField(m map[string]interface{}, key string) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func firstPullRequestNumber(pr map[string]interface{}) interface{} {
+	for _, key := range []string{"number", "pull_request_number", "index"} {
+		if value, ok := pr[key]; ok {
+			return value
+		}
+	}
+	return nil
 }

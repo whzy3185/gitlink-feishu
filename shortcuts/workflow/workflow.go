@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -20,63 +19,63 @@ type TriageReport struct {
 	Results    []TriageResult `json:"results"`
 }
 
-func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
-	tr := shortcutTranslator(translators...)
+func Shortcuts() []*common.Shortcut {
 	return []*common.Shortcut{
-		newTriageShortcut(tr),
-		newHealthShortcut(tr),
-		newPRSummaryShortcut(tr),
-		newRepoReportShortcut(tr),
+		newTriageShortcut(),
+		newHealthShortcut(),
+		newPRSummaryShortcut(nil),
+		newRepoReportShortcut(),
+		newReviewContextShortcut(),
 	}
 }
 
-func newTriageShortcut(tr *i18n.Translator) *common.Shortcut {
+func newTriageShortcut() *common.Shortcut {
 	return &common.Shortcut{
 		Name:        "triage",
-		Description: tr.T("cmd.workflow.triage.short"),
+		Description: "Analyze issues with local workflow triage rules",
 		Flags: []common.Flag{
-			{Name: "from", Usage: tr.T("flag.workflow.from")},
-			{Name: "title", Short: "t", Usage: tr.T("flag.workflow.title")},
-			{Name: "body", Short: "b", Usage: tr.T("flag.workflow.body")},
-			{Name: "number", Short: "n", Usage: tr.T("flag.workflow.number")},
-			{Name: "author", Usage: tr.T("flag.workflow.author")},
-			{Name: "url", Usage: tr.T("flag.workflow.url")},
-			{Name: "labels", Usage: tr.T("flag.workflow.labels")},
-			{Name: "state", Short: "s", Usage: tr.T("flag.workflow.state"), Default: "open"},
-			{Name: "page", Short: "p", Usage: tr.T("flag.workflow.page"), Default: "1"},
-			{Name: "limit", Short: "l", Usage: tr.T("flag.workflow.limit"), Default: "30"},
-			{Name: "since", Usage: tr.T("flag.workflow.since")},
-			{Name: "dry-run", Usage: tr.T("flag.workflow.dry_run"), Bool: true, Default: "true"},
-			{Name: "lang", Usage: tr.T("flag.workflow.lang"), Default: langEN},
+			{Name: "from", Usage: "Read issue inputs from a JSON file. Supports a single issue, an array, or an object with an issues field"},
+			{Name: "title", Short: "t", Usage: "Issue title for single-issue local analysis"},
+			{Name: "body", Short: "b", Usage: "Issue body for single-issue local analysis"},
+			{Name: "number", Short: "n", Usage: "Issue number for single-issue local analysis"},
+			{Name: "author", Usage: "Issue author for single-issue local analysis"},
+			{Name: "url", Usage: "Issue URL for single-issue local analysis"},
+			{Name: "labels", Usage: "Comma-separated labels for single-issue local analysis"},
+			{Name: "state", Short: "s", Usage: "Filter or assign issue state", Default: "open"},
+			{Name: "page", Short: "p", Usage: "API page number for remote triage", Default: "1"},
+			{Name: "limit", Short: "l", Usage: "Maximum issues to analyze", Default: "30"},
+			{Name: "since", Usage: "Optional remote issue filter for updated time"},
+			{Name: "dry-run", Usage: "Preview workflow recommendations without remote writes", Bool: true, Default: "true"},
+			{Name: "lang", Usage: "Output language: en or zh-CN", Default: langEN},
 		},
 		Run: runTriage,
 	}
 }
 
-func newHealthShortcut(tr *i18n.Translator) *common.Shortcut {
+func newHealthShortcut() *common.Shortcut {
 	return &common.Shortcut{
 		Name:        "health",
-		Description: tr.T("cmd.workflow.health.short"),
+		Description: "Score repository health with local workflow rules",
 		Flags: []common.Flag{
-			{Name: "from", Usage: tr.T("flag.workflow.from_2")},
-			{Name: "repository", Usage: tr.T("flag.workflow.repository")},
-			{Name: "open-issues", Usage: tr.T("flag.workflow.open_issues"), Default: "0"},
-			{Name: "open-prs", Usage: tr.T("flag.workflow.open_prs"), Default: "0"},
-			{Name: "stale-issues", Usage: tr.T("flag.workflow.stale_issues"), Default: "0"},
-			{Name: "stale-prs", Usage: tr.T("flag.workflow.stale_prs"), Default: "0"},
-			{Name: "recent-activity-known", Usage: tr.T("flag.workflow.recent_activity_known"), Bool: true, Default: "false"},
-			{Name: "recent-activity-days", Usage: tr.T("flag.workflow.recent_activity_days"), Default: "0"},
-			{Name: "release-known", Usage: tr.T("flag.workflow.release_known"), Bool: true, Default: "false"},
-			{Name: "has-recent-release", Usage: tr.T("flag.workflow.has_recent_release"), Bool: true, Default: "false"},
-			{Name: "ci-known", Usage: tr.T("flag.workflow.ci_known"), Bool: true, Default: "false"},
-			{Name: "ci-passing", Usage: tr.T("flag.workflow.ci_passing"), Bool: true, Default: "false"},
-			{Name: "has-readme", Usage: tr.T("flag.workflow.has_readme"), Bool: true, Default: "false"},
-			{Name: "has-license", Usage: tr.T("flag.workflow.has_license"), Bool: true, Default: "false"},
-			{Name: "has-contributing", Usage: tr.T("flag.workflow.has_contributing"), Bool: true, Default: "false"},
-			{Name: "agent-readiness-known", Usage: tr.T("flag.workflow.agent_readiness_known"), Bool: true, Default: "false"},
-			{Name: "agent-readiness-score", Usage: tr.T("flag.workflow.agent_readiness_score"), Default: "0"},
-			{Name: "stale-days", Usage: tr.T("flag.workflow.stale_days"), Default: "30"},
-			{Name: "lang", Usage: tr.T("flag.workflow.lang"), Default: langEN},
+			{Name: "from", Usage: "Read health input from a JSON file"},
+			{Name: "repository", Usage: "Repository name, for example owner/repo"},
+			{Name: "open-issues", Usage: "Open issue count", Default: "0"},
+			{Name: "open-prs", Usage: "Open pull request count", Default: "0"},
+			{Name: "stale-issues", Usage: "Stale issue count", Default: "0"},
+			{Name: "stale-prs", Usage: "Stale pull request count", Default: "0"},
+			{Name: "recent-activity-known", Usage: "Whether recent activity is known", Bool: true, Default: "false"},
+			{Name: "recent-activity-days", Usage: "Days since recent activity", Default: "0"},
+			{Name: "release-known", Usage: "Whether release status is known", Bool: true, Default: "false"},
+			{Name: "has-recent-release", Usage: "Whether a recent release exists", Bool: true, Default: "false"},
+			{Name: "ci-known", Usage: "Whether CI status is known", Bool: true, Default: "false"},
+			{Name: "ci-passing", Usage: "Whether CI is passing", Bool: true, Default: "false"},
+			{Name: "has-readme", Usage: "Whether README exists", Bool: true, Default: "false"},
+			{Name: "has-license", Usage: "Whether LICENSE exists", Bool: true, Default: "false"},
+			{Name: "has-contributing", Usage: "Whether CONTRIBUTING exists", Bool: true, Default: "false"},
+			{Name: "agent-readiness-known", Usage: "Whether agent readiness score is known", Bool: true, Default: "false"},
+			{Name: "agent-readiness-score", Usage: "Agent readiness score from 0 to 10", Default: "0"},
+			{Name: "stale-days", Usage: "Days before an issue or PR is considered stale", Default: "30"},
+			{Name: "lang", Usage: "Output language: en or zh-CN", Default: langEN},
 		},
 		Run: runHealth,
 	}
@@ -385,11 +384,4 @@ func mustParseInt(value string, defaultValue int) int {
 		return defaultValue
 	}
 	return parsed
-}
-
-func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
-	if len(translators) > 0 && translators[0] != nil {
-		return translators[0]
-	}
-	return i18n.Default()
 }

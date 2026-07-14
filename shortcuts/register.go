@@ -52,7 +52,6 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"compare":   compare.Shortcuts(),
 		"export":    export.Shortcuts(),
 		"webhook":   webhook.Shortcuts(tr),
-		"wiki":      wiki.Shortcuts(),
 		"workflow":  workflow.Shortcuts(),
 		"wiki":      wiki.Shortcuts(tr),
 	}
@@ -76,7 +75,6 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"compare":   "Compare branches, tags, or commits",
 		"export":    "Data export to CSV/JSON",
 		"webhook":   tr.T("cmd.webhook.short"),
-		"wiki":      "Wiki page operations",
 		"workflow":  "AI agent workflow analysis",
 		"wiki":      tr.T("cmd.wiki.short"),
 	}

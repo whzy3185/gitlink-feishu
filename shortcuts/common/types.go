@@ -2,12 +2,14 @@ package common
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/client"
 	"github.com/gitlink-org/gitlink-cli/internal/context"
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 )
 
@@ -15,6 +17,7 @@ import (
 type Shortcut struct {
 	Name        string
 	Description string
+	Long        string
 	Flags       []Flag
 	Run         func(ctx *RuntimeContext) error
 }
@@ -36,10 +39,15 @@ type RuntimeContext struct {
 	Repo   string
 	Format string
 	Args   map[string]string
+	Tr     *i18n.Translator
 }
 
 // NewRuntimeContext creates a RuntimeContext with auto-resolved owner/repo.
-func NewRuntimeContext(args map[string]string) (*RuntimeContext, error) {
+func NewRuntimeContext(args map[string]string, translators ...*i18n.Translator) (*RuntimeContext, error) {
+	tr := i18n.Default()
+	if len(translators) > 0 && translators[0] != nil {
+		tr = translators[0]
+	}
 	cli, err := client.New()
 	if err != nil {
 		return nil, err
@@ -57,6 +65,7 @@ func NewRuntimeContext(args map[string]string) (*RuntimeContext, error) {
 		Repo:   cmdutil.Repo,
 		Format: format,
 		Args:   args,
+		Tr:     tr,
 	}, nil
 }
 
@@ -81,42 +90,9 @@ func (ctx *RuntimeContext) CallAPIWithQuery(method, path string, query url.Value
 	return ctx.Client.Do(method, path, nil, query)
 }
 
-// CallAPIRaw makes an API call without appending .json suffix.
-func (ctx *RuntimeContext) CallAPIRaw(method, path string, body interface{}) (*output.Envelope, error) {
-	return ctx.Client.DoRaw(method, path, body, nil)
-}
-
-// CallAPIRawWithQuery makes an API call with query parameters without appending .json suffix.
-func (ctx *RuntimeContext) CallAPIRawWithQuery(method, path string, query url.Values) (*output.Envelope, error) {
-	return ctx.Client.DoRaw(method, path, nil, query)
-}
-
 // PaginateAll fetches all pages.
 func (ctx *RuntimeContext) PaginateAll(path string, params url.Values) ([]json.RawMessage, error) {
 	return ctx.Client.PaginateAll(path, params)
-}
-
-// PaginateAllKey fetches all pages of a list endpoint whose response wraps
-// the array in the field named listKey (e.g. "issues", "pulls").
-func (ctx *RuntimeContext) PaginateAllKey(path string, params url.Values, listKey string) ([]json.RawMessage, error) {
-	return ctx.Client.PaginateAllKey(path, params, listKey)
-}
-
-// NewListEnvelope wraps combined pages in the same shape as a single-page
-// response: {"total_count": N, "<listKey>": [...]}.
-func NewListEnvelope(listKey string, items []json.RawMessage) *output.Envelope {
-	decoded := make([]interface{}, 0, len(items))
-	for _, item := range items {
-		var v interface{}
-		if err := json.Unmarshal(item, &v); err == nil {
-			decoded = append(decoded, v)
-		}
-	}
-	data := map[string]interface{}{
-		"total_count": len(decoded),
-		listKey:       decoded,
-	}
-	return output.SuccessEnvelope(data, &output.Meta{TotalCount: len(decoded)})
 }
 
 // Output prints the envelope in the configured format.
@@ -127,6 +103,20 @@ func (ctx *RuntimeContext) Output(env *output.Envelope) error {
 // OutputData wraps data in a success envelope and prints it.
 func (ctx *RuntimeContext) OutputData(data interface{}) error {
 	return output.Print(output.SuccessEnvelope(data, nil), ctx.Format)
+}
+
+// DefaultBranch fetches the repository's default branch, falling back to "master".
+func (ctx *RuntimeContext) DefaultBranch() (string, error) {
+	env, err := ctx.CallAPI("GET", ctx.RepoPath(), nil)
+	if err != nil {
+		return "", err
+	}
+	if data, ok := env.Data.(map[string]interface{}); ok {
+		if branch, ok := data["default_branch"].(string); ok && branch != "" {
+			return branch, nil
+		}
+	}
+	return "master", nil
 }
 
 // RepoPath returns the API path prefix for the current owner/repo.
@@ -146,7 +136,7 @@ func (ctx *RuntimeContext) Arg(name string) string {
 func (ctx *RuntimeContext) RequireArg(name string) (string, error) {
 	v := ctx.Arg(name)
 	if v == "" {
-		return "", fmt.Errorf("required flag --%s is missing", name)
+		return "", errors.New(ctx.Tr.Tf("error.missing_required_flag", i18n.Args{"name": name}))
 	}
 	return v, nil
 }
