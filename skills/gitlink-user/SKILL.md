@@ -1,7 +1,7 @@
 ---
 name: gitlink-user
-version: 1.1.0
-description: "用户操作：查看当前用户、用户详情、贡献热力图、活跃度、开发能力、角色定位和专业定位统计。当用户需要查看 GitLink 用户信息或用户统计画像时触发。"
+version: 1.0.0
+description: "用户操作：查看当前用户、用户详情、贡献热力图、统计和项目趋势。当用户需要查看 GitLink 用户信息时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -22,66 +22,33 @@ metadata:
 |----------|------|----------|
 | `user +me` | 当前登录用户 | 是 |
 | `user +info` | 查看用户详情 | 否 |
-| `user +activity` | 查看用户近期活跃度统计 | 否 |
-| `user +headmap` | 查看用户贡献热力图，可按年份过滤 | 否 |
-| `user +develop` | 查看用户开发能力统计 | 否 |
-| `user +role` | 查看用户角色定位统计 | 否 |
-| `user +major` | 查看用户专业定位 / 项目分类统计 | 否 |
-
-## SSH Public Keys
-
-Use these shortcuts to manage SSH public keys for the current authenticated user:
-
-```bash
-gitlink-cli user +keys
-gitlink-cli user +add-key --title laptop --from ~/.ssh/id_ed25519.pub
-gitlink-cli user +add-key --from ~/.ssh/id_rsa.pub
-gitlink-cli user +add-key --title laptop --key "ssh-ed25519 AAAA..."
-gitlink-cli user +delete-key --id 123
-```
-
-`user +add-key` accepts either `--key` or `--from`, not both. When `--from` is used without `--title`, the filename is used as the default title. `user +delete-key` requires a positive integer key ID.
+| `user +heatmap` | 用户贡献热力图 | 省略 `--user` 时需要 |
+| `user +statistics` | 用户聚合统计 | 省略 `--user` 时需要 |
+| `user +stats` | `user +statistics` 的短别名 | 省略 `--user` 时需要 |
+| `user +project-trends` | 用户项目趋势 | 省略 `--user` 时需要 |
+| `user +trends` | `user +project-trends` 的短别名 | 省略 `--user` 时需要 |
 
 ## 使用示例
 
 ```bash
 # 查看当前用户
-gitlink-cli user +me --format json
+gitlink-cli user +me
 
 # 查看其他用户
-gitlink-cli user +info --login zhangsan --format json
-
-# 用户近期活跃度
-gitlink-cli user +activity --login zhangsan --format json
+gitlink-cli user +info --login zhangsan
 
 # 用户贡献热力图
-gitlink-cli user +headmap --login zhangsan --year 2026 --format json
-
-# 用户开发能力、角色定位、专业定位
-gitlink-cli user +develop --login zhangsan --start-time 1717200000 --end-time 1719800000 --format json
-gitlink-cli user +role --login zhangsan --format json
-gitlink-cli user +major --login zhangsan --format json
-```
-
-## 参数说明
-
-- `--login` 不传时优先使用全局 `--owner`，否则通过 `/users/me` 解析当前登录用户。
-- `--start-time` / `--end-time` 为 Unix 时间戳，必须是非负整数，且 `start-time <= end-time`。
-- `--year` 必须是四位年份。
-- 新增统计命令全部是只读 `GET` 操作，适合 Agent 做开源贡献画像、科研仓库成员分析和自动报告。
-
-## Raw API 补充
-
-```bash
-# 用户贡献热力图
-gitlink-cli api GET /users/:user_id/headmaps
+gitlink-cli user +heatmap --user zhangsan --year 2026
 
 # 用户统计
-gitlink-cli api GET /users/:user_id/statistics/activity
-gitlink-cli api GET /users/:user_id/statistics/develop
-gitlink-cli api GET /users/:user_id/statistics/role
-gitlink-cli api GET /users/:user_id/statistics/major
+gitlink-cli user +statistics --user zhangsan --start-time 1704067200 --end-time 1735689600
 
 # 用户项目动态
-gitlink-cli api GET /users/:user_id/project_trends
+gitlink-cli user +project-trends --user zhangsan
 ```
+
+## 注意事项
+
+- `user +heatmap`、`user +statistics`、`user +project-trends` 都是只读命令。
+- 省略 `--user` 时会先调用 `user +me` 等价的 `/users/me` 解析当前登录用户，因此需要已登录。
+- `user +stats` 和 `user +trends` 是为贡献者分析工作流保留的短别名。
