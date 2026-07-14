@@ -485,11 +485,11 @@ gitlink-cli search +users -k "zhangsan"
 - `workflow +health`
 - `workflow +pr-summary`
 - `workflow +repo-report`
-- `workflow +dependency-audit`
+- `workflow +review-queue`
 
 `workflow +pr-summary` defaults to `table` when `--format` is omitted.
 `workflow +repo-report` defaults to `markdown` when `--format` is omitted.
-`workflow +dependency-audit` defaults to `table` when `--format` is omitted.
+`workflow +review-queue` defaults to `table` when `--format` is omitted.
 
 Examples:
 
@@ -563,11 +563,11 @@ gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format ma
 # Repository workflow report from a local JSON file
 gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format json
 
-# Audit go.mod dependency risk signals without network access
-gitlink-cli workflow +dependency-audit --from go.mod --format table
+# Pull request review queue by read-only GitLink fetch
+gitlink-cli workflow +review-queue --owner Gitlink --repo gitlink-cli --limit 20 --format table
 
-# Render dependency audit findings as markdown
-gitlink-cli workflow +dependency-audit --repository Gitlink/gitlink-cli --from go.mod --format markdown
+# Pull request review queue from local PR summary inputs
+gitlink-cli workflow +review-queue --from review_queue.json --format markdown
 ```
 
 Output formats:
@@ -583,7 +583,7 @@ Safety:
 - They do not depend on LLM APIs.
 - `workflow +pr-summary` does not comment, approve, reject, or merge pull requests.
 - `workflow +repo-report` aggregates health, issue triage, and PR review summary signals without remote writes.
-- `workflow +dependency-audit` reads local go.mod or JSON input only; it does not download modules or contact remote services.
+- `workflow +review-queue` only sorts and explains the review queue; it does not comment, approve, reject, or merge pull requests.
 
 ### Raw API
 

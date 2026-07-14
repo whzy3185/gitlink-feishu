@@ -25,7 +25,7 @@ func Shortcuts() []*common.Shortcut {
 		newHealthShortcut(),
 		newPRSummaryShortcut(),
 		newRepoReportShortcut(),
-		newDependencyAuditShortcut(),
+		newReviewQueueShortcut(),
 	}
 }
 

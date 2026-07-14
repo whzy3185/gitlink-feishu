@@ -457,7 +457,7 @@ gitlink-cli search +users -k "zhangsan"
 
 ### 工作流命令
 
-`workflow` 提供面向维护者和 AI Agent 的只读分析能力，可用于 Issue 分流、仓库健康度评估、PR 审查摘要、仓库工作流报告和依赖风险审计。
+`workflow` 提供面向维护者和 AI Agent 的只读分析能力，可用于 Issue 分流、仓库健康度评估、PR 审查摘要、仓库工作流报告和 PR 审查队列排序。
 
 ```bash
 # 生成单个 PR 的审查摘要
@@ -466,14 +466,14 @@ gitlink-cli workflow +pr-summary --owner Gitlink --repo gitlink-cli --number 1 -
 # 生成仓库工作流报告
 gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
 
-# 审计 go.mod 中的依赖风险信号
-gitlink-cli workflow +dependency-audit --from go.mod --format table
+# 根据风险、变更类型、diff 规模和测试信号生成 PR 审查队列
+gitlink-cli workflow +review-queue --owner Gitlink --repo gitlink-cli --limit 20 --format table
 
-# 输出 markdown 格式的依赖审计报告
-gitlink-cli workflow +dependency-audit --repository Gitlink/gitlink-cli --from go.mod --format markdown
+# 从本地 JSON 输入生成 PR 审查队列
+gitlink-cli workflow +review-queue --from review_queue.json --format markdown
 ```
 
-`workflow +dependency-audit` 默认使用 `table` 输出，会检查本地 replace、pseudo version、预发布版本、主版本路径不匹配、go 指令缺失或过旧等风险；命令只读取本地 `go.mod` 或 JSON 输入，不会下载模块或访问远端服务。
+`workflow +review-queue` 默认使用 `table` 输出，适合维护者快速决定先审哪个 PR；它只读取 PR 元数据并进行本地规则分析，不会评论、审批、拒绝或合并 PR。
 
 ### Raw API
 
