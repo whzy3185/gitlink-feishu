@@ -1,54 +1,23 @@
 package pr
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 
-	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func v1RepoPath(ctx *common.RuntimeContext) string {
-	return fmt.Sprintf("/v1/%s/%s", ctx.Owner, ctx.Repo)
-}
-
-func normalizePullRequestListState(state string) string {
-	switch strings.ToLower(strings.TrimSpace(state)) {
-	case "open", "opened":
-		return "0"
-	case "merged":
-		return "1"
-	case "closed":
-		return "2"
-	case "all", "":
-		return ""
-	default:
-		return state
-	}
-}
-
-func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
-	tr := shortcutTranslator(translators...)
+func Shortcuts() []*common.Shortcut {
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: tr.T("cmd.pr.list.short"),
+			Description: "List pull requests",
 			Flags: []common.Flag{
-				{Name: "state", Short: "s", Usage: tr.T("flag.pr.state"), Default: "open"},
-				{Name: "keyword", Short: "k", Usage: tr.T("flag.search.keyword")},
-				{Name: "priority-id", Usage: tr.T("flag.pr.priority_id")},
-				{Name: "tag-id", Usage: tr.T("flag.pr.tag_id")},
-				{Name: "milestone-id", Usage: tr.T("flag.pr.milestone_id")},
-				{Name: "reviewer-id", Usage: tr.T("flag.pr.reviewer_id")},
-				{Name: "assignee-id", Usage: tr.T("flag.pr.assignee_id")},
-				{Name: "sort-by", Usage: tr.T("flag.sort_by")},
-				{Name: "sort-direction", Usage: tr.T("flag.sort_direction")},
-				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
-				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+				{Name: "state", Short: "s", Usage: "Filter: open, merged, closed", Default: "open"},
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -57,34 +26,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
-				if s := normalizePullRequestListState(ctx.Arg("state")); s != "" {
-					q.Set("status", s)
+				if s := ctx.Arg("state"); s != "" {
+					q.Set("state", s)
 				}
-				if keyword := ctx.Arg("keyword"); keyword != "" {
-					q.Set("keyword", keyword)
-				}
-				if priorityID := ctx.Arg("priority-id"); priorityID != "" {
-					q.Set("priority_id", priorityID)
-				}
-				if tagID := ctx.Arg("tag-id"); tagID != "" {
-					q.Set("issue_tag_id", tagID)
-				}
-				if milestoneID := ctx.Arg("milestone-id"); milestoneID != "" {
-					q.Set("version_id", milestoneID)
-				}
-				if reviewerID := ctx.Arg("reviewer-id"); reviewerID != "" {
-					q.Set("reviewer_id", reviewerID)
-				}
-				if assigneeID := ctx.Arg("assignee-id"); assigneeID != "" {
-					q.Set("assign_user_id", assigneeID)
-				}
-				if sortBy := ctx.Arg("sort-by"); sortBy != "" {
-					q.Set("sort_by", sortBy)
-				}
-				if sortDirection := ctx.Arg("sort-direction"); sortDirection != "" {
-					q.Set("sort_direction", sortDirection)
-				}
-				env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx)+"/pulls", q)
+				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/pulls", q)
 				if err != nil {
 					return err
 				}
@@ -93,12 +38,12 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: tr.T("cmd.pr.create.short"),
+			Description: "Create a pull request",
 			Flags: []common.Flag{
-				{Name: "title", Short: "t", Usage: tr.T("flag.pr.title"), Required: true},
-				{Name: "body", Short: "b", Usage: tr.T("flag.pr.body")},
-				{Name: "head", Usage: tr.T("flag.pr.head"), Required: true},
-				{Name: "base", Usage: tr.T("flag.pr.base"), Default: "master"},
+				{Name: "title", Short: "t", Usage: "PR title", Required: true},
+				{Name: "body", Short: "b", Usage: "PR description"},
+				{Name: "head", Usage: "Source branch", Required: true},
+				{Name: "base", Usage: "Target branch", Default: "master"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -127,9 +72,9 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "view",
-			Description: tr.T("cmd.pr.view.short"),
+			Description: "View pull request details",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -148,10 +93,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "merge",
-			Description: tr.T("cmd.pr.merge.short"),
+			Description: "Merge a pull request",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
-				{Name: "method", Short: "m", Usage: tr.T("flag.pr.merge_method"), Default: "merge"},
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "method", Short: "m", Usage: "Merge method: merge, rebase, squash", Default: "merge"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -173,10 +118,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "refuse",
-			Description: "Refuse and close a pull request",
+			Name:        "close",
+			Description: "Close a pull request",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -213,9 +158,9 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "files",
-			Description: tr.T("cmd.pr.files.short"),
+			Description: "List changed files in a pull request",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -231,9 +176,9 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "diff",
-			Description: tr.T("cmd.pr.diff.short"),
+			Description: "Show diff for a pull request",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -249,9 +194,9 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "versions",
-			Description: tr.T("cmd.pr.versions.short"),
+			Description: "List pull request patchset versions",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -270,11 +215,11 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "version-diff",
-			Description: tr.T("cmd.pr.version_diff.short"),
+			Description: "Show diff for a pull request patchset version",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
-				{Name: "version-id", Short: "v", Usage: tr.T("flag.pr.version_id"), Required: true},
-				{Name: "file", Short: "f", Usage: tr.T("flag.pr.file")},
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "version-id", Short: "v", Usage: "Patchset version ID", Required: true},
+				{Name: "file", Short: "f", Usage: "Filter diff by file path"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -307,10 +252,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "reviews",
-			Description: tr.T("cmd.pr.reviews.short"),
+			Description: "List pull request reviews",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
-				{Name: "status", Short: "s", Usage: tr.T("flag.pr.review_status_filter")},
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "status", Short: "s", Usage: "Filter review status: common, approved, rejected"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -336,13 +281,13 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "review",
-			Description: tr.T("cmd.pr.review.short"),
+			Description: "Create a pull request review",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
-				{Name: "status", Short: "s", Usage: tr.T("flag.pr.review_status"), Default: "common"},
-				{Name: "content", Short: "c", Usage: tr.T("flag.pr.review_content"), Required: true},
-				{Name: "commit", Short: "m", Usage: tr.T("flag.pr.review_commit")},
-				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "status", Short: "s", Usage: "Review status: common, approved, rejected", Default: "common"},
+				{Name: "content", Short: "c", Usage: "Review content", Required: true},
+				{Name: "commit", Short: "m", Usage: "Commit SHA to attach the review to"},
+				{Name: "dry-run", Usage: "Preview the review request without creating it", Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -383,29 +328,15 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-
-				// Also post a journal comment so the review is visible in the PR conversation.
-				prEnv, journalErr := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
-				if journalErr == nil {
-					if issueID, extractErr := extractIssueID(prEnv); extractErr == nil {
-						statusLabel := map[string]string{
-							"approved": "approved", "rejected": "rejected", "common": "commented",
-						}[status]
-						summary := fmt.Sprintf("## Review: %s\n\n%s", statusLabel, content)
-						ctx.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, issueID),
-							map[string]interface{}{"notes": summary})
-					}
-				}
-
 				return ctx.Output(env)
 			},
 		},
 		{
 			Name:        "comment",
-			Description: tr.T("cmd.pr.comment.short"),
+			Description: "Add a comment to a pull request",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
-				{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
+				{Name: "body", Short: "b", Usage: "Comment body", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -434,332 +365,76 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "review-comments",
-			Description: "List pull request review comments and discussion threads",
+			Name:        "commits",
+			Description: "List commits in a pull request",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
-				{Name: "keyword", Short: "k", Usage: "Search review comment content"},
-				{Name: "review-id", Usage: "Filter by review ID"},
-				{Name: "need-respond", Usage: "Filter comments that need response: true or false"},
-				{Name: "state", Short: "s", Usage: "Filter by opened, resolved, or disabled"},
-				{Name: "parent-id", Usage: "Filter replies under a parent comment ID"},
-				{Name: "path", Usage: "Filter by file path"},
-				{Name: "full", Usage: "Include replies in the response", Bool: true, Default: "false"},
-				{Name: "sort-by", Usage: "Sort field: created_on or updated_on"},
-				{Name: "sort-direction", Usage: "Sort direction: asc or desc"},
+				{Name: "id", Short: "i", Usage: "PR number", Required: true},
 			},
-			Run: runPRReviewComments,
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", prV1Path(ctx, id)+"/commits", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
 		},
 		{
-			Name:        "review-comment",
-			Description: "Create a pull request review comment or reply",
-			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
-				{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
-				{Name: "type", Usage: "Comment type: comment or problem", Default: "comment"},
-				{Name: "review-id", Usage: "Review ID"},
-				{Name: "line-code", Usage: "GitLink diff line code"},
-				{Name: "commit", Usage: "Commit SHA for the commented diff"},
-				{Name: "path", Usage: "Commented file path"},
-				{Name: "parent-id", Usage: "Parent review comment ID for a reply"},
-				{Name: "diff-json", Usage: "Raw diff JSON object for line comments"},
-				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
+			Name:        "branches",
+			Description: "List branches for pull request creation",
+			Flags:       []common.Flag{},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/pulls/get_branches", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
 			},
-			Run: runPRReviewCommentCreate,
 		},
 		{
-			Name:        "review-comment-update",
-			Description: "Update a pull request review comment note, commit, or state",
+			Name:        "check-merge",
+			Description: "Check if two branches can be merged",
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
-				{Name: "comment-id", Usage: "Review comment ID", Required: true},
-				{Name: "body", Short: "b", Usage: tr.T("flag.comment.body")},
-				{Name: "commit", Usage: "Commit SHA"},
-				{Name: "state", Short: "s", Usage: "New state: opened, resolved, or disabled"},
-				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
+				{Name: "head", Usage: "Source branch", Required: true},
+				{Name: "base", Usage: "Target branch", Required: true},
 			},
-			Run: runPRReviewCommentUpdate,
-		},
-		{
-			Name:        "review-comment-delete",
-			Description: "Delete a pull request review comment",
-			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
-				{Name: "comment-id", Usage: "Review comment ID", Required: true},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				head, err := ctx.RequireArg("head")
+				if err != nil {
+					return err
+				}
+				base, err := ctx.RequireArg("base")
+				if err != nil {
+					return err
+				}
+				payload := map[string]interface{}{
+					"head": head,
+					"base": base,
+				}
+				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/pulls/check_can_merge", payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
 			},
-			Run: runPRReviewCommentDelete,
 		},
 	}
-}
-
-func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
-	if len(translators) > 0 && translators[0] != nil {
-		return translators[0]
-	}
-	return i18n.Default()
 }
 
 func prV1Path(ctx *common.RuntimeContext, id string) string {
 	return fmt.Sprintf("/v1/%s/%s/pulls/%s", ctx.Owner, ctx.Repo, id)
-}
-
-func prReviewCommentPath(ctx *common.RuntimeContext, prID string) string {
-	return fmt.Sprintf("%s/journals", prV1Path(ctx, url.PathEscape(prID)))
-}
-
-func prReviewCommentItemPath(ctx *common.RuntimeContext, prID, commentID string) string {
-	return fmt.Sprintf("%s/%s", prReviewCommentPath(ctx, prID), url.PathEscape(commentID))
-}
-
-func runPRReviewComments(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	id, err := ctx.RequireArg("id")
-	if err != nil {
-		return err
-	}
-	q := url.Values{}
-	setPRQueryIfPresent(q, "keyword", ctx.Arg("keyword"))
-	if reviewID := ctx.Arg("review-id"); reviewID != "" {
-		if _, err := parsePRPositiveID(reviewID, "review-id"); err != nil {
-			return err
-		}
-		q.Set("review_id", strings.TrimSpace(reviewID))
-	}
-	if needRespond := ctx.Arg("need-respond"); needRespond != "" {
-		if err := validatePRBoolString("need-respond", needRespond); err != nil {
-			return err
-		}
-		q.Set("need_respond", strings.ToLower(strings.TrimSpace(needRespond)))
-	}
-	if state := ctx.Arg("state"); state != "" {
-		if err := validatePRReviewCommentState(state); err != nil {
-			return err
-		}
-		q.Set("state", strings.TrimSpace(state))
-	}
-	if parentID := ctx.Arg("parent-id"); parentID != "" {
-		if _, err := parsePRPositiveID(parentID, "parent-id"); err != nil {
-			return err
-		}
-		q.Set("parent_id", strings.TrimSpace(parentID))
-	}
-	setPRQueryIfPresent(q, "path", ctx.Arg("path"))
-	if ctx.Arg("full") == "true" {
-		q.Set("is_full", "true")
-	}
-	setPRQueryIfPresent(q, "sort_by", ctx.Arg("sort-by"))
-	setPRQueryIfPresent(q, "sort_direction", ctx.Arg("sort-direction"))
-	env, err := ctx.CallAPIWithQuery("GET", prReviewCommentPath(ctx, id), q)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func runPRReviewCommentCreate(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	id, err := ctx.RequireArg("id")
-	if err != nil {
-		return err
-	}
-	body, err := ctx.RequireArg("body")
-	if err != nil {
-		return err
-	}
-	payload, err := prReviewCommentCreatePayload(ctx, body)
-	if err != nil {
-		return err
-	}
-	if ctx.Arg("dry-run") == "true" {
-		return ctx.OutputData(map[string]interface{}{
-			"repository":   fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
-			"pull_request": id,
-			"dry_run":      true,
-			"action":       "create_review_comment",
-			"payload":      payload,
-		})
-	}
-	env, err := ctx.CallAPI("POST", prReviewCommentPath(ctx, id), payload)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func runPRReviewCommentUpdate(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	prID, commentID, err := prReviewCommentTarget(ctx)
-	if err != nil {
-		return err
-	}
-	payload, err := prReviewCommentUpdatePayload(ctx)
-	if err != nil {
-		return err
-	}
-	if ctx.Arg("dry-run") == "true" {
-		return ctx.OutputData(map[string]interface{}{
-			"repository":     fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
-			"pull_request":   prID,
-			"review_comment": commentID,
-			"dry_run":        true,
-			"action":         "update_review_comment",
-			"payload":        payload,
-		})
-	}
-	env, err := ctx.CallAPI("PUT", prReviewCommentItemPath(ctx, prID, commentID), payload)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func runPRReviewCommentDelete(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	prID, commentID, err := prReviewCommentTarget(ctx)
-	if err != nil {
-		return err
-	}
-	env, err := ctx.CallAPI("DELETE", prReviewCommentItemPath(ctx, prID, commentID), nil)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-func prReviewCommentCreatePayload(ctx *common.RuntimeContext, body string) (map[string]interface{}, error) {
-	commentType := firstPRNonEmpty(ctx.Arg("type"), "comment")
-	if err := validatePRReviewCommentType(commentType); err != nil {
-		return nil, err
-	}
-	payload := map[string]interface{}{
-		"type": commentType,
-		"note": body,
-	}
-	for _, field := range []struct {
-		flag string
-		key  string
-	}{
-		{"review-id", "review_id"},
-		{"parent-id", "parent_id"},
-	} {
-		if value := ctx.Arg(field.flag); value != "" {
-			id, err := parsePRPositiveID(value, field.flag)
-			if err != nil {
-				return nil, err
-			}
-			payload[field.key] = id
-		}
-	}
-	setPayloadStringIfPresent(payload, "line_code", ctx.Arg("line-code"))
-	setPayloadStringIfPresent(payload, "commit_id", ctx.Arg("commit"))
-	setPayloadStringIfPresent(payload, "path", ctx.Arg("path"))
-	if rawDiff := strings.TrimSpace(ctx.Arg("diff-json")); rawDiff != "" {
-		var diff map[string]interface{}
-		if err := json.Unmarshal([]byte(rawDiff), &diff); err != nil {
-			return nil, fmt.Errorf("invalid --diff-json: %w", err)
-		}
-		payload["diff"] = diff
-	}
-	return payload, nil
-}
-
-func prReviewCommentUpdatePayload(ctx *common.RuntimeContext) (map[string]interface{}, error) {
-	payload := map[string]interface{}{}
-	setPayloadStringIfPresent(payload, "note", ctx.Arg("body"))
-	setPayloadStringIfPresent(payload, "commit_id", ctx.Arg("commit"))
-	if state := ctx.Arg("state"); state != "" {
-		if err := validatePRReviewCommentState(state); err != nil {
-			return nil, err
-		}
-		payload["state"] = strings.TrimSpace(state)
-	}
-	if len(payload) == 0 {
-		return nil, fmt.Errorf("at least one of --body, --commit, or --state is required")
-	}
-	return payload, nil
-}
-
-func prReviewCommentTarget(ctx *common.RuntimeContext) (string, string, error) {
-	prID, err := ctx.RequireArg("id")
-	if err != nil {
-		return "", "", err
-	}
-	commentID, err := ctx.RequireArg("comment-id")
-	if err != nil {
-		return "", "", err
-	}
-	if _, err := parsePRPositiveID(commentID, "comment-id"); err != nil {
-		return "", "", err
-	}
-	return strings.TrimSpace(prID), strings.TrimSpace(commentID), nil
-}
-
-func validatePRReviewCommentType(value string) error {
-	switch strings.TrimSpace(value) {
-	case "comment", "problem":
-		return nil
-	default:
-		return fmt.Errorf("invalid --type value %q: use comment or problem", value)
-	}
-}
-
-func validatePRReviewCommentState(value string) error {
-	switch strings.TrimSpace(value) {
-	case "opened", "resolved", "disabled":
-		return nil
-	default:
-		return fmt.Errorf("invalid --state value %q: use opened, resolved, or disabled", value)
-	}
-}
-
-func validatePRBoolString(flagName, value string) error {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "true", "false":
-		return nil
-	default:
-		return fmt.Errorf("invalid --%s value %q: use true or false", flagName, value)
-	}
-}
-
-func parsePRPositiveID(value, flagName string) (int, error) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return 0, fmt.Errorf("--%s contains an empty ID", flagName)
-	}
-	id, err := strconv.Atoi(trimmed)
-	if err != nil || id <= 0 {
-		return 0, fmt.Errorf("--%s must be a positive numeric ID", flagName)
-	}
-	return id, nil
-}
-
-func setPRQueryIfPresent(q url.Values, key, value string) {
-	if strings.TrimSpace(value) != "" {
-		q.Set(key, strings.TrimSpace(value))
-	}
-}
-
-func setPayloadStringIfPresent(payload map[string]interface{}, key, value string) {
-	if strings.TrimSpace(value) != "" {
-		payload[key] = strings.TrimSpace(value)
-	}
-}
-
-func firstPRNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
 }
 
 func validatePRReviewStatus(status string) error {

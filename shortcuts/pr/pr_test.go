@@ -825,6 +825,120 @@ func TestPRDiffHTTPError(t *testing.T) {
 	}
 }
 
+// --- commits ---
+
+func TestPRCommits(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/owner/repo/pulls/42/commits.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, []interface{}{
+			map[string]interface{}{"sha": "abc1234", "message": "fix: bug"},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "commits", map[string]string{"id": "42"})
+	if err != nil {
+		t.Fatalf("commits failed: %v", err)
+	}
+}
+
+func TestPRCommitsHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "commits", map[string]string{"id": "42"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+// --- branches ---
+
+func TestPRBranches(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/pulls/get_branches.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, []interface{}{
+			map[string]interface{}{"name": "master"},
+			map[string]interface{}{"name": "develop"},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "branches", map[string]string{})
+	if err != nil {
+		t.Fatalf("branches failed: %v", err)
+	}
+}
+
+func TestPRBranchesHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "branches", map[string]string{})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
+// --- check-merge ---
+
+func TestPRCheckMerge(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/pulls/check_can_merge.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"can_merge": true})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "check-merge", map[string]string{
+		"head": "feature/x",
+		"base": "master",
+	})
+	if err != nil {
+		t.Fatalf("check-merge failed: %v", err)
+	}
+	assertEqual(t, payload["head"], "feature/x")
+	assertEqual(t, payload["base"], "master")
+}
+
+func TestPRCheckMergeHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "check-merge", map[string]string{
+		"head": "feature/x",
+		"base": "master",
+	})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
 func runPRShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
 	t.Helper()
 	shortcut := findPRShortcut(t, name)
