@@ -23,7 +23,6 @@ metadata:
 | `repo +list` | 仓库列表 | 否（公开项目） |
 | `repo +info` | 仓库详情 | 否（公开项目） |
 | `repo +readme` | README 内容 | 否（公开项目） |
-| `repo +file` | 任意仓库文件内容 | 否（公开项目） |
 | `repo +tree` | 仓库文件树 | 否（公开项目） |
 | `repo +languages` | 仓库语言统计 | 否（公开项目） |
 | `repo +contributors` | 仓库贡献者列表 | 否（公开项目） |
@@ -37,10 +36,10 @@ metadata:
 | `repo +unlike` | 取消点赞仓库 | 是 |
 | `repo +create` | 创建仓库 | 是 |
 | `repo +fork` | Fork 仓库 | 是 |
-| `repo +delete` | 删除仓库 | 是 |
-| `repo +transfer-orgs` | 列出可接收仓库转移的组织 | 是 |
-| `repo +transfer` | 发起仓库转移 | 是 |
+| `repo +transfer-orgs` | 查看可接收仓库转移的组织 | 是 |
+| `repo +transfer` | 发起仓库转移请求 | 是 |
 | `repo +transfer-cancel` | 取消待处理的仓库转移 | 是 |
+| `repo +delete` | 删除仓库 | 是 |
 
 ## 使用示例
 
@@ -58,8 +57,6 @@ gitlink-cli repo +list --user zhangsan
 # 查看文件树、语言占比和贡献者
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
-gitlink-cli repo +file --owner Gitlink --repo forgeplus --path go.mod --ref master
-gitlink-cli repo +file --owner Gitlink --repo forgeplus --path .gitignore --content-only
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 gitlink-cli repo +contributors --owner Gitlink --repo forgeplus
 
@@ -95,8 +92,6 @@ gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-or
 
 # 取消待处理的仓库转移
 gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --dry-run
-
-# 确认后取消待处理的仓库转移
 gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --yes
 
 # 删除仓库（⚠️ 危险操作）
@@ -125,11 +120,8 @@ gitlink-cli api GET /:owner/:repo/commits --query 'page=1&limit=20'
 # 获取标签列表
 gitlink-cli api GET /:owner/:repo/tags
 
-# 获取文件内容（Shortcut 优先）
-gitlink-cli repo +file --owner Gitlink --repo forgeplus --path README.md --ref master
-
-# Raw API 仍可用于未封装场景
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=README.md&ref=master'
+# 获取文件内容
+gitlink-cli api GET /:owner/:repo/raw/main/README.md
 ```
 
 ## 注意事项
@@ -138,4 +130,3 @@ gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=README.md&ref=ma
 - `repo +transfer` 会改变仓库所有者，只有显式传入 `--yes` 才会真正发起；执行前先使用 `repo +transfer-orgs` 确认可转移目标，并用 `--dry-run` 预览请求
 - `repo +transfer-cancel` 只用于取消已发起且未处理的转移申请，只有显式传入 `--yes` 才会真正执行，建议先用 `--dry-run` 预览
 - 创建仓库默认为公开，使用 `--private true` 创建私有仓库
-- `repo +file` 只接受文件路径；如果目标是目录，请改用 `repo +tree`

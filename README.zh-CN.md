@@ -260,11 +260,30 @@ gitlink-cli repo +unfollow --owner Gitlink --repo forgeplus --project-id 123
 gitlink-cli repo +like --owner Gitlink --repo forgeplus
 gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 
+# 查看和更新仓库导航模块
+gitlink-cli repo +units --owner Gitlink --repo forgeplus
+gitlink-cli repo +set-units --owner Gitlink --repo forgeplus --units code,issues,pulls,wiki
+
 # 创建仓库
 gitlink-cli repo +create -n my-project -d "项目描述"
 
 # Fork 仓库
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+
+# 列出可接收仓库转移的组织
+gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
+
+# 预览仓库转移请求，不修改线上数据
+gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org --dry-run
+
+# 确认后发起仓库转移
+gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org --yes
+
+# 预览取消待处理的仓库转移
+gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --dry-run
+
+# 确认后取消待处理的仓库转移
+gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --yes
 ```
 
 ### Webhook 管理

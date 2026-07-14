@@ -249,11 +249,30 @@ gitlink-cli repo +unfollow --owner Gitlink --repo forgeplus --project-id 123
 gitlink-cli repo +like --owner Gitlink --repo forgeplus
 gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 
+# List and update repository navigation units
+gitlink-cli repo +units --owner Gitlink --repo forgeplus
+gitlink-cli repo +set-units --owner Gitlink --repo forgeplus --units code,issues,pulls,wiki
+
 # Create a repository
 gitlink-cli repo +create -n my-project -d "Project description"
 
 # Fork a repository
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+
+# List organizations that can receive a repository transfer
+gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
+
+# Preview a repository transfer without changing data
+gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org --dry-run
+
+# Confirm and send a repository transfer request
+gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org --yes
+
+# Preview canceling a pending repository transfer
+gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --dry-run
+
+# Confirm canceling a pending repository transfer
+gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --yes
 ```
 
 ### Webhook Management
