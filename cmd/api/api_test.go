@@ -32,6 +32,55 @@ func TestResolveFormat(t *testing.T) {
 	}
 }
 
+func TestResolvePathPlaceholders(t *testing.T) {
+	origOwner, origRepo := cmdutil.Owner, cmdutil.Repo
+	t.Cleanup(func() { cmdutil.Owner, cmdutil.Repo = origOwner, origRepo })
+	cmdutil.Owner, cmdutil.Repo = "demo-owner", "demo-repo"
+
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{"colon placeholders", "/:owner/:repo/issues", "/demo-owner/demo-repo/issues"},
+		{"colon with suffix", "/:owner/:repo/issues/42", "/demo-owner/demo-repo/issues/42"},
+		{"brace placeholders", "/{{owner}}/{{repo}}/pulls", "/demo-owner/demo-repo/pulls"},
+		{"no placeholders unchanged", "/users/me", "/users/me"},
+		{"literal path unchanged", "/Gitlink/gitlink-cli/issues", "/Gitlink/gitlink-cli/issues"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolvePathPlaceholders(tt.path)
+			if err != nil {
+				t.Fatalf("resolvePathPlaceholders(%q): %v", tt.path, err)
+			}
+			if got != tt.want {
+				t.Fatalf("resolvePathPlaceholders(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolvePathPlaceholdersUnresolvable(t *testing.T) {
+	origOwner, origRepo := cmdutil.Owner, cmdutil.Repo
+	t.Cleanup(func() { cmdutil.Owner, cmdutil.Repo = origOwner, origRepo })
+	cmdutil.Owner, cmdutil.Repo = "", ""
+
+	tmp := t.TempDir()
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origWD) })
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := resolvePathPlaceholders("/:owner/:repo/issues"); err == nil {
+		t.Fatal("expected error when owner/repo cannot be resolved")
+	}
+}
+
 func TestNewAPICmd(t *testing.T) {
 	cmd := NewAPICmd()
 	if cmd.Use != "api (<METHOD> <PATH> | --batch-file <FILE>)" {

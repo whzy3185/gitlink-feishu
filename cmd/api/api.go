@@ -7,23 +7,15 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/client"
-	"github.com/gitlink-org/gitlink-cli/internal/context"
+	repocontext "github.com/gitlink-org/gitlink-cli/internal/context"
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
-)
-
-// apiOwnerPlaceholder and apiRepoPlaceholder match the REST-style :owner / :repo
-// path placeholders used throughout the GitLink API docs and shortcut commands.
-var (
-	apiOwnerPlaceholder = regexp.MustCompile(`:owner\b`)
-	apiRepoPlaceholder  = regexp.MustCompile(`:repo\b`)
 )
 
 func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
@@ -69,32 +61,6 @@ func validateAPIArgs(c *cobra.Command, args []string) error {
 	return cobra.ExactArgs(2)(c, args)
 }
 
-// msysPathRe matches Windows drive-letter prefixes produced by MSYS2/Git Bash
-// path conversion, e.g. "C:/Program Files/Git/v1/owner/repo" for input "/v1/owner/repo".
-var msysPathRe = regexp.MustCompile(`^[A-Za-z]:/`)
-
-// restoreAPIPath restores an API path polluted by MSYS2/Git Bash path
-// conversion on Windows, e.g. "C:/Program Files/Git/v1/owner/repo" -> "/v1/owner/repo".
-// If the path does not start with a drive letter, or no known API prefix is
-// found, the original path is returned unchanged.
-func restoreAPIPath(path string) string {
-	if !msysPathRe.MatchString(path) {
-		return path
-	}
-	// Pick the EARLIEST occurrence among known API prefixes, so a path like
-	// ".../api/v1/users" restores to "/api/v1/users" rather than "/v1/users".
-	bestIdx := -1
-	for _, prefix := range []string{"/v1/", "/v2/", "/api/", "/users/", "/projects/"} {
-		if idx := strings.Index(path, prefix); idx >= 0 && (bestIdx == -1 || idx < bestIdx) {
-			bestIdx = idx
-		}
-	}
-	if bestIdx >= 0 {
-		return path[bestIdx:]
-	}
-	return path
-}
-
 func runAPI(c *cobra.Command, args []string) error {
 	batchFile, _ := c.Flags().GetString("batch-file")
 	if batchFile != "" {
@@ -102,12 +68,13 @@ func runAPI(c *cobra.Command, args []string) error {
 	}
 
 	method := strings.ToUpper(args[0])
+	path := args[1]
 
-	// Fix MSYS2/Git Bash path auto-conversion on Windows first:
-	// "/v1/owner/repo" is rewritten to "C:/Program Files/Git/v1/owner/repo".
-	rawPath := restoreAPIPath(args[1])
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
 
-	path, err := resolveAPIPath(c, rawPath)
+	path, err := resolvePathPlaceholders(path)
 	if err != nil {
 		return err
 	}
@@ -146,37 +113,24 @@ func runAPI(c *cobra.Command, args []string) error {
 	return output.Print(env, resolveFormat())
 }
 
-// resolveAPIPath prepares a single-call path: it renders {{var}} templates
-// supplied via --var (consistent with batch mode), substitutes the REST-style
-// :owner / :repo placeholders (resolved from --owner/--repo or the git remote,
-// exactly like the shortcut commands), and ensures a leading slash.
-func resolveAPIPath(c *cobra.Command, rawPath string) (string, error) {
-	path := rawPath
-
-	overrides, err := parseBatchVars(c)
+// resolvePathPlaceholders substitutes :owner/:repo (and {{owner}}/{{repo}})
+// segments in a single-call path with the global --owner/--repo flags or the
+// values auto-resolved from the current git remote, matching the help-text
+// examples. Paths without placeholders are returned unchanged.
+func resolvePathPlaceholders(path string) (string, error) {
+	hasColon := strings.Contains(path, "/:owner") || strings.Contains(path, "/:repo")
+	hasBrace := strings.Contains(path, "{{owner}}") || strings.Contains(path, "{{repo}}")
+	if !hasColon && !hasBrace {
+		return path, nil
+	}
+	owner, repo, err := repocontext.ResolveOwnerRepo(cmdutil.Owner, cmdutil.Repo)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("path contains :owner/:repo placeholders: %w", err)
 	}
-	if len(overrides) > 0 {
-		rendered, rerr := renderTemplate(path, overrides)
-		if rerr != nil {
-			return "", rerr
-		}
-		path = rendered
-	}
-
-	if apiOwnerPlaceholder.MatchString(path) || apiRepoPlaceholder.MatchString(path) {
-		owner, repo, rerr := context.ResolveOwnerRepo(cmdutil.Owner, cmdutil.Repo)
-		if rerr != nil {
-			return "", fmt.Errorf("path contains :owner/:repo placeholders but they could not be resolved: %w", rerr)
-		}
-		path = apiOwnerPlaceholder.ReplaceAllLiteralString(path, owner)
-		path = apiRepoPlaceholder.ReplaceAllLiteralString(path, repo)
-	}
-
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
+	path = strings.ReplaceAll(path, "/:owner", "/"+owner)
+	path = strings.ReplaceAll(path, "/:repo", "/"+repo)
+	path = strings.ReplaceAll(path, "{{owner}}", owner)
+	path = strings.ReplaceAll(path, "{{repo}}", repo)
 	return path, nil
 }
 
