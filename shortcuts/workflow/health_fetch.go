@@ -200,7 +200,7 @@ func updateRecentActivity(input HealthInput, latest time.Time) (bool, int, Healt
 		return input.RecentActivityKnown, input.RecentActivityDays, input
 	}
 	days := apiAgeInDays(latest)
-	if !input.RecentActivityKnown || days < input.RecentActivityDays {
+	if !input.RecentActivityKnown || days < input.RecentActivityDays || input.RecentActivityDays == 0 {
 		input.RecentActivityKnown = true
 		input.RecentActivityDays = days
 	}
@@ -220,52 +220,52 @@ func queryWithPageLimit(base url.Values, page, limit int) url.Values {
 	return base
 }
 
-// The GitLink v1 list API filters issues by category and pulls by status; a
-// stray "state" param is silently ignored and every state is returned.
 func issueListQuery(state string) url.Values {
 	q := url.Values{}
-	q.Set("category", normalizeIssueListCategory(state))
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "open", "opened", "":
+		q.Set("category", "opened")
+	case "closed":
+		q.Set("category", "closed")
+	case "all":
+		q.Set("category", "all")
+	default:
+		q.Set("category", state)
+	}
 	return q
 }
 
 func pullListQuery(state string) url.Values {
 	q := url.Values{}
-	if status := normalizePullListStatus(state); status != "" {
-		q.Set("status", status)
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "open", "opened":
+		q.Set("status", "0")
+	case "merged":
+		q.Set("status", "1")
+	case "closed":
+		q.Set("status", "2")
+	case "all", "":
+	default:
+		q.Set("status", state)
 	}
 	return q
 }
 
-func normalizeIssueListCategory(state string) string {
-	switch strings.ToLower(strings.TrimSpace(state)) {
-	case "open", "opened":
-		return "opened"
-	case "closed":
-		return "closed"
-	default:
-		return "all"
-	}
-}
-
-func normalizePullListStatus(state string) string {
-	switch strings.ToLower(strings.TrimSpace(state)) {
-	case "open", "opened":
-		return "0"
-	case "merged":
-		return "1"
-	case "closed":
-		return "2"
-	default:
-		return ""
-	}
-}
-
 func fetchAllListItems(ctx *common.RuntimeContext, path string, baseQuery url.Values, pageSize int) ([]map[string]interface{}, error) {
+	return fetchListItems(ctx, path, baseQuery, pageSize, 0)
+}
+
+func fetchListItems(ctx *common.RuntimeContext, path string, baseQuery url.Values, pageSize, maxItems int) ([]map[string]interface{}, error) {
 	if pageSize <= 0 {
-		pageSize = 100
+		pageSize = 50
+	}
+	if maxItems > 0 && pageSize > maxItems {
+		pageSize = maxItems
 	}
 	all := []map[string]interface{}{}
-	for page := 1; ; page++ {
+	seen := map[string]struct{}{}
+	totalCount := 0
+	for page := 1; page <= 1000; page++ {
 		query := cloneValues(baseQuery)
 		query.Set("page", fmt.Sprintf("%d", page))
 		query.Set("limit", fmt.Sprintf("%d", pageSize))
@@ -273,6 +273,12 @@ func fetchAllListItems(ctx *common.RuntimeContext, path string, baseQuery url.Va
 		env, err := ctx.CallAPIWithQuery("GET", path, query)
 		if err != nil {
 			return nil, err
+		}
+		if env.Meta != nil && env.Meta.TotalCount > totalCount {
+			totalCount = env.Meta.TotalCount
+		}
+		if dataTotal := apiListTotal(env.Data); dataTotal > totalCount {
+			totalCount = dataTotal
 		}
 		items := apiList(env.Data)
 		pageItems := make([]map[string]interface{}, 0, len(items))
@@ -284,12 +290,50 @@ func fetchAllListItems(ctx *common.RuntimeContext, path string, baseQuery url.Va
 		if len(pageItems) == 0 {
 			break
 		}
-		all = append(all, pageItems...)
-		if len(pageItems) < pageSize {
+		before := len(all)
+		for _, item := range pageItems {
+			key := listItemIdentity(item)
+			if key != "" {
+				if _, exists := seen[key]; exists {
+					continue
+				}
+				seen[key] = struct{}{}
+			}
+			all = append(all, item)
+			if maxItems > 0 && len(all) >= maxItems {
+				return all[:maxItems], nil
+			}
+		}
+		if totalCount > 0 && len(all) >= totalCount {
+			break
+		}
+		if len(all) == before {
+			break
+		}
+		if totalCount == 0 && len(pageItems) < pageSize {
 			break
 		}
 	}
 	return all, nil
+}
+
+func apiListTotal(data interface{}) int {
+	object := apiObject(data)
+	for _, key := range []string{"total_count", "opened_count", "total"} {
+		if total := apiInt(object[key]); total > 0 {
+			return total
+		}
+	}
+	return 0
+}
+
+func listItemIdentity(item map[string]interface{}) string {
+	for _, key := range []string{"id", "database_id", "index", "number", "iid", "project_issues_index"} {
+		if value := apiString(item[key]); value != "" {
+			return key + ":" + value
+		}
+	}
+	return ""
 }
 
 func cloneValues(values url.Values) url.Values {

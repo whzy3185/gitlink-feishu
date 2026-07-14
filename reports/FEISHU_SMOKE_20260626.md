@@ -1,0 +1,231 @@
+# Feishu Smoke Report
+
+Date: 2026-06-26 20:58:49 +08:00
+
+## Branch
+
+```text
+feat/feishu-export-clean
+```
+
+## Commit
+
+```text
+73da46c143b37cb2b26e9e624b8c39963ad52d77
+```
+
+The worktree was dirty during this smoke run because the Feishu implementation
+and documentation were still being updated.
+
+## Mode
+
+```text
+real Feishu test enterprise plus local previews
+```
+
+## Test Environment
+
+```text
+Feishu test enterprise: used
+Custom bot in test group: used
+Self-built app with broad test permissions: used
+Feishu DocX target: used
+Feishu Base target: used
+Feishu Task API: used
+GitLink real repository data: Gitlink/gitlink-cli
+Reference PR IDs for smoke notes: 95, 29, 75
+GitLink write operations: not used
+```
+
+All Feishu resource IDs, tokens, webhook URLs, app credentials, table IDs, and
+document IDs were kept in `.local/feishu-gitlink.env.ps1` and are not committed.
+
+The Feishu self-built app in this test enterprise was intentionally granted
+broad permissions for validation. This is not the recommended production
+permission model. A production deployment should use the smallest scopes and
+resource permissions required by the enabled commands.
+
+## Redacted Environment Presence
+
+| Variable | Present? | Notes |
+| --- | --- | --- |
+| `FEISHU_WEBHOOK_URL` | present | redacted in CLI output |
+| `FEISHU_WEBHOOK_SECRET` | present | redacted in CLI output |
+| `FEISHU_APP_ID` | present | redacted where printed |
+| `FEISHU_APP_SECRET` | present | never printed |
+| `FEISHU_FOLDER_TOKEN` | present | redacted |
+| `FEISHU_DOCUMENT_ID` | present | redacted |
+| `FEISHU_BASE_APP_TOKEN` | present | redacted |
+| `FEISHU_REPORT_TABLE_ID` | present | split test table |
+| `FEISHU_ISSUE_TABLE_ID` | present | split test table |
+| `FEISHU_PR_TABLE_ID` | present | split test table |
+| `FEISHU_CONTRIBUTOR_TABLE_ID` | present | split test table |
+| `FEISHU_TASK_TABLE_ID` | present | split test table |
+| `FEISHU_TASK_PROJECT_ID` | missing | optional; current request body does not place tasks into project/section |
+| `FEISHU_TASK_SECTION_ID` | missing | optional; current request body does not place tasks into project/section |
+| `GITLINK_OWNER` | present | `Gitlink` |
+| `GITLINK_REPO` | present | `gitlink-cli` |
+| `GITLINK_TEST_PR_IDS` | present | `95,29,75` |
+| `GITLINK_TOKEN` | missing | not required for the read-only workflow report in this run |
+
+## GitLink Report Source
+
+Command:
+
+```powershell
+go run . workflow +repo-report --owner $env:GITLINK_OWNER --repo $env:GITLINK_REPO --format json > .local\report.json
+go run . workflow +repo-report --owner $env:GITLINK_OWNER --repo $env:GITLINK_REPO --lang zh-CN --format json > .local\report.zh-CN.json
+```
+
+Result:
+
+| Item | Value |
+| --- | --- |
+| Repository | `Gitlink/gitlink-cli` |
+| Report score | `49` |
+| Risk level | `high` |
+| Health score | `58` |
+| Issues | `19` |
+| Pull requests | `10` |
+| Source | `remote-read-only-fetch` |
+
+The workflow command does not currently filter the report by explicit PR IDs, so
+`GITLINK_TEST_PR_IDS` is recorded as smoke context rather than a hard filter.
+
+## Real Feishu Results
+
+| Command | Result | Details |
+| --- | --- | --- |
+| `feishu +bot-test --send` | pass | custom bot returned Feishu code `0` |
+| `feishu +notify --send` | pass | English/default workflow card delivered |
+| `feishu +weekly-report --send` | pass | weekly report card delivered |
+| `feishu +owner-digest --send` | pass | owner digest card delivered |
+| `feishu +contributor-digest --send` | pass | contributor digest card delivered |
+| `feishu +notify --lang zh-CN --send` | pass | Chinese workflow card delivered |
+| `feishu +owner-digest --lang zh-CN --send` | pass | Chinese owner digest delivered |
+| `feishu +contributor-digest --lang zh-CN --send` | pass | Chinese contributor digest delivered |
+| `feishu +app-check --remote` | pass | custom bot, app credentials, and tenant_access_token checked with redacted output |
+| `feishu +doc-check --remote` | pass | app credentials and configured DocX/folder targets checked; edit/create permission intentionally not checked without writing |
+| `feishu +bitable-check --remote` | pass | five split Bitable tables passed sentinel `unique_key` search without writing records |
+| `feishu +task-check --remote` | pass with warnings | app credentials and tenant_access_token checked; project/section/dedupe remain next-stage boundaries |
+| `feishu +doc-export --send` | pass | appended 9 DocX blocks to the configured document |
+| `feishu +doc-export --lang zh-CN --send` | pass | appended 9 localized DocX blocks |
+| `feishu +bitable-sync --tables reports --send` | pass after table fields were added | created the report record |
+| `feishu +bitable-sync --tables reports,issues,prs,contributors,tasks --send` | pass | updated 1 report, created 5 issue buckets, 2 PR buckets, 1 contributor bucket, 7 task buckets |
+| `feishu +bitable-sync --lang zh-CN --send` | pass | updated existing records from the Chinese workflow JSON |
+| split-table `feishu +bitable-sync --send` | pass | wrote to 5 separate Bitable tables: reports=1, issues=5, prs=2, contributors=1, tasks=7 |
+| `feishu +task-preview --lang zh-CN` | pass | generated 7 Chinese task candidates |
+| `feishu +task-create --lang zh-CN --send` | pass | created 7 Feishu tasks |
+
+## Bitable Setup Observation
+
+The provided Feishu Base URLs pointed to one Base and one table with multiple
+views. The test enterprise initially had only the default fields. A direct
+OpenAPI inspection found one table and the default fields only, so the test
+table was expanded with the fields expected by the CLI records:
+
+```text
+unique_key, repository, health_score, risk_level, report_score,
+issue_total, issue_high_risk, issue_missing_info, pr_total, pr_high_risk,
+review_focus_count, generated_at, source, doc_url, issue_group, priority,
+count, risk_reason, recommended_action, gitlink_url, pr_group, review_focus,
+contributor, role, open_items, risk_items, task_title, task_type, source_type,
+source_key, recommended_owner, status, due_hint
+```
+
+This confirms that `+bitable-sync` can search, create, and update records when
+the target table already has compatible fields. It does not yet create Base
+tables or views itself.
+
+After the first one-table validation, five dedicated test tables were created
+or reused in the same Base:
+
+```text
+gitlink_reports
+gitlink_issues
+gitlink_prs
+gitlink_contributors
+gitlink_tasks
+```
+
+Each table was populated with its own required fields and then validated with
+`+bitable-sync --send`. The split-table run created records in every table:
+
+```text
+reports: 1
+issues: 5
+prs: 2
+contributors: 1
+tasks: 7
+```
+
+This split-table validation is better evidence for the project-management model
+than the earlier one-table/multiple-view validation.
+
+## i18n Result
+
+Feishu command-level Chinese output is usable:
+
+```text
+workflow +repo-report --lang zh-CN
+feishu +notify --lang zh-CN
+feishu +owner-digest --lang zh-CN
+feishu +contributor-digest --lang zh-CN
+feishu +doc-export --lang zh-CN
+feishu +task-preview --lang zh-CN
+feishu +task-create --lang zh-CN
+```
+
+The Feishu module localizes stable card labels, digest headings, common
+recommendations, DocX block headings, and task candidate titles. For best
+results, generate the source workflow report with `--lang zh-CN` and pass
+`--lang zh-CN` again to the Feishu command.
+
+Repository-wide i18n formatting check:
+
+```text
+go run ./internal/i18n/cmd/check
+```
+
+Result:
+
+```text
+fail: internal/i18n/locales/en-US.json is not formatted
+```
+
+That appears to be an existing locale formatting issue outside the Feishu
+module. It was not fixed in this smoke run to avoid unrelated locale churn.
+
+## Tests
+
+| Check | Result |
+| --- | --- |
+| `go test ./shortcuts/feishu` | pass |
+| `go test ./shortcuts/workflow` | pass |
+| `go test ./shortcuts` | pass |
+| `go test ./...` | pass |
+| `go build .` | pass |
+| `go vet ./...` | pass |
+| Raw secret scan over tracked/unignored candidate files | pass |
+
+## Known Limitations
+
+```text
+1. Bitable sync requires existing Base/table/fields; CLI does not create tables or views.
+2. The first smoke used one test table for all record groups; a later smoke created split tables and proved every record group can write to its own table.
+3. Current Bitable records are summary buckets, not row-level PR/Issue/CI records.
+4. `+bitable-check --remote` can verify table access and unique_key search before writes, but it still does not create fields or validate every field type.
+5. Feishu task creation does not yet map project/section placement into the request body; this is a next-stage capability boundary.
+6. Feishu-side task dedupe/search is not implemented; avoid repeated real task-create runs unless duplicates are acceptable.
+7. No Feishu callback server is implemented.
+8. No GitLink write operation is implemented.
+9. Image evidence is deferred and is not part of this upload.
+```
+
+## Image Evidence
+
+Image files are intentionally not included in this upload.
+
+The validation evidence for this round is command output, real OpenAPI results,
+the permission matrix, and the smoke report. UI screenshots can be collected in
+a later documentation pass if needed.

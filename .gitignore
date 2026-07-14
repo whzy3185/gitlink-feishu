@@ -1,7 +1,9 @@
-docs/
-doc/
-# Python & demo artifacts
-__pycache__/
-*.pyc
-demo/bin/
-data/
+
+gitlink-cli.exe
+/gitlink-cli
+.local/*
+!.local/
+!.local/feishu-gitlink.env.example.ps1
+*.local.ps1
+*.secret.*
+reports/feishu-real-smoke-terminal.log

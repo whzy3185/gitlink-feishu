@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
@@ -28,8 +27,7 @@ func FetchIssuesForTriage(ctx *common.RuntimeContext, opts TriageFetchOptions) (
 		state = "open"
 	}
 
-	query := url.Values{}
-	query.Set("category", normalizeIssueListCategory(state))
+	query := issueListQuery(state)
 	query.Set("limit", fmt.Sprintf("%d", limit))
 	query.Set("page", fmt.Sprintf("%d", page))
 	if len(opts.Labels) > 0 {
@@ -81,13 +79,13 @@ func normalizeIssueItem(raw interface{}) (IssueInput, bool) {
 	if id == "" {
 		id = fmt.Sprintf("%d", number)
 	}
-	state := firstIssueState(item)
+	state := firstIssueString(item, "state", "status")
 	author := firstIssueString(item, "author", "user", "creator")
 	urlValue := firstIssueString(item, "html_url", "url", "web_url")
-	labels := firstIssueLabels(item["labels"], item["tags"], item["issue_tags"])
+	labels := firstIssueLabels(item["labels"])
 	createdAt := firstIssueTime(item, "created_at", "created")
 	updatedAt := firstIssueTime(item, "updated_at", "updated", "last_updated_at")
-	comments := firstIssueInt(item, "comments_count", "comments", "comment_journals_count", "journals_count")
+	comments := firstIssueInt(item, "comments_count", "comments")
 
 	return IssueInput{
 		ID:            id,
@@ -150,48 +148,21 @@ func firstIssueTime(item map[string]interface{}, keys ...string) time.Time {
 	return time.Time{}
 }
 
-func firstIssueState(item map[string]interface{}) string {
-	if state := firstIssueString(item, "state", "status_name"); state != "" {
-		return state
-	}
-	if raw, ok := item["status"]; ok {
-		switch value := raw.(type) {
-		case map[string]interface{}:
-			for _, key := range []string{"name", "title", "label", "state"} {
-				if state := apiString(value[key]); state != "" {
-					return state
-				}
-			}
-		default:
-			if state := apiString(raw); state != "" {
-				return state
+func firstIssueLabels(value interface{}) []string {
+	switch labels := value.(type) {
+	case []interface{}:
+		out := make([]string, 0, len(labels))
+		for _, label := range labels {
+			if s := apiStringValue(label); s != "" {
+				out = append(out, s)
 			}
 		}
+		return out
+	case []string:
+		return append([]string(nil), labels...)
+	case string:
+		return apiStringSlice(labels)
+	default:
+		return nil
 	}
-	return ""
-}
-
-func firstIssueLabels(values ...interface{}) []string {
-	out := []string{}
-	for _, value := range values {
-		switch labels := value.(type) {
-		case []interface{}:
-			for _, label := range labels {
-				if s := apiStringValue(label); s != "" {
-					out = append(out, s)
-				}
-			}
-		case []map[string]interface{}:
-			for _, label := range labels {
-				if s := apiStringValue(label); s != "" {
-					out = append(out, s)
-				}
-			}
-		case []string:
-			out = append(out, labels...)
-		case string:
-			out = append(out, apiStringSlice(labels)...)
-		}
-	}
-	return uniqueStrings(out)
 }
