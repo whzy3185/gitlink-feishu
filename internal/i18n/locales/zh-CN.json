@@ -267,5 +267,15 @@
   "success.config.set": "✓ 已设置 {key} = {value}",
   "warning.auth.not_logged_in": "✗ 未登录",
   "warning.auth.token_unverified": "✓ Token 已保存（但无法验证：{message}）",
-  "warning.auth.user_unavailable": "✓ Token 已保存（用户信息不可用）"
+  "warning.auth.user_unavailable": "✓ Token 已保存（用户信息不可用）",
+  "cmd.ignore.short": "忽略文件模板操作",
+  "cmd.pipeline.short": "流水线操作",
+  "cmd.compare.short": "比较分支、标签或提交",
+  "cmd.wiki.short": "Wiki 页面管理",
+  "cmd.health.short": "项目健康度数据采集",
+  "cmd.workflow.short": "AI Agent 工作流分析",
+  "cmd.label.short": "Issue 标签操作",
+  "cmd.license.short": "许可证操作",
+  "cmd.member.short": "仓库成员操作",
+  "cmd.milestone.short": "里程碑操作"
 }

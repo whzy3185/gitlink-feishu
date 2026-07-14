@@ -267,5 +267,15 @@
   "success.config.set": "✓ {key} = {value}",
   "warning.auth.not_logged_in": "✗ Not logged in",
   "warning.auth.token_unverified": "✓ Token stored (but cannot verify: {message})",
-  "warning.auth.user_unavailable": "✓ Token stored (user info unavailable)"
+  "warning.auth.user_unavailable": "✓ Token stored (user info unavailable)",
+  "cmd.ignore.short": "Ignore file template operations",
+  "cmd.pipeline.short": "Pipeline operations",
+  "cmd.compare.short": "Compare branches, tags, or commits",
+  "cmd.wiki.short": "Wiki page management",
+  "cmd.health.short": "Project health data collection",
+  "cmd.workflow.short": "AI agent workflow analysis",
+  "cmd.label.short": "Issue label operations",
+  "cmd.license.short": "License operations",
+  "cmd.member.short": "Repository member operations",
+  "cmd.milestone.short": "Milestone operations"
 }
