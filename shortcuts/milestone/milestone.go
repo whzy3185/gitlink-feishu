@@ -5,22 +5,24 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List milestones",
+			Description: tr.T("cmd.milestone.list.short"),
 			Flags: []common.Flag{
-				{Name: "keyword", Short: "k", Usage: "Search keyword"},
-				{Name: "category", Short: "c", Usage: "Filter by category: opening, closed"},
-				{Name: "only-name", Usage: "Return only milestone id and name: true or false"},
-				{Name: "sort-by", Usage: "Sort field: created_on, updated_on, effective_date, issues_count, percent"},
-				{Name: "sort-direction", Usage: "Sort direction: asc or desc"},
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "keyword", Short: "k", Usage: tr.T("flag.search.keyword")},
+				{Name: "category", Short: "c", Usage: tr.T("flag.milestone.category")},
+				{Name: "only-name", Usage: tr.T("flag.milestone.only_name")},
+				{Name: "sort-by", Usage: tr.T("flag.milestone.sort_by")},
+				{Name: "sort-direction", Usage: tr.T("flag.milestone.sort_direction")},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -43,11 +45,11 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: "Create a milestone",
+			Description: tr.T("cmd.milestone.create.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Milestone name", Required: true},
-				{Name: "description", Short: "d", Usage: "Milestone description"},
-				{Name: "due-date", Usage: "Due date in YYYY-MM-DD format"},
+				{Name: "name", Short: "n", Usage: tr.T("flag.milestone.name"), Required: true},
+				{Name: "description", Short: "d", Usage: tr.T("flag.milestone.description"), Required: true},
+				{Name: "due-date", Usage: tr.T("flag.milestone.due_date"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -66,17 +68,17 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "view",
-			Description: "View milestone details and linked issues",
+			Description: tr.T("cmd.milestone.view.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Milestone ID", Required: true},
-				{Name: "category", Short: "c", Usage: "Filter issues by category: all, opened, closed"},
-				{Name: "author-id", Usage: "Filter issues by author ID"},
-				{Name: "assigner-id", Usage: "Filter issues by assignee ID"},
-				{Name: "issue-tag-ids", Usage: "Comma-separated issue tag IDs"},
-				{Name: "sort-by", Usage: "Sort field: issues.created_on, issues.updated_on, issue_priorities.position"},
-				{Name: "sort-direction", Usage: "Sort direction: asc or desc"},
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.milestone.id"), Required: true},
+				{Name: "category", Short: "c", Usage: tr.T("flag.milestone.category_2")},
+				{Name: "author-id", Usage: tr.T("flag.milestone.author_id")},
+				{Name: "assigner-id", Usage: tr.T("flag.milestone.assigner_id")},
+				{Name: "issue-tag-ids", Usage: tr.T("flag.milestone.issue_tag_ids")},
+				{Name: "sort-by", Usage: tr.T("flag.milestone.sort_by_2")},
+				{Name: "sort-direction", Usage: tr.T("flag.milestone.sort_direction")},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -102,15 +104,14 @@ func Shortcuts() []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
-		newMilestoneReportShortcut(),
 		{
 			Name:        "update",
-			Description: "Update a milestone",
+			Description: tr.T("cmd.milestone.update.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Milestone ID", Required: true},
-				{Name: "name", Short: "n", Usage: "Milestone name"},
-				{Name: "description", Short: "d", Usage: "Milestone description"},
-				{Name: "due-date", Usage: "Due date in YYYY-MM-DD format"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.milestone.id"), Required: true},
+				{Name: "name", Short: "n", Usage: tr.T("flag.milestone.name")},
+				{Name: "description", Short: "d", Usage: tr.T("flag.milestone.description")},
+				{Name: "due-date", Usage: tr.T("flag.milestone.due_date")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -133,9 +134,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "delete",
-			Description: "Delete a milestone",
+			Description: tr.T("cmd.milestone.delete.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Milestone ID", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.milestone.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -152,8 +153,8 @@ func Shortcuts() []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
-		newStatusShortcut("close", "Close a milestone", "closed"),
-		newStatusShortcut("reopen", "Reopen a milestone", "open"),
+		newStatusShortcut(tr, "close", tr.T("cmd.milestone.close.short"), "closed"),
+		newStatusShortcut(tr, "reopen", tr.T("cmd.milestone.reopen.short"), "open"),
 	}
 }
 
@@ -169,7 +170,7 @@ func milestoneStatusPath(ctx *common.RuntimeContext, id string) string {
 	return fmt.Sprintf("%s/milestones/%s/update_status", ctx.RepoPath(), url.PathEscape(id))
 }
 
-func milestonePayload(ctx *common.RuntimeContext, requireName bool) (map[string]interface{}, error) {
+func milestonePayload(ctx *common.RuntimeContext, requireAll bool) (map[string]interface{}, error) {
 	payload := map[string]interface{}{}
 	if name := ctx.Arg("name"); name != "" {
 		payload["name"] = name
@@ -181,9 +182,11 @@ func milestonePayload(ctx *common.RuntimeContext, requireName bool) (map[string]
 		payload["effective_date"] = dueDate
 	}
 
-	if requireName {
-		if _, err := ctx.RequireArg("name"); err != nil {
-			return nil, err
+	if requireAll {
+		for _, name := range []string{"name", "description", "due-date"} {
+			if _, err := ctx.RequireArg(name); err != nil {
+				return nil, err
+			}
 		}
 		return payload, nil
 	}
@@ -193,12 +196,12 @@ func milestonePayload(ctx *common.RuntimeContext, requireName bool) (map[string]
 	return payload, nil
 }
 
-func newStatusShortcut(name, description, status string) *common.Shortcut {
+func newStatusShortcut(tr *i18n.Translator, name, description, status string) *common.Shortcut {
 	return &common.Shortcut{
 		Name:        name,
 		Description: description,
 		Flags: []common.Flag{
-			{Name: "id", Short: "i", Usage: "Milestone ID", Required: true},
+			{Name: "id", Short: "i", Usage: tr.T("flag.milestone.id"), Required: true},
 		},
 		Run: func(ctx *common.RuntimeContext) error {
 			if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -235,4 +238,11 @@ func normalizeCSV(value string) string {
 		}
 	}
 	return strings.Join(result, ",")
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

@@ -16,18 +16,14 @@ import (
 )
 
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
-	tr := i18n.Default()
-	if len(translators) > 0 && translators[0] != nil {
-		tr = translators[0]
-	}
-
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "fetch",
-			Description: "Fetch PR and Issue data into SQLite for health analysis",
+			Description: tr.T("cmd.health.fetch.short"),
 			Flags: []common.Flag{
-				{Name: "db", Short: "d", Usage: "SQLite database path (default: ~/.agents/skills/gitlink-health/data/gitlink_health.db)"},
-				{Name: "max-pages", Short: "M", Usage: "Maximum pages per query (default: unlimited)"},
+				{Name: "db", Short: "d", Usage: tr.T("flag.health.db")},
+				{Name: "max-pages", Short: "M", Usage: tr.T("flag.health.max_pages")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -53,7 +49,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				defer func() { _ = db.Close() }()
+				defer db.Close()
 
 				repoID, err := getOrCreateRepo(db, ctx.Repo, ctx.Owner)
 				if err != nil {
@@ -97,7 +93,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return nil
 			},
 		},
-		diagnoseShortcut(tr),
 	}
 }
 
@@ -229,4 +224,11 @@ func fetchIssues(ctx *common.RuntimeContext, db *sql.DB, repoID int, state strin
 		page++
 	}
 	return nil
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

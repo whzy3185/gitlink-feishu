@@ -7,18 +7,20 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List platform pipelines",
+			Description: tr.T("cmd.pipeline.list.short"),
 			Flags: []common.Flag{
-				{Name: "owner-id", Usage: "Owner user or organization ID"},
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "owner-id", Usage: tr.T("flag.pipeline.owner_id")},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				q := pageLimitQuery(ctx)
@@ -32,8 +34,8 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "runs",
-			Description: "List pipeline run records",
-			Flags:       runFilterFlags(),
+			Description: tr.T("cmd.pipeline.runs.short"),
+			Flags:       runFilterFlags(tr),
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
@@ -47,9 +49,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "run",
-			Description: "Run a pipeline workflow",
-			Flags: append(runFilterFlags(),
-				common.Flag{Name: "dry-run", Usage: "Preview the run request without starting a pipeline", Bool: true, Default: "false"},
+			Description: tr.T("cmd.pipeline.run.short"),
+			Flags: append(runFilterFlags(tr),
+				common.Flag{Name: "dry-run", Usage: tr.T("flag.pipeline.dry_run"), Bool: true, Default: "false"},
 			),
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -76,9 +78,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "view",
-			Description: "Show pipeline details",
+			Description: tr.T("cmd.pipeline.view.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Pipeline ID", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pipeline.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -97,10 +99,10 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "delete",
-			Description: "Delete a pipeline",
+			Description: tr.T("cmd.pipeline.delete.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Pipeline ID", Required: true},
-				{Name: "dry-run", Usage: "Preview the delete request without changing pipeline state", Bool: true, Default: "false"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pipeline.id"), Required: true},
+				{Name: "dry-run", Usage: tr.T("flag.pipeline.dry_run_2"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -129,11 +131,11 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "save-yaml",
-			Description: "Save a visual pipeline YAML graph",
+			Description: tr.T("cmd.pipeline.save-yaml.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "Pipeline ID", Required: true},
-				{Name: "pipeline-json", Usage: "Pipeline graph JSON object or string", Required: true},
-				{Name: "dry-run", Usage: "Preview the save request without changing pipeline state", Bool: true, Default: "false"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pipeline.id"), Required: true},
+				{Name: "pipeline-json", Usage: tr.T("flag.pipeline.pipeline_json"), Required: true},
+				{Name: "dry-run", Usage: tr.T("flag.pipeline.dry_run_2"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -171,31 +173,31 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "enable",
-			Description: "Enable a pipeline workflow",
-			Flags:       workflowStateFlags(true),
+			Description: tr.T("cmd.pipeline.enable.short"),
+			Flags:       workflowStateFlags(tr, true),
 			Run: func(ctx *common.RuntimeContext) error {
 				return runWorkflowState(ctx, "enable")
 			},
 		},
 		{
 			Name:        "disable",
-			Description: "Disable a pipeline workflow",
-			Flags:       workflowStateFlags(true),
+			Description: tr.T("cmd.pipeline.disable.short"),
+			Flags:       workflowStateFlags(tr, true),
 			Run: func(ctx *common.RuntimeContext) error {
 				return runWorkflowState(ctx, "disable")
 			},
 		},
 		{
 			Name:        "logs",
-			Description: "Query pipeline run logs",
+			Description: tr.T("cmd.pipeline.logs.short"),
 			Flags: []common.Flag{
-				{Name: "run-id", Short: "r", Usage: "Pipeline run ID", Required: true},
-				{Name: "id", Short: "i", Usage: "Pipeline ID", Required: true},
-				{Name: "index", Usage: "Run index", Required: true},
-				{Name: "job", Short: "j", Usage: "Job index", Default: "0"},
-				{Name: "cursor", Usage: "Log cursor"},
-				{Name: "step", Usage: "Log step", Default: "1"},
-				{Name: "expanded", Usage: "Whether the log cursor is expanded", Bool: true, Default: "true"},
+				{Name: "run-id", Short: "r", Usage: tr.T("flag.pipeline.run_id"), Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.pipeline.id"), Required: true},
+				{Name: "index", Usage: tr.T("flag.pipeline.index"), Required: true},
+				{Name: "job", Short: "j", Usage: tr.T("flag.pipeline.job"), Default: "0"},
+				{Name: "cursor", Usage: tr.T("flag.pipeline.cursor")},
+				{Name: "step", Usage: tr.T("flag.pipeline.step"), Default: "1"},
+				{Name: "expanded", Usage: tr.T("flag.pipeline.expanded"), Bool: true, Default: "true"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -244,9 +246,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "results",
-			Description: "Show pipeline run report results",
+			Description: tr.T("cmd.pipeline.results.short"),
 			Flags: []common.Flag{
-				{Name: "run-id", Short: "r", Usage: "Pipeline run ID"},
+				{Name: "run-id", Short: "r", Usage: tr.T("flag.pipeline.run_id")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -268,10 +270,10 @@ func pipelineV1RepoPath(ctx *common.RuntimeContext) string {
 	return "/v1" + ctx.RepoPath()
 }
 
-func runFilterFlags() []common.Flag {
+func runFilterFlags(tr *i18n.Translator) []common.Flag {
 	return []common.Flag{
-		{Name: "ref", Short: "r", Usage: "Branch, tag, or commit SHA"},
-		{Name: "workflow", Short: "w", Usage: "Workflow file name"},
+		{Name: "ref", Short: "r", Usage: tr.T("flag.pipeline.ref")},
+		{Name: "workflow", Short: "w", Usage: tr.T("flag.pipeline.workflow")},
 	}
 }
 
@@ -282,13 +284,13 @@ func runFilterQuery(ctx *common.RuntimeContext) url.Values {
 	return q
 }
 
-func workflowStateFlags(includeDryRun bool) []common.Flag {
+func workflowStateFlags(tr *i18n.Translator, includeDryRun bool) []common.Flag {
 	flags := []common.Flag{
-		{Name: "id", Short: "i", Usage: "Pipeline ID", Required: true},
-		{Name: "workflow", Short: "w", Usage: "Workflow file name", Required: true},
+		{Name: "id", Short: "i", Usage: tr.T("flag.pipeline.id"), Required: true},
+		{Name: "workflow", Short: "w", Usage: tr.T("flag.pipeline.workflow"), Required: true},
 	}
 	if includeDryRun {
-		flags = append(flags, common.Flag{Name: "dry-run", Usage: "Preview the request without changing pipeline state", Bool: true, Default: "false"})
+		flags = append(flags, common.Flag{Name: "dry-run", Usage: tr.T("flag.pipeline.dry_run_2"), Bool: true, Default: "false"})
 	}
 	return flags
 }
@@ -386,4 +388,11 @@ func requiredNonNegativeIntWithDefault(ctx *common.RuntimeContext, flagName stri
 		return 0, fmt.Errorf("--%s must be a non-negative integer", flagName)
 	}
 	return id, nil
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

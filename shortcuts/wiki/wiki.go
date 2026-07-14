@@ -2,301 +2,208 @@ package wiki
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/url"
-	"strings"
-	"time"
 
+	"github.com/gitlink-org/gitlink-cli/internal/config"
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-const wikiBaseURL = "https://gateway.gitlink.org.cn/api"
+// switchToGateway overrides the client base URL with the gateway URL from config.
+func switchToGateway(ctx *common.RuntimeContext) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	if cfg.GatewayURL == "" {
+		cfg.GatewayURL = config.DefaultGatewayURL
+	}
+	ctx.Client.BaseURL = cfg.GatewayURL
+	return nil
+}
 
-func Shortcuts() []*common.Shortcut {
+// gatewayFlag returns the common --gateway flag definition.
+func gatewayFlag(tr *i18n.Translator) common.Flag {
+	return common.Flag{Name: "gateway", Short: "g", Usage: tr.T("flag.wiki.gateway"), Bool: true}
+}
+
+// Shortcuts returns all wiki shortcuts.
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List wiki pages",
+			Description: tr.T("cmd.wiki.list.short"),
+			Flags: []common.Flag{
+				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
+				gatewayFlag(tr),
+			},
 			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
+				if ctx.Arg("gateway") == "true" {
+					if err := switchToGateway(ctx); err != nil {
+						return err
+					}
 				}
-				projectID, err := fetchProjectID(ctx)
-				if err != nil {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
 				q := url.Values{}
 				q.Set("owner", ctx.Owner)
 				q.Set("repo", ctx.Repo)
-				q.Set("projectId", fmt.Sprintf("%d", projectID))
-				return callWikiAPI(ctx, "GET", "/wiki/open/wikiPages", nil, q)
+				q.Set("projectId", ctx.Arg("project-id"))
+				env, err := ctx.CallAPIWithQuery("GET", "/wiki/open/wikiPages", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
 			},
 		},
 		{
 			Name:        "view",
-			Description: "View a wiki page",
+			Description: tr.T("cmd.wiki.view.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Wiki page name", Required: true},
+				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
+				{Name: "page-name", Short: "n", Usage: tr.T("flag.wiki.page_name"), Required: true},
+				gatewayFlag(tr),
 			},
 			Run: func(ctx *common.RuntimeContext) error {
+				if ctx.Arg("gateway") == "true" {
+					if err := switchToGateway(ctx); err != nil {
+						return err
+					}
+				}
 				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				name, err := ctx.RequireArg("name")
-				if err != nil {
-					return err
-				}
-				projectID, err := fetchProjectID(ctx)
-				if err != nil {
 					return err
 				}
 				q := url.Values{}
 				q.Set("owner", ctx.Owner)
 				q.Set("repo", ctx.Repo)
-				q.Set("projectId", fmt.Sprintf("%d", projectID))
-				q.Set("pageName", name)
-				return callWikiAPI(ctx, "GET", "/wiki/open/getWiki", nil, q)
+				q.Set("projectId", ctx.Arg("project-id"))
+				q.Set("pageName", ctx.Arg("page-name"))
+				env, err := ctx.CallAPIWithQuery("GET", "/wiki/open/getWiki", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
 			},
 		},
 		{
 			Name:        "create",
-			Description: "Create a wiki page",
+			Description: tr.T("cmd.wiki.create.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Wiki page name", Required: true},
-				{Name: "content", Short: "c", Usage: "Page content (will be base64 encoded)", Required: true},
-				{Name: "message", Short: "m", Usage: "Commit message"},
+				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
+				{Name: "page-name", Short: "n", Usage: tr.T("flag.wiki.page_name"), Required: true},
+				{Name: "title", Short: "t", Usage: tr.T("flag.wiki.title"), Required: true},
+				{Name: "content", Short: "c", Usage: tr.T("flag.wiki.content"), Required: true},
+				{Name: "message", Short: "m", Usage: tr.T("flag.wiki.message")},
+				gatewayFlag(tr),
 			},
 			Run: func(ctx *common.RuntimeContext) error {
+				if ctx.Arg("gateway") == "true" {
+					if err := switchToGateway(ctx); err != nil {
+						return err
+					}
+				}
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				name, err := ctx.RequireArg("name")
-				if err != nil {
-					return err
-				}
-				content, err := ctx.RequireArg("content")
-				if err != nil {
-					return err
-				}
-				projectID, err := fetchProjectID(ctx)
-				if err != nil {
-					return err
-				}
-				body := map[string]interface{}{
+				content := ctx.Arg("content")
+				payload := map[string]interface{}{
 					"owner":          ctx.Owner,
 					"repo":           ctx.Repo,
-					"projectId":      projectID,
-					"pageName":       name,
-					"title":          name,
-					"message":        ctx.Arg("message"),
+					"projectId":      ctx.Arg("project-id"),
+					"pageName":       ctx.Arg("page-name"),
+					"title":          ctx.Arg("title"),
 					"content_base64": base64.StdEncoding.EncodeToString([]byte(content)),
+					"message":        ctx.Arg("message"),
 				}
-				return callWikiAPI(ctx, "POST", "/wiki/open/createWiki", body, nil)
+				env, err := ctx.CallAPI("POST", "/wiki/open/createWiki", payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
 			},
 		},
 		{
 			Name:        "update",
-			Description: "Update a wiki page",
+			Description: tr.T("cmd.wiki.update.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Wiki page name", Required: true},
-				{Name: "content", Short: "c", Usage: "New page content (will be base64 encoded)", Required: true},
-				{Name: "message", Short: "m", Usage: "Commit message"},
+				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
+				{Name: "page-name", Short: "n", Usage: tr.T("flag.wiki.page_name"), Required: true},
+				{Name: "title", Short: "t", Usage: tr.T("flag.wiki.title"), Required: true},
+				{Name: "content", Short: "c", Usage: tr.T("flag.wiki.content")},
+				{Name: "message", Short: "m", Usage: tr.T("flag.wiki.message")},
+				gatewayFlag(tr),
 			},
 			Run: func(ctx *common.RuntimeContext) error {
+				if ctx.Arg("gateway") == "true" {
+					if err := switchToGateway(ctx); err != nil {
+						return err
+					}
+				}
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				name, err := ctx.RequireArg("name")
+				title := ctx.Arg("title")
+				if title == "" {
+					return fmt.Errorf("--title is required")
+				}
+				content := ctx.Arg("content")
+				payload := map[string]interface{}{
+					"owner":     ctx.Owner,
+					"repo":      ctx.Repo,
+					"projectId": ctx.Arg("project-id"),
+					"pageName":  ctx.Arg("page-name"),
+					"title":     title,
+					"message":   ctx.Arg("message"),
+				}
+				if content != "" {
+					payload["content_base64"] = base64.StdEncoding.EncodeToString([]byte(content))
+				}
+				env, err := ctx.CallAPI("PUT", "/wiki/open/updateWiki", payload)
 				if err != nil {
 					return err
 				}
-				content, err := ctx.RequireArg("content")
-				if err != nil {
-					return err
-				}
-				projectID, err := fetchProjectID(ctx)
-				if err != nil {
-					return err
-				}
-				body := map[string]interface{}{
-					"owner":          ctx.Owner,
-					"repo":           ctx.Repo,
-					"projectId":      projectID,
-					"pageName":       name,
-					"title":          name,
-					"message":        ctx.Arg("message"),
-					"content_base64": base64.StdEncoding.EncodeToString([]byte(content)),
-				}
-				return callWikiAPI(ctx, "PUT", "/wiki/open/updateWiki", body, nil)
+				return ctx.Output(env)
 			},
 		},
 		{
 			Name:        "delete",
-			Description: "Delete a wiki page and remove it from sidebar",
+			Description: tr.T("cmd.wiki.delete.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Wiki page name", Required: true},
+				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
+				{Name: "page-name", Short: "n", Usage: tr.T("flag.wiki.page_name"), Required: true},
+				gatewayFlag(tr),
 			},
 			Run: func(ctx *common.RuntimeContext) error {
+				if ctx.Arg("gateway") == "true" {
+					if err := switchToGateway(ctx); err != nil {
+						return err
+					}
+				}
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				name, err := ctx.RequireArg("name")
-				if err != nil {
-					return err
-				}
-				projectID, err := fetchProjectID(ctx)
-				if err != nil {
-					return err
-				}
-
-				// Step 1: Delete the wiki page
-				body := map[string]interface{}{
+				payload := map[string]interface{}{
 					"owner":     ctx.Owner,
 					"repo":      ctx.Repo,
-					"projectId": projectID,
-					"pageName":  name,
+					"projectId": ctx.Arg("project-id"),
+					"pageName":  ctx.Arg("page-name"),
 				}
-				if err := callWikiAPISilent(ctx, "DELETE", "/wiki/open/deleteWiki", body, nil); err != nil {
+				env, err := ctx.CallAPI("DELETE", "/wiki/open/deleteWiki", payload)
+				if err != nil {
 					return err
 				}
-
-				// Step 2: Wait for GitLink async sidebar rebuild, then clean up
-				time.Sleep(2 * time.Second)
-				cleanSidebar(ctx, projectID, name)
-
-				fmt.Printf("Wiki page %q deleted successfully.\n", name)
-				return nil
+				return ctx.Output(env)
 			},
 		},
 	}
 }
 
-// callWikiAPI sends a request to the wiki gateway.
-// It switches the client BaseURL to the wiki gateway for the duration of the call,
-// but skips the switch during tests (local httptest server).
-func callWikiAPI(ctx *common.RuntimeContext, method, path string, body interface{}, query url.Values) error {
-	origBase := ctx.Client.BaseURL
-	if !strings.HasPrefix(origBase, "http://127.0.0.1") && !strings.HasPrefix(origBase, "http://localhost") {
-		ctx.Client.BaseURL = wikiBaseURL
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
 	}
-	defer func() { ctx.Client.BaseURL = origBase }()
-
-	env, err := ctx.Client.DoRaw(method, path, body, query)
-	if err != nil {
-		return err
-	}
-	return ctx.Output(env)
-}
-
-// fetchProjectID resolves the numeric project ID from the repo info API.
-func fetchProjectID(ctx *common.RuntimeContext) (int64, error) {
-	env, err := ctx.CallAPI("GET", ctx.RepoPath(), nil)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get project info: %w", err)
-	}
-	data, ok := env.Data.(map[string]interface{})
-	if !ok {
-		return 0, fmt.Errorf("unexpected project info response")
-	}
-	for _, key := range []string{"project_id", "repo_id", "id"} {
-		if id, ok := data[key].(float64); ok {
-			return int64(id), nil
-		}
-	}
-	return 0, fmt.Errorf("project id not found in response")
-}
-
-// callWikiAPISilent is like callWikiAPI but does not print output.
-func callWikiAPISilent(ctx *common.RuntimeContext, method, path string, body interface{}, query url.Values) error {
-	origBase := ctx.Client.BaseURL
-	if !strings.HasPrefix(origBase, "http://127.0.0.1") && !strings.HasPrefix(origBase, "http://localhost") {
-		ctx.Client.BaseURL = wikiBaseURL
-	}
-	defer func() { ctx.Client.BaseURL = origBase }()
-
-	_, err := ctx.Client.DoRaw(method, path, body, query)
-	return err
-}
-
-const sidebarPageName = "_Sidebar" // GitLink uses capital S for the sidebar page
-
-// cleanSidebar fetches the wiki sidebar, removes the deleted page link, and updates it.
-func cleanSidebar(ctx *common.RuntimeContext, projectID int64, pageName string) {
-	// Fetch sidebar
-	q := url.Values{}
-	q.Set("owner", ctx.Owner)
-	q.Set("repo", ctx.Repo)
-	q.Set("projectId", fmt.Sprintf("%d", projectID))
-	q.Set("pageName", sidebarPageName)
-
-	origBase := ctx.Client.BaseURL
-	if !strings.HasPrefix(origBase, "http://127.0.0.1") && !strings.HasPrefix(origBase, "http://localhost") {
-		ctx.Client.BaseURL = wikiBaseURL
-	}
-	defer func() { ctx.Client.BaseURL = origBase }()
-
-	env, err := ctx.Client.DoRaw("GET", "/wiki/open/getWiki", nil, q)
-	if err != nil {
-		return // sidebar might not exist, silently skip
-	}
-
-	// Extract content_base64 from response.
-	// DoRaw auto-parses JSON, so env.Data is a map with "data" as either
-	// a nested dict (already parsed) or a JSON string (needs parsing).
-	outer, ok := env.Data.(map[string]interface{})
-	if !ok {
-		return
-	}
-
-	var inner map[string]interface{}
-	switch v := outer["data"].(type) {
-	case map[string]interface{}:
-		inner = v
-	case string:
-		if err := json.Unmarshal([]byte(v), &inner); err != nil {
-			return
-		}
-	default:
-		return
-	}
-
-	contentB64, ok := inner["content_base64"].(string)
-	if !ok {
-		return
-	}
-	contentBytes, err := base64.StdEncoding.DecodeString(contentB64)
-	if err != nil {
-		return
-	}
-	sidebar := string(contentBytes)
-
-	// Remove the line containing [[pageName]]
-	target := "[[" + pageName + "]]"
-	lines := strings.Split(sidebar, "\n")
-	var newLines []string
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed != target {
-			newLines = append(newLines, line)
-		}
-	}
-	newSidebar := strings.Join(newLines, "\n")
-
-	// No change needed
-	if newSidebar == sidebar {
-		return
-	}
-
-	// Update sidebar
-	body := map[string]interface{}{
-		"owner":          ctx.Owner,
-		"repo":           ctx.Repo,
-		"projectId":      projectID,
-		"pageName":       sidebarPageName,
-		"title":          sidebarPageName,
-		"message":        "Remove deleted page " + pageName + " from sidebar",
-		"content_base64": base64.StdEncoding.EncodeToString([]byte(newSidebar)),
-	}
-	ctx.Client.DoRaw("PUT", "/wiki/open/updateWiki", body, nil)
+	return i18n.Default()
 }

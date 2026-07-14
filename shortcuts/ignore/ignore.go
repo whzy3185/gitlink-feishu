@@ -3,6 +3,7 @@ package ignore
 import (
 	"net/url"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -10,13 +11,14 @@ import (
 //
 // These shortcuts provide access to the GitLink ignore-file registry,
 // which lists all available .gitignore templates supported by the platform.
-func Shortcuts() []*common.Shortcut {
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List available ignore-file templates",
+			Description: tr.T("cmd.ignore.list.short"),
 			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: "Filter ignore templates by name"},
+				{Name: "name", Short: "n", Usage: tr.T("flag.ignore.name")},
 			},
 			Run: runList,
 		},
@@ -33,4 +35,11 @@ func runList(ctx *common.RuntimeContext) error {
 		return err
 	}
 	return ctx.Output(env)
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

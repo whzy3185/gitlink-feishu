@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -48,19 +49,19 @@ type RepoPRSummary struct {
 	ReviewFocus []string       `json:"review_focus"`
 }
 
-func newRepoReportShortcut() *common.Shortcut {
+func newRepoReportShortcut(tr *i18n.Translator) *common.Shortcut {
 	return &common.Shortcut{
 		Name:        "repo-report",
-		Description: "Generate a read-only repository workflow report",
+		Description: tr.T("cmd.workflow.repo-report.short"),
 		Flags: []common.Flag{
-			{Name: "from", Usage: "Read repository report input from a JSON file"},
-			{Name: "issue-limit", Usage: "Maximum issues to fetch and analyze", Default: "20"},
-			{Name: "pr-limit", Usage: "Maximum pull requests to fetch and summarize", Default: "10"},
-			{Name: "stale-days", Usage: "Days before an issue or PR is considered stale", Default: "30"},
-			{Name: "include-issues", Usage: "Include issue triage summary", Bool: true, Default: "true"},
-			{Name: "include-prs", Usage: "Include pull request summary", Bool: true, Default: "true"},
-			{Name: "include-health", Usage: "Include repository health summary", Bool: true, Default: "true"},
-			{Name: "lang", Usage: "Output language: en or zh-CN", Default: langEN},
+			{Name: "from", Usage: tr.T("flag.workflow.repo_report.from")},
+			{Name: "issue-limit", Usage: tr.T("flag.workflow.repo_report.issue_limit"), Default: "20"},
+			{Name: "pr-limit", Usage: tr.T("flag.workflow.repo_report.pr_limit"), Default: "10"},
+			{Name: "stale-days", Usage: tr.T("flag.workflow.repo_report.stale_days"), Default: "30"},
+			{Name: "include-issues", Usage: tr.T("flag.workflow.repo_report.include_issues"), Bool: true, Default: "true"},
+			{Name: "include-prs", Usage: tr.T("flag.workflow.repo_report.include_prs"), Bool: true, Default: "true"},
+			{Name: "include-health", Usage: tr.T("flag.workflow.repo_report.include_health"), Bool: true, Default: "true"},
+			{Name: "lang", Usage: tr.T("flag.workflow.repo_report.lang"), Default: langEN},
 		},
 		Run: runRepoReport,
 	}
