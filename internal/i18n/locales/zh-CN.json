@@ -270,5 +270,19 @@
   "success.config.set": "✓ 已设置 {key} = {value}",
   "warning.auth.not_logged_in": "✗ 未登录",
   "warning.auth.token_unverified": "✓ Token 已保存（但无法验证：{message}）",
-  "warning.auth.user_unavailable": "✓ Token 已保存（用户信息不可用）"
+  "warning.auth.user_unavailable": "✓ Token 已保存（用户信息不可用）",
+  "cmd.repo.contributors.short": "列出仓库贡献者",
+  "flag.contributors.chart": "以 ASCII 图表形式展示贡献者（bar, pie, table, all）",
+  "flag.contributors.limit": "显示的最大贡献者数量",
+  "output.contributors.chart.title": "贡献者概览",
+  "output.contributors.chart.summary": "贡献者总数：{total} | 贡献总数：{count}",
+  "output.contributors.chart.rankings": "贡献者排行榜",
+  "output.contributors.chart.distribution": "贡献分布",
+  "output.contributors.chart.list": "贡献者列表",
+  "output.contributors.chart.no_data": "未找到贡献者",
+  "error.contributors.chart.unsupported_type": "不支持的图表类型：{type}（请使用：bar, pie, table 或 all）",
+  "output.contributors.chart.total_contributions": "贡献总数：{count}",
+  "output.contributors.chart.table_header": "排名  名称                    贡献次数    类型",
+  "output.contributors.chart.type_user": "用户",
+  "output.contributors.chart.type_organization": "组织"
 }

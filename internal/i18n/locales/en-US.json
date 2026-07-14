@@ -270,5 +270,19 @@
   "success.config.set": "✓ {key} = {value}",
   "warning.auth.not_logged_in": "✗ Not logged in",
   "warning.auth.token_unverified": "✓ Token stored (but cannot verify: {message})",
-  "warning.auth.user_unavailable": "✓ Token stored (user info unavailable)"
+  "warning.auth.user_unavailable": "✓ Token stored (user info unavailable)",
+  "cmd.repo.contributors.short": "List repository contributors",
+  "flag.contributors.chart": "Display contributors as ASCII chart (bar, pie, table, all)",
+  "flag.contributors.limit": "Maximum number of contributors to display",
+  "output.contributors.chart.title": "Contributors Overview",
+  "output.contributors.chart.summary": "Total Contributors: {total} | Total Contributions: {count}",
+  "output.contributors.chart.rankings": "Contributor Rankings",
+  "output.contributors.chart.distribution": "Contribution Distribution",
+  "output.contributors.chart.list": "Contributors List",
+  "output.contributors.chart.no_data": "No contributors found",
+  "error.contributors.chart.unsupported_type": "Unsupported chart type: {type} (use: bar, pie, table, or all)",
+  "output.contributors.chart.total_contributions": "Total Contributions: {count}",
+  "output.contributors.chart.table_header": "Rank  Name                    Contributions  Type",
+  "output.contributors.chart.type_user": "User",
+  "output.contributors.chart.type_organization": "Organization"
 }
