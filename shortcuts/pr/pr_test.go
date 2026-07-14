@@ -300,6 +300,44 @@ func TestPRView(t *testing.T) {
 	}
 }
 
+func TestPRViewSurfacesMergedAt(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/owner/repo/pulls/42.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"id": float64(42),
+			"pull_request": map[string]interface{}{
+				"merged_at":          "2026-07-05T12:52:05+08:00",
+				"merged":             true,
+				"pull_request_staus": "merged",
+			},
+		})
+	}))
+	defer server.Close()
+
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+		Owner:  "owner",
+		Repo:   "repo",
+		Format: "json",
+	}
+	env, err := ctx.CallAPI("GET", "/owner/repo/pulls/42", nil)
+	if err != nil {
+		t.Fatalf("CallAPI error: %v", err)
+	}
+	if err := enrichPullRequestTimestamps(ctx, env); err != nil {
+		t.Fatalf("enrich error: %v", err)
+	}
+
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("unexpected data type: %T", env.Data)
+	}
+	assertEqual(t, data["merged_at"], "2026-07-05T12:52:05+08:00")
+	assertEqual(t, data["merged"], true)
+}
+
 // --- merge ---
 
 func TestPRMerge(t *testing.T) {
