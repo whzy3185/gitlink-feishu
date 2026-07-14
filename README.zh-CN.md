@@ -553,6 +553,25 @@ gitlink-cli pipeline +disable --owner Gitlink --repo forgeplus --id 7 --workflow
 gitlink-cli pipeline +delete --owner Gitlink --repo forgeplus --id 7 --dry-run
 ```
 
+### 项目管理
+
+`pm` 暴露 GitLink 项目管理数据，覆盖看板、Sprint、周报、标签、流水线和 Action 运行记录。
+PM 命令需要传入数字项目 ID。
+
+```bash
+# 查询 PM 看板和 Sprint Issue
+gitlink-cli pm +dashboards --project-id 123 --limit 20
+gitlink-cli pm +sprint-issues --project-id 123 --page 1 --limit 20
+
+# 查询周报 Issue 和 PM Issue 标签
+gitlink-cli pm +weekly-issues --project-id 123
+gitlink-cli pm +issue-tags --project-id 123
+
+# 查询 PM 流水线和 Action 运行记录
+gitlink-cli pm +pipelines --project-id 123
+gitlink-cli pm +action-runs --project-id 123
+```
+
 ### 忽略文件模板
 
 ```bash
@@ -718,6 +737,7 @@ gitlink-cli/
 │   ├── org/                  # 组织 shortcuts
 │   ├── ci/                   # CI shortcuts
 │   ├── pipeline/             # Pipeline shortcuts
+│   ├── pm/                   # 项目管理 shortcuts
 │   ├── search/               # 搜索 shortcuts
 │   ├── user/                 # 用户 shortcuts
 │   └── register.go           # 注册入口

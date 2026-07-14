@@ -1,137 +1,71 @@
+// Package pm implements GitLink project management shortcuts.
 package pm
 
 import (
 	"net/url"
+	"strings"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-// Shortcuts returns project management shortcuts for GitLink.
-//
-// The pm domain provides commands for viewing dashboards, sprints,
-// weekly issues, tags, pipelines, and action runs associated with
-// a project.
-func Shortcuts() []*common.Shortcut {
+// Shortcuts returns project management read shortcuts.
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
-		{
-			Name:        "dashboards",
-			Description: "查看项目仪表盘数据",
-			Flags: []common.Flag{
-				{Name: "project", Usage: "项目 ID", Required: true},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				project, err := ctx.RequireArg("project")
-				if err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("project_id", project)
-				env, err := ctx.CallAPIWithQuery("GET", "/pm/dashboards", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
+		pmListShortcut(tr, "dashboards", tr.T("cmd.pm.dashboards.short"), "/pm/dashboards"),
+		pmListShortcut(tr, "sprint-issues", tr.T("cmd.pm.sprint_issues.short"), "/pm/sprint_issues"),
+		pmListShortcut(tr, "weekly-issues", tr.T("cmd.pm.weekly_issues.short"), "/pm/weekly_issues"),
+		pmListShortcut(tr, "issue-tags", tr.T("cmd.pm.issue_tags.short"), "/pm/issue_tags"),
+		pmListShortcut(tr, "pipelines", tr.T("cmd.pm.pipelines.short"), "/pm/pipelines"),
+		pmListShortcut(tr, "action-runs", tr.T("cmd.pm.action_runs.short"), "/pm/action_runs"),
+	}
+}
+
+func pmListShortcut(tr *i18n.Translator, name, description, path string) *common.Shortcut {
+	return &common.Shortcut{
+		Name:        name,
+		Description: description,
+		Flags: []common.Flag{
+			{Name: "project-id", Short: "P", Usage: tr.T("flag.pm.project_id"), Required: true},
+			{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+			{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 		},
-		{
-			Name:        "sprints",
-			Description: "查看 Sprint 任务列表",
-			Flags: []common.Flag{
-				{Name: "project", Usage: "项目 ID", Required: true},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				project, err := ctx.RequireArg("project")
-				if err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("project_id", project)
-				env, err := ctx.CallAPIWithQuery("GET", "/pm/sprint_issues", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "weekly",
-			Description: "查看周报任务",
-			Flags: []common.Flag{
-				{Name: "project", Usage: "项目 ID", Required: true},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				project, err := ctx.RequireArg("project")
-				if err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("project_id", project)
-				env, err := ctx.CallAPIWithQuery("GET", "/pm/weekly_issues", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "tags",
-			Description: "查看项目 Issue 标签",
-			Flags: []common.Flag{
-				{Name: "project", Usage: "项目 ID", Required: true},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				project, err := ctx.RequireArg("project")
-				if err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("project_id", project)
-				env, err := ctx.CallAPIWithQuery("GET", "/pm/issue_tags", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "pipelines",
-			Description: "查看项目 CI/CD 流水线列表",
-			Flags: []common.Flag{
-				{Name: "project", Usage: "项目 ID", Required: true},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				project, err := ctx.RequireArg("project")
-				if err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("project_id", project)
-				env, err := ctx.CallAPIWithQuery("GET", "/pm/pipelines", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "runs",
-			Description: "查看项目 Action 运行记录",
-			Flags: []common.Flag{
-				{Name: "project", Usage: "项目 ID", Required: true},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				project, err := ctx.RequireArg("project")
-				if err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("project_id", project)
-				env, err := ctx.CallAPIWithQuery("GET", "/pm/action_runs", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
+		Run: func(ctx *common.RuntimeContext) error {
+			projectID, err := ctx.RequireArg("project-id")
+			if err != nil {
+				return err
+			}
+			q := pmQuery(ctx, projectID)
+			env, err := ctx.CallAPIWithQuery("GET", path, q)
+			if err != nil {
+				return err
+			}
+			return ctx.Output(env)
 		},
 	}
+}
+
+func pmQuery(ctx *common.RuntimeContext, projectID string) url.Values {
+	q := url.Values{}
+	q.Set("project_id", strings.TrimSpace(projectID))
+	q.Set("page", firstNonEmpty(ctx.Arg("page"), "1"))
+	q.Set("limit", firstNonEmpty(ctx.Arg("limit"), "20"))
+	return q
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }
