@@ -494,6 +494,49 @@ gitlink-cli release +update --owner Gitlink --repo forgeplus -i <version_id> -b 
 gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --dry-run
 ```
 
+### 健康度诊断
+
+`gitlink health diagnose` 从 5 个维度分析仓库健康度：文档、许可证、社区、成熟度、CI/CD。
+
+```bash
+# 基础诊断（文本输出）
+gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli
+
+# JSON 输出，便于脚本和 AI Agent 处理
+gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli --format json
+
+# Markdown 输出，用于报告
+gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli --format markdown
+
+# 详细模式，显示完整分解
+gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli --verbose
+
+# 自定义数据库路径，用于历史追踪
+gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli --db ./health.db
+```
+
+**评分维度（总分 100 分）：**
+
+| 维度 | 权重 | 评估标准 |
+|------|------|----------|
+| 文档 | 20 | README 质量、贡献指南、行为准则 |
+| 许可证 | 15 | 许可证存在性及 OSI 认证 |
+| 社区 | 25 | 贡献者数量、活跃度、巴士系数 |
+| 成熟度 | 20 | 发布版本、版本稳定性、项目年龄 |
+| CI/CD | 20 | 构建成功率、流水线配置 |
+
+**健康状态阈值：**
+
+- `good` (≥70%)：健康项目，维护活跃
+- `warning` (≥40%)：部分领域需要关注
+- `critical` (<40%)：需要立即改进
+
+**输出格式：**
+
+- `text`（默认）：人类可读的摘要和建议
+- `json`：结构化数据，便于脚本和 AI Agent 处理
+- `markdown`：格式化报告，用于文档
+
 ### 流水线管理
 
 ```bash
@@ -676,6 +719,7 @@ git push gitlink
 | `gitlink-user` | 用户管理（个人信息等） |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |
 | `gitlink-workflow` | AI 自动化工作流（Issue 分类、PR Review、Release Notes 等） |
+| `gitlink-health` | 项目健康度诊断（5 维度评分：文档、许可证、社区、成熟度、CI/CD） |
 
 ## 项目结构
 

@@ -16,6 +16,11 @@ import (
 )
 
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := i18n.Default()
+	if len(translators) > 0 && translators[0] != nil {
+		tr = translators[0]
+	}
+
 	return []*common.Shortcut{
 		{
 			Name:        "fetch",
@@ -92,6 +97,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return nil
 			},
 		},
+		diagnoseShortcut(tr),
 	}
 }
 
