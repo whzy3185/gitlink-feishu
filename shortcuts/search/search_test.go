@@ -83,6 +83,37 @@ func TestSearchUsers(t *testing.T) {
 	}
 }
 
+// --- recommend ---
+
+func TestSearchRecommend(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/projects/recommend.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		// bare JSON array (matches the real endpoint shape)
+		writeJSON(w, []interface{}{
+			map[string]interface{}{"identifier": "forgeplus", "name": "确实开源", "visits": float64(48497)},
+		})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "recommend", nil); err != nil {
+		t.Fatalf("recommend failed: %v", err)
+	}
+}
+
+func TestSearchRecommendHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "recommend", nil); err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+}
+
 // --- HTTP error paths ---
 
 func TestSearchReposHTTPError(t *testing.T) {

@@ -102,6 +102,8 @@
   "cmd.repo.tree.short": "列出仓库文件和目录",
   "cmd.root.long": "用于管理 GitLink 上的仓库、议题、拉取请求、发布、CI 和工作流。",
   "cmd.root.short": "GitLink CLI - GitLink 命令行工具",
+  "cmd.search.recommend.long": "列出平台推荐/精选项目（ID、名称、访问量、作者、分类）。",
+  "cmd.search.recommend.short": "列出推荐项目",
   "cmd.search.repos.short": "搜索仓库",
   "cmd.search.short": "搜索操作",
   "cmd.search.users.short": "搜索用户",

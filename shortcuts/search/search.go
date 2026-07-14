@@ -1,6 +1,7 @@
 package search
 
 import (
+	"encoding/json"
 	"net/url"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
@@ -48,6 +49,26 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				env, err := ctx.CallAPIWithQuery("GET", "/users/list", q)
 				if err != nil {
 					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "recommend",
+			Description: tr.T("cmd.search.recommend.short"),
+			Long:        tr.T("cmd.search.recommend.long"),
+			Run: func(ctx *common.RuntimeContext) error {
+				env, err := ctx.CallAPI("GET", "/projects/recommend", nil)
+				if err != nil {
+					return err
+				}
+				// This endpoint returns a bare JSON array, which the client
+				// surfaces as a raw string; normalize it to structured data.
+				if s, ok := env.Data.(string); ok {
+					var arr interface{}
+					if json.Unmarshal([]byte(s), &arr) == nil {
+						return ctx.OutputData(arr)
+					}
 				}
 				return ctx.Output(env)
 			},

@@ -549,6 +549,9 @@ gitlink-cli search +repos -k "machine learning"
 
 # 搜索用户
 gitlink-cli search +users -k "zhangsan"
+
+# 列出推荐/精选项目
+gitlink-cli search +recommend
 ```
 
 ### 用户画像
