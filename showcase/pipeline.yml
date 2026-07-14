@@ -1,0 +1,31 @@
+version: 2
+name: 构建部署Showcase
+description: "代码提交自动触发：在服务器上拉取代码、构建Docker镜像并部署"
+global:
+  concurrent: 1
+trigger:
+  webhook: gitlink@1.0.0
+  event:
+    - ref: push
+      ruleset-operator: AND
+workflow:
+  - ref: start
+    name: 开始
+    task: start
+  - ref: ssh_cmd_0
+    name: SSH部署到服务器
+    task: ssh_cmd@1.1.1
+    input:
+      ssh_pass: ((deploy_server.server_password))
+      ssh_ip: '"118.31.4.168"'
+      ssh_port: '"22"'
+      ssh_user: '"root"'
+      ssh_cmd: >-
+        "mkdir -p /opt/gitlink-cli && cd /opt/gitlink-cli && (git clone https://gitlink.org.cn/chroe/gitlink-cli.git . || git pull origin master) && docker build -f showcase/Dockerfile -t gitlink-cli-showcase . && docker stop gitlink-cli-showcase || true && docker rm gitlink-cli-showcase || true && docker run -d -p 9090:9090 --name gitlink-cli-showcase --restart unless-stopped gitlink-cli-showcase"
+    needs:
+      - start
+  - ref: end
+    name: 结束
+    task: end
+    needs:
+      - ssh_cmd_0
