@@ -104,6 +104,8 @@ skills/
 │   └── SKILL.md                       # 许可证和 .gitignore 模板查询指南
 ├── gitlink-user/                      # 用户管理
 │   └── SKILL.md                       # 用户操作指南
+├── gitlink-notification/              # 通知消息管理
+│   └── SKILL.md                       # 消息与设置操作指南
 ├── gitlink-org/                       # 组织管理
 │   ├── SKILL.md                       # 组织操作指南
 │   └── examples/
@@ -151,6 +153,7 @@ skills/
 |-------|------|----------|
 | **gitlink-search** | 搜索功能 | `search +repos`, `search +users` |
 | **gitlink-user** | 用户管理 | `user +me`, `user +info` |
+| **gitlink-notification** | 通知消息管理 | `notification +list`, `notification +mark-read`, `notification +settings-update` |
 | **gitlink-org** | 组织管理 | `org +list`, `org +info`, `org +members` |
 | **gitlink-ci** | CI/CD | `ci +builds`, `ci +logs` |
 | **gitlink-pipeline** | 流水线工作流 | `pipeline +runs`, `pipeline +run`, `pipeline +logs` |
@@ -276,9 +279,10 @@ gitlink-cli attachment +upload --file screenshot.png --description "复现截图
 - [gitlink-attachment/SKILL.md](gitlink-attachment/SKILL.md) - 附件命令
 - [gitlink-meta/SKILL.md](gitlink-meta/SKILL.md) - 公开元数据命令
 
-**组织和用户**:
+**组织、用户和通知**:
 - [gitlink-org/SKILL.md](gitlink-org/SKILL.md) - 组织命令
 - [gitlink-user/SKILL.md](gitlink-user/SKILL.md) - 用户命令
+- [gitlink-notification/SKILL.md](gitlink-notification/SKILL.md) - 通知消息命令
 
 ---
 

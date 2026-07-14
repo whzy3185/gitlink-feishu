@@ -8,38 +8,261 @@ import (
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
-	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func runShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
+func TestNotificationListBuildsQuery(t *testing.T) {
+	server := newNotificationTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/users/alice/messages.json")
+		query := r.URL.Query()
+		assertEqual(t, query.Get("page"), "2")
+		assertEqual(t, query.Get("limit"), "5")
+		assertEqual(t, query.Get("type"), "atme")
+		assertEqual(t, query.Get("status"), "1")
+		writeJSON(t, w, map[string]interface{}{"total_count": 0, "messages": []interface{}{}})
+	})
+	defer server.Close()
+
+	err := runNotificationShortcut(t, server, "list", map[string]string{
+		"user":   "alice",
+		"type":   "atme",
+		"status": "unread",
+		"page":   "2",
+		"limit":  "5",
+	})
+	if err != nil {
+		t.Fatalf("list shortcut failed: %v", err)
+	}
+}
+
+func TestNotificationMarkReadPayload(t *testing.T) {
+	var payload map[string]interface{}
+	server := newNotificationTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/users/alice/messages/read.json")
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	})
+	defer server.Close()
+
+	err := runNotificationShortcut(t, server, "mark-read", map[string]string{
+		"user": "alice",
+		"ids":  "101,102,101",
+		"type": "notification",
+	})
+	if err != nil {
+		t.Fatalf("mark-read shortcut failed: %v", err)
+	}
+
+	assertEqual(t, payload["type"], "notification")
+	assertNumberSlice(t, payload["ids"], []float64{101, 102})
+}
+
+func TestNotificationMarkReadAllUnreadDryRunDoesNotCallAPI(t *testing.T) {
+	called := false
+	server := newNotificationTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		t.Fatalf("dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runNotificationShortcut(t, server, "mark-read", map[string]string{
+		"user":       "alice",
+		"all-unread": "true",
+		"dry-run":    "true",
+	})
+	if err != nil {
+		t.Fatalf("mark-read dry-run failed: %v", err)
+	}
+	if called {
+		t.Fatal("dry-run called API")
+	}
+}
+
+func TestNotificationDeletePayload(t *testing.T) {
+	var payload map[string]interface{}
+	server := newNotificationTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "DELETE", "/users/alice/messages.json")
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	})
+	defer server.Close()
+
+	err := runNotificationShortcut(t, server, "delete", map[string]string{
+		"user": "alice",
+		"ids":  "201,202",
+		"type": "atme",
+	})
+	if err != nil {
+		t.Fatalf("delete shortcut failed: %v", err)
+	}
+
+	assertEqual(t, payload["type"], "atme")
+	assertNumberSlice(t, payload["ids"], []float64{201, 202})
+}
+
+func TestNotificationCreateAtmePayload(t *testing.T) {
+	var payload map[string]interface{}
+	server := newNotificationTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/users/alice/messages.json")
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	})
+	defer server.Close()
+
+	err := runNotificationShortcut(t, server, "create-atme", map[string]string{
+		"user":          "alice",
+		"receivers":     "bob,carol,bob",
+		"atmeable-type": "issue",
+		"atmeable-id":   "99",
+	})
+	if err != nil {
+		t.Fatalf("create-atme shortcut failed: %v", err)
+	}
+
+	assertEqual(t, payload["type"], "atme")
+	assertStringSlice(t, payload["receivers_login"], []string{"bob", "carol"})
+	assertEqual(t, payload["atmeable_type"], "Issue")
+	assertEqual(t, payload["atmeable_id"], float64(99))
+}
+
+func TestNotificationPlatformSettings(t *testing.T) {
+	server := newNotificationTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/template_message_settings.json")
+		writeJSON(t, w, map[string]interface{}{"status": 0, "setting_types": []interface{}{}})
+	})
+	defer server.Close()
+
+	if err := runNotificationShortcut(t, server, "platform-settings", nil); err != nil {
+		t.Fatalf("platform-settings shortcut failed: %v", err)
+	}
+}
+
+func TestNotificationSettings(t *testing.T) {
+	server := newNotificationTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/users/alice/template_message_settings.json")
+		writeJSON(t, w, map[string]interface{}{
+			"status":            0,
+			"notification_body": map[string]bool{"Normal::Project": true},
+			"email_body":        map[string]bool{"Normal::Project": false},
+		})
+	})
+	defer server.Close()
+
+	if err := runNotificationShortcut(t, server, "settings", map[string]string{"user": "alice"}); err != nil {
+		t.Fatalf("settings shortcut failed: %v", err)
+	}
+}
+
+func TestNotificationSettingsUpdatePreservesExistingKeys(t *testing.T) {
+	var payload map[string]interface{}
+	server := newNotificationTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/users/alice/template_message_settings.json":
+			writeJSON(t, w, map[string]interface{}{
+				"status": 0,
+				"notification_body": map[string]bool{
+					"Normal::Project":      true,
+					"ManageProject::Issue": true,
+				},
+				"email_body": map[string]bool{
+					"Normal::Project":      false,
+					"ManageProject::Issue": false,
+				},
+			})
+		case r.Method == "POST" && r.URL.Path == "/users/alice/template_message_settings/update_setting.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"status": 0, "message": "响应成功"})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runNotificationShortcut(t, server, "settings-update", map[string]string{
+		"user":         "alice",
+		"notification": "ManageProject::Issue=false",
+		"email":        "Normal::Project=true",
+	})
+	if err != nil {
+		t.Fatalf("settings-update shortcut failed: %v", err)
+	}
+
+	setting, ok := payload["setting"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("payload setting type = %T, want map", payload["setting"])
+	}
+	notificationBody, ok := setting["notification_body"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("notification_body type = %T, want map", setting["notification_body"])
+	}
+	emailBody, ok := setting["email_body"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("email_body type = %T, want map", setting["email_body"])
+	}
+	assertEqual(t, notificationBody["Normal::Project"], true)
+	assertEqual(t, notificationBody["ManageProject::Issue"], false)
+	assertEqual(t, emailBody["Normal::Project"], true)
+	assertEqual(t, emailBody["ManageProject::Issue"], false)
+}
+
+func TestNotificationRejectsInvalidInputs(t *testing.T) {
+	if _, err := normalizeMessageType("chat"); err == nil {
+		t.Fatal("expected invalid message type to fail")
+	}
+	if _, err := normalizeMessageStatus("done"); err == nil {
+		t.Fatal("expected invalid status to fail")
+	}
+	if _, err := normalizeAtmeableType("Repository"); err == nil {
+		t.Fatal("expected invalid atmeable type to fail")
+	}
+	if _, err := parseBoolPairs("Normal::Project=yes"); err == nil {
+		t.Fatal("expected invalid boolean setting to fail")
+	}
+	if _, err := parseMessageIDs("1", true, true); err == nil {
+		t.Fatal("expected --ids with --all-unread to fail")
+	}
+	if _, err := parseMessageIDs("", true, false); err == nil {
+		t.Fatal("expected all-unread to be rejected when not allowed")
+	}
+}
+
+func runNotificationShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
 	t.Helper()
-	shortcut := findShortcut(t, name)
+	shortcut := findNotificationShortcut(t, name)
 	ctx := &common.RuntimeContext{
-		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+		Client: &client.Client{
+			HTTP:    server.Client(),
+			BaseURL: server.URL,
+		},
 		Format: "json",
 		Args:   args,
-		Tr:     i18n.Default(),
+	}
+	if ctx.Args == nil {
+		ctx.Args = map[string]string{}
 	}
 	return shortcut.Run(ctx)
 }
 
-func findShortcut(t *testing.T, name string) *common.Shortcut {
+func findNotificationShortcut(t *testing.T, name string) *common.Shortcut {
 	t.Helper()
-	for _, s := range Shortcuts() {
-		if s.Name == name {
-			return s
+	for _, shortcut := range Shortcuts() {
+		if shortcut.Name == name {
+			return shortcut
 		}
 	}
 	t.Fatalf("shortcut %q not found", name)
 	return nil
 }
 
-func writeJSON(t *testing.T, w http.ResponseWriter, v interface{}) {
+func newNotificationTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	t.Helper()
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		t.Fatalf("write JSON: %v", err)
+	return httptest.NewServer(handler)
+}
+
+func assertRequest(t *testing.T, r *http.Request, method, path string) {
+	t.Helper()
+	if r.Method != method || r.URL.Path != path {
+		t.Fatalf("got request %s %s, want %s %s", r.Method, r.URL.Path, method, path)
 	}
 }
 
@@ -47,345 +270,60 @@ func decodeJSON(t *testing.T, r *http.Request) map[string]interface{} {
 	t.Helper()
 	var payload map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode request body: %v", err)
+		t.Fatalf("failed to decode request body: %v", err)
 	}
 	return payload
 }
 
-func assertPath(t *testing.T, r *http.Request, method, path string) {
+func writeJSON(t *testing.T, w http.ResponseWriter, payload interface{}) {
 	t.Helper()
-	if r.Method != method {
-		t.Fatalf("method = %s, want %s", r.Method, method)
-	}
-	if r.URL.Path != path {
-		t.Fatalf("path = %s, want %s", r.URL.Path, path)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		t.Fatalf("failed to write response: %v", err)
 	}
 }
 
-// --- list ---
-
-func TestNotificationListExplicitUser(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertPath(t, r, "GET", "/api/users/alice/messages.json")
-		if got := r.URL.Query().Get("type"); got != "atme" {
-			t.Fatalf("type = %q, want atme", got)
-		}
-		if got := r.URL.Query().Get("status"); got != "1" {
-			t.Fatalf("status = %q, want 1", got)
-		}
-		if got := r.URL.Query().Get("page"); got != "2" {
-			t.Fatalf("page = %q, want 2", got)
-		}
-		if got := r.URL.Query().Get("limit"); got != "50" {
-			t.Fatalf("limit = %q, want 50", got)
-		}
-		writeJSON(t, w, map[string]interface{}{"total_count": 1, "messages": []interface{}{}})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "list", map[string]string{
-		"user":   "alice",
-		"type":   "atme",
-		"status": "unread",
-		"page":   "2",
-		"limit":  "50",
-	})
-	if err != nil {
-		t.Fatalf("list failed: %v", err)
+func assertEqual(t *testing.T, got interface{}, want interface{}) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
 	}
 }
 
-func TestNotificationListDefaultsToCurrentUser(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/users/me.json":
-			writeJSON(t, w, map[string]interface{}{"login": "current"})
-		case "/api/users/current/messages.json":
-			if got := r.URL.Query().Get("status"); got != "2" {
-				t.Fatalf("status = %q, want 2", got)
-			}
-			writeJSON(t, w, map[string]interface{}{"messages": []interface{}{}})
-		default:
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-	}))
-	defer server.Close()
-
-	if err := runShortcut(t, server, "list", map[string]string{"status": "read"}); err != nil {
-		t.Fatalf("list default user failed: %v", err)
-	}
-}
-
-func TestNotificationDefaultUserMissingLogin(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertPath(t, r, "GET", "/users/me.json")
-		writeJSON(t, w, map[string]interface{}{"name": "No Login"})
-	}))
-	defer server.Close()
-
-	if err := runShortcut(t, server, "list", nil); err == nil {
-		t.Fatal("expected error when current user login is unavailable")
-	}
-}
-
-// --- read ---
-
-func TestNotificationReadDryRunDoesNotCallRemoteWrite(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call remote API: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "read", map[string]string{
-		"user":    "alice",
-		"ids":     "1,2,3",
-		"dry-run": "true",
-	})
-	if err != nil {
-		t.Fatalf("read dry-run failed: %v", err)
-	}
-}
-
-func TestNotificationReadRequiresYesForRemoteWrite(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("read without --yes should not call remote API: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "read", map[string]string{"user": "alice", "ids": "1"})
-	if err == nil {
-		t.Fatal("expected error when read is missing --yes")
-	}
-}
-
-func TestNotificationReadPostsIDs(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertPath(t, r, "POST", "/api/users/alice/messages/read.json")
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "read", map[string]string{
-		"user": "alice",
-		"type": "atme",
-		"ids":  "4,5",
-		"yes":  "true",
-	})
-	if err != nil {
-		t.Fatalf("read failed: %v", err)
-	}
-	if payload["type"] != "atme" {
-		t.Fatalf("type = %#v, want atme", payload["type"])
-	}
-	if got := floatSliceToInts(payload["ids"]); !reflect.DeepEqual(got, []int{4, 5}) {
-		t.Fatalf("ids = %#v, want [4 5]", payload["ids"])
-	}
-}
-
-func TestNotificationReadAllUnread(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertPath(t, r, "POST", "/api/users/alice/messages/read.json")
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "read", map[string]string{
-		"user":       "alice",
-		"all-unread": "true",
-		"yes":        "true",
-	})
-	if err != nil {
-		t.Fatalf("read all-unread failed: %v", err)
-	}
-	if got := floatSliceToInts(payload["ids"]); !reflect.DeepEqual(got, []int{-1}) {
-		t.Fatalf("ids = %#v, want [-1]", payload["ids"])
-	}
-}
-
-func TestNotificationReadRejectsIDsWithAllUnread(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("invalid args should fail before remote API: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "read", map[string]string{
-		"user":       "alice",
-		"ids":        "1",
-		"all-unread": "true",
-		"dry-run":    "true",
-	})
-	if err == nil {
-		t.Fatal("expected error when --ids and --all-unread are combined")
-	}
-}
-
-func TestNotificationReadRequiresIDsOrAllUnread(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("invalid args should fail before remote API: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "read", map[string]string{"user": "alice", "dry-run": "true"})
-	if err == nil {
-		t.Fatal("expected error when read has no ids")
-	}
-}
-
-// --- delete ---
-
-func TestNotificationDeleteDryRunDoesNotCallRemoteWrite(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call remote API: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "delete", map[string]string{
-		"user":    "alice",
-		"ids":     "9",
-		"dry-run": "true",
-	})
-	if err != nil {
-		t.Fatalf("delete dry-run failed: %v", err)
-	}
-}
-
-func TestNotificationDeleteRequiresYes(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("delete without --yes should not call remote API: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "delete", map[string]string{"user": "alice", "ids": "9"})
-	if err == nil {
-		t.Fatal("expected error when delete is missing --yes")
-	}
-}
-
-func TestNotificationDeleteCallsEndpoint(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertPath(t, r, "DELETE", "/api/users/alice/messages.json")
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "delete", map[string]string{
-		"user": "alice",
-		"type": "notification",
-		"ids":  "10,11",
-		"yes":  "true",
-	})
-	if err != nil {
-		t.Fatalf("delete failed: %v", err)
-	}
-	if got := floatSliceToInts(payload["ids"]); !reflect.DeepEqual(got, []int{10, 11}) {
-		t.Fatalf("ids = %#v, want [10 11]", payload["ids"])
-	}
-}
-
-// --- send-atme ---
-
-func TestNotificationSendAtmeDryRunDoesNotCallRemoteWrite(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call remote API: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "send-atme", map[string]string{
-		"user":          "alice",
-		"receivers":     "bob,carol",
-		"atmeable-type": "Issue",
-		"atmeable-id":   "42",
-		"dry-run":       "true",
-	})
-	if err != nil {
-		t.Fatalf("send-atme dry-run failed: %v", err)
-	}
-}
-
-func TestNotificationSendAtmeRequiresYes(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("send-atme without --yes should not call remote API: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "send-atme", map[string]string{
-		"user":          "alice",
-		"receivers":     "bob",
-		"atmeable-type": "Issue",
-		"atmeable-id":   "42",
-	})
-	if err == nil {
-		t.Fatal("expected error when send-atme is missing --yes")
-	}
-}
-
-func TestNotificationSendAtmeCallsEndpoint(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertPath(t, r, "POST", "/api/users/alice/messages.json")
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "send-atme", map[string]string{
-		"user":          "alice",
-		"receivers":     "bob, carol",
-		"atmeable-type": "PullRequest",
-		"atmeable-id":   "77",
-		"yes":           "true",
-	})
-	if err != nil {
-		t.Fatalf("send-atme failed: %v", err)
-	}
-	if payload["type"] != "atme" {
-		t.Fatalf("type = %#v, want atme", payload["type"])
-	}
-	if got, ok := payload["receivers_login"].([]interface{}); !ok || len(got) != 2 || got[0] != "bob" || got[1] != "carol" {
-		t.Fatalf("receivers_login = %#v, want [bob carol]", payload["receivers_login"])
-	}
-	if payload["atmeable_type"] != "PullRequest" {
-		t.Fatalf("atmeable_type = %#v, want PullRequest", payload["atmeable_type"])
-	}
-	if payload["atmeable_id"] != float64(77) {
-		t.Fatalf("atmeable_id = %#v, want 77", payload["atmeable_id"])
-	}
-}
-
-func TestNotificationSendAtmeRejectsInvalidID(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("invalid args should fail before remote API: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "send-atme", map[string]string{
-		"user":          "alice",
-		"receivers":     "bob",
-		"atmeable-type": "Issue",
-		"atmeable-id":   "0",
-		"dry-run":       "true",
-	})
-	if err == nil {
-		t.Fatal("expected invalid atmeable-id error")
-	}
-}
-
-func floatSliceToInts(raw interface{}) []int {
-	values, ok := raw.([]interface{})
+func assertStringSlice(t *testing.T, got interface{}, want []string) {
+	t.Helper()
+	values, ok := got.([]interface{})
 	if !ok {
-		return nil
+		t.Fatalf("got %T, want []interface{}", got)
 	}
-	ints := make([]int, 0, len(values))
+	result := make([]string, 0, len(values))
 	for _, value := range values {
-		if number, ok := value.(float64); ok {
-			ints = append(ints, int(number))
+		text, ok := value.(string)
+		if !ok {
+			t.Fatalf("got value %v (%T), want string", value, value)
 		}
+		result = append(result, text)
 	}
-	return ints
+	if !reflect.DeepEqual(result, want) {
+		t.Fatalf("got %v, want %v", result, want)
+	}
+}
+
+func assertNumberSlice(t *testing.T, got interface{}, want []float64) {
+	t.Helper()
+	values, ok := got.([]interface{})
+	if !ok {
+		t.Fatalf("got %T, want []interface{}", got)
+	}
+	result := make([]float64, 0, len(values))
+	for _, value := range values {
+		number, ok := value.(float64)
+		if !ok {
+			t.Fatalf("got value %v (%T), want float64", value, value)
+		}
+		result = append(result, number)
+	}
+	if !reflect.DeepEqual(result, want) {
+		t.Fatalf("got %v, want %v", result, want)
+	}
 }

@@ -1,109 +1,110 @@
 ---
 name: gitlink-notification
 version: 1.0.0
-description: "通知与消息管理：查看 GitLink 通知、标记已读、删除消息、发送 @ 提及消息。当用户需要查看或管理站内消息/通知时触发。"
+description: "通知消息操作：查看消息、标记已读、删除消息、创建 @我通知、查看和更新消息设置。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli notification --help"
 ---
 
-# gitlink-notification（通知与消息管理）
+# gitlink-notification（通知消息管理）
 
-**CRITICAL — 开始前必须先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)，其中包含认证、全局参数和安全规则。**
-**CRITICAL — 标记已读、删除消息和发送 @ 消息都是写操作，执行前必须先 dry-run 并确认用户意图。**
+**CRITICAL — 开始前必须先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)，其中包含认证、权限处理和 API 注意事项。**
+**CRITICAL — `notification +mark-read`、`notification +delete`、`notification +create-atme`、`notification +settings-update` 都会修改远端数据，执行前必须先向用户展示 `--dry-run` 结果并获得确认。**
+**CRITICAL — GitLink 操作只能用 `gitlink-cli`。禁止用 `gh`（GitHub CLI）操作 GitLink 资源。**
 
-> **前置条件：** 先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)。
+> **适用场景：** Agent 帮用户整理 GitLink 站内消息、批量标记已读、清理指定消息、在已有 Issue/PR/Journal 上补发 @我通知、检查或调整消息/邮件通知配置。
 
-## 功能概述
+## Shortcuts
 
-GitLink 平台的通知在 API 中称为 messages。本 Skill 使用 `notification` shortcut 管理用户消息：
+| Shortcut | 说明 | 读/写 |
+|----------|------|-------|
+| `notification +list` | 查询用户消息列表，支持 `notification` / `atme` 与已读状态过滤 | 读 |
+| `notification +mark-read` | 按消息 ID 标记已读，或使用 `--all-unread` 标记全部未读 | 写 |
+| `notification +delete` | 按消息 ID 删除消息 | 写 |
+| `notification +create-atme` | 基于 Issue、PullRequest 或 Journal 创建 @我通知 | 写 |
+| `notification +platform-settings` | 查看平台消息模板配置 | 读 |
+| `notification +settings` | 查看指定用户消息设置 | 读 |
+| `notification +settings-update` | 更新用户消息/邮件设置，未指定 key 会保留原值 | 写 |
 
-| 命令 | 用途 | 是否写操作 |
-|------|------|------------|
-| `notification +list` | 列出用户消息和通知 | 否 |
-| `notification +read` | 将消息标记为已读 | 是 |
-| `notification +delete` | 删除消息 | 是 |
-| `notification +send-atme` | 发送 @ 提及消息 | 是 |
+## 参数约定
 
-## 常用命令
+- `--user`：OpenAPI 路径中的用户标识，如 `wangyue111`。
+- `--type`：消息类型，取值：`notification`（系统消息）或 `atme`（@我消息）。不传表示不限定类型。
+- `--status`：列表过滤：`unread`/`1` 表示未读，`read`/`2` 表示已读。
+- `--ids`：消息 ID 列表，例如 `101,102,103`。
+- `--all-unread`：仅用于 `notification +mark-read`，对应 OpenAPI 的 `ids: [-1]`。
+- `--atmeable-type`：@我消息来源对象，取值：`Journal`、`Issue`、`PullRequest`。
+- `--notification` / `--email`：消息设置键值对，格式 `Key=true,OtherKey=false`，例如 `Normal::Project=true`。
+
+## 安全工作流
+
+写操作必须遵循：
+
+1. 先读取用户输入并确认目标用户、消息 ID / 设置 key。
+2. 先执行带 `--dry-run` 的命令，展示将要请求的 method/path/body。
+3. 用户确认后再去掉 `--dry-run` 执行真实写操作。
+4. 执行后用 `--format json` 保留结构化结果，便于答辩或审计复现。
+
+## 使用示例
 
 ```bash
-# 查看当前认证用户的未读通知
-gitlink-cli notification +list --status unread --limit 20 --format json
-
-# 查看 @ 我消息
-gitlink-cli notification +list --type atme --status unread --format json
-
-# 查看指定用户消息
-gitlink-cli notification +list --user zhangsan --type notification --status read --page 1 --limit 20 --format json
+# 查看未读 @我消息
+gitlink-cli notification +list --user wangyue111 --type atme --status unread --format json
 
 # 预览标记指定消息为已读
-gitlink-cli notification +read --ids 740214,740213 --dry-run --format json
+gitlink-cli notification +mark-read --user wangyue111 --ids 101,102 --dry-run --format json
 
-# 确认标记指定消息为已读
-gitlink-cli notification +read --ids 740214,740213 --yes --format json
+# 确认后真实标记已读
+gitlink-cli notification +mark-read --user wangyue111 --ids 101,102 --format json
 
-# 预览将全部未读系统通知标记为已读
-gitlink-cli notification +read --type notification --all-unread --dry-run --format json
+# 预览标记全部未读为已读
+gitlink-cli notification +mark-read --user wangyue111 --all-unread --type notification --dry-run --format json
 
 # 预览删除指定消息
-gitlink-cli notification +delete --ids 740214,740213 --dry-run --format json
+gitlink-cli notification +delete --user wangyue111 --ids 201,202 --type notification --dry-run --format json
 
-# 发送 @ 提及消息，先 dry-run
-gitlink-cli notification +send-atme --receivers alice,bob \
-  --atmeable-type Issue --atmeable-id 123 --dry-run --format json
+# 创建绑定到 Issue 的 @我通知（先 dry-run）
+gitlink-cli notification +create-atme \
+  --user wangyue111 \
+  --receivers reviewer1,reviewer2 \
+  --atmeable-type Issue \
+  --atmeable-id 99 \
+  --dry-run \
+  --format json
+
+# 查看平台消息模板和用户当前设置
+gitlink-cli notification +platform-settings --format json
+gitlink-cli notification +settings --user wangyue111 --format json
+
+# 预览更新消息设置：只修改指定 key，其余配置保留
+gitlink-cli notification +settings-update \
+  --user wangyue111 \
+  --notification Normal::Project=true,ManageProject::Issue=false \
+  --email Normal::Project=false \
+  --dry-run \
+  --format json
 ```
 
-## 参数
+## OpenAPI 映射
 
-### `notification +list`
+| Shortcut | Method | Path |
+|----------|--------|------|
+| `notification +list` | `GET` | `/api/users/{owner}/messages.json` |
+| `notification +mark-read` | `POST` | `/api/users/{owner}/messages/read.json` |
+| `notification +delete` | `DELETE` | `/api/users/{owner}/messages.json` |
+| `notification +create-atme` | `POST` | `/api/users/{owner}/messages.json` |
+| `notification +platform-settings` | `GET` | `/api/template_message_settings.json` |
+| `notification +settings` | `GET` | `/api/users/{owner}/template_message_settings.json` |
+| `notification +settings-update` | `POST` | `/api/users/{owner}/template_message_settings/update_setting.json` |
 
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `--user, -u` | 否 | 目标用户登录名，默认使用当前认证用户 |
-| `--type, -t` | 否 | 消息类型：`notification` 或 `atme` |
-| `--status, -s` | 否 | 状态：`unread`/`1` 或 `read`/`2` |
-| `--page, -p` | 否 | 页码，默认 `1` |
-| `--limit, -l` | 否 | 每页数量，默认 `20` |
+## Agent 提示模板
 
-### `notification +read`
+当用户要求“帮我清理/整理 GitLink 通知”时：
 
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `--ids, -i` | 条件必填 | 消息 ID，多个用英文逗号分隔 |
-| `--all-unread` | 条件必填 | 将所选类型全部未读消息标记为已读 |
-| `--type, -t` | 否 | 消息类型，默认 `notification` |
-| `--dry-run` | 否 | 预览请求，不修改远端 |
-| `--yes` | 否 | 确认执行远端写入 |
-
-### `notification +delete`
-
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `--ids, -i` | 是 | 要删除的消息 ID，多个用英文逗号分隔 |
-| `--type, -t` | 否 | 消息类型，默认 `notification` |
-| `--dry-run` | 否 | 预览删除请求 |
-| `--yes` | 否 | 确认执行删除 |
-
-### `notification +send-atme`
-
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `--receivers, -r` | 是 | 接收者登录名，多个用英文逗号分隔 |
-| `--atmeable-type` | 是 | @ 消息目标类型：`Journal`、`Issue` 或 `PullRequest` |
-| `--atmeable-id` | 是 | @ 消息目标对象 ID |
-| `--dry-run` | 否 | 预览发送请求 |
-| `--yes` | 否 | 确认发送 |
-
-## 安全规则
-
-- `notification +read`、`notification +delete` 和 `notification +send-atme` 默认不会修改远端状态。
-- 真实执行前必须先使用 `--dry-run` 查看 `payload`。
-- 用户明确确认后，才可以加 `--yes` 执行。
-- `notification +read --all-unread` 会向 API 发送 `ids: [-1]`，表示所选类型的全部未读消息。
-- `notification +delete` 不支持 `--all-unread`，避免误删大量消息。
-
-## 参考
-
-- [gitlink-shared](../gitlink-shared/SKILL.md)
-- [gitlink-notification-digest](../gitlink-notification-digest/SKILL.md)
+1. 先问清楚目标用户和范围（只看 @我、只看未读、还是全部消息）。
+2. 使用 `notification +list` 获取候选消息。
+3. 对标记已读、删除、更新设置等写操作，先执行 `--dry-run`。
+4. 把 dry-run 中的 `method`、`path`、`body` 展示给用户确认。
+5. 用户确认后执行真实命令，并总结成功/失败结果。
