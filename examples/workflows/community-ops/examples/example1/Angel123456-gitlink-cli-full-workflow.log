@@ -1,0 +1,182 @@
+========================================
+  社区运营自动化工作流日志
+  仓库: Angel123456/gitlink-cli
+  后端: gitlink
+  执行时间: 2026-07-10 14:56 ~ 15:03
+  执行范围: 完整工作流（Step 1 + Step 2 + Step 3）
+  状态: 全部写回成功 ✓
+========================================
+
+----------------------------------------
+  Step 0: 环境检测 + 参数收集
+----------------------------------------
+
+[CHECK] gitlink-cli auth status → 已登录为 Angel123456 ✓
+[CHECK] gitlink-cli --version → 版本可用 ✓
+[CHECK] gitlink-cli repo +info → 仓库 Angel123456/gitlink-cli 确认 (7 Issue, Owner 权限) ✓
+[CHECK] 子 Skill 可用性 → gitlink-issue-triage-rules / gitlink-community-report / gitlink-release-notes 全部可用 ✓
+
+环境检测结果:
+  - 后端: gitlink
+  - 认证用户: Angel123456
+  - 仓库: Angel123456/gitlink-cli (7 Issue, Owner 权限)
+  - 子 Skill: 3 个全部可用
+
+----------------------------------------
+  Step 1: Issue 自动分类分拣
+----------------------------------------
+
+[CMD] gitlink-cli issue +list --owner Angel123456 --repo gitlink-cli --state open --format json
+[RESULT] 开放 Issue 共 7 条: #1, #2, #5, #6, #9, #12, #13
+
+[CMD] gitlink-cli label +list --owner Angel123456 --repo gitlink-cli --format json
+[RESULT] 标签映射: 缺陷(id:398784) / 功能(id:398785) / 疑问(id:398786)
+
+[CMD] gitlink-cli member +list --owner Angel123456 --repo gitlink-cli --format json
+[RESULT] 成员映射:
+  - Angel123456 (id:153579, 管理员) — 核心负责人
+  - Hsy15889521073 (id:134328, 开发者) — 开发角色
+  - Priziq (id:134450, 报告者) — 辅助角色
+
+[CMD] gitlink-cli issue +view → 回读 #2, #12, #13 详情
+
+[ANALYSIS] 规则评估结果 (mode=hybrid):
+
+| Issue | 标题                      | 建议分类 | 建议标签 | 标签ID | 责任人           | 责任人ID | 优先级  | 优先级ID | 命中规则          | LLM兜底 |
+|-------|---------------------------|---------|---------|--------|-----------------|---------|--------|---------|------------------|--------|
+| #2    | 建议支持 Markdown 格式评论 | 功能     | 功能     | 398785 | Hsy15889521073  | 134328  | normal | 2       | —                | ✓      |
+| #13   | 服务启动时偶尔会崩溃       | 缺陷     | 缺陷     | 398784 | Angel123456     | 153579  | high   | 3       | bug-default      | —      |
+| #12   | 请问如何配置 HTTPS 证书？ | 疑问     | 疑问     | 398786 | Angel123456     | 153579  | normal | 2       | question-default | —      |
+
+[SKIP] #9 — 周报类 Issue，不参与分拣
+
+[USER_CONFIRM] 按角色分配：缺陷类→Angel123456，功能类→Hsy15889521073，疑问类→Angel123456
+
+[DRY-RUN] dry-run 预览已展示 → 用户确认执行 (apply)
+
+[WRITE] Issue #2 (功能类):
+  [CMD] gitlink-cli api PATCH /v1/Angel123456/gitlink-cli/issues/2
+  [BODY] {subject, description, issue_tag_ids:[398785], assigner_ids:[134328], priority_id:2}
+  [RESULT] 写回成功 ✓
+  [CMD] gitlink-cli issue +comment --number 2 --body "🤖 自动分拣：分类=功能，标签=功能，优先级=normal，责任人=Hsy15889521073，命中规则=LLM兜底（hybrid模式）"
+  [RESULT] 审计评论写入成功 ✓
+
+[WRITE] Issue #13 (缺陷类):
+  [CMD] gitlink-cli api PATCH /v1/Angel123456/gitlink-cli/issues/13
+  [BODY] {subject, description, issue_tag_ids:[398784], assigner_ids:[153579], priority_id:3}
+  [RESULT] 写回成功 ✓
+  [CMD] gitlink-cli issue +comment --number 13 --body "🤖 自动分拣：分类=缺陷，标签=缺陷，优先级=high，责任人=Angel123456，命中规则=bug-default（关键词：崩溃）"
+  [RESULT] 审计评论写入成功 ✓
+
+[WRITE] Issue #12 (疑问类):
+  [CMD] gitlink-cli api PATCH /v1/Angel123456/gitlink-cli/issues/12
+  [BODY] {subject, description, issue_tag_ids:[398786], assigner_ids:[153579], priority_id:2}
+  [RESULT] 写回成功 ✓
+  [CMD] gitlink-cli issue +comment --number 12 --body "🤖 自动分拣：分类=疑问，标签=疑问，优先级=normal，责任人=Angel123456，命中规则=question-default（关键词：请问、如何）"
+  [RESULT] 审计评论写入成功 ✓
+
+[VERIFY] 验证写回结果:
+  - #2: tags=[功能], assigners=[Hsy15889521073], priority=normal ✓
+  - #13: tags=[缺陷], assigners=[Angel123456], priority=high ✓
+  - #12: tags=[疑问], assigners=[Angel123456], priority=normal ✓
+
+Step 1 汇总:
+  - 分拣 Issue: 3 条
+  - 规则命中: 2 条 (bug-default, question-default)
+  - LLM 兜底: 1 条 (功能类)
+  - 跳过: 1 条 (周报类)
+  - 写回成功: 3 条 ✓
+  - 审计评论: 3 条 ✓
+
+----------------------------------------
+  Step 2: 社区周报生成与发布
+----------------------------------------
+
+[CMD] gitlink-cli issue +list --owner Angel123456 --repo gitlink-cli --state closed --format json
+[RESULT] 已关闭 Issue: 0 条
+
+[CMD] gitlink-cli release +list --owner Angel123456 --repo gitlink-cli --format json
+[RESULT] 累计 Release: 2 (v2026.07.09, v2026.07.10)
+
+统计结果 (PERIOD=7天, 2026-07-03 ~ 2026-07-10):
+  - 开放 Issue: 7 → 8 (含新创建的 #14 周报)
+  - 已关闭 Issue: 0
+  - 本周新建: 7 (#1,#2,#5,#6,#9,#12,#13)
+  - 本周关闭: 0
+  - 本周新 Release: 2 (v2026.07.09, v2026.07.10)
+  - 标签分布 (分拣后): 缺陷:2, 功能:2, 疑问:2, 无标签:1
+  - 高优先级: #1(高), #13(高)
+
+[USER_CONFIRM] 确认发布周报 Issue (apply)
+
+[CMD] gitlink-cli issue +create --owner Angel123456 --repo gitlink-cli
+  --title "📊 社区周报 2026-07-10（分拣后更新版）"
+  --body "$REPORT_MD"
+[RESULT] Issue #14 创建成功 ✓
+
+Step 2 汇总:
+  - 周报标题: 📊 社区周报 2026-07-10（分拣后更新版）
+  - 周报 Issue 编号: #14
+  - 开放 Issue: 7 → 8
+  - 本周新建: 7 / 本周关闭: 0
+  - 本周新 Release: 2
+
+----------------------------------------
+  Step 3: Release Notes 生成与发布
+----------------------------------------
+
+已有 Release tag: v2026.07.09, v2026.07.10
+[DECISION] v2026.07.10 已存在 → 使用版本号 v2026.07.10-2
+
+Issue 分类 (基于已关闭 Issue = 0 条):
+  - Bug 修复: 0 项
+  - 新功能: 0 项
+  - 其他改进: 3 项 (社区运营自动化)
+
+[USER_CONFIRM] 确认发布 v2026.07.10-2 Release (apply)
+
+[CMD] gitlink-cli release +create --owner Angel123456 --repo gitlink-cli
+  --name "v2026.07.10-2" --tag "v2026.07.10-2" --target master
+  --body "$NOTES_MD"
+[RESULT] Release 创建成功 ✓
+
+[VERIFY] gitlink-cli release +list → 确认 v2026.07.10-2 已出现在列表中 ✓
+
+Step 3 汇总:
+  - 版本号: v2026.07.10-2
+  - Bug 修复: 0 / 新功能: 0 / 其他改进: 3 (社区运营自动化)
+  - Release 已创建: ✓
+
+----------------------------------------
+  工作流串联的 CLI 命令清单
+----------------------------------------
+
+| #  | CLI 命令                                    | 所属步骤       |
+|----|---------------------------------------------|---------------|
+| 1  | gitlink-cli auth status                     | Step 0 认证   |
+| 2  | gitlink-cli repo +info                      | Step 0 仓库   |
+| 3  | gitlink-cli issue +list (open)              | Step 1 列Issue |
+| 4  | gitlink-cli label +list                     | Step 1 标签   |
+| 5  | gitlink-cli member +list                    | Step 1 成员   |
+| 6  | gitlink-cli issue +view (#2,#12,#13)        | Step 1 回读   |
+| 7  | gitlink-cli api PATCH (×3)                  | Step 1 写回   |
+| 8  | gitlink-cli issue +comment (×3)             | Step 1 审计   |
+| 9  | gitlink-cli issue +list (closed)            | Step 2 采集   |
+| 10 | gitlink-cli release +list                   | Step 2/3 采集  |
+| 11 | gitlink-cli issue +create (#14)             | Step 2 周报   |
+| 12 | gitlink-cli release +create (v2026.07.10-2) | Step 3 发布   |
+
+----------------------------------------
+  关键经验
+----------------------------------------
+
+- GitLink 写回必须带 subject + description，否则这两个字段会被清空
+- GitLink 优先级: critical→4, high→3, normal→2, low→1
+- 版本号去重: 当天已有同名 tag 时追加 -N 序号
+- 周报类 Issue (标题以 📊 开头) 应跳过分拣
+- 审计评论格式: "🤖 自动分拣：分类=X，标签=X，优先级=X，责任人=X，命中规则=X"
+
+========================================
+  工作流完成 ✓
+  Angel123456/gitlink-cli — 全部写回成功
+========================================
