@@ -6,6 +6,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/branch"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/ci"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/commit"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/compare"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/feedback"
@@ -48,6 +49,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"org":       org.Shortcuts(tr),
 		"user":      user.Shortcuts(tr),
 		"search":    search.Shortcuts(tr),
+		"commit":    commit.Shortcuts(),
 		"ci":        ci.Shortcuts(tr),
 		"compare":   compare.Shortcuts(),
 		"feedback":  feedback.Shortcuts(),
@@ -71,6 +73,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"org":       tr.T("cmd.org.short"),
 		"user":      tr.T("cmd.user.short"),
 		"search":    tr.T("cmd.search.short"),
+		"commit":    "Commit history, view, diff and blame operations",
 		"ci":        tr.T("cmd.ci.short"),
 		"compare":   "Compare branches, tags, or commits",
 		"feedback":  "Submit feedback and suggestions",
