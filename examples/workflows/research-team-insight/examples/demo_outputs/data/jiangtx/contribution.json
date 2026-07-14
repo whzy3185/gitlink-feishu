@@ -1,0 +1,32 @@
+{
+  "ok": true,
+  "data": {
+    "headmaps": [
+      {
+        "contributions": 9,
+        "date": "2026-05-13"
+      },
+      {
+        "contributions": 1,
+        "date": "2026-06-01"
+      },
+      {
+        "contributions": 11,
+        "date": "2026-06-02"
+      },
+      {
+        "contributions": 21,
+        "date": "2026-06-03"
+      },
+      {
+        "contributions": 17,
+        "date": "2026-06-04"
+      },
+      {
+        "contributions": 2,
+        "date": "2026-06-05"
+      }
+    ],
+    "total_contributions": 61
+  }
+}
