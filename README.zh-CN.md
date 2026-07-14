@@ -5,7 +5,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue.svg)](https://golang.org)
 [![npm version](https://img.shields.io/npm/v/@gitlink-ai/cli.svg)](https://www.npmjs.com/package/@gitlink-ai/cli)
 
-[GitLink（确实开源）](https://www.gitlink.org.cn) 官方 CLI 工具 — 为人类和 AI Agent 双重设计。支持 **macOS、Linux、Windows**，覆盖仓库管理、Issue 追踪、Pull Request、Webhook、成员协作、CI/CD 和 AI 自动化工作流，包含 40+ 命令和 AI Agent [Skills](./skills/README.md)。
+[GitLink（确实开源）](https://www.gitlink.org.cn) 官方 CLI 工具 — 为人类和 AI Agent 双重设计。支持 **macOS、Linux、Windows**，覆盖仓库管理、Issue 追踪、Pull Request、Webhook、成员协作、CI/CD 和 AI 自动化工作流，包含 40+ 命令和 AI Agent [Skills](./skills/)。
 
 **[English](./README.md)**
 
@@ -78,19 +78,11 @@
   <a href="https://www.gitlink.org.cn/jiangtx" title="jiangtx"><img src="https://www.gitlink.org.cn/system/lets/letter_avatars/2/J/67_157_94/120.png" width="40" height="40" alt="jiangtx" style="border-radius: 50%;"></a>
   <br><sub><a href="https://www.gitlink.org.cn/jiangtx">jiangtx</a></sub>
 </div>
-<div align="center">
-  <a href="https://www.gitlink.org.cn/luwanzhou" title="luwanzhou"><img src="https://www.gitlink.org.cn/system/lets/letter_avatars/2/L/165_135_246/120.png" width="40" height="40" alt="luwanzhou" style="border-radius: 50%;"></a>
-  <br><sub><a href="https://www.gitlink.org.cn/luwanzhou">luwanzhou</a></sub>
-</div>
-<div align="center">
-  <a href="https://www.gitlink.org.cn/whale_hihihi" title="whale_hihihi"><img src="https://www.gitlink.org.cn/images/avatars/User/137722?t=1778575729" width="40" height="40" alt="whale_hihihi" style="border-radius: 50%;"></a>
-  <br><sub><a href="https://www.gitlink.org.cn/whale_hihihi">whale_hihihi</a></sub>
-</div>
 </div>
 
 ## 为什么选择 gitlink-cli？
 
-- **Agent-Native 设计** — 开箱即用结构化 [Skills](./skills/README.md)，兼容 Claude Code — Agent 零配置即可操作 GitLink
+- **Agent-Native 设计** — 开箱即用结构化 [Skills](./skills/)，兼容 Claude Code — Agent 零配置即可操作 GitLink
 - **广泛覆盖** — 仓库、Issue、PR、Webhook、成员、分支、Release、CI、Pipeline、组织、搜索、用户等常用工作流均提供高层命令
 - **AI 友好 & 优化** — 每条命令都经过真实 Agent 测试，简洁参数、智能默认值、结构化输出
 - **跨平台** — macOS、Linux、Windows (x64/arm64) 全支持，`npm` 一条命令安装
@@ -104,7 +96,7 @@
 | 分类 | 能力 |
 |------|------|
 | 📦 仓库 | 列出、创建、Fork、删除仓库，查看仓库信息、洞察数据和互动状态 |
-| 🐛 Issue | 创建、更新、关闭、批量关闭/更新/删除、评论 Issue |
+| 🐛 Issue | 创建、更新、关闭、批量关闭、评论 Issue |
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
 | 👥 成员 | 列出、添加、移除仓库成员，调整角色，生成和接受邀请链接 |
@@ -113,13 +105,9 @@
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
-| 📖 Wiki | 列出、查看、创建、更新、删除 Wiki 页面 |
 | 🔍 搜索 | 搜索仓库、用户 |
-| 📊 数据集 | 按项目查询科研数据集 |
-| 👤 用户 | 查看用户资料和信息 |
-| 📊 画像 | 用户开发能力、角色定位、专业定位、近期活动、贡献热力图统计 |
+| 👤 用户 | 查看资料、管理 Public Keys、查询用户统计 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
-| 📝 模板 | 管理 Issue 和 Pull Request 项目模板 |
 | 🤖 工作流 | AI 驱动的 Issue 分类、PR Review、Release Notes |
 
 ## 安装与快速上手
@@ -239,17 +227,6 @@ gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
 
-# 搜索仓库文件并查看提交历史
-gitlink-cli repo +files --owner Gitlink --repo forgeplus --search README --ref master
-gitlink-cli repo +commits --owner Gitlink --repo forgeplus --ref master --limit 20
-gitlink-cli repo +commit-files --owner Gitlink --repo forgeplus --sha <commit_sha>
-gitlink-cli repo +commit-diff --owner Gitlink --repo forgeplus --sha <commit_sha>
-
-# 查看仓库标签
-gitlink-cli repo +tags --owner Gitlink --repo forgeplus --name v1 --only-name true
-gitlink-cli repo +tag --owner Gitlink --repo forgeplus --name v1.0.0
-gitlink-cli repo +delete-tag --owner Gitlink --repo forgeplus --name v1.0.0 --dry-run
-
 # 查看语言占比
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 
@@ -273,16 +250,6 @@ gitlink-cli repo +unfollow --owner Gitlink --repo forgeplus --project-id 123
 gitlink-cli repo +like --owner Gitlink --repo forgeplus
 gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 
-# 预览并执行多文件提交
-gitlink-cli repo +batch-commit --owner me --repo proj \
-  --branch master --message "docs: update guide" \
-  --files 'update:README.md:# Updated;create:docs/demo.md:# Demo' \
-  --dry-run
-gitlink-cli repo +batch-commit --owner me --repo proj \
-  --branch master --message "docs: update guide" \
-  --files 'update:README.md:# Updated;delete:old.md' \
-  --yes
-
 # 创建仓库
 gitlink-cli repo +create -n my-project -d "项目描述"
 
@@ -305,28 +272,6 @@ gitlink-cli webhook +test --owner Gitlink --repo forgeplus --id 68
 
 # 查看 webhook 投递任务
 gitlink-cli webhook +tasks --owner Gitlink --repo forgeplus --id 68
-```
-
-### Wiki 管理
-
-```bash
-# 列出 Wiki 页面（目录结构）
-gitlink-cli wiki +list --owner Gitlink --repo forgeplus --project-id 12345
-
-# 查看 Wiki 页面
-gitlink-cli wiki +view --owner Gitlink --repo forgeplus --project-id 12345 -n home
-
-# 创建 Wiki 页面
-gitlink-cli wiki +create --owner Gitlink --repo forgeplus --project-id 12345 \
-  -n getting-started -t "快速开始" -c "# 快速开始指南"
-
-# 更新 Wiki 页面标题和/或内容
-gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n home -t "新标题"
-gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n home -c "# 更新后的内容"
-gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n home -t "新标题" -c "新内容"
-
-# 删除 Wiki 页面
-gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 12345 -n old-page
 ```
 
 ### 成员管理
@@ -378,14 +323,6 @@ gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,12
 # 从 CSV 文件批量关闭 Issue
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --from issues.csv
 
-# 按 API issue id 预览批量更新元数据
-# 注意：--ids 是 API issue id，不是网页 URL 中的 Issue 编号。
-gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --ids 101,102 --status-id 3 --priority-id 2 --dry-run
-
-# 危险批量删除必须先 dry-run，真实执行还要显式 --yes
-gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --dry-run
-gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --yes
-
 # 添加评论
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "已修复"
 
@@ -428,30 +365,6 @@ gitlink-cli label +update --owner Gitlink --repo forgeplus -i 42 -c "#00FF00"
 gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
 ```
 
-### 模板管理
-
-```bash
-# 列出项目模板
-gitlink-cli template +list --owner Gitlink --repo forgeplus
-
-# 获取模板详情
-gitlink-cli template +get --owner Gitlink --repo forgeplus -i 1
-
-# 创建 Issue 模板
-gitlink-cli template +create --owner Gitlink --repo forgeplus \
-  -t "ProjectTemplates::Issue" -n "Bug 报告" -c "## 描述\n..."
-
-# 创建 Pull Request 模板
-gitlink-cli template +create --owner Gitlink --repo forgeplus \
-  -t "ProjectTemplates::PullRequest" -n "功能 PR" -c "## 概述\n..."
-
-# 更新模板
-gitlink-cli template +update --owner Gitlink --repo forgeplus -i 1 -n "新名称"
-
-# 删除模板
-gitlink-cli template +delete --owner Gitlink --repo forgeplus -i 1
-```
-
 ### Pull Request
 
 ```bash
@@ -475,9 +388,6 @@ gitlink-cli pr +reopen --owner Gitlink --repo forgeplus -i 42
 
 # 查看 PR 变更文件
 gitlink-cli pr +files --owner Gitlink --repo forgeplus -i 42
-
-# 查看 PR 包含的提交
-gitlink-cli pr +commits --owner Gitlink --repo forgeplus -i 42
 
 # 查看 PR patchset/version 列表
 gitlink-cli pr +versions --owner Gitlink --repo forgeplus -i 42
@@ -535,16 +445,6 @@ gitlink-cli pipeline +disable --owner Gitlink --repo forgeplus --id 7 --workflow
 gitlink-cli pipeline +delete --owner Gitlink --repo forgeplus --id 7 --dry-run
 ```
 
-### 忽略文件模板
-
-```bash
-# 列出所有可用的 .gitignore 模板
-gitlink-cli ignore +list
-
-# 按名称筛选模板
-gitlink-cli ignore +list --name Go
-```
-
 ### 搜索
 
 ```bash
@@ -555,61 +455,24 @@ gitlink-cli search +repos -k "machine learning"
 gitlink-cli search +users -k "zhangsan"
 ```
 
-### 用户画像
-
-`profile` 暴露 GitLink 原生的用户画像统计（开发能力、角色定位、专业定位、近期活动、贡献热力图）。
-省略 `--user` 时默认使用当前认证用户。
-`user` 同时提供面向贡献者分析的热力图、聚合统计和项目趋势快捷入口。
+### 用户操作
 
 ```bash
-# 当前认证用户
+# 当前登录用户和详细资料
 gitlink-cli user +me
+gitlink-cli user +current --format json
 
-# 用户贡献热力图和聚合统计
-gitlink-cli user +heatmap --user zhangsan --year 2026
-gitlink-cli user +statistics --user zhangsan --start-time 1704067200 --end-time 1735689600
+# Public Key 管理
+gitlink-cli user +keys --page 1 --limit 20
+gitlink-cli user +key-create --title "work laptop" --key-file ~/.ssh/id_rsa.pub --dry-run
+gitlink-cli user +key-delete --id 7 --dry-run
 
-# 项目趋势数据（短别名：user +trends）
-gitlink-cli user +project-trends --user zhangsan
-
-# 开发能力评分 + 语言分布
-gitlink-cli profile +ability --user zhangsan
-
-# 角色定位 / 专业（学科）定位
-gitlink-cli profile +role --user zhangsan
-gitlink-cli profile +major --user zhangsan
-
-# 指定时间范围的开发能力（Unix 时间戳）
-gitlink-cli profile +ability --user zhangsan --start-time 1704067200 --end-time 1735689600
-
-# 当前用户的近期活动（每日 疑修 / 合并请求 / 提交）
-gitlink-cli profile +activity
-
-# 指定年份的贡献热力图
-gitlink-cli profile +contribution --user zhangsan --year 2025
+# 用户统计
+gitlink-cli user +activity --login zhangsan
+gitlink-cli user +headmap --login zhangsan --year 2026
+gitlink-cli user +develop --login zhangsan --start-time 1704067200 --end-time 1735689599
 ```
 
-### 数据集
-
-`dataset` 管理并查询 GitLink 科研数据集（标题、描述、论文内容、许可证、所属项目）。
-
-```bash
-# 按数字项目 ID 列出一个或多个项目的数据集
-gitlink-cli dataset +list --ids 5988
-
-# 查看仓库的数据集及其附件
-gitlink-cli dataset +view --owner Gitlink --repo forgeplus
-
-# 创建 / 更新仓库数据集（先用 --dry-run 预览）
-gitlink-cli dataset +create --owner me --repo proj -t "我的数据集" -d "..." --license-id 359 --dry-run
-gitlink-cli dataset +update --owner me --repo proj -t "我的数据集" -d "更新"
-
-# 删除数据集附件（破坏性：先预览，再用 --yes 确认）
-gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --dry-run
-gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --yes
-```
-
-> 注意：`dataset +list`（平台数据集查询）已在生产 gitlink.org.cn 验证可用。按仓库的 `+view`/`+create`/`+update` 遵循已发布的 OpenAPI 契约，但生产环境尚未部署（当前返回 404），待平台上线后即可生效。
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：
@@ -666,13 +529,13 @@ git push gitlink
 
 `skills/` 目录包含 Claude Code Agent Skill 文件，支持 AI 自动化操作 GitLink 平台。
 
-详见 [skills/README.md](./skills/README.md)
+详见 [skills/README.md](skills/README.md)
 
 | Skill | 说明 |
 |-------|------|
 | `gitlink-shared` | 认证、全局参数、安全规则、API 注意事项 |
 | `gitlink-repo` | 仓库操作（创建、查看、删除、Fork、洞察数据等） |
-| `gitlink-issue` | Issue 操作（创建、更新、关闭、批量更新/删除、评论等） |
+| `gitlink-issue` | Issue 操作（创建、更新、关闭、评论等） |
 | `gitlink-pr` | Pull Request 操作（创建、合并、Review 等） |
 | `gitlink-member` | 仓库成员与邀请链接管理 |
 | `gitlink-release` | 发布管理（创建、编辑、更新、查看、删除等） |
@@ -680,7 +543,7 @@ git push gitlink
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |
 | `gitlink-pipeline` | 流水线工作流操作（运行、日志、启停、删除等） |
 | `gitlink-search` | 搜索功能（仓库、用户等） |
-| `gitlink-user` | 用户管理（个人信息、热力图、统计、项目趋势等） |
+| `gitlink-user` | 用户管理（资料、Public Keys、统计等） |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |
 | `gitlink-workflow` | AI 自动化工作流（Issue 分类、PR Review、Release Notes 等） |
 
@@ -734,7 +597,7 @@ gitlink-cli/
 
 ## 文档
 
-- [Skills 使用指南](./skills/README.md) — AI Agent Skills 详细说明
+- [Skills 使用指南](skills/README.md) — AI Agent Skills 详细说明
 - [设计文档](doc/design.md) — 架构设计和开发计划
 
 ## 常见问题
@@ -797,7 +660,7 @@ gitlink-cli 使用 Windows Credential Manager 安全存储 Token。如果 Creden
 
 ### Q: 如何查看完整的 API 参考？
 
-查看 [skills/gitlink-shared/references/api-reference.md](./skills/gitlink-shared/references/api-reference.md)
+查看 [skills/gitlink-shared/REFERENCE.md](skills/gitlink-shared/REFERENCE.md)
 
 ## 许可证
 
