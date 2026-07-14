@@ -1,308 +1,325 @@
 package wiki
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
+// --- list ---
+
 func TestWikiList(t *testing.T) {
+	callCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/wiki/open/wikiPages")
-		assertEqual(t, r.URL.Query().Get("owner"), "owner")
-		assertEqual(t, r.URL.Query().Get("repo"), "repo")
-		assertEqual(t, r.URL.Query().Get("projectId"), "12345")
-		writeJSON(t, w, map[string]interface{}{"status": 0, "data": []interface{}{}})
+		callCount++
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{"id": float64(42)})
+		case r.Method == "GET" && r.URL.Path == "/wiki/open/wikiPages":
+			if r.URL.Query().Get("projectId") != "42" {
+				t.Fatalf("expected projectId=42, got %s", r.URL.Query().Get("projectId"))
+			}
+			writeJSON(t, w, map[string]interface{}{
+				"data": []interface{}{
+					map[string]interface{}{"title": "Home", "sub_url": "Home"},
+					map[string]interface{}{"title": "Guide", "sub_url": "Guide"},
+				},
+			})
+		default:
+			t.Fatalf("unexpected request #%d: %s %s", callCount, r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
-	err := runWikiShortcut(t, server, "list", map[string]string{
-		"project-id": "12345",
-	})
-	if err != nil {
-		t.Fatalf("list shortcut failed: %v", err)
+	if err := runWikiShortcut(t, server, "list", map[string]string{}); err != nil {
+		t.Fatalf("list failed: %v", err)
 	}
 }
+
+func TestWikiListWithProjectID(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{"project_id": float64(99)})
+		case r.Method == "GET" && r.URL.Path == "/wiki/open/wikiPages":
+			if r.URL.Query().Get("projectId") != "99" {
+				t.Fatalf("expected projectId=99, got %s", r.URL.Query().Get("projectId"))
+			}
+			writeJSON(t, w, map[string]interface{}{"data": []interface{}{}})
+		default:
+			t.Fatalf("unexpected request #%d: %s %s", callCount, r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	if err := runWikiShortcut(t, server, "list", map[string]string{}); err != nil {
+		t.Fatalf("list with project_id failed: %v", err)
+	}
+}
+
+// --- view ---
 
 func TestWikiView(t *testing.T) {
+	callCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/wiki/open/getWiki")
-		assertEqual(t, r.URL.Query().Get("owner"), "owner")
-		assertEqual(t, r.URL.Query().Get("repo"), "repo")
-		assertEqual(t, r.URL.Query().Get("projectId"), "12345")
-		assertEqual(t, r.URL.Query().Get("pageName"), "home")
-		writeJSON(t, w, map[string]interface{}{"status": 0, "data": map[string]interface{}{"title": "home"}})
+		callCount++
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{"id": float64(42)})
+		case r.Method == "GET" && r.URL.Path == "/wiki/open/getWiki":
+			if r.URL.Query().Get("pageName") != "Home" {
+				t.Fatalf("expected pageName=Home, got %s", r.URL.Query().Get("pageName"))
+			}
+			writeJSON(t, w, map[string]interface{}{
+				"data": map[string]interface{}{
+					"title":          "Home",
+					"content_base64": base64.StdEncoding.EncodeToString([]byte("Welcome to wiki")),
+				},
+			})
+		default:
+			t.Fatalf("unexpected request #%d: %s %s", callCount, r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
-	err := runWikiShortcut(t, server, "view", map[string]string{
-		"project-id": "12345",
-		"page-name":  "home",
-	})
+	err := runWikiShortcut(t, server, "view", map[string]string{"name": "Home"})
 	if err != nil {
-		t.Fatalf("view shortcut failed: %v", err)
+		t.Fatalf("view failed: %v", err)
 	}
 }
+
+func TestWikiViewRequiresName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no request should be made without --name")
+	}))
+	defer server.Close()
+
+	err := runWikiShortcut(t, server, "view", map[string]string{})
+	if err == nil {
+		t.Fatal("expected error for missing --name")
+	}
+}
+
+// --- create ---
 
 func TestWikiCreate(t *testing.T) {
-	var payload map[string]interface{}
+	callCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "POST", "/wiki/open/createWiki")
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+		callCount++
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{"id": float64(42)})
+		case r.Method == "POST" && r.URL.Path == "/wiki/open/createWiki":
+			var payload map[string]interface{}
+			json.NewDecoder(r.Body).Decode(&payload)
+			if payload["pageName"] != "NewPage" {
+				t.Fatalf("expected pageName=NewPage, got %v", payload["pageName"])
+			}
+			if payload["title"] != "NewPage" {
+				t.Fatalf("expected title=NewPage, got %v", payload["title"])
+			}
+			if payload["owner"] != "owner" {
+				t.Fatalf("expected owner=owner, got %v", payload["owner"])
+			}
+			if payload["repo"] != "repo" {
+				t.Fatalf("expected repo=repo, got %v", payload["repo"])
+			}
+			if payload["projectId"].(float64) != 42 {
+				t.Fatalf("expected projectId=42, got %v", payload["projectId"])
+			}
+			expectedContent := base64.StdEncoding.EncodeToString([]byte("Hello Wiki!"))
+			if payload["content_base64"] != expectedContent {
+				t.Fatalf("content_base64 mismatch: got %v", payload["content_base64"])
+			}
+			writeJSON(t, w, map[string]interface{}{
+				"code": 201,
+				"data": map[string]interface{}{"title": "NewPage"},
+			})
+		default:
+			t.Fatalf("unexpected request #%d: %s %s", callCount, r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
 	err := runWikiShortcut(t, server, "create", map[string]string{
-		"project-id": "12345",
-		"page-name":  "new-page",
-		"title":      "New Page",
-		"content":    "# Hello",
+		"name": "NewPage", "content": "Hello Wiki!", "message": "create page",
 	})
 	if err != nil {
-		t.Fatalf("create shortcut failed: %v", err)
-	}
-
-	assertEqual(t, payload["owner"], "owner")
-	assertEqual(t, payload["repo"], "repo")
-	assertEqual(t, payload["pageName"], "new-page")
-	assertEqual(t, payload["title"], "New Page")
-	if _, ok := payload["content_base64"]; !ok {
-		t.Fatal("body missing content_base64")
+		t.Fatalf("create failed: %v", err)
 	}
 }
+
+func TestWikiCreateRequiresName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no request should be made without --name")
+	}))
+	defer server.Close()
+
+	err := runWikiShortcut(t, server, "create", map[string]string{"content": "test"})
+	if err == nil {
+		t.Fatal("expected error for missing --name")
+	}
+}
+
+func TestWikiCreateRequiresContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no request should be made without --content")
+	}))
+	defer server.Close()
+
+	err := runWikiShortcut(t, server, "create", map[string]string{"name": "Test"})
+	if err == nil {
+		t.Fatal("expected error for missing --content")
+	}
+}
+
+// --- update ---
 
 func TestWikiUpdate(t *testing.T) {
-	var payload map[string]interface{}
+	callCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "PUT", "/wiki/open/updateWiki")
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+		callCount++
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{"id": float64(42)})
+		case r.Method == "PUT" && r.URL.Path == "/wiki/open/updateWiki":
+			var payload map[string]interface{}
+			json.NewDecoder(r.Body).Decode(&payload)
+			if payload["pageName"] != "Home" {
+				t.Fatalf("expected pageName=Home, got %v", payload["pageName"])
+			}
+			if payload["title"] != "Home" {
+				t.Fatalf("expected title=Home, got %v", payload["title"])
+			}
+			if payload["message"] != "update page" {
+				t.Fatalf("expected message=update page, got %v", payload["message"])
+			}
+			writeJSON(t, w, map[string]interface{}{"code": 200})
+		default:
+			t.Fatalf("unexpected request #%d: %s %s", callCount, r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
 	err := runWikiShortcut(t, server, "update", map[string]string{
-		"project-id": "12345",
-		"page-name":  "home",
-		"title":      "Updated Title",
+		"name": "Home", "content": "Updated content", "message": "update page",
 	})
 	if err != nil {
-		t.Fatalf("update shortcut failed: %v", err)
+		t.Fatalf("update failed: %v", err)
 	}
-
-	assertEqual(t, payload["owner"], "owner")
-	assertEqual(t, payload["pageName"], "home")
-	assertEqual(t, payload["title"], "Updated Title")
 }
 
-func TestWikiUpdateRequiresTitle(t *testing.T) {
+func TestWikiUpdateRequiresName(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("server should not be called when title is missing: %s %s", r.Method, r.URL.Path)
+		t.Fatal("no request should be made without --name")
 	}))
 	defer server.Close()
 
-	err := runWikiShortcut(t, server, "update", map[string]string{
-		"project-id": "12345",
-		"page-name":  "home",
-	})
+	err := runWikiShortcut(t, server, "update", map[string]string{"content": "test"})
 	if err == nil {
-		t.Fatal("expected update without --title to return an error")
-	}
-	if err.Error() != "--title is required" {
-		t.Fatalf("unexpected error message: %s", err.Error())
+		t.Fatal("expected error for missing --name")
 	}
 }
 
-func TestWikiUpdateWithContentOnly(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "PUT", "/wiki/open/updateWiki")
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-	}))
-	defer server.Close()
-
-	err := runWikiShortcut(t, server, "update", map[string]string{
-		"project-id": "12345",
-		"page-name":  "home",
-		"title":      "Existing Title",
-		"content":    "# Updated content",
-	})
-	if err != nil {
-		t.Fatalf("update with content failed: %v", err)
-	}
-	if _, ok := payload["content_base64"]; !ok {
-		t.Fatal("body missing content_base64 when --content provided")
-	}
-}
+// --- delete ---
 
 func TestWikiDelete(t *testing.T) {
-	var payload map[string]interface{}
+	callCount := 0
+	sidebarContent := "[[Home]]\n[[OldPage]]\n[[Guide]]"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "DELETE", "/wiki/open/deleteWiki")
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-	}))
-	defer server.Close()
-
-	err := runWikiShortcut(t, server, "delete", map[string]string{
-		"project-id": "12345",
-		"page-name":  "old-page",
-	})
-	if err != nil {
-		t.Fatalf("delete shortcut failed: %v", err)
-	}
-
-	assertEqual(t, payload["owner"], "owner")
-	assertEqual(t, payload["repo"], "repo")
-	assertEqual(t, payload["pageName"], "old-page")
-}
-
-func TestWikiListAutoResolvesProjectID(t *testing.T) {
-	requests := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests++
-		switch requests {
-		case 1:
-			assertRequest(t, r, "GET", "/owner/repo.json")
-			writeJSON(t, w, map[string]interface{}{"project_id": float64(1549132)})
-		case 2:
-			assertRequest(t, r, "GET", "/wiki/open/wikiPages")
-			assertEqual(t, r.URL.Query().Get("projectId"), "1549132")
-			writeJSON(t, w, map[string]interface{}{"status": 0, "data": []interface{}{}})
+		callCount++
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{"id": float64(42)})
+		case r.Method == "DELETE" && r.URL.Path == "/wiki/open/deleteWiki":
+			var payload map[string]interface{}
+			json.NewDecoder(r.Body).Decode(&payload)
+			if payload["pageName"] != "OldPage" {
+				t.Fatalf("expected pageName=OldPage, got %v", payload["pageName"])
+			}
+			writeJSON(t, w, map[string]interface{}{"code": 200})
+		case r.Method == "GET" && r.URL.Path == "/wiki/open/getWiki":
+			if r.URL.Query().Get("pageName") != "_Sidebar" {
+				t.Fatalf("expected pageName=_Sidebar, got %s", r.URL.Query().Get("pageName"))
+			}
+			// Return sidebar with the page still in it
+			writeJSON(t, w, map[string]interface{}{
+				"code": 200,
+				"data": fmt.Sprintf(`{"content_base64":"%s"}`, base64.StdEncoding.EncodeToString([]byte(sidebarContent))),
+			})
+		case r.Method == "PUT" && r.URL.Path == "/wiki/open/updateWiki":
+			var payload map[string]interface{}
+			json.NewDecoder(r.Body).Decode(&payload)
+			if payload["pageName"] != "_Sidebar" {
+				t.Fatalf("expected pageName=_Sidebar, got %v", payload["pageName"])
+			}
+			// Verify OldPage is removed from sidebar
+			updated, _ := base64.StdEncoding.DecodeString(payload["content_base64"].(string))
+			if strings.Contains(string(updated), "[[OldPage]]") {
+				t.Fatal("sidebar should not contain [[OldPage]] after delete")
+			}
+			if !strings.Contains(string(updated), "[[Home]]") {
+				t.Fatal("sidebar should still contain [[Home]]")
+			}
+			writeJSON(t, w, map[string]interface{}{"code": 200})
 		default:
-			t.Fatalf("unexpected extra request: %s %s", r.Method, r.URL.Path)
+			t.Fatalf("unexpected request #%d: %s %s", callCount, r.Method, r.URL.Path)
 		}
 	}))
 	defer server.Close()
 
-	err := runWikiShortcut(t, server, "list", nil)
+	err := runWikiShortcut(t, server, "delete", map[string]string{"name": "OldPage"})
 	if err != nil {
-		t.Fatalf("list with auto-resolved project id failed: %v", err)
-	}
-	if requests != 2 {
-		t.Fatalf("expected 2 requests, got %d", requests)
+		t.Fatalf("delete failed: %v", err)
 	}
 }
 
-func TestWikiCreateAutoResolvesProjectID(t *testing.T) {
-	requests := 0
-	var payload map[string]interface{}
+func TestWikiDeleteRequiresName(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests++
-		switch requests {
-		case 1:
-			assertRequest(t, r, "GET", "/owner/repo.json")
-			writeJSON(t, w, map[string]interface{}{"project_id": float64(789)})
-		case 2:
-			assertRequest(t, r, "POST", "/wiki/open/createWiki")
-			payload = decodeJSON(t, r)
-			writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-		default:
-			t.Fatalf("unexpected extra request: %s %s", r.Method, r.URL.Path)
-		}
+		t.Fatal("no request should be made without --name")
 	}))
 	defer server.Close()
 
-	err := runWikiShortcut(t, server, "create", map[string]string{
-		"page-name": "new-page",
-		"title":     "New Page",
-		"content":   "# Hello",
-	})
-	if err != nil {
-		t.Fatalf("create with auto-resolved project id failed: %v", err)
-	}
-	assertEqual(t, payload["projectId"], "789")
-}
-
-func TestWikiInvalidProjectID(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("server should not be called for invalid --project-id: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runWikiShortcut(t, server, "list", map[string]string{
-		"project-id": "abc",
-	})
+	err := runWikiShortcut(t, server, "delete", map[string]string{})
 	if err == nil {
-		t.Fatal("expected invalid --project-id to return an error")
+		t.Fatal("expected error for missing --name")
 	}
 }
 
-func TestWikiResolveProjectIDMissingField(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/owner/repo.json")
-		writeJSON(t, w, map[string]interface{}{"identifier": "repo"})
-	}))
-	defer server.Close()
-
-	err := runWikiShortcut(t, server, "list", nil)
-	if err == nil {
-		t.Fatal("expected missing project_id in repository response to return an error")
-	}
-}
+// --- helpers ---
 
 func runWikiShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
 	t.Helper()
 	shortcut := findWikiShortcut(t, name)
 	ctx := &common.RuntimeContext{
-		Client: &client.Client{
-			HTTP:    server.Client(),
-			BaseURL: server.URL,
-		},
-		Owner:  "owner",
-		Repo:   "repo",
-		Format: "json",
-		Args:   args,
-	}
-	if ctx.Args == nil {
-		ctx.Args = map[string]string{}
+		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+		Owner:  "owner", Repo: "repo", Format: "json", Args: args,
 	}
 	return shortcut.Run(ctx)
 }
 
 func findWikiShortcut(t *testing.T, name string) *common.Shortcut {
 	t.Helper()
-	for _, shortcut := range Shortcuts() {
-		if shortcut.Name == name {
-			return shortcut
+	for _, s := range Shortcuts() {
+		if s.Name == name {
+			return s
 		}
 	}
 	t.Fatalf("shortcut %q not found", name)
 	return nil
 }
 
-func assertRequest(t *testing.T, r *http.Request, method, path string) {
-	t.Helper()
-	if r.Method != method || r.URL.Path != path {
-		t.Fatalf("got request %s %s, want %s %s", r.Method, r.URL.Path, method, path)
-	}
-}
-
-func decodeJSON(t *testing.T, r *http.Request) map[string]interface{} {
-	t.Helper()
-	var payload map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		t.Fatalf("failed to decode request body: %v", err)
-	}
-	return payload
-}
-
 func writeJSON(t *testing.T, w http.ResponseWriter, payload interface{}) {
 	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		t.Fatalf("failed to write response: %v", err)
-	}
-}
-
-func assertEqual(t *testing.T, got interface{}, want interface{}) {
-	t.Helper()
-	if got != want {
-		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
-	}
+	json.NewEncoder(w).Encode(payload)
 }
