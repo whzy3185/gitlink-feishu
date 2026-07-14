@@ -21,6 +21,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "category", Short: "c", Usage: tr.T("flag.repo.category"), Default: "manage"},
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+				{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				user := ctx.Arg("user")
@@ -34,6 +35,13 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				path := "/projects"
 				if user != "" {
 					path = fmt.Sprintf("/users/%s/projects", user)
+				}
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(path, q, "projects")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("projects", items))
 				}
 				env, err := ctx.CallAPIWithQuery("GET", path, q)
 				if err != nil {
@@ -234,6 +242,35 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Flags:       communityListFlags(),
 			Run: func(ctx *common.RuntimeContext) error {
 				return runCommunityList(ctx, "stargazers")
+			},
+		},
+		{
+			Name:        "forks",
+			Description: "List repository forks",
+			Flags: []common.Flag{
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(ctx.RepoPath()+"/forks", q, "users")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("users", items))
+				}
+				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/forks", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
 			},
 		},
 		{
@@ -578,6 +615,15 @@ func runCommunityList(ctx *common.RuntimeContext, path string) error {
 	if err != nil {
 		return err
 	}
+	q.Set("page", ctx.Arg("page"))
+	q.Set("limit", ctx.Arg("limit"))
+	if ctx.Arg("all") == "true" {
+		items, err := ctx.PaginateAllKey(ctx.RepoPath()+"/"+path, q, "users")
+		if err != nil {
+			return err
+		}
+		return ctx.Output(common.NewListEnvelope("users", items))
+	}
 	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/"+path, q)
 	if err != nil {
 		return err
@@ -589,6 +635,9 @@ func communityListFlags() []common.Flag {
 	return []common.Flag{
 		{Name: "start-at", Usage: "Start timestamp"},
 		{Name: "end-at", Usage: "End timestamp"},
+		{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+		{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+		{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
 	}
 }
 

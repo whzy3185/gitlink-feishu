@@ -96,6 +96,29 @@ func (ctx *RuntimeContext) PaginateAll(path string, params url.Values) ([]json.R
 	return ctx.Client.PaginateAll(path, params)
 }
 
+// PaginateAllKey fetches all pages of a list endpoint whose response wraps
+// the array in the field named listKey (e.g. "issues", "pulls").
+func (ctx *RuntimeContext) PaginateAllKey(path string, params url.Values, listKey string) ([]json.RawMessage, error) {
+	return ctx.Client.PaginateAllKey(path, params, listKey)
+}
+
+// NewListEnvelope wraps combined pages in the same shape as a single-page
+// response: {"total_count": N, "<listKey>": [...]}.
+func NewListEnvelope(listKey string, items []json.RawMessage) *output.Envelope {
+	decoded := make([]interface{}, 0, len(items))
+	for _, item := range items {
+		var v interface{}
+		if err := json.Unmarshal(item, &v); err == nil {
+			decoded = append(decoded, v)
+		}
+	}
+	data := map[string]interface{}{
+		"total_count": len(decoded),
+		listKey:       decoded,
+	}
+	return output.SuccessEnvelope(data, &output.Meta{TotalCount: len(decoded)})
+}
+
 // Output prints the envelope in the configured format.
 func (ctx *RuntimeContext) Output(env *output.Envelope) error {
 	return output.Print(env, ctx.Format)

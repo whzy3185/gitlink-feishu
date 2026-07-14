@@ -311,6 +311,22 @@ gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role develope
 # List issues
 gitlink-cli issue +list --owner Gitlink --repo forgeplus
 
+# Fetch all pages automatically (works on all paginated list commands:
+# issue/pr/branch/release/milestone/org/repo/label/member/webhook/tag/commit +list,
+# issue +comments, repo +watchers/+stargazers/+forks, search +repos/+users)
+gitlink-cli issue +list --owner Gitlink --repo forgeplus --all
+
+# Commit history and single commit details
+gitlink-cli commit +list --owner Gitlink --repo forgeplus --ref develop --all
+gitlink-cli commit +view --owner Gitlink --repo forgeplus --sha <sha>
+
+# Git tags
+gitlink-cli tag +list --owner Gitlink --repo forgeplus --all
+
+# Show a single tag by name (falls back to a list scan when the
+# show endpoint's existence precheck misfires)
+gitlink-cli tag +view --owner Gitlink --repo forgeplus -n v4.0.0
+
 # Create an issue
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: Login failed" -b "Steps to reproduce..."
 

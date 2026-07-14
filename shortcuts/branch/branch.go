@@ -1,11 +1,8 @@
 package branch
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
-	"strconv"
-	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
@@ -20,8 +17,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Flags: []common.Flag{
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
-				{Name: "state", Usage: tr.T("flag.branch.state")},
-				{Name: "keyword", Short: "k", Usage: tr.T("flag.branch.keyword")},
+				{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -30,27 +26,14 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
-				if state := strings.TrimSpace(ctx.Arg("state")); state != "" {
-					q.Set("state", state)
-				}
-				if keyword := strings.TrimSpace(ctx.Arg("keyword")); keyword != "" {
-					q.Set("keyword", keyword)
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey("/v1"+ctx.RepoPath()+"/branches", q, "branches")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("branches", items))
 				}
 				env, err := ctx.CallAPIWithQuery("GET", "/v1"+ctx.RepoPath()+"/branches", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "all",
-			Description: tr.T("cmd.branch.all.short"),
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", "/v1"+ctx.RepoPath()+"/branches/all", nil)
 				if err != nil {
 					return err
 				}
@@ -106,53 +89,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "set-default",
-			Description: tr.T("cmd.branch.set_default.short"),
-			Flags: []common.Flag{
-				{Name: "name", Short: "n", Usage: tr.T("flag.branch.name"), Required: true},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				name, _ := ctx.RequireArg("name")
-				q := url.Values{}
-				q.Set("name", name)
-				env, err := ctx.CallAPIWithQuery("PATCH", "/v1"+ctx.RepoPath()+"/branches/update_default_branch", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "restore",
-			Description: tr.T("cmd.branch.restore.short"),
-			Flags: []common.Flag{
-				{Name: "branch-id", Usage: tr.T("flag.branch.id"), Required: true},
-				{Name: "name", Short: "n", Usage: tr.T("flag.branch.name"), Required: true},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				branchID, err := parseBranchID(ctx)
-				if err != nil {
-					return err
-				}
-				name, _ := ctx.RequireArg("name")
-				payload := map[string]interface{}{
-					"branch_id":   branchID,
-					"branch_name": name,
-				}
-				env, err := ctx.CallAPI("POST", "/v1"+ctx.RepoPath()+"/branches/restore", payload)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
 			Name:        "protect",
 			Description: tr.T("cmd.branch.protect.short"),
 			Flags: []common.Flag{
@@ -199,13 +135,4 @@ func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
 		return translators[0]
 	}
 	return i18n.Default()
-}
-
-func parseBranchID(ctx *common.RuntimeContext) (int, error) {
-	value, _ := ctx.RequireArg("branch-id")
-	parsed, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil || parsed <= 0 {
-		return 0, errors.New(ctx.Tr.Tf("error.branch.id_invalid", i18n.Args{"value": value}))
-	}
-	return parsed, nil
 }

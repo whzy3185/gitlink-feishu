@@ -7,14 +7,12 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/client"
-	repoContext "github.com/gitlink-org/gitlink-cli/internal/context"
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 )
@@ -30,10 +28,9 @@ func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
 		Long:  tr.T("cmd.api.long"),
 		Example: `  gitlink-cli api GET /users/me
   gitlink-cli api GET /projects --query 'page=1&limit=10'
+  gitlink-cli api GET /:owner/:repo/issues --paginate
   gitlink-cli api POST /:owner/:repo/issues --body '{"subject":"Bug","description":"..."}'
   gitlink-cli api POST /:owner/:repo/issues --body-file issue.json
-  gitlink-cli api POST /v1/{{owner}}/{{repo}}/issues/{{number}}/journals --body '{"notes":"handled by {{actor}}"}' --var owner=Gitlink --var repo=gitlink-cli --var number=42 --var actor=bot
-  gitlink-cli api POST /v1/{{owner}}/{{repo}}/issues --body-file issue.json --var owner=Gitlink --var repo=gitlink-cli --dry-run
   gitlink-cli api --batch-file plan.json --dry-run
   gitlink-cli api --batch-file plan.json --var owner=Gitlink --var repo=gitlink-cli`,
 		Args: validateAPIArgs,
@@ -44,6 +41,7 @@ func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
 	apiCmd.Flags().String("body-file", "", tr.T("flag.api.body_file"))
 	apiCmd.Flags().Bool("body-stdin", false, tr.T("flag.api.body_stdin"))
 	apiCmd.Flags().String("query", "", tr.T("flag.api.query"))
+	apiCmd.Flags().Bool("paginate", false, tr.T("flag.api.paginate"))
 	apiCmd.Flags().StringSlice("header", nil, tr.T("flag.api.header"))
 	apiCmd.Flags().String("batch-file", "", tr.T("flag.api.batch_file"))
 	apiCmd.Flags().Bool("dry-run", false, tr.T("flag.api.batch_dry_run"))
@@ -66,7 +64,11 @@ func validateAPIArgs(c *cobra.Command, args []string) error {
 
 func runAPI(c *cobra.Command, args []string) error {
 	batchFile, _ := c.Flags().GetString("batch-file")
+	paginate, _ := c.Flags().GetBool("paginate")
 	if batchFile != "" {
+		if paginate {
+			return fmt.Errorf("--paginate cannot be used with --batch-file")
+		}
 		return runAPIBatch(c, batchFile)
 	}
 
@@ -77,23 +79,13 @@ func runAPI(c *cobra.Command, args []string) error {
 		path = "/" + path
 	}
 
-	vars, err := parseBatchVars(c)
-	if err != nil {
-		return err
-	}
-	addRepoContextVars(vars)
-	path, err = renderSinglePath(path, vars)
-	if err != nil {
-		return err
-	}
-
 	cli, err := client.New()
 	if err != nil {
 		return err
 	}
 	cli.Debug = cmdutil.Debug
 
-	body, err := readJSONBody(c, vars)
+	body, err := readJSONBody(c)
 	if err != nil {
 		return err
 	}
@@ -101,22 +93,30 @@ func runAPI(c *cobra.Command, args []string) error {
 	var query url.Values
 	queryStr, _ := c.Flags().GetString("query")
 	if queryStr != "" {
-		query, err = renderSingleQuery(queryStr, vars)
+		var err error
+		query, err = url.ParseQuery(queryStr)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid query string: %w", err)
 		}
 	}
 
-	dryRun, _ := c.Flags().GetBool("dry-run")
-	if dryRun {
-		return output.Print(output.SuccessEnvelope(map[string]interface{}{
-			"dry_run":   true,
-			"method":    method,
-			"path":      path,
-			"query":     query,
-			"body":      body,
-			"variables": sortedVars(vars),
-		}, nil), resolveFormat())
+	if paginate {
+		if method != "GET" {
+			return fmt.Errorf("--paginate only supports GET requests, got %s", method)
+		}
+		if body != nil {
+			return fmt.Errorf("--paginate cannot be used with a request body")
+		}
+		items, err := cli.PaginateAll(path, query)
+		if err != nil {
+			var apiErr *client.APIError
+			if errors.As(err, &apiErr) {
+				errEnv := output.ErrorEnvelope(apiErr.Code, apiErr.Message, "")
+				return output.Print(errEnv, resolveFormat())
+			}
+			return err
+		}
+		return output.Print(paginatedEnvelope(items), resolveFormat())
 	}
 
 	env, err := cli.Do(method, path, body, query)
@@ -132,7 +132,24 @@ func runAPI(c *cobra.Command, args []string) error {
 	return output.Print(env, resolveFormat())
 }
 
-func readJSONBody(c *cobra.Command, vars map[string]string) (interface{}, error) {
+// paginatedEnvelope wraps merged pages in the same shape as a single-page
+// list response: {"total_count": N, "items": [...]}.
+func paginatedEnvelope(items []json.RawMessage) *output.Envelope {
+	decoded := make([]interface{}, 0, len(items))
+	for _, item := range items {
+		var v interface{}
+		if err := json.Unmarshal(item, &v); err == nil {
+			decoded = append(decoded, v)
+		}
+	}
+	data := map[string]interface{}{
+		"total_count": len(decoded),
+		"items":       decoded,
+	}
+	return output.SuccessEnvelope(data, &output.Meta{TotalCount: len(decoded)})
+}
+
+func readJSONBody(c *cobra.Command) (interface{}, error) {
 	bodyStr, _ := c.Flags().GetString("body")
 	bodyFile, _ := c.Flags().GetString("body-file")
 	bodyStdin, _ := c.Flags().GetBool("body-stdin")
@@ -172,64 +189,7 @@ func readJSONBody(c *cobra.Command, vars map[string]string) (interface{}, error)
 	if err := json.Unmarshal(data, &body); err != nil {
 		return nil, fmt.Errorf("invalid JSON body: %w", err)
 	}
-	rendered, err := renderBatchValue(body, vars)
-	if err != nil {
-		return nil, fmt.Errorf("render JSON body: %w", err)
-	}
-	return rendered, nil
-}
-
-func renderSinglePath(path string, vars map[string]string) (string, error) {
-	rendered, err := renderTemplate(rewriteColonPlaceholders(path), vars)
-	if err != nil {
-		return "", fmt.Errorf("render path: %w", err)
-	}
-	return rendered, nil
-}
-
-func renderSingleQuery(raw string, vars map[string]string) (url.Values, error) {
-	rendered, err := renderTemplate(raw, vars)
-	if err != nil {
-		return nil, fmt.Errorf("render query: %w", err)
-	}
-	query, err := url.ParseQuery(rendered)
-	if err != nil {
-		return nil, fmt.Errorf("invalid query string: %w", err)
-	}
-	return query, nil
-}
-
-func addRepoContextVars(vars map[string]string) {
-	if vars == nil {
-		return
-	}
-	if vars["owner"] != "" && vars["repo"] != "" {
-		return
-	}
-	owner, repo, err := repoContext.ResolveOwnerRepo(cmdutil.Owner, cmdutil.Repo)
-	if err != nil {
-		return
-	}
-	if vars["owner"] == "" {
-		vars["owner"] = owner
-	}
-	if vars["repo"] == "" {
-		vars["repo"] = repo
-	}
-}
-
-func rewriteColonPlaceholders(path string) string {
-	return colonPathVarPattern.ReplaceAllString(path, `$1{{$2}}`)
-}
-
-var colonPathVarPattern = templatePattern
-
-func init() {
-	colonPathVarPattern = mustCompileColonPattern()
-}
-
-func mustCompileColonPattern() *regexp.Regexp {
-	return regexp.MustCompile(`(^|/):([A-Za-z0-9_.-]+)`)
+	return body, nil
 }
 
 func resolveFormat() string {

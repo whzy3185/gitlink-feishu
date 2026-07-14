@@ -18,6 +18,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "keyword", Short: "k", Usage: tr.T("flag.search.keyword"), Required: true},
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+				{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				keyword, _ := ctx.RequireArg("keyword")
@@ -25,6 +26,13 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				q.Set("search", keyword)
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey("/projects", q, "projects")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("projects", items))
+				}
 				env, err := ctx.CallAPIWithQuery("GET", "/projects", q)
 				if err != nil {
 					return err
@@ -39,6 +47,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "keyword", Short: "k", Usage: tr.T("flag.search.keyword"), Required: true},
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+				{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				keyword, _ := ctx.RequireArg("keyword")
@@ -46,6 +55,13 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				q.Set("search", keyword)
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey("/users/list", q, "users")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("users", items))
+				}
 				env, err := ctx.CallAPIWithQuery("GET", "/users/list", q)
 				if err != nil {
 					return err

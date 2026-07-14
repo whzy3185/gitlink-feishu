@@ -9,19 +9,31 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-// Shortcuts returns all shortcuts for webhook management.
+var allowedWebhookTypes = map[string]bool{
+	"gitea": true, "slack": true, "discord": true, "dingtalk": true, "telegram": true,
+	"msteams": true, "feishu": true, "matrix": true, "jianmu": true, "softbot": true,
+}
+
+var allowedWebhookContentTypes = map[string]bool{"json": true, "form": true}
+var allowedWebhookMethods = map[string]bool{"GET": true, "POST": true}
+
+var allowedWebhookEvents = map[string]bool{
+	"push": true, "create": true, "delete": true,
+	"issues_only": true, "issue_assign": true, "issue_label": true, "issue_comment": true,
+	"pull_request_only": true, "pull_request_assign": true, "pull_request_comment": true,
+}
+
+// Shortcuts returns webhook management shortcuts.
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
-	tr := i18n.Default()
-	if len(translators) > 0 && translators[0] != nil {
-		tr = translators[0]
-	}
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
 			Description: tr.T("cmd.webhook.list.short"),
 			Flags: []common.Flag{
-				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
-				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "all", Usage: tr.T("flag.all"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -30,50 +42,14 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
-				env, err := ctx.CallAPIWithQuery("GET", v1Path(ctx)+"/webhooks", q)
-				if err != nil {
-					return err
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(webhookPath(ctx), q, "webhooks")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("webhooks", items))
 				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "create",
-			Description: tr.T("cmd.webhook.create.short"),
-			Flags: []common.Flag{
-				{Name: "url", Short: "u", Usage: tr.T("flag.webhook.url"), Required: true},
-				{Name: "content-type", Usage: tr.T("flag.webhook.content_type"), Default: "json"},
-				{Name: "secret", Short: "s", Usage: tr.T("flag.webhook.secret")},
-				{Name: "events", Short: "e", Usage: tr.T("flag.webhook.events")},
-				{Name: "branch-filter", Usage: tr.T("flag.webhook.branch_filter")},
-				{Name: "active", Usage: tr.T("flag.webhook.active"), Default: "true"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				webhookURL, err := ctx.RequireArg("url")
-				if err != nil {
-					return err
-				}
-				body := map[string]interface{}{
-					"url":          webhookURL,
-					"content_type": ctx.Arg("content-type"),
-					"http_method":  "POST",
-					"active":       true,
-				}
-				if secret := ctx.Arg("secret"); secret != "" {
-					body["secret"] = secret
-				}
-				if events := ctx.Arg("events"); events != "" {
-					body["events"] = strings.Split(events, ",")
-				} else {
-					body["events"] = []string{"push"}
-				}
-				if bf := ctx.Arg("branch-filter"); bf != "" {
-					body["branch_filter"] = bf
-				}
-				env, err := ctx.CallAPI("POST", v1Path(ctx)+"/webhooks", body)
+				env, err := ctx.CallAPIWithQuery("GET", webhookPath(ctx), q)
 				if err != nil {
 					return err
 				}
@@ -94,12 +70,27 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/webhooks/%s", v1Path(ctx), id), nil)
+				env, err := ctx.CallAPI("GET", webhookItemPath(ctx, id), nil)
 				if err != nil {
 					return err
 				}
 				return ctx.Output(env)
 			},
+		},
+		{
+			Name:        "create",
+			Description: tr.T("cmd.webhook.create.short"),
+			Flags: []common.Flag{
+				{Name: "url", Short: "u", Usage: tr.T("flag.webhook.url"), Required: true},
+				{Name: "events", Short: "e", Usage: tr.T("flag.webhook.events"), Required: true},
+				{Name: "type", Short: "t", Usage: tr.T("flag.webhook.type"), Default: "gitea"},
+				{Name: "content-type", Usage: tr.T("flag.webhook.content_type"), Default: "json"},
+				{Name: "http-method", Usage: tr.T("flag.webhook.http_method"), Default: "POST"},
+				{Name: "secret", Short: "s", Usage: tr.T("flag.webhook.secret")},
+				{Name: "branch-filter", Usage: tr.T("flag.webhook.branch_filter"), Default: "*"},
+				{Name: "active", Usage: tr.T("flag.webhook.active"), Default: "true"},
+			},
+			Run: runCreate,
 		},
 		{
 			Name:        "update",
@@ -107,45 +98,19 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Flags: []common.Flag{
 				{Name: "id", Short: "i", Usage: tr.T("flag.webhook.id"), Required: true},
 				{Name: "url", Short: "u", Usage: tr.T("flag.webhook.url")},
-				{Name: "content-type", Usage: tr.T("flag.webhook.content_type"), Default: "json"},
-				{Name: "secret", Short: "s", Usage: tr.T("flag.webhook.secret")},
 				{Name: "events", Short: "e", Usage: tr.T("flag.webhook.events")},
+				{Name: "type", Short: "t", Usage: tr.T("flag.webhook.type")},
+				{Name: "content-type", Usage: tr.T("flag.webhook.content_type")},
+				{Name: "http-method", Usage: tr.T("flag.webhook.http_method")},
+				{Name: "secret", Short: "s", Usage: tr.T("flag.webhook.secret_update")},
 				{Name: "branch-filter", Usage: tr.T("flag.webhook.branch_filter")},
-				{Name: "active", Usage: tr.T("flag.webhook.active"), Default: "true"},
+				{Name: "active", Usage: tr.T("flag.webhook.active")},
 			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				id, err := ctx.RequireArg("id")
-				if err != nil {
-					return err
-				}
-				body := map[string]interface{}{
-					"content_type":  ctx.Arg("content-type"),
-					"http_method":   "POST",
-					"active":        true,
-					"branch_filter": ctx.Arg("branch-filter"),
-					"secret":        ctx.Arg("secret"),
-				}
-				if webhookURL := ctx.Arg("url"); webhookURL != "" {
-					body["url"] = webhookURL
-				}
-				if events := ctx.Arg("events"); events != "" {
-					body["events"] = strings.Split(events, ",")
-				} else {
-					body["events"] = []string{"push"}
-				}
-				env, err := ctx.CallAPI("PUT", fmt.Sprintf("%s/webhooks/%s", v1Path(ctx), id), body)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
+			Run: runUpdate,
 		},
 		{
-			Name:        "history",
-			Description: tr.T("cmd.webhook.tasks.short"),
+			Name:        "delete",
+			Description: tr.T("cmd.webhook.delete.short"),
 			Flags: []common.Flag{
 				{Name: "id", Short: "i", Usage: tr.T("flag.webhook.id"), Required: true},
 			},
@@ -157,7 +122,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/webhooks/%s/hooktasks", v1Path(ctx), id), nil)
+				env, err := ctx.CallAPI("DELETE", webhookItemPath(ctx, id), nil)
 				if err != nil {
 					return err
 				}
@@ -178,7 +143,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("POST", fmt.Sprintf("%s/webhooks/%s/tests", v1Path(ctx), id), nil)
+				env, err := ctx.CallAPI("POST", fmt.Sprintf("%s/tests", webhookItemPath(ctx, id)), nil)
 				if err != nil {
 					return err
 				}
@@ -186,8 +151,8 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "delete",
-			Description: tr.T("cmd.webhook.delete.short"),
+			Name:        "tasks",
+			Description: tr.T("cmd.webhook.tasks.short"),
 			Flags: []common.Flag{
 				{Name: "id", Short: "i", Usage: tr.T("flag.webhook.id"), Required: true},
 			},
@@ -199,7 +164,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("DELETE", fmt.Sprintf("%s/webhooks/%s", v1Path(ctx), id), nil)
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/hooktasks", webhookItemPath(ctx, id)), nil)
 				if err != nil {
 					return err
 				}
@@ -209,6 +174,221 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	}
 }
 
-func v1Path(ctx *common.RuntimeContext) string {
-	return fmt.Sprintf("/v1/%s/%s", ctx.Owner, ctx.Repo)
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
+}
+
+func runCreate(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	payload, err := webhookPayloadFromArgs(ctx, nil)
+	if err != nil {
+		return err
+	}
+	env, err := ctx.CallAPI("POST", webhookPath(ctx), payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runUpdate(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	id, err := ctx.RequireArg("id")
+	if err != nil {
+		return err
+	}
+
+	current, err := fetchWebhook(ctx, id)
+	if err != nil {
+		return fmt.Errorf("fetch webhook: %w", err)
+	}
+	payload, err := webhookPayloadFromArgs(ctx, current)
+	if err != nil {
+		return err
+	}
+	env, err := ctx.CallAPI("PUT", webhookItemPath(ctx, id), payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func webhookPath(ctx *common.RuntimeContext) string {
+	return fmt.Sprintf("/v1/%s/%s/webhooks", ctx.Owner, ctx.Repo)
+}
+
+func webhookItemPath(ctx *common.RuntimeContext, id string) string {
+	return fmt.Sprintf("%s/%s", webhookPath(ctx), id)
+}
+
+func fetchWebhook(ctx *common.RuntimeContext, id string) (map[string]interface{}, error) {
+	env, err := ctx.CallAPI("GET", webhookItemPath(ctx, id), nil)
+	if err != nil {
+		return nil, err
+	}
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("failed to parse webhook data")
+	}
+	return data, nil
+}
+
+func webhookPayloadFromArgs(ctx *common.RuntimeContext, current map[string]interface{}) (map[string]interface{}, error) {
+	url := firstNonEmpty(ctx.Arg("url"), stringFromMap(current, "url"))
+	if url == "" {
+		return nil, fmt.Errorf("required flag --url is missing")
+	}
+
+	eventValue := ctx.Arg("events")
+	var events []string
+	var err error
+	if eventValue != "" {
+		events, err = parseWebhookEvents(eventValue)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		events, err = eventsFromMap(current)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(events) == 0 {
+		return nil, fmt.Errorf("required flag --events is missing")
+	}
+
+	webhookType := strings.ToLower(firstNonEmpty(ctx.Arg("type"), stringFromMap(current, "type"), "gitea"))
+	if err := validateOneOf("type", webhookType, allowedWebhookTypes); err != nil {
+		return nil, err
+	}
+	contentType := strings.ToLower(firstNonEmpty(ctx.Arg("content-type"), stringFromMap(current, "content_type"), "json"))
+	if err := validateOneOf("content-type", contentType, allowedWebhookContentTypes); err != nil {
+		return nil, err
+	}
+	httpMethod := strings.ToUpper(firstNonEmpty(ctx.Arg("http-method"), stringFromMap(current, "http_method"), "POST"))
+	if err := validateOneOf("http-method", httpMethod, allowedWebhookMethods); err != nil {
+		return nil, err
+	}
+	branchFilter := firstNonEmpty(ctx.Arg("branch-filter"), stringFromMap(current, "branch_filter"), "*")
+	active, err := activeFromArgs(ctx.Arg("active"), current)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := map[string]interface{}{
+		"type":          webhookType,
+		"active":        active,
+		"content_type":  contentType,
+		"http_method":   httpMethod,
+		"url":           url,
+		"branch_filter": branchFilter,
+		"events":        events,
+	}
+	if secret := firstNonEmpty(ctx.Arg("secret"), stringFromMap(current, "secret")); secret != "" {
+		payload["secret"] = secret
+	}
+	return payload, nil
+}
+
+func parseWebhookEvents(value string) ([]string, error) {
+	parts := strings.Split(value, ",")
+	events := make([]string, 0, len(parts))
+	seen := map[string]bool{}
+	for _, part := range parts {
+		event := strings.TrimSpace(part)
+		if event == "" {
+			continue
+		}
+		if !allowedWebhookEvents[event] {
+			return nil, fmt.Errorf("invalid --events value %q", event)
+		}
+		if seen[event] {
+			continue
+		}
+		seen[event] = true
+		events = append(events, event)
+	}
+	if len(events) == 0 {
+		return nil, fmt.Errorf("required flag --events is missing")
+	}
+	return events, nil
+}
+
+func eventsFromMap(values map[string]interface{}) ([]string, error) {
+	if values == nil {
+		return nil, nil
+	}
+	raw, ok := values["events"]
+	if !ok || raw == nil {
+		return nil, nil
+	}
+	switch events := raw.(type) {
+	case []interface{}:
+		result := make([]string, 0, len(events))
+		for _, event := range events {
+			name, ok := event.(string)
+			if !ok {
+				return nil, fmt.Errorf("failed to parse webhook events")
+			}
+			result = append(result, name)
+		}
+		return result, nil
+	case []string:
+		return events, nil
+	default:
+		return nil, fmt.Errorf("failed to parse webhook events")
+	}
+}
+
+func activeFromArgs(value string, current map[string]interface{}) (bool, error) {
+	if value != "" {
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "true":
+			return true, nil
+		case "false":
+			return false, nil
+		default:
+			return false, fmt.Errorf("invalid --active value %q: use true or false", value)
+		}
+	}
+	if current != nil {
+		if active, ok := current["active"].(bool); ok {
+			return active, nil
+		}
+		if active, ok := current["is_active"].(bool); ok {
+			return active, nil
+		}
+	}
+	return true, nil
+}
+
+func stringFromMap(values map[string]interface{}, key string) string {
+	if values == nil {
+		return ""
+	}
+	value, _ := values[key].(string)
+	return value
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func validateOneOf(name, value string, allowed map[string]bool) error {
+	if allowed[value] {
+		return nil
+	}
+	return fmt.Errorf("invalid --%s value %q", name, value)
 }

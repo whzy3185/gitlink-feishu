@@ -171,6 +171,42 @@ func TestIssueListStateAll(t *testing.T) {
 	}
 }
 
+func TestIssueListAllPaginates(t *testing.T) {
+	var pages []string
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/owner/repo/issues.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		page := r.URL.Query().Get("page")
+		pages = append(pages, page)
+		assertEqual(t, r.URL.Query().Get("limit"), "2")
+		var issues []interface{}
+		if page == "1" {
+			issues = []interface{}{
+				map[string]interface{}{"id": float64(1), "project_issues_index": float64(11)},
+				map[string]interface{}{"id": float64(2), "project_issues_index": float64(12)},
+			}
+		} else {
+			issues = []interface{}{
+				map[string]interface{}{"id": float64(3), "project_issues_index": float64(13)},
+			}
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"total_count": float64(3),
+			"issues":      issues,
+		})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "list", map[string]string{"all": "true", "limit": "2"})
+	if err != nil {
+		t.Fatalf("list --all failed: %v", err)
+	}
+	if len(pages) != 2 || pages[0] != "1" || pages[1] != "2" {
+		t.Fatalf("pages requested = %v, want [1 2]", pages)
+	}
+}
+
 // --- create ---
 
 func TestIssueCreate(t *testing.T) {

@@ -4,36 +4,44 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func v1RepoPath(ctx *common.RuntimeContext) string {
-	return fmt.Sprintf("/v1/%s/%s", ctx.Owner, ctx.Repo)
-}
-
-func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
-	tr := shortcutTranslator(translators...)
+// Shortcuts returns commit history shortcuts.
+//
+// Commit history previously had no first-class command even though the
+// platform exposes a paginated v1 endpoint; agents had to fall back to the
+// raw api command to read it.
+func Shortcuts() []*common.Shortcut {
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: tr.T("cmd.commit.list.short"),
+			Description: "List repository commits",
 			Flags: []common.Flag{
-				{Name: "sha", Short: "s", Usage: tr.T("flag.commit.sha_start")},
-				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
-				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+				{Name: "ref", Short: "r", Usage: "Branch, tag, or commit SHA to start from (default branch when omitted)"},
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
+				path := fmt.Sprintf("/v1/%s/%s/commits", ctx.Owner, ctx.Repo)
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
-				if sha := ctx.Arg("sha"); sha != "" {
-					q.Set("sha", sha)
+				if ref := ctx.Arg("ref"); ref != "" {
+					q.Set("sha", ref)
 				}
-				env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx)+"/commits", q)
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(path, q, "commits")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("commits", items))
+				}
+				env, err := ctx.CallAPIWithQuery("GET", path, q)
 				if err != nil {
 					return err
 				}
@@ -41,35 +49,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "recent",
-			Description: tr.T("cmd.commit.recent.short"),
+			Name:        "view",
+			Description: "View a single commit",
 			Flags: []common.Flag{
-				{Name: "keyword", Short: "k", Usage: tr.T("flag.commit.keyword")},
-				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
-				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("page", ctx.Arg("page"))
-				q.Set("limit", ctx.Arg("limit"))
-				if keyword := ctx.Arg("keyword"); keyword != "" {
-					q.Set("keyword", keyword)
-				}
-				env, err := ctx.CallAPIWithQuery("GET", v1RepoPath(ctx)+"/commits/recent", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "diff",
-			Description: tr.T("cmd.commit.diff.short"),
-			Flags: []common.Flag{
-				{Name: "sha", Short: "s", Usage: tr.T("flag.commit.sha"), Required: true},
+				{Name: "sha", Short: "s", Usage: "Commit SHA", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -79,37 +62,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/commits/%s/diff", v1RepoPath(ctx), url.PathEscape(sha)), nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "files",
-			Description: tr.T("cmd.commit.files.short"),
-			Flags: []common.Flag{
-				{Name: "sha", Short: "s", Usage: tr.T("flag.commit.sha"), Required: true},
-				{Name: "filepath", Short: "f", Usage: tr.T("flag.commit.filepath")},
-				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
-				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				sha, err := ctx.RequireArg("sha")
-				if err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("page", ctx.Arg("page"))
-				q.Set("limit", ctx.Arg("limit"))
-				if fp := ctx.Arg("filepath"); fp != "" {
-					q.Set("filepath", fp)
-				}
-				env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("%s/commits/%s/files", v1RepoPath(ctx), url.PathEscape(sha)), q)
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/commits/%s", ctx.RepoPath(), sha), nil)
 				if err != nil {
 					return err
 				}
@@ -117,11 +70,4 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 	}
-}
-
-func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
-	if len(translators) > 0 && translators[0] != nil {
-		return translators[0]
-	}
-	return i18n.Default()
 }
