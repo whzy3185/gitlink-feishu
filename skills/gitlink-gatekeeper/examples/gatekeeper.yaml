@@ -48,3 +48,12 @@ behavior:
   apply_label: true             # 按裁决打标签
   auto_merge: false             # 仅当 true 且裁决=PASS 且显式 --apply 时才合并
   merge_method: squash          # merge | rebase | squash
+
+# —— 咨询标记（advisory，可选）——
+# 与硬门禁互补的「软」一层：硬门禁命中即 REQUEST_CHANGES（真牙齿）；
+# 咨询标记只在评分卡里提示、不参与评分、不改变裁决（建议留给人工判断）。
+# 默认关闭、向后兼容；确定性——仅用已采集数据，不依赖当前时间等非确定性输入。
+# 典型用途：PR 积压的活跃仓库里，对「超体量但未触硬门禁」的 PR 提示拆分而不阻断。
+advisory_flags:
+  enabled: false                # 总开关，默认关闭
+  large_pr_files: 0             # 变更文件数 ≥ 此值则提示拆分（0=不启用；建议 < hard_gates.max_changed_files）

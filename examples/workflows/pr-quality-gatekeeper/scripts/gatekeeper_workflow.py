@@ -84,6 +84,12 @@ DEFAULT_POLICY: dict[str, Any] = {
         "auto_merge": False,
         "merge_method": "squash",
     },
+    # 咨询标记（advisory）：默认全关；开启后仅在评分卡中给出建议性提示，
+    # 不参与评分、不改变裁决。向后兼容——旧策略无此段时等同关闭。
+    "advisory_flags": {
+        "enabled": False,
+        "large_pr_files": 0,   # 变更文件数 ≥ 此值则提示拆分（0=不启用；建议 < hard_gates.max_changed_files）
+    },
 }
 
 VERDICT_EMOJI = {"PASS": "✅", "REQUEST_CHANGES": "❌", "COMMENT": "💬"}
@@ -641,6 +647,35 @@ def evaluate_hard_gates(inp: ScoreInput, policy: dict[str, Any]) -> list[dict[st
     return failures
 
 
+def evaluate_advisory_flags(inp: ScoreInput, policy: dict[str, Any]) -> list[dict[str, str]]:
+    """咨询标记（advisory）——建议性、不参与评分、不改变裁决。
+
+    与硬门禁互补的「软」一层：硬门禁是真牙齿（命中即 REQUEST_CHANGES），
+    咨询标记只在评分卡里给出提示，把治理建议（如积压仓库里的超体量 PR
+    应拆分但不应阻断）留给人工判断。
+
+    设计约束：
+    - 默认全关、向后兼容（策略无 advisory_flags 段时返回空，行为与旧版完全一致）；
+    - 确定性——仅消费已采集的 PR 数据，不依赖当前时间等非确定性输入，
+      保持「同输入 → 同输出」，与评分主逻辑一致可复算。
+    """
+    cfg = policy.get("advisory_flags") or {}
+    if not cfg.get("enabled"):
+        return []
+    flags: list[dict[str, str]] = []
+    threshold = int(cfg.get("large_pr_files", 0) or 0)
+    n_files = len(inp.changed_files)
+    if threshold > 0 and n_files >= threshold:
+        flags.append(
+            {
+                "flag": "large_pr_files",
+                "detail": f"变更 {n_files} 个文件，达到建议拆分阈值 {threshold}"
+                f"（未触发硬门禁，建议拆分为更小的 PR 以便审查）",
+            }
+        )
+    return flags
+
+
 def decide_verdict(
     total: int, hard_gate_failed: bool, policy: dict[str, Any]
 ) -> str:
@@ -667,6 +702,7 @@ def render_scorecard(
     policy_label: str,
     routing: dict[str, Any] | None,
     tracking_issue: Any = None,
+    advisory: list[dict[str, str]] | None = None,
 ) -> str:
     emoji = VERDICT_EMOJI[verdict]
     total = dims["total"]
@@ -717,6 +753,13 @@ def render_scorecard(
         lines.append(f"### ⛔ Hard gate failures ({len(failures)})")
         for f in failures:
             lines.append(f"- `{f['gate']}`: {f['detail']}")
+        lines.append("")
+
+    if advisory:
+        lines.append(f"### 💡 Advisory ({len(advisory)})")
+        lines.append("> 建议性提示，不参与评分、不改变裁决。")
+        for a in advisory:
+            lines.append(f"- `{a['flag']}`: {a['detail']}")
         lines.append("")
 
     must = [f for f in inp.findings if f.severity in ("blocker", "major")]
@@ -1184,9 +1227,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         dims = score_dimensions(inp, policy)
         failures = evaluate_hard_gates(inp, policy)
+        advisory = evaluate_advisory_flags(inp, policy)
         verdict = decide_verdict(dims["total"], bool(failures), policy)
-        scorecard = render_scorecard(inp, dims, failures, verdict, policy_label, routing)
-        print(f"      Score: {dims['total']}/100 · 硬门禁失败 {len(failures)} 项 · 裁决: {verdict}")
+        scorecard = render_scorecard(
+            inp, dims, failures, verdict, policy_label, routing, advisory=advisory
+        )
+        adv_note = f" · 咨询标记 {len(advisory)} 条" if advisory else ""
+        print(f"      Score: {dims['total']}/100 · 硬门禁失败 {len(failures)} 项 · 裁决: {verdict}{adv_note}")
         print()
 
         # 落盘本地产物（无论 dry-run 与否都生成，便于复核 / 验证记录）
@@ -1229,7 +1276,7 @@ def main(argv: list[str] | None = None) -> int:
                     # 把编号补进评分卡 Next steps 后重新落盘（评论将带上回链）
                     scorecard = render_scorecard(
                         inp, dims, failures, verdict, policy_label, routing,
-                        tracking_issue=tracking_issue_no,
+                        tracking_issue=tracking_issue_no, advisory=advisory,
                     )
                     scorecard_path.write_text(scorecard + "\n", encoding="utf-8")
 
@@ -1289,6 +1336,7 @@ def main(argv: list[str] | None = None) -> int:
             "scores": {k: v for k, v in dims.items() if k != "total"},
             "total": dims["total"],
             "hard_gate_failures": failures,
+            "advisory_flags": advisory,
             "verdict": verdict,
             "verdict_label": verdict_label,
             "tracking_issue": tracking_issue_no,
