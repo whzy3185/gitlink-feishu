@@ -285,6 +285,31 @@ gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role D
 gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
 ```
 
+### Organization Operations
+
+```bash
+# List organizations
+gitlink-cli org +list --page 1 --limit 20
+
+# Show organization details
+gitlink-cli org +info --id Gitlink
+
+# List organization members with team or keyword filters
+gitlink-cli org +members --id Gitlink --team Platform --format json
+gitlink-cli org +members --id Gitlink --keyword alice --limit 50 --format json
+
+# List organization teams with normalized user details
+gitlink-cli org +teams --id Gitlink --authorize write --include-users --format json
+
+# Preview and create an organization team
+gitlink-cli org +team-create --id Gitlink --name platform --nickname "Platform Team" --dry-run
+gitlink-cli org +team-create --id Gitlink --name platform --nickname "Platform Team"
+
+# Preview and remove an organization member
+gitlink-cli org +member-remove --id Gitlink --login alice --dry-run
+gitlink-cli org +member-remove --id Gitlink --user-id 101
+```
+
 ### Issue Management
 
 ```bash

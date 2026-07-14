@@ -1,33 +1,23 @@
-# Organization Team Shortcuts
+# org team shortcuts
 
-## Summary
+This change expands the `org` shortcut group from basic organization lookup into an operational workflow for team and membership management.
 
-Adds a read-only organization team shortcut so users and agents can inspect teams without dropping down to Raw API calls.
+The updated command set keeps `org +list`, `org +info`, and `org +create`, and adds stronger organization administration coverage:
 
-## Commands
+- `org +members` now supports `--all`, `--team`, `--login`, and `--keyword`, and automatically fetches all pages before applying filters.
+- `org +teams` lists organization teams with `--authorize`, `--unit`, `--keyword`, and `--include-users` support, returning normalized team summaries.
+- `org +team-create` creates a team and supports `--dry-run` for request preview.
+- `org +member-remove` removes an organization member by `--user-id` or resolves `--login` automatically, with `--dry-run` support.
 
-```bash
-gitlink-cli org +teams --id Gitlink
-gitlink-cli org +teams --id Gitlink --page 1 --limit 50
-gitlink-cli org +teams --id Gitlink --format json
-```
+The output shape is normalized for automation use. Member results now include matched counts, team summaries, and consistent user fields. Team results expose permission-level aggregation, unit information, and optional normalized user details.
 
-## Behavior
+The command examples in `README.md` were extended so the new team and member management flows are discoverable from the main project documentation.
 
-- Calls `GET /organizations/{id}/teams`.
-- Supports `--page` and `--limit`, matching `org +list` and `org +members` pagination behavior.
-- Requires `--id` to avoid accidental ambiguous organization lookup.
-- Leaves team creation and destructive team management in Raw API because only the read-only list endpoint is currently documented by the GitLink org Skill.
-
-## Documentation
-
-- Updates the `gitlink-org` Skill index to include `org +teams`.
-- Adds a dedicated `gitlink-org-teams` reference page for Agent usage.
-- Updates README feature wording to state that organization teams can be inspected through shortcuts.
-
-## Verification
+Validation:
 
 ```bash
-go test ./shortcuts/org ./shortcuts
+go test ./shortcuts/org/...
+go test ./shortcuts/...
 go test ./...
+go build ./...
 ```
