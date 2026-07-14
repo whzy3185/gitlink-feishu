@@ -1,11 +1,12 @@
 package issue
 
 import (
-	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
 func TestParseIssueNumbers(t *testing.T) {
@@ -206,6 +207,51 @@ func TestCollectIssueNumbersCSVReadError(t *testing.T) {
 	}
 }
 
+func TestReadIssueTextArgInline(t *testing.T) {
+	ctx := &common.RuntimeContext{Args: map[string]string{"body": "hello"}}
+	got, err := readIssueTextArg(ctx, "body", "body-file", true)
+	if err != nil {
+		t.Fatalf("readIssueTextArg returned error: %v", err)
+	}
+	if got != "hello" {
+		t.Fatalf("readIssueTextArg() = %q, want %q", got, "hello")
+	}
+}
+
+func TestReadIssueTextArgFromFile(t *testing.T) {
+	path := writeTempText(t, "hello from file")
+	ctx := &common.RuntimeContext{Args: map[string]string{"body-file": path}}
+	got, err := readIssueTextArg(ctx, "body", "body-file", true)
+	if err != nil {
+		t.Fatalf("readIssueTextArg returned error: %v", err)
+	}
+	if got != "hello from file" {
+		t.Fatalf("readIssueTextArg() = %q, want %q", got, "hello from file")
+	}
+}
+
+func TestReadIssueTextArgRejectsMixedSources(t *testing.T) {
+	path := writeTempText(t, "hello from file")
+	ctx := &common.RuntimeContext{Args: map[string]string{"body": "inline", "body-file": path}}
+	if _, err := readIssueTextArg(ctx, "body", "body-file", true); err == nil {
+		t.Fatal("expected readIssueTextArg to reject mixed inline and file sources")
+	}
+}
+
+func TestPreviewTextTruncatesLongValue(t *testing.T) {
+	input := ""
+	for i := 0; i < 150; i++ {
+		input += "a"
+	}
+	got := previewText(input)
+	if len([]rune(got)) != 123 {
+		t.Fatalf("previewText() length = %d, want %d", len([]rune(got)), 123)
+	}
+	if got[len(got)-3:] != "..." {
+		t.Fatalf("previewText() = %q, want trailing ellipsis", got)
+	}
+}
+
 func writeTempCSV(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "issues.csv")
@@ -215,186 +261,11 @@ func writeTempCSV(t *testing.T, content string) string {
 	return path
 }
 
-func TestBatchUpdateDryRun(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "batch-update", map[string]string{
-		"ids":          "101,102",
-		"status-id":    "3",
-		"priority-id":  "2",
-		"tag-ids":      "7,8",
-		"assigner-ids": "11",
-		"dry-run":      "true",
-	})
-	if err != nil {
-		t.Fatalf("batch-update dry-run failed: %v", err)
-	}
-}
-
-func TestBatchUpdateCallsAPI(t *testing.T) {
-	var payload map[string]interface{}
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/issues/batch_update.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "batch-update", map[string]string{
-		"ids":          "101,102,101",
-		"status-id":    "3",
-		"priority-id":  "2",
-		"milestone-id": "9",
-		"tag-ids":      "7,8",
-		"assigner-ids": "11,12",
-	})
-	if err != nil {
-		t.Fatalf("batch-update failed: %v", err)
-	}
-	assertFloatSlice(t, payload["ids"], []float64{101, 102})
-	assertEqual(t, payload["status_id"], float64(3))
-	assertEqual(t, payload["priority_id"], float64(2))
-	assertEqual(t, payload["milestone_id"], float64(9))
-	assertFloatSlice(t, payload["issue_tag_ids"], []float64{7, 8})
-	assertFloatSlice(t, payload["assigner_ids"], []float64{11, 12})
-}
-
-func TestBatchUpdateRequiresUpdateField(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	if err := runShortcut(t, server, "batch-update", map[string]string{"ids": "101"}); err == nil {
-		t.Fatal("expected error when no update fields are provided")
-	}
-}
-
-func TestBatchUpdateRejectsInvalidIDs(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	cases := []map[string]string{
-		{"ids": "abc", "status-id": "3"},
-		{"ids": "101", "status-id": "bad"},
-		{"ids": "101", "tag-ids": "7,,8"},
-	}
-	for _, args := range cases {
-		if err := runShortcut(t, server, "batch-update", args); err == nil {
-			t.Fatalf("expected validation error for args %#v", args)
-		}
-	}
-}
-
-func TestBatchDeleteDryRun(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	if err := runShortcut(t, server, "batch-delete", map[string]string{"ids": "101,102", "dry-run": "true"}); err != nil {
-		t.Fatalf("batch-delete dry-run failed: %v", err)
-	}
-}
-
-func TestBatchDeleteRequiresYes(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected API call without --yes: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	if err := runShortcut(t, server, "batch-delete", map[string]string{"ids": "101"}); err == nil {
-		t.Fatal("expected --yes confirmation error")
-	}
-}
-
-func TestBatchDeleteCallsAPIWithYes(t *testing.T) {
-	var payload map[string]interface{}
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/issues/batch_destroy.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-	})
-	defer server.Close()
-
-	if err := runShortcut(t, server, "batch-delete", map[string]string{"ids": "101,102,101", "yes": "true"}); err != nil {
-		t.Fatalf("batch-delete failed: %v", err)
-	}
-	assertFloatSlice(t, payload["ids"], []float64{101, 102})
-}
-
-func assertFloatSlice(t *testing.T, got interface{}, want []float64) {
+func writeTempText(t *testing.T, content string) string {
 	t.Helper()
-	items, ok := got.([]interface{})
-	if !ok {
-		t.Fatalf("got %#v, want []interface{}", got)
+	path := filepath.Join(t.TempDir(), "body.md")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write temp text: %v", err)
 	}
-	if len(items) != len(want) {
-		t.Fatalf("got len %d, want %d: %#v", len(items), len(want), got)
-	}
-	for i := range want {
-		if items[i] != want[i] {
-			t.Fatalf("item %d = %#v, want %#v", i, items[i], want[i])
-		}
-	}
-}
-
-func TestBatchReopenDryRun(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	if err := runShortcut(t, server, "batch-reopen", map[string]string{
-		"numbers": "1,2,3",
-		"dry-run": "true",
-	}); err != nil {
-		t.Fatalf("batch-reopen dry-run failed: %v", err)
-	}
-}
-
-func TestBatchReopenRequiresNumbers(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	if err := runShortcut(t, server, "batch-reopen", map[string]string{}); err == nil {
-		t.Fatal("expected error when no issue numbers are provided")
-	}
-}
-
-func TestBatchCommentDryRun(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	if err := runShortcut(t, server, "batch-comment", map[string]string{
-		"numbers": "1,2",
-		"body":    "hello",
-		"dry-run": "true",
-	}); err != nil {
-		t.Fatalf("batch-comment dry-run failed: %v", err)
-	}
-}
-
-func TestBatchCommentRequiresBody(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	if err := runShortcut(t, server, "batch-comment", map[string]string{"numbers": "1"}); err == nil {
-		t.Fatal("expected error when --body is missing")
-	}
+	return path
 }

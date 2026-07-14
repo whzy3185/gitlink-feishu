@@ -1,142 +1,95 @@
 ---
 name: gitlink-issue
-version: 3.0.0
-description: "Issue 管理：创建、查看、更新、关闭/批量关闭/批量更新/批量删除 Issue，添加评论，查看动态记录和活动。当用户需要操作 GitLink Issue 时触发。"
+version: 2.1.0
+description: "GitLink Issue 管理：创建、查看、更新、关闭、评论，以及批量关闭、批量评论、批量更新。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
   cliHelp: "gitlink-cli issue --help"
 ---
 
-# gitlink-issue（Issue 操作）
+# gitlink-issue
 
-**CRITICAL — 开始前必须先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)，其中包含认证、权限处理和 API 注意事项。**
-**CRITICAL — 所有 Shortcuts 在执行写入/删除操作前，务必先确认用户意图。**
-**CRITICAL — GitLink 操作只能用 `gitlink-cli`。禁止用 `gh`（GitHub CLI）操作 GitLink 资源。`gh` 仅适用于 GitHub 平台。**
+> 先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)，确认认证方式、全局参数和安全约束。
 
-> **前置条件：** 先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md) 了解认证和全局参数。
+## 适用场景
 
-## Shortcuts
+- 维护者需要快速创建、更新、关闭或评论 Issue。
+- Agent 需要基于仓库内的 Issue 批量做运营动作，例如统一补评论、统一更新优先级、统一补截止日期。
+- 需要从 Markdown 文件读取长文本，避免把大段内容直接塞进命令行参数。
 
-| Shortcut | 说明 | 需要认证 |
-|----------|------|----------|
-| `issue +list` | Issue 列表 | 否（公开项目） |
-| `issue +create` | 创建 Issue | 是 |
-| `issue +view` | Issue 详情 | 否（公开项目） |
-| `issue +update` | 更新 Issue | 是 |
-| `issue +close` | 关闭 Issue | 是 |
-| `issue +batch-close` | 批量关闭 Issue，支持 `--dry-run` 预览 | 是（dry-run 不写入） |
-| `issue +batch-update` | 按 API issue id 批量更新状态、优先级、里程碑、标签、负责人 | 是（dry-run 不写入） |
-| `issue +batch-delete` | 按 API issue id 批量删除 Issue；真实删除必须 `--yes` | 是（dry-run 不写入） |
-| `issue +export` | 按筛选条件批量导出 Issue 到 CSV/JSON/Markdown | 否（公开项目） |
-| `issue +comment` | 添加评论 | 是 |
-| `issue +journals` | 查询 Issue 动态记录，支持分类和分页 | 否（公开项目） |
-| `issue +activity` | 查询 Issue 活动事件，复用 journals 端点 | 否（公开项目） |
-| `issue +assigners` | 查询 Issue 负责人列表 | 否（公开项目） |
-| `issue +authors` | 查询 Issue 发布人列表 | 否（公开项目） |
-| `issue +statuses` | 查询 Issue 状态列表 | 否（公开项目） |
-| `issue +tags` | 查询 Issue 标签列表 | 否（公开项目） |
-| `issue +priorities` | 查询 Issue 优先级列表 | 否（公开项目） |
+## 常用命令
 
-## 使用示例
+| Shortcut | 用途 | 是否写操作 |
+| --- | --- | --- |
+| `issue +list` | 列出 Issue | 否 |
+| `issue +view` | 查看单个 Issue 详情 | 否 |
+| `issue +create` | 创建 Issue，支持 `--body-file` | 是 |
+| `issue +update` | 更新单个 Issue，支持 `--body-file` | 是 |
+| `issue +close` | 关闭单个 Issue | 是 |
+| `issue +comment` | 给单个 Issue 添加评论，支持 `--body-file` | 是 |
+| `issue +batch-close` | 按编号或 CSV 批量关闭 Issue | 是 |
+| `issue +batch-comment` | 按编号或 CSV 批量评论 | 是 |
+| `issue +batch-update` | 按编号或 CSV 批量更新元数据 | 是 |
+| `issue +assigners` | 列出可分配负责人 | 否 |
+| `issue +authors` | 列出 Issue 作者 | 否 |
+| `issue +priorities` | 列出优先级 | 否 |
+| `issue +tags` | 列出标签 | 否 |
+| `issue +statuses` | 列出状态 | 否 |
 
-```bash
-# 列出 Issue
-gitlink-cli issue +list --owner Gitlink --repo forgeplus --state open
-
-# 搜索并排序 Issue
-gitlink-cli issue +list --owner Gitlink --repo forgeplus --state open --keyword 登录 --sort-by issues.updated_on --sort-direction desc
-
-# 创建 Issue
-gitlink-cli issue +create --owner myuser --repo myrepo --title "Bug: 登录失败" --body "复现步骤：..."
-
-# 查看 Issue 详情（使用网页可见的 Issue 编号）
-gitlink-cli issue +view --owner Gitlink --repo forgeplus --number 4
-
-# 更新 Issue
-gitlink-cli issue +update --number 4 --title "新标题" --body "更新描述"
-
-# 关闭 Issue
-gitlink-cli issue +close --number 4
-
-# 预览批量关闭 Issue，不修改数据
-gitlink-cli issue +batch-close --owner myuser --repo myrepo --numbers 123,124 --dry-run
-
-# 从 CSV 文件批量关闭 Issue
-gitlink-cli issue +batch-close --owner myuser --repo myrepo --from issues.csv
-
-# 按 API issue id 预览批量更新元数据（注意不是网页 Issue 编号）
-gitlink-cli issue +batch-update --owner myuser --repo myrepo --ids 101,102 --status-id 3 --priority-id 2 --dry-run
-
-# 危险批量删除：必须先 dry-run，真实执行还要 --yes
-gitlink-cli issue +batch-delete --owner myuser --repo myrepo --ids 101,102 --dry-run
-gitlink-cli issue +batch-delete --owner myuser --repo myrepo --ids 101,102 --yes
-
-# 导出打开的 Issue 到 CSV，用于周报、迁移或离线分析
-gitlink-cli issue +export --owner Gitlink --repo forgeplus --state open --keyword 登录 --export-format csv --output issues.csv
-
-# 添加评论
-gitlink-cli issue +comment --number 4 --body "已修复，请验证"
-
-# 查询 Issue 评论和活动记录
-gitlink-cli issue +journals --number 4 --category comment --page 1 --limit 50
-gitlink-cli issue +activity --number 4 --page 1 --limit 50
-
-# 查询 Issue 负责人
-gitlink-cli issue +assigners --owner Gitlink --repo forgeplus --keyword alice
-
-# 查询 Issue 发布人
-gitlink-cli issue +authors --owner Gitlink --repo forgeplus --keyword bob
-```
-
-## 批量维护安全约束
-
-- `issue +batch-close --numbers` 使用网页 URL 中的 Issue 编号，即 `project_issues_index`。
-- `issue +batch-update --ids` 和 `issue +batch-delete --ids` 使用 OpenAPI 返回的 API issue id，不是网页 Issue 编号。
-- 执行 `batch-update` / `batch-delete` 前，先用 `issue +list` 或 `issue +view` 确认 id 来源。
-- 写操作先执行 `--dry-run`，展示 `method`、`path`、`body` 给用户确认。
-- `batch-delete` 是破坏性操作，真实执行必须显式传 `--yes`。
-
-## Raw API 补充
+## 使用方式
 
 ```bash
-# 批量更新 Issue（仍使用旧版 API，需传数据库 ID）
-gitlink-cli api POST /:owner/:repo/issues/series_update --body '{"ids":[1,2,3],"status_id":"closed"}'
+# 创建一个 Issue
+gitlink-cli issue +create --owner Gitlink --repo forgeplus \
+  --title "Bug: 登录失败" \
+  --body-file issue.md
+
+# 更新单个 Issue 的优先级和截止日期
+gitlink-cli issue +update --owner Gitlink --repo forgeplus \
+  --number 42 \
+  --priority-id 4 \
+  --due-date 2026-06-15
+
+# 通过文件给单个 Issue 添加长评论
+gitlink-cli issue +comment --owner Gitlink --repo forgeplus \
+  --number 42 \
+  --body-file comment.md
+
+# 预览批量评论
+gitlink-cli issue +batch-comment --owner Gitlink --repo forgeplus \
+  --numbers 42,43,44 \
+  --body-file comment.md \
+  --dry-run
+
+# 从 CSV 批量更新 Issue
+gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus \
+  --from issues.csv \
+  --state closed \
+  --priority-id 4 \
+  --due-date 2026-06-15
 ```
 
-## GitLink Issue 字段映射
+## 批量操作约定
 
-| gitlink-cli 参数 | GitLink API 字段 | 说明 |
-|------------------|-----------------|------|
-| `--number` / `-n` | `project_issues_index` | Issue 编号（网页 URL 中的序号） |
-| `--id` / `-i` | `project_issues_index` | `--number` 的兼容别名，不是数据库内部 ID |
-| `--title` | `subject` | Issue 标题 |
-| `--body` | `description` | Issue 描述 |
-| `--assignee` | `assigned_to_id` | 指派人 ID |
-| `--milestone` | `fixed_version_id` | 里程碑 ID |
-| `--state` | `status_id` | 状态（open=1，closed=5，也可直接传数字 ID） |
-| `--priority-id` | `priority_id` | 优先级 ID |
-| `--tag-ids` / `--label` | `issue_tag_ids` | Issue 标签 ID 数组 |
-| `--assigner-ids` | `assigner_ids` | 负责人 ID 数组 |
-| `--branch` | `branch_name` | 关联分支 |
-| `--start-date` | `start_date` | 开始日期 |
-| `--due-date` | `due_date` | 截止日期 |
+- `--numbers` 使用网页 URL 中可见的 Issue 编号，不是数据库内部 ID。
+- `--from` 支持 CSV 文件，优先识别 `number`、`issue_number`、`project_issues_index` 列；如果没有表头，则默认第一列为 Issue 编号。
+- `issue +batch-comment` 和 `issue +batch-update` 会逐条执行，并输出每条 Issue 的结果汇总。
+- 批量命令支持 `--dry-run`，推荐先预览再真实执行。
 
-## API 注意事项
+## 文本输入约定
 
-- **Issue 编号（`--number`）是网页 URL 中看到的序号**（如 `issues/4` 中的 `4`），不是数据库内部 ID
-- `--id` / `-i` 仅作为 `--number` / `-n` 的兼容别名，传入的仍然是网页 URL 中的 Issue 编号
-- **批量关闭使用 `--numbers`，同样传网页 URL 中的 Issue 编号**，不是数据库内部 ID
-- Issue 操作使用 v1 API（`/api/v1/`），支持按 Issue 编号查询和操作
-- **创建 Issue 时 CLI 会自动设置 `status_id: 1`（新增）和 `priority_id: 2`（正常）**
-- **更新/关闭 Issue 时必须保留当前 `subject` 和 `description`**，即使只修改状态（CLI 会先读取当前 Issue 并自动带回）
-- v1 API 写操作必须使用 `access_token`（非 `token`）认证，CLI 已自动处理
+- `issue +create`、`issue +update`、`issue +comment`、`issue +batch-comment`、`issue +batch-update` 都支持 `--body-file`。
+- `--body` 和 `--body-file` 互斥，避免正文来源不明确。
+- 长文本优先使用 `--body-file`，便于保留换行和 Markdown 格式。
 
-## Issue 状态映射（status_id）
+## 安全建议
 
-| status_id | 名称 | 说明 |
-|-----------|------|------|
-| 1 | 新增 | 新建 Issue 的默认状态 |
-| 2 | 正在解决 | 处理中 |
-| 3 | 已解决 | 已修复 |
-| 5 | 关闭 | 关闭（`+close` 命令使用此值） |
+- 对写操作先确认仓库、Issue 编号和目标字段。
+- 批量命令先跑 `--dry-run`，确认数量和目标无误后再执行真实写入。
+- `issue +update` 和 `issue +batch-update` 会先读取当前 Issue，再带上现有标题/描述/元数据发起 PATCH，避免误清空字段。
+
+## 输出与自动化
+
+- 所有命令都支持全局 `--format json|table|yaml`。
+- 批量命令输出统一包含 `repository`、`action`、`dry_run`、`total`、`succeeded`、`failed` 和逐条 `results`，适合脚本和 Agent 继续处理。

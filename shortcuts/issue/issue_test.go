@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -96,58 +94,6 @@ func assertNumberSlice(t *testing.T, got interface{}, want []float64) {
 	}
 }
 
-func assertStringSliceEqual(t *testing.T, got, want []string) {
-	t.Helper()
-	if len(got) != len(want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-	for i := range got {
-		if got[i] != want[i] {
-			t.Fatalf("got %v, want %v", got, want)
-		}
-	}
-}
-
-func assertNumberSliceEqual(t *testing.T, got, want []int) {
-	t.Helper()
-	if len(got) != len(want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-	for i := range got {
-		if got[i] != want[i] {
-			t.Fatalf("got %v, want %v", got, want)
-		}
-	}
-}
-
-func interfaceSliceToStrings(value interface{}) []string {
-	items, ok := value.([]interface{})
-	if !ok {
-		return nil
-	}
-	out := make([]string, 0, len(items))
-	for _, item := range items {
-		if s, ok := item.(string); ok {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
-func interfaceSliceToInts(value interface{}) []int {
-	items, ok := value.([]interface{})
-	if !ok {
-		return nil
-	}
-	out := make([]int, 0, len(items))
-	for _, item := range items {
-		if n, ok := item.(float64); ok {
-			out = append(out, int(n))
-		}
-	}
-	return out
-}
-
 // --- list ---
 
 func TestIssueList(t *testing.T) {
@@ -225,183 +171,6 @@ func TestIssueListStateAll(t *testing.T) {
 	}
 }
 
-// --- export ---
-
-func TestIssueExportCSVWithFiltersAndPagination(t *testing.T) {
-	var pages []string
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Fatalf("expected GET, got %s", r.Method)
-		}
-		if r.URL.Path != "/v1/owner/repo/issues.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		query := r.URL.Query()
-		assertEqual(t, query.Get("category"), "opened")
-		assertEqual(t, query.Get("keyword"), "release")
-		assertEqual(t, query.Get("participant_category"), "assignedme")
-		assertEqual(t, query.Get("author_id"), "10")
-		assertEqual(t, query.Get("assigner_id"), "11")
-		assertEqual(t, query.Get("milestone_id"), "12")
-		assertEqual(t, query.Get("status_id"), "1")
-		assertEqual(t, query.Get("issue_tag_ids"), "2,3")
-		assertEqual(t, query.Get("sort_by"), "issues.updated_on")
-		assertEqual(t, query.Get("sort_direction"), "desc")
-		assertEqual(t, query.Get("limit"), "2")
-		pages = append(pages, query.Get("page"))
-
-		switch query.Get("page") {
-		case "1":
-			writeJSON(t, w, map[string]interface{}{
-				"total_count": 3,
-				"issues": []interface{}{
-					map[string]interface{}{
-						"id":                   float64(101),
-						"project_issues_index": float64(1),
-						"subject":              "release blocker",
-						"status":               map[string]interface{}{"id": float64(1), "name": "New"},
-						"priority":             map[string]interface{}{"id": float64(2), "name": "Normal"},
-						"author":               map[string]interface{}{"login": "alice"},
-						"assigners": []interface{}{
-							map[string]interface{}{"login": "bob"},
-						},
-						"tags": []interface{}{
-							map[string]interface{}{"name": "bug"},
-						},
-						"updated_on": "2026-06-01",
-					},
-					map[string]interface{}{
-						"id":                   float64(102),
-						"project_issues_index": float64(2),
-						"subject":              "release notes",
-						"status":               map[string]interface{}{"id": float64(1), "name": "New"},
-						"priority":             map[string]interface{}{"id": float64(3), "name": "High"},
-						"author":               map[string]interface{}{"login": "carol"},
-						"updated_on":           "2026-06-02",
-					},
-				},
-			})
-		case "2":
-			writeJSON(t, w, map[string]interface{}{
-				"total_count": 3,
-				"issues": []interface{}{
-					map[string]interface{}{
-						"id":                   float64(103),
-						"project_issues_index": float64(3),
-						"subject":              "release checklist",
-						"status":               map[string]interface{}{"id": float64(5), "name": "Closed"},
-						"priority":             map[string]interface{}{"id": float64(2), "name": "Normal"},
-						"author":               map[string]interface{}{"login": "dave"},
-						"updated_on":           "2026-06-03",
-					},
-				},
-			})
-		default:
-			t.Fatalf("unexpected page %s", query.Get("page"))
-		}
-	})
-	defer server.Close()
-
-	outputPath := filepath.Join(t.TempDir(), "issues.csv")
-	err := runShortcut(t, server, "export", map[string]string{
-		"state":          "open",
-		"keyword":        "release",
-		"participant":    "assignedme",
-		"author-id":      "10",
-		"assignee-id":    "11",
-		"milestone-id":   "12",
-		"status-id":      "1",
-		"tag-ids":        "2,3",
-		"sort-by":        "issues.updated_on",
-		"sort-direction": "desc",
-		"limit":          "2",
-		"fields":         "number,title,status,priority,author,assignees,tags,updated_at,url",
-		"export-format":  "csv",
-		"output":         outputPath,
-	})
-	if err != nil {
-		t.Fatalf("export failed: %v", err)
-	}
-	assertEqual(t, strings.Join(pages, ","), "1,2")
-	content, err := os.ReadFile(outputPath)
-	if err != nil {
-		t.Fatalf("read export file: %v", err)
-	}
-	got := string(content)
-	if !strings.Contains(got, "number,title,status,priority,author,assignees,tags,updated_at,url") {
-		t.Fatalf("missing csv header: %s", got)
-	}
-	if !strings.Contains(got, "1,release blocker,New,Normal,alice,bob,bug,2026-06-01,https://www.gitlink.org.cn/owner/repo/issues/1") {
-		t.Fatalf("missing first issue row: %s", got)
-	}
-	if !strings.Contains(got, "3,release checklist,Closed,Normal,dave,,,2026-06-03,https://www.gitlink.org.cn/owner/repo/issues/3") {
-		t.Fatalf("missing second page issue row: %s", got)
-	}
-}
-
-func TestIssueExportMaxStopsWithinPage(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("page") != "1" {
-			t.Fatalf("unexpected page: %s", r.URL.Query().Get("page"))
-		}
-		writeJSON(t, w, map[string]interface{}{
-			"total_count": 3,
-			"issues": []interface{}{
-				map[string]interface{}{"project_issues_index": float64(1), "subject": "one"},
-				map[string]interface{}{"project_issues_index": float64(2), "subject": "two"},
-			},
-		})
-	})
-	defer server.Close()
-
-	outputPath := filepath.Join(t.TempDir(), "issues.json")
-	err := runShortcut(t, server, "export", map[string]string{
-		"limit":         "2",
-		"max":           "1",
-		"fields":        "number,title",
-		"export-format": "json",
-		"output":        outputPath,
-	})
-	if err != nil {
-		t.Fatalf("export failed: %v", err)
-	}
-	content, err := os.ReadFile(outputPath)
-	if err != nil {
-		t.Fatalf("read export file: %v", err)
-	}
-	if strings.Contains(string(content), `"title": "two"`) {
-		t.Fatalf("expected max=1 to omit second issue: %s", content)
-	}
-	if !strings.Contains(string(content), `"title": "one"`) {
-		t.Fatalf("expected first issue in json export: %s", content)
-	}
-}
-
-func TestIssueExportMarkdownEscapesCells(t *testing.T) {
-	content := renderIssueExportMarkdown([]issueExportRecord{
-		{"number": "1", "title": "pipe | newline\ntext"},
-	}, []string{"number", "title"})
-	got := string(content)
-	if !strings.Contains(got, "pipe \\| newline text") {
-		t.Fatalf("markdown cell not escaped: %s", got)
-	}
-}
-
-func TestIssueExportRejectsInvalidOptions(t *testing.T) {
-	if _, err := parseIssueExportFields("number,unknown"); err == nil {
-		t.Fatal("expected invalid field error")
-	}
-	if _, err := normalizeIssueExportFormat("xml"); err == nil {
-		t.Fatal("expected invalid format error")
-	}
-	if _, err := boundedPositiveInt("0", 50, 100, "limit"); err == nil {
-		t.Fatal("expected invalid limit error")
-	}
-	if _, err := nonNegativeInt("-1", "max"); err == nil {
-		t.Fatal("expected invalid max error")
-	}
-}
-
 // --- create ---
 
 func TestIssueCreate(t *testing.T) {
@@ -464,6 +233,45 @@ func TestIssueCreateSupportsMetadataFields(t *testing.T) {
 	assertEqual(t, createPayload["branch_name"], "feature/metadata")
 	assertEqual(t, createPayload["start_date"], "2026-05-01")
 	assertEqual(t, createPayload["due_date"], "2026-05-31")
+}
+
+func TestIssueCreateAcceptsBodyFile(t *testing.T) {
+	var createPayload map[string]interface{}
+	bodyPath := writeTempText(t, "Body from file")
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/issues.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		createPayload = decodeJSON(t, r)
+		writeJSON(t, w, createPayload)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "create", map[string]string{
+		"title":     "Issue from file",
+		"body-file": bodyPath,
+	})
+	if err != nil {
+		t.Fatalf("create with body-file failed: %v", err)
+	}
+	assertEqual(t, createPayload["description"], "Body from file")
+}
+
+func TestIssueCreateRejectsBodyAndBodyFile(t *testing.T) {
+	bodyPath := writeTempText(t, "Body from file")
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no API call expected")
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "create", map[string]string{
+		"title":     "Issue from file",
+		"body":      "inline",
+		"body-file": bodyPath,
+	})
+	if err == nil {
+		t.Fatal("expected create to reject mixed body sources")
+	}
 }
 
 func TestIssueCreateMissingTitle(t *testing.T) {
@@ -848,6 +656,35 @@ func TestIssueUpdateSupportsMetadataFields(t *testing.T) {
 	assertEqual(t, updatePayload["due_date"], "2026-06-15")
 }
 
+func TestIssueUpdateAcceptsBodyFile(t *testing.T) {
+	var updatePayload map[string]interface{}
+	bodyPath := writeTempText(t, "Updated body from file")
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
+				"subject":     "Existing title",
+				"description": "Existing description",
+			})
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			updatePayload = decodeJSON(t, r)
+			writeJSON(t, w, updatePayload)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "update", map[string]string{
+		"number":    "42",
+		"body-file": bodyPath,
+	})
+	if err != nil {
+		t.Fatalf("update with body-file failed: %v", err)
+	}
+	assertEqual(t, updatePayload["description"], "Updated body from file")
+}
+
 func TestIssueUpdateInvalidState(t *testing.T) {
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -948,8 +785,9 @@ func TestIssueCommentAcceptsIDAlias(t *testing.T) {
 	assertEqual(t, commentPayload["notes"], "Fixed")
 }
 
-func TestIssueCommentSupportsThreadingAttachmentsAndReceivers(t *testing.T) {
+func TestIssueCommentAcceptsBodyFile(t *testing.T) {
 	var commentPayload map[string]interface{}
+	bodyPath := writeTempText(t, "Comment from file")
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -960,121 +798,29 @@ func TestIssueCommentSupportsThreadingAttachmentsAndReceivers(t *testing.T) {
 	defer server.Close()
 
 	err := runShortcut(t, server, "comment", map[string]string{
-		"number":         "42",
-		"body":           "Reply with context",
-		"parent-id":      "10",
-		"reply-id":       "11",
-		"attachment-ids": "5, 6",
-		"receivers":      "alice, bob, alice",
+		"number":    "42",
+		"body-file": bodyPath,
 	})
 	if err != nil {
-		t.Fatalf("comment shortcut failed: %v", err)
+		t.Fatalf("comment with body-file failed: %v", err)
 	}
-	assertEqual(t, commentPayload["notes"], "Reply with context")
-	assertEqual(t, commentPayload["parent_id"], float64(10))
-	assertEqual(t, commentPayload["reply_id"], float64(11))
-	assertStringSliceEqual(t, interfaceSliceToStrings(commentPayload["receivers_login"]), []string{"alice", "bob"})
-	assertNumberSliceEqual(t, interfaceSliceToInts(commentPayload["attachment_ids"]), []int{5, 6})
+	assertEqual(t, commentPayload["notes"], "Comment from file")
 }
 
-func TestIssueCommentsListSendsFilters(t *testing.T) {
+func TestIssueCommentRejectsBodyAndBodyFile(t *testing.T) {
+	bodyPath := writeTempText(t, "Comment from file")
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		q := r.URL.Query()
-		assertEqual(t, q.Get("category"), "all")
-		assertEqual(t, q.Get("keyword"), "panic")
-		assertEqual(t, q.Get("sort_by"), "updated_on")
-		assertEqual(t, q.Get("sort_direction"), "desc")
-		assertEqual(t, q.Get("page"), "2")
-		assertEqual(t, q.Get("limit"), "50")
-		writeJSON(t, w, map[string]interface{}{
-			"total_count": float64(1),
-			"journals": []interface{}{
-				map[string]interface{}{"id": float64(7), "notes": "panic fixed"},
-			},
-		})
+		t.Fatal("no API call expected")
 	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "comments", map[string]string{
-		"number":         "42",
-		"category":       "all",
-		"keyword":        "panic",
-		"sort-by":        "updated_on",
-		"sort-direction": "desc",
-		"page":           "2",
-		"limit":          "50",
+	err := runShortcut(t, server, "comment", map[string]string{
+		"number":    "42",
+		"body":      "inline",
+		"body-file": bodyPath,
 	})
-	if err != nil {
-		t.Fatalf("comments shortcut failed: %v", err)
-	}
-}
-
-func TestIssueCommentUpdate(t *testing.T) {
-	var commentPayload map[string]interface{}
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/issues/42/journals/9.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		commentPayload = decodeJSON(t, r)
-		writeJSON(t, w, commentPayload)
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "comment-update", map[string]string{
-		"number":         "42",
-		"comment-id":     "9",
-		"body":           "Updated",
-		"attachment-ids": "8",
-		"receivers":      "alice",
-	})
-	if err != nil {
-		t.Fatalf("comment-update failed: %v", err)
-	}
-	assertEqual(t, commentPayload["notes"], "Updated")
-	assertNumberSliceEqual(t, interfaceSliceToInts(commentPayload["attachment_ids"]), []int{8})
-	assertStringSliceEqual(t, interfaceSliceToStrings(commentPayload["receivers_login"]), []string{"alice"})
-}
-
-func TestIssueCommentDelete(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/issues/42/journals/9.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		writeJSON(t, w, map[string]interface{}{"status": float64(0), "message": "success"})
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "comment-delete", map[string]string{"number": "42", "comment-id": "9"})
-	if err != nil {
-		t.Fatalf("comment-delete failed: %v", err)
-	}
-}
-
-func TestIssueCommentReplies(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42/journals/9/children_journals.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		q := r.URL.Query()
-		assertEqual(t, q.Get("keyword"), "thanks")
-		assertEqual(t, q.Get("page"), "3")
-		assertEqual(t, q.Get("limit"), "10")
-		writeJSON(t, w, map[string]interface{}{"total_count": float64(0), "journals": []interface{}{}})
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "comment-replies", map[string]string{
-		"number":     "42",
-		"comment-id": "9",
-		"keyword":    "thanks",
-		"page":       "3",
-		"limit":      "10",
-	})
-	if err != nil {
-		t.Fatalf("comment-replies failed: %v", err)
+	if err == nil {
+		t.Fatal("expected comment to reject mixed body sources")
 	}
 }
 
@@ -1104,10 +850,6 @@ func TestIssueNumberOrIDIsRequired(t *testing.T) {
 		{name: "close", args: map[string]string{}},
 		{name: "update", args: map[string]string{"title": "New title"}},
 		{name: "comment", args: map[string]string{"body": "Fixed"}},
-		{name: "comments", args: map[string]string{}},
-		{name: "comment-update", args: map[string]string{"comment-id": "9", "body": "Updated"}},
-		{name: "comment-delete", args: map[string]string{"comment-id": "9"}},
-		{name: "comment-replies", args: map[string]string{"comment-id": "9"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1117,32 +859,6 @@ func TestIssueNumberOrIDIsRequired(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), "--number") || !strings.Contains(err.Error(), "--id") {
 				t.Fatalf("unexpected error: %v", err)
-			}
-		})
-	}
-}
-
-func TestIssueCommentRejectsInvalidIDs(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("invalid IDs should not call API, got %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	cases := []struct {
-		name string
-		cmd  string
-		args map[string]string
-	}{
-		{name: "bad parent", cmd: "comment", args: map[string]string{"number": "42", "body": "x", "parent-id": "abc"}},
-		{name: "bad attachment", cmd: "comment", args: map[string]string{"number": "42", "body": "x", "attachment-ids": "1,,"}},
-		{name: "bad update comment", cmd: "comment-update", args: map[string]string{"number": "42", "comment-id": "0", "body": "x"}},
-		{name: "bad delete comment", cmd: "comment-delete", args: map[string]string{"number": "42", "comment-id": "-1"}},
-		{name: "bad replies comment", cmd: "comment-replies", args: map[string]string{"number": "42", "comment-id": "abc"}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if err := runShortcut(t, server, tc.cmd, tc.args); err == nil {
-				t.Fatal("expected validation error")
 			}
 		})
 	}
@@ -1239,6 +955,141 @@ func TestBatchCloseWithFailedClose(t *testing.T) {
 	err := runShortcut(t, server, "batch-close", map[string]string{"numbers": "1, 2"})
 	if err == nil {
 		t.Fatal("expected error when some issues fail to close")
+	}
+}
+
+func TestBatchCommentDryRun(t *testing.T) {
+	bodyPath := writeTempText(t, "Batch comment from file")
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no API call expected in dry-run mode")
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "batch-comment", map[string]string{
+		"numbers":   "1,2",
+		"body-file": bodyPath,
+		"dry-run":   "true",
+	})
+	if err != nil {
+		t.Fatalf("batch-comment dry-run failed: %v", err)
+	}
+}
+
+func TestBatchCommentUsesBodyFile(t *testing.T) {
+	bodyPath := writeTempText(t, "Batch comment from file")
+	seen := map[string]string{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		payload := decodeJSON(t, r)
+		seen[r.URL.Path] = payload["notes"].(string)
+		writeJSON(t, w, map[string]interface{}{"ok": true})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "batch-comment", map[string]string{
+		"numbers":   "1,2",
+		"body-file": bodyPath,
+	})
+	if err != nil {
+		t.Fatalf("batch-comment failed: %v", err)
+	}
+	assertEqual(t, seen["/v1/owner/repo/issues/1/journals.json"], "Batch comment from file")
+	assertEqual(t, seen["/v1/owner/repo/issues/2/journals.json"], "Batch comment from file")
+}
+
+func TestBatchUpdateDryRun(t *testing.T) {
+	bodyPath := writeTempText(t, "Updated in bulk")
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no API call expected in dry-run mode")
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "batch-update", map[string]string{
+		"numbers":     "1,2",
+		"title":       "Bulk title",
+		"body-file":   bodyPath,
+		"state":       "closed",
+		"priority-id": "4",
+		"dry-run":     "true",
+	})
+	if err != nil {
+		t.Fatalf("batch-update dry-run failed: %v", err)
+	}
+}
+
+func TestBatchUpdateAppliesSharedChanges(t *testing.T) {
+	var updatePayloads []map[string]interface{}
+	bodyPath := writeTempText(t, "Bulk body from file")
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && (r.URL.Path == "/v1/owner/repo/issues/1.json" || r.URL.Path == "/v1/owner/repo/issues/2.json"):
+			writeJSON(t, w, map[string]interface{}{
+				"subject":     "Existing title",
+				"description": "Existing description",
+				"status":      map[string]interface{}{"id": 1},
+				"priority":    map[string]interface{}{"id": 2},
+				"tags": []map[string]interface{}{
+					{"id": 9},
+				},
+			})
+		case r.Method == "PATCH" && (r.URL.Path == "/v1/owner/repo/issues/1.json" || r.URL.Path == "/v1/owner/repo/issues/2.json"):
+			payload := decodeJSON(t, r)
+			updatePayloads = append(updatePayloads, payload)
+			writeJSON(t, w, payload)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "batch-update", map[string]string{
+		"numbers":     "1,2",
+		"title":       "Bulk title",
+		"body-file":   bodyPath,
+		"state":       "closed",
+		"priority-id": "4",
+		"tag-ids":     "7,8",
+	})
+	if err != nil {
+		t.Fatalf("batch-update failed: %v", err)
+	}
+	if len(updatePayloads) != 2 {
+		t.Fatalf("expected 2 update payloads, got %d", len(updatePayloads))
+	}
+	for _, payload := range updatePayloads {
+		assertEqual(t, payload["subject"], "Bulk title")
+		assertEqual(t, payload["description"], "Bulk body from file")
+		assertEqual(t, payload["status_id"], float64(5))
+		assertEqual(t, payload["priority_id"], float64(4))
+		assertNumberSlice(t, payload["issue_tag_ids"], []float64{7, 8})
+	}
+}
+
+func TestBatchUpdateContinuesAfterFailure(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/1.json":
+			writeJSON(t, w, map[string]interface{}{"subject": "Issue 1", "description": "desc1"})
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/2.json":
+			writeJSON(t, w, map[string]interface{}{"subject": "Issue 2", "description": "desc2"})
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/1.json":
+			writeJSON(t, w, map[string]interface{}{"ok": true})
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/2.json":
+			writeText(t, w, http.StatusInternalServerError, "server error")
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "batch-update", map[string]string{
+		"numbers": "1,2",
+		"state":   "closed",
+	})
+	if err == nil {
+		t.Fatal("expected batch-update to return an error when one issue fails")
 	}
 }
 
