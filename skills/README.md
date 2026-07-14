@@ -79,6 +79,8 @@ skills/
 │   └── references/                    # PR 命令参考文档
 ├── gitlink-member/                    # 仓库成员管理
 │   └── SKILL.md                       # 成员与邀请链接操作指南
+├── gitlink-invite/                    # 项目邀请管理
+│   └── SKILL.md                       # 邀请链接、加入/退出项目操作指南
 ├── gitlink-branch/                    # 分支管理
 │   ├── SKILL.md                       # 分支操作指南
 │   └── examples/
@@ -173,6 +175,7 @@ skills/
 | **gitlink-issue** | Issue 管理 | `issue +create`, `issue +list`, `issue +view`, `issue +close`, `issue +batch-close`, `issue +batch-update`, `issue +batch-delete` |
 | **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +versions`, `pr +version-diff`, `pr +reviews`, `pr +review` |
 | **gitlink-member** | 仓库成员管理 | `member +list`, `member +add`, `member +batch-add`, `member +role`, `member +invite-link` |
+| **gitlink-invite** | 项目邀请管理 | `invite +generate`, `invite +show`, `invite +accept`, `invite +join`, `invite +quit` |
 | **gitlink-branch** | 分支管理 | `branch +list`, `branch +create`, `branch +delete`, `branch +protect` |
 | **gitlink-release** | 版本发布 | `release +list`, `release +create`, `release +edit`, `release +update`, `release +view` |
 
