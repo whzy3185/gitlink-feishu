@@ -1,16 +1,15 @@
 package repo
 
 import (
-	"errors"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
-	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -47,51 +46,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "clone",
-			Description: tr.T("cmd.repo.clone.short"),
-			Long:        tr.T("cmd.repo.clone.long"),
-			Flags: []common.Flag{
-				{Name: "dir", Short: "d", Usage: tr.T("flag.repo.clone_dir")},
-				{Name: "branch", Short: "b", Usage: tr.T("flag.repo.clone_branch")},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", ctx.RepoPath(), nil)
-				if err != nil {
-					return err
-				}
-				data, _ := env.Data.(map[string]interface{})
-				cloneURL, _ := data["clone_url"].(string)
-				if cloneURL == "" {
-					return errors.New(tr.T("error.repo.clone_url_missing"))
-				}
-				args := []string{"clone", cloneURL}
-				if branch := ctx.Arg("branch"); branch != "" {
-					args = append(args, "--branch", branch)
-				}
-				if dir := ctx.Arg("dir"); dir != "" {
-					args = append(args, dir)
-				}
-				gitCmd := exec.Command("git", args...)
-				gitCmd.Stdout = os.Stderr
-				gitCmd.Stderr = os.Stderr
-				if err := gitCmd.Run(); err != nil {
-					return fmt.Errorf("git clone failed: %w", err)
-				}
-				dest := ctx.Arg("dir")
-				if dest == "" {
-					dest = strings.TrimSuffix(cloneURL[strings.LastIndex(cloneURL, "/")+1:], ".git")
-				}
-				return ctx.Output(output.SuccessEnvelope(map[string]interface{}{
-					"message":   "cloned",
-					"clone_url": cloneURL,
-					"dir":       dest,
-				}, nil))
-			},
-		},
-		{
 			Name:        "info",
 			Description: tr.T("cmd.repo.info.short"),
 			Run: func(ctx *common.RuntimeContext) error {
@@ -106,111 +60,21 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "edit",
-			Description: tr.T("cmd.repo.edit.short"),
-			Flags: []common.Flag{
-				{Name: "description", Short: "d", Usage: tr.T("flag.repo.description")},
-				{Name: "website", Usage: tr.T("flag.repo.edit.website")},
-				{Name: "private", Usage: tr.T("flag.repo.private")},
-				{Name: "default-branch", Usage: tr.T("flag.repo.edit.default_branch")},
-				{Name: "category-id", Usage: tr.T("flag.repo.edit.category_id")},
-				{Name: "language-id", Usage: tr.T("flag.repo.edit.language_id")},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				private := ctx.Arg("private")
-				if private != "" && private != "true" && private != "false" {
-					return fmt.Errorf("--private must be true or false, got %q", private)
-				}
-				ids := map[string]interface{}{}
-				for flag, key := range map[string]string{"category-id": "project_category_id", "language-id": "project_language_id"} {
-					if v := ctx.Arg(flag); v != "" {
-						id, err := strconv.Atoi(v)
-						if err != nil {
-							return fmt.Errorf("--%s must be an integer, got %q", flag, v)
-						}
-						ids[key] = id
-					}
-				}
-				description := ctx.Arg("description")
-				website := ctx.Arg("website")
-				defaultBranch := ctx.Arg("default-branch")
-				if description == "" && website == "" && defaultBranch == "" && private == "" && len(ids) == 0 {
-					return fmt.Errorf("nothing to update: pass at least one of --description, --website, --private, --default-branch, --category-id, --language-id")
-				}
-
-				detail, err := ctx.CallAPI("GET", ctx.RepoPath(), nil)
-				if err != nil {
-					return err
-				}
-				data, _ := detail.Data.(map[string]interface{})
-				name, _ := data["name"].(string)
-				identifier, _ := data["identifier"].(string)
-				if name == "" || identifier == "" {
-					return fmt.Errorf("cannot resolve repository name/identifier from %s", ctx.RepoPath())
-				}
-				base := func() map[string]interface{} {
-					return map[string]interface{}{"name": name, "identifier": identifier}
-				}
-
-				// The server dispatches on which key is present (website,
-				// default_branch, or general metadata), so each group goes
-				// out as its own request.
-				if defaultBranch != "" {
-					payload := base()
-					payload["default_branch"] = defaultBranch
-					if _, err := ctx.CallAPI("PATCH", ctx.RepoPath(), payload); err != nil {
-						return err
-					}
-				}
-				if website != "" {
-					payload := base()
-					payload["website"] = website
-					if _, err := ctx.CallAPI("PATCH", ctx.RepoPath(), payload); err != nil {
-						return err
-					}
-				}
-				if description != "" || private != "" || len(ids) > 0 {
-					payload := base()
-					if description != "" {
-						payload["description"] = description
-					}
-					if private != "" {
-						payload["private"] = private == "true"
-					}
-					for k, v := range ids {
-						payload[k] = v
-					}
-					if _, err := ctx.CallAPI("PATCH", ctx.RepoPath(), payload); err != nil {
-						return err
-					}
-				}
-
-				env, err := ctx.CallAPI("GET", ctx.RepoPath(), nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
 			Name:        "readme",
-			Description: tr.T("cmd.repo.readme.short"),
+			Description: "Show repository README content",
 			Flags: []common.Flag{
-				{Name: "ref", Usage: tr.T("flag.repo.readme_ref")},
-				{Name: "path", Usage: tr.T("flag.repo.readme_path")},
+				{Name: "ref", Usage: "Branch, tag, or commit SHA"},
+				{Name: "path", Usage: "README directory path"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
 				q := url.Values{}
-				if ref := strings.TrimSpace(ctx.Arg("ref")); ref != "" {
+				if ref := ctx.Arg("ref"); ref != "" {
 					q.Set("ref", ref)
 				}
-				if path := strings.Trim(strings.TrimSpace(ctx.Arg("path")), "/"); path != "" {
+				if path := ctx.Arg("path"); path != "" {
 					q.Set("filepath", path)
 				}
 				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/readme", q)
@@ -222,11 +86,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "file",
-			Description: "Show repository file content",
+			Description: "Show repository file content and metadata",
 			Flags: []common.Flag{
 				{Name: "path", Short: "p", Usage: "Repository file path", Required: true},
 				{Name: "ref", Short: "r", Usage: "Branch, tag, or commit SHA", Default: "master"},
-				{Name: "content-only", Usage: "Output file content only", Bool: true, Default: "false"},
 			},
 			Run: runFile,
 		},
@@ -235,19 +98,13 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.repo.tree.short"),
 			Flags: []common.Flag{
 				{Name: "path", Short: "p", Usage: tr.T("flag.repo.tree.path")},
-				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.tree.ref")},
+				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.tree.ref"), Default: "master"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				q := url.Values{}
-				if path := ctx.Arg("path"); path != "" {
-					q.Set("filepath", path)
-				}
-				if ref := ctx.Arg("ref"); ref != "" {
-					q.Set("ref", ref)
-				}
+				q := repoSubEntriesQuery(ctx.Arg("path"), ctx.Arg("ref"))
 				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
 				if err != nil {
 					return err
@@ -256,33 +113,34 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "blame",
-			Description: tr.T("cmd.repo.blame.short"),
+			Name:        "files",
+			Description: "Search repository files by name",
 			Flags: []common.Flag{
-				{Name: "path", Short: "p", Usage: tr.T("flag.repo.blame.path"), Required: true},
-				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.tree.ref"), Default: "master"},
+				{Name: "search", Short: "s", Usage: "File name keyword"},
+				{Name: "ref", Short: "r", Usage: "Branch, tag, or commit SHA"},
 			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				path, err := ctx.RequireArg("path")
-				if err != nil {
-					return err
-				}
-				ref := ctx.Arg("ref")
-				if ref == "" {
-					ref = "master"
-				}
-				q := url.Values{}
-				q.Set("filepath", path)
-				q.Set("sha", ref)
-				env, err := ctx.CallAPIWithQuery("GET", "/v1"+ctx.RepoPath()+"/blame", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
+			Run: runFiles,
+		},
+		{
+			Name:        "commit-files",
+			Description: "Commit one file operation or a batch JSON file through contents/batch",
+			Flags: []common.Flag{
+				{Name: "branch", Short: "b", Usage: "Target branch", Required: true},
+				{Name: "message", Short: "m", Usage: "Commit message", Required: true},
+				{Name: "new-branch", Usage: "Create and commit to a new branch"},
+				{Name: "action", Short: "a", Usage: "Single-file action: create, update, or delete; defaults to update"},
+				{Name: "path", Short: "p", Usage: "Repository file path for single-file mode"},
+				{Name: "content", Short: "c", Usage: "Inline file content for single-file mode"},
+				{Name: "from", Usage: "Read single-file content from a local file"},
+				{Name: "encoding", Usage: "Content encoding for single-file mode: text or base64; defaults to text"},
+				{Name: "ops", Usage: "Read batch file operations from a JSON file"},
+				{Name: "author-name", Usage: "Commit author name"},
+				{Name: "author-email", Usage: "Commit author email"},
+				{Name: "committer-name", Usage: "Committer name"},
+				{Name: "committer-email", Usage: "Committer email"},
+				{Name: "dry-run", Usage: "Preview the request without committing files", Bool: true, Default: "false"},
 			},
+			Run: runCommitFiles,
 		},
 		{
 			Name:        "languages",
@@ -293,42 +151,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "contributors",
 			Description: "List repository contributors",
 			Run:         runContributors,
-		},
-		{
-			Name:        "activity",
-			Description: tr.T("cmd.repo.activity.short"),
-			Flags: []common.Flag{
-				{Name: "type", Short: "t", Usage: tr.T("flag.repo.activity.type")},
-				{Name: "status", Short: "s", Usage: tr.T("flag.repo.activity.status")},
-				{Name: "time", Usage: tr.T("flag.repo.activity.time")},
-				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
-				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("page", ctx.Arg("page"))
-				q.Set("limit", ctx.Arg("limit"))
-				if trendType := ctx.Arg("type"); trendType != "" {
-					q.Set("type", trendType)
-				}
-				if status := ctx.Arg("status"); status != "" {
-					q.Set("status", status)
-				}
-				if timeDays := ctx.Arg("time"); timeDays != "" {
-					if _, err := strconv.Atoi(timeDays); err != nil {
-						return fmt.Errorf("--time must be an integer number of days, got %q", timeDays)
-					}
-					q.Set("time", timeDays)
-				}
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/activity", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
 		},
 		{
 			Name:        "contributor-stats",
@@ -361,28 +183,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Flags:       communityListFlags(),
 			Run: func(ctx *common.RuntimeContext) error {
 				return runCommunityList(ctx, "stargazers")
-			},
-		},
-		{
-			Name:        "forks",
-			Description: tr.T("cmd.repo.forks.short"),
-			Flags:       communityListFlags(),
-			Run: func(ctx *common.RuntimeContext) error {
-				return runCommunityList(ctx, "forks")
-			},
-		},
-		{
-			Name:        "top-counts",
-			Description: tr.T("cmd.repo.top_counts.short"),
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/top_counts", nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
 			},
 		},
 		{
@@ -473,90 +273,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
-
-		{
-			Name:        "transfer-orgs",
-			Description: tr.T("cmd.repo.transfer_orgs.short"),
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", repoTransferPath(ctx, "organizations"), nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "transfer",
-			Description: tr.T("cmd.repo.transfer.short"),
-			Flags: []common.Flag{
-				{Name: "target-owner", Usage: tr.T("flag.repo.target_owner"), Required: true},
-				{Name: "dry-run", Usage: tr.T("flag.repo.transfer_dry_run"), Bool: true, Default: "false"},
-				{Name: "yes", Usage: tr.T("flag.repo.transfer_yes"), Bool: true, Default: "false"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				targetOwner, err := ctx.RequireArg("target-owner")
-				if err != nil {
-					return err
-				}
-				targetOwner = strings.TrimSpace(targetOwner)
-				if targetOwner == "" {
-					return fmt.Errorf("required flag --target-owner is missing")
-				}
-				payload := map[string]interface{}{"owner_name": targetOwner}
-				path := repoTransferPath(ctx, "")
-				if ctx.Arg("dry-run") == "true" {
-					return ctx.OutputData(map[string]interface{}{
-						"dry_run": true,
-						"method":  "POST",
-						"path":    path,
-						"payload": payload,
-					})
-				}
-				if err := requireRepoTransferConfirmation(ctx, "transfer"); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("POST", path, payload)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "transfer-cancel",
-			Description: tr.T("cmd.repo.transfer_cancel.short"),
-			Flags: []common.Flag{
-				{Name: "dry-run", Usage: tr.T("flag.repo.transfer_cancel_dry_run"), Bool: true, Default: "false"},
-				{Name: "yes", Usage: tr.T("flag.repo.transfer_yes"), Bool: true, Default: "false"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				path := repoTransferPath(ctx, "cancel")
-				if ctx.Arg("dry-run") == "true" {
-					return ctx.OutputData(map[string]interface{}{
-						"dry_run": true,
-						"method":  "POST",
-						"path":    path,
-					})
-				}
-				if err := requireRepoTransferConfirmation(ctx, "transfer-cancel"); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("POST", path, nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
 		{
 			Name:        "delete",
 			Description: tr.T("cmd.repo.delete.short"),
@@ -571,132 +287,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
-		{
-			Name:        "languages",
-			Description: "Show language breakdown of a repository",
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/languages", nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "contributors",
-			Description: "List contributors of a repository",
-			Flags: []common.Flag{
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("page", ctx.Arg("page"))
-				q.Set("limit", ctx.Arg("limit"))
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/contributors", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "files",
-			Description: "List files in a repository directory",
-			Flags: []common.Flag{
-				{Name: "ref", Short: "r", Usage: "Branch, tag, or commit SHA"},
-				{Name: "path", Short: "p", Usage: "Directory path (default: repository root)"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				q := url.Values{}
-				if ref := ctx.Arg("ref"); ref != "" {
-					q.Set("ref", ref)
-				}
-				if p := ctx.Arg("path"); p != "" {
-					q.Set("filepath", p)
-				}
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/files", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "tags",
-			Description: "List tags of a repository",
-			Flags: []common.Flag{
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("page", ctx.Arg("page"))
-				q.Set("limit", ctx.Arg("limit"))
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/tags", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "commits",
-			Description: "List commits of a repository",
-			Flags: []common.Flag{
-				{Name: "sha", Short: "s", Usage: "Branch name, tag, or commit SHA"},
-				{Name: "path", Short: "p", Usage: "Filter commits by file path"},
-				{Name: "page", Short: "P", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				q := url.Values{}
-				q.Set("page", ctx.Arg("page"))
-				q.Set("limit", ctx.Arg("limit"))
-				if sha := ctx.Arg("sha"); sha != "" {
-					q.Set("sha", sha)
-				}
-				if p := ctx.Arg("path"); p != "" {
-					q.Set("path", p)
-				}
-				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/commits", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
 	}
-}
-
-func repoTransferPath(ctx *common.RuntimeContext, action string) string {
-	base := ctx.RepoPath() + "/applied_transfer_projects"
-	if action == "" {
-		return base
-	}
-	return fmt.Sprintf("%s/%s", base, action)
-}
-
-func requireRepoTransferConfirmation(ctx *common.RuntimeContext, shortcut string) error {
-	if ctx.Arg("yes") == "true" {
-		return nil
-	}
-	return fmt.Errorf("refusing to run repo +%s without --yes; use --dry-run to preview the request first", shortcut)
 }
 
 func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
@@ -704,6 +295,271 @@ func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
 		return translators[0]
 	}
 	return i18n.Default()
+}
+
+type repoBatchCommitRequest struct {
+	Files          []repoFileOperation `json:"files"`
+	AuthorEmail    string              `json:"author_email,omitempty"`
+	AuthorName     string              `json:"author_name,omitempty"`
+	CommitterEmail string              `json:"committer_email,omitempty"`
+	CommitterName  string              `json:"committer_name,omitempty"`
+	Branch         string              `json:"branch"`
+	NewBranch      string              `json:"new_branch,omitempty"`
+	Message        string              `json:"message"`
+}
+
+type repoFileOperation struct {
+	ActionType string  `json:"action_type"`
+	Content    *string `json:"content,omitempty"`
+	Encoding   string  `json:"encoding,omitempty"`
+	FilePath   string  `json:"file_path"`
+}
+
+func runFile(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	filePath, err := requiredRepoString(ctx, "path")
+	if err != nil {
+		return err
+	}
+	q := repoSubEntriesQuery(filePath, ctx.Arg("ref"))
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runFiles(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	q := url.Values{}
+	setRepoQueryIfPresent(q, "search", ctx.Arg("search"))
+	setRepoQueryIfPresent(q, "ref", ctx.Arg("ref"))
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/files", q)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runCommitFiles(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	req, err := buildRepoBatchCommitRequest(ctx)
+	if err != nil {
+		return err
+	}
+	if ctx.Arg("dry-run") == "true" {
+		return ctx.OutputData(map[string]interface{}{
+			"dry_run": true,
+			"method":  "POST",
+			"path":    "/v1" + ctx.RepoPath() + "/contents/batch",
+			"request": req,
+		})
+	}
+	env, err := ctx.CallAPI("POST", "/v1"+ctx.RepoPath()+"/contents/batch", req)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func buildRepoBatchCommitRequest(ctx *common.RuntimeContext) (repoBatchCommitRequest, error) {
+	branch, err := requiredRepoString(ctx, "branch")
+	if err != nil {
+		return repoBatchCommitRequest{}, err
+	}
+	message, err := requiredRepoString(ctx, "message")
+	if err != nil {
+		return repoBatchCommitRequest{}, err
+	}
+
+	opsFile := strings.TrimSpace(ctx.Arg("ops"))
+	files, err := repoCommitFileOperations(ctx, opsFile)
+	if err != nil {
+		return repoBatchCommitRequest{}, err
+	}
+
+	req := repoBatchCommitRequest{
+		Files:          files,
+		Branch:         branch,
+		Message:        message,
+		NewBranch:      strings.TrimSpace(ctx.Arg("new-branch")),
+		AuthorName:     strings.TrimSpace(ctx.Arg("author-name")),
+		AuthorEmail:    strings.TrimSpace(ctx.Arg("author-email")),
+		CommitterName:  strings.TrimSpace(ctx.Arg("committer-name")),
+		CommitterEmail: strings.TrimSpace(ctx.Arg("committer-email")),
+	}
+	if err := validateRepoIdentityPair("author", req.AuthorName, req.AuthorEmail); err != nil {
+		return repoBatchCommitRequest{}, err
+	}
+	if err := validateRepoIdentityPair("committer", req.CommitterName, req.CommitterEmail); err != nil {
+		return repoBatchCommitRequest{}, err
+	}
+	return req, nil
+}
+
+func repoCommitFileOperations(ctx *common.RuntimeContext, opsFile string) ([]repoFileOperation, error) {
+	if opsFile != "" {
+		if repoHasSingleFileArgs(ctx) {
+			return nil, fmt.Errorf("--ops cannot be combined with --path, --content, --from, --action, or --encoding")
+		}
+		return readRepoFileOperations(opsFile)
+	}
+	op, err := singleRepoFileOperation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return []repoFileOperation{op}, nil
+}
+
+func repoHasSingleFileArgs(ctx *common.RuntimeContext) bool {
+	for _, name := range []string{"path", "content", "from", "action", "encoding"} {
+		if strings.TrimSpace(ctx.Arg(name)) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func readRepoFileOperations(path string) ([]repoFileOperation, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read --ops file: %w", err)
+	}
+	var files []repoFileOperation
+	if err := json.Unmarshal(data, &files); err == nil {
+		return validateRepoFileOperations(files)
+	}
+	var req repoBatchCommitRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		return nil, fmt.Errorf("parse --ops JSON: expected an array of file operations or an object with files: %w", err)
+	}
+	return validateRepoFileOperations(req.Files)
+}
+
+func singleRepoFileOperation(ctx *common.RuntimeContext) (repoFileOperation, error) {
+	filePath, err := requiredRepoString(ctx, "path")
+	if err != nil {
+		return repoFileOperation{}, err
+	}
+	action := strings.TrimSpace(ctx.Arg("action"))
+	if action == "" {
+		action = "update"
+	}
+	op := repoFileOperation{
+		ActionType: action,
+		FilePath:   filePath,
+		Encoding:   strings.TrimSpace(ctx.Arg("encoding")),
+	}
+
+	hasContent := ctx.Arg("content") != ""
+	fromPath := strings.TrimSpace(ctx.Arg("from"))
+	hasFrom := fromPath != ""
+	if hasContent && hasFrom {
+		return repoFileOperation{}, fmt.Errorf("--content and --from cannot be used together")
+	}
+	if hasContent {
+		content := ctx.Arg("content")
+		op.Content = &content
+	}
+	if hasFrom {
+		content, err := readRepoFileContent(fromPath, op.Encoding)
+		if err != nil {
+			return repoFileOperation{}, err
+		}
+		op.Content = &content
+	}
+	return validateRepoFileOperation(op, 0)
+}
+
+func readRepoFileContent(path, encoding string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read --from file: %w", err)
+	}
+	if strings.TrimSpace(encoding) == "base64" {
+		return base64.StdEncoding.EncodeToString(data), nil
+	}
+	return string(data), nil
+}
+
+func validateRepoFileOperations(files []repoFileOperation) ([]repoFileOperation, error) {
+	if len(files) == 0 {
+		return nil, fmt.Errorf("at least one file operation is required")
+	}
+	for i := range files {
+		op, err := validateRepoFileOperation(files[i], i)
+		if err != nil {
+			return nil, err
+		}
+		files[i] = op
+	}
+	return files, nil
+}
+
+func validateRepoFileOperation(op repoFileOperation, index int) (repoFileOperation, error) {
+	prefix := fmt.Sprintf("files[%d]", index)
+	op.ActionType = strings.TrimSpace(op.ActionType)
+	op.FilePath = strings.TrimSpace(op.FilePath)
+	op.Encoding = strings.TrimSpace(op.Encoding)
+
+	switch op.ActionType {
+	case "create", "update", "delete":
+	default:
+		return repoFileOperation{}, fmt.Errorf("%s.action_type must be create, update, or delete", prefix)
+	}
+	if op.FilePath == "" {
+		return repoFileOperation{}, fmt.Errorf("%s.file_path is required", prefix)
+	}
+	if op.ActionType == "delete" {
+		if op.Content != nil || op.Encoding != "" {
+			return repoFileOperation{}, fmt.Errorf("%s delete operation must not include content or encoding", prefix)
+		}
+		return op, nil
+	}
+	if op.Content == nil {
+		return repoFileOperation{}, fmt.Errorf("%s content is required for create and update operations", prefix)
+	}
+	if op.Encoding == "" {
+		op.Encoding = "text"
+	}
+	if op.Encoding != "text" && op.Encoding != "base64" {
+		return repoFileOperation{}, fmt.Errorf("%s.encoding must be text or base64", prefix)
+	}
+	return op, nil
+}
+
+func validateRepoIdentityPair(name, personName, email string) error {
+	if (personName == "") != (email == "") {
+		return fmt.Errorf("--%s-name and --%s-email must be provided together", name, name)
+	}
+	return nil
+}
+
+func requiredRepoString(ctx *common.RuntimeContext, name string) (string, error) {
+	value := strings.TrimSpace(ctx.Arg(name))
+	if value == "" {
+		return "", fmt.Errorf("missing required flag: --%s", name)
+	}
+	return value, nil
+}
+
+func repoSubEntriesQuery(path, ref string) url.Values {
+	q := url.Values{}
+	if path = strings.TrimSpace(path); path != "" {
+		q.Set("filepath", path)
+	}
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		ref = "master"
+	}
+	q.Set("ref", ref)
+	return q
 }
 
 func runLanguages(ctx *common.RuntimeContext) error {
@@ -726,44 +582,6 @@ func runContributors(ctx *common.RuntimeContext) error {
 		return err
 	}
 	return ctx.Output(env)
-}
-
-func runFile(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	path, err := normalizeRepoFilePath(ctx)
-	if err != nil {
-		return err
-	}
-
-	ref := strings.TrimSpace(ctx.Arg("ref"))
-	if ref == "" {
-		ref = "master"
-	}
-
-	q := url.Values{}
-	q.Set("filepath", path)
-	q.Set("ref", ref)
-
-	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
-	if err != nil {
-		return err
-	}
-
-	entry, err := extractRepoFileEntry(env.Data, path)
-	if err != nil {
-		return err
-	}
-	if ctx.Arg("content-only") == "true" {
-		content, _ := entry["content"].(string)
-		if content == "" {
-			return fmt.Errorf("file response did not include content for %q", path)
-		}
-		return ctx.OutputData(content)
-	}
-
-	return ctx.OutputData(buildRepoFileResult(entry, path, ref))
 }
 
 func runContributorStats(ctx *common.RuntimeContext) error {
@@ -961,58 +779,6 @@ func setRepoQueryIfPresent(q url.Values, key, value string) {
 	if value := strings.TrimSpace(value); value != "" {
 		q.Set(key, value)
 	}
-}
-
-func normalizeRepoFilePath(ctx *common.RuntimeContext) (string, error) {
-	path, err := ctx.RequireArg("path")
-	if err != nil {
-		return "", err
-	}
-	path = strings.TrimLeft(strings.TrimSpace(path), "/")
-	if path == "" {
-		return "", fmt.Errorf("invalid --path %q: provide a repository file path", ctx.Arg("path"))
-	}
-	return path, nil
-}
-
-func extractRepoFileEntry(data interface{}, path string) (map[string]interface{}, error) {
-	payload, ok := data.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected file response format")
-	}
-
-	entry, ok := payload["entries"]
-	if !ok {
-		return nil, fmt.Errorf("unexpected file response format")
-	}
-
-	if _, isDir := entry.([]interface{}); isDir {
-		return nil, fmt.Errorf("path %q is a directory; use repo +tree instead", path)
-	}
-
-	fileEntry, ok := entry.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected file response format")
-	}
-
-	if entryType, _ := fileEntry["type"].(string); entryType != "" && entryType != "file" {
-		return nil, fmt.Errorf("path %q is not a file; use repo +tree instead", path)
-	}
-
-	return fileEntry, nil
-}
-
-func buildRepoFileResult(entry map[string]interface{}, path, ref string) map[string]interface{} {
-	result := map[string]interface{}{
-		"path": path,
-		"ref":  ref,
-	}
-	for _, key := range []string{"name", "type", "size", "sha", "content"} {
-		if value, ok := entry[key]; ok {
-			result[key] = value
-		}
-	}
-	return result
 }
 
 func parseOptionalRepoNonNegativeInt(value, name string) (int, bool, error) {
