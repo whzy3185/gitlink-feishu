@@ -103,8 +103,8 @@ skills/
 │   └── SKILL.md                       # Pipeline 操作指南
 ├── gitlink-wiki/                      # Wiki 页面管理
 │   └── SKILL.md                       # Wiki 操作指南
-├── gitlink-notification/              # 用户消息
-│   └── SKILL.md                       # 消息查询、已读和删除指南
+├── gitlink-trace/                     # 代码溯源分析
+│   └── SKILL.md                       # 代码溯源分析操作指南
 ├── gitlink-pm/                        # 项目管理
 │   └── SKILL.md                       # PM 操作指南
 ├── gitlink-health/                    # 项目健康度分析
@@ -146,7 +146,7 @@ skills/
 | **gitlink-ci** | CI/CD | `ci +builds`, `ci +logs` |
 | **gitlink-pipeline** | 流水线工作流 | `pipeline +runs`, `pipeline +run`, `pipeline +logs` |
 | **gitlink-wiki** | Wiki 页面管理 | `wiki +list`, `wiki +view`, `wiki +create`, `wiki +update`, `wiki +delete` |
-| **gitlink-notification** | 用户消息 | `notification +list`, `notification +read`, `notification +delete` |
+| **gitlink-trace** | 代码溯源分析 | `trace +init`, `trace +start`, `trace +results`, `trace +report` |
 | **gitlink-pm** | 项目管理 | 通过 Raw API 访问 |
 | **gitlink-workflow** | AI 工作流 | Issue 分类、PR Review、Release Notes |
 | **gitlink-health** | 开源项目健康度 | 详情见SKILL.md |
