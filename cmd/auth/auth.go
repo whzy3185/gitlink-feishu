@@ -34,16 +34,21 @@ func NewAuthCmd(translators ...*i18n.Translator) *cobra.Command {
 	cmd.AddCommand(newLoginCmd(tr))
 	cmd.AddCommand(newLogoutCmd(tr))
 	cmd.AddCommand(newStatusCmd(tr))
+	cmd.AddCommand(newTokenCmd(tr))
 	return cmd
 }
 
 func newLoginCmd(tr *i18n.Translator) *cobra.Command {
 	var tokenMode bool
+	var withToken bool
 
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: tr.T("cmd.auth.login.short"),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if withToken {
+				return loginWithTokenStdin(cmd.InOrStdin(), cmd.OutOrStdout(), tr)
+			}
 			if tokenMode {
 				return loginWithToken(cmd.InOrStdin(), cmd.OutOrStdout(), tr)
 			}
@@ -51,6 +56,7 @@ func newLoginCmd(tr *i18n.Translator) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&tokenMode, "token", false, tr.T("flag.auth.token"))
+	cmd.Flags().BoolVar(&withToken, "with-token", false, tr.T("flag.auth.with_token"))
 	return cmd
 }
 
@@ -117,6 +123,26 @@ func loginWithToken(in io.Reader, out io.Writer, tr *i18n.Translator) error {
 	return err
 }
 
+// loginWithTokenStdin reads a token from stdin without prompting, mirroring
+// `gh auth login --with-token` for non-interactive use (CI, scripts):
+//
+//	echo $TOKEN | gitlink-cli auth login --with-token
+func loginWithTokenStdin(in io.Reader, out io.Writer, tr *i18n.Translator) error {
+	data, err := io.ReadAll(io.LimitReader(in, 4096))
+	if err != nil {
+		return err
+	}
+	token := strings.TrimSpace(string(data))
+	if token == "" {
+		return errors.New(tr.T("error.auth.token_empty"))
+	}
+	if err := storeToken(token); err != nil {
+		return errors.New(tr.Tf("error.auth.store_token_failed", i18n.Args{"message": err.Error()}))
+	}
+	_, err = fmt.Fprintln(out, tr.T("success.auth.token_saved"))
+	return err
+}
+
 func newLogoutCmd(tr *i18n.Translator) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
@@ -132,7 +158,9 @@ func newLogoutCmd(tr *i18n.Translator) *cobra.Command {
 }
 
 func newStatusCmd(tr *i18n.Translator) *cobra.Command {
-	return &cobra.Command{
+	var showToken bool
+
+	cmd := &cobra.Command{
 		Use:   "status",
 		Short: tr.T("cmd.auth.status.short"),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -142,9 +170,19 @@ func newStatusCmd(tr *i18n.Translator) *cobra.Command {
 				if _, err := fmt.Fprintln(out, tr.Tf("success.auth.logged_in_via_env", i18n.Args{"env": envTokenVar})); err != nil {
 					return err
 				}
+				if showToken {
+					if _, err := fmt.Fprintln(out, tr.Tf("output.auth.token_value", i18n.Args{"token": envToken})); err != nil {
+						return err
+					}
+				}
 			}
 
 			token, err := loadToken()
+			if err == nil && token != "" && showToken {
+				if _, err := fmt.Fprintln(out, tr.Tf("output.auth.token_value", i18n.Args{"token": token})); err != nil {
+					return err
+				}
+			}
 			if err != nil || token == "" {
 				if os.Getenv(envTokenVar) == "" {
 					if _, err := fmt.Fprintln(out, tr.T("warning.auth.not_logged_in")); err != nil {
@@ -177,6 +215,31 @@ func newStatusCmd(tr *i18n.Translator) *cobra.Command {
 				return err
 			}
 			_, err = fmt.Fprintln(out, tr.T("warning.auth.user_unavailable"))
+			return err
+		},
+	}
+	cmd.Flags().BoolVar(&showToken, "show-token", false, tr.T("flag.auth.show_token"))
+	return cmd
+}
+
+// newTokenCmd prints the active token to stdout for scripting, mirroring
+// `gh auth token`. Resolution order matches API calls: GITLINK_TOKEN env
+// var first, then the stored keyring/file token.
+func newTokenCmd(tr *i18n.Translator) *cobra.Command {
+	return &cobra.Command{
+		Use:   "token",
+		Short: tr.T("cmd.auth.token.short"),
+		Long:  tr.T("cmd.auth.token.long"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			token := os.Getenv(envTokenVar)
+			if token == "" {
+				stored, err := loadToken()
+				if err != nil || stored == "" {
+					return errors.New(tr.T("error.auth.no_token"))
+				}
+				token = stored
+			}
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), token)
 			return err
 		},
 	}
