@@ -457,7 +457,7 @@ gitlink-cli search +users -k "zhangsan"
 
 ### 工作流命令
 
-`workflow` 提供面向维护者和 AI Agent 的只读分析能力，可用于 Issue 分流、仓库健康度评估、PR 审查摘要、仓库工作流报告和发布就绪度检查。
+`workflow` 提供面向维护者和 AI Agent 的只读分析能力，可用于 Issue 分流、仓库健康度评估、PR 审查摘要、仓库工作流报告和重复 Issue 候选检测。
 
 ```bash
 # 生成单个 PR 的审查摘要
@@ -466,20 +466,14 @@ gitlink-cli workflow +pr-summary --owner Gitlink --repo gitlink-cli --number 1 -
 # 生成仓库工作流报告
 gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
 
-# 根据本地门禁信号判断发布是否可以推进
-gitlink-cli workflow +release-readiness \
-  --version v1.2.0 \
-  --changes "新增工作流门禁,修复 Release 上传" \
-  --tests "go test ./...=passed,go build ./...=passed" \
-  --artifacts "windows zip=passed,linux tar=passed" \
-  --rollback-plan "回滚 tag 并恢复上一版制品" \
-  --format table
+# 从远端只读拉取 Issue 并检测重复候选
+gitlink-cli workflow +issue-dedupe --owner Gitlink --repo gitlink-cli --limit 50 --threshold 55 --format table
 
-# 从 JSON 门禁文件生成发布就绪度报告
-gitlink-cli workflow +release-readiness --from release_readiness.json --format markdown
+# 从本地 JSON 文件检测重复候选
+gitlink-cli workflow +issue-dedupe --from issues.json --threshold 60 --format markdown
 ```
 
-`workflow +release-readiness` 默认使用 `table` 输出，会综合版本号、变更摘要、已知阻塞项、测试结果、发布制品、破坏性变更回滚方案和依赖风险，给出 `pass/review/block` 门禁结论；命令只分析本地输入，不会创建 tag、Release 或附件。
+`workflow +issue-dedupe` 默认使用 `table` 输出，会根据标题、正文和标签的共享关键词计算相似度，帮助维护者优先确认高置信重复候选；命令只输出候选对，不会关闭、评论或修改 Issue。
 
 ### Raw API
 
