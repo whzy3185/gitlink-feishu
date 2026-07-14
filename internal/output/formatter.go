@@ -17,6 +17,9 @@ func Print(envelope *Envelope, format string) error {
 	if format == "" {
 		format = "json"
 	}
+	if Query != "" {
+		return PrintQuery(os.Stdout, envelope, Query)
+	}
 	return PrintTo(os.Stdout, envelope, format)
 }
 

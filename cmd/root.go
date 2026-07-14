@@ -14,6 +14,7 @@ import (
 	doctorCmd "github.com/gitlink-org/gitlink-cli/cmd/doctor"
 	internalConfig "github.com/gitlink-org/gitlink-cli/internal/config"
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
+	"github.com/gitlink-org/gitlink-cli/internal/output"
 	"github.com/gitlink-org/gitlink-cli/shortcuts"
 )
 
@@ -55,6 +56,7 @@ func NewRootCmd(opts RootOptions, tr *i18n.Translator) (*cobra.Command, error) {
 	rootCmd.PersistentFlags().StringVar(&cmdutil.Format, "format", "", tr.T("flag.format"))
 	rootCmd.PersistentFlags().BoolVar(&cmdutil.Debug, "debug", false, tr.T("flag.debug"))
 	rootCmd.PersistentFlags().StringVar(&cmdutil.Lang, "lang", "", tr.T("flag.lang"))
+	rootCmd.PersistentFlags().StringVar(&output.Query, "jq", "", tr.T("flag.jq"))
 
 	rootCmd.AddCommand(authCmd.NewAuthCmd(tr))
 	rootCmd.AddCommand(apiCmd.NewAPICmd(tr))

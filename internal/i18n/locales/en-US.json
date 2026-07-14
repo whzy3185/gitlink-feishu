@@ -192,6 +192,7 @@
   "flag.issue.status_id": "Issue status ID",
   "flag.issue.tag_ids": "Comma-separated issue tag IDs",
   "flag.issue.title": "Issue title",
+  "flag.jq": "Extract a value from the output by dot-separated path (e.g. data.commits.0.sha)",
   "flag.lang": "Display language",
   "flag.limit": "Items per page",
   "flag.org.id": "Organization ID",

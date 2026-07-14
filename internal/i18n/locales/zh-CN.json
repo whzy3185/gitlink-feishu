@@ -192,6 +192,7 @@
   "flag.issue.status_id": "议题状态 ID",
   "flag.issue.tag_ids": "逗号分隔的议题标签 ID",
   "flag.issue.title": "议题标题",
+  "flag.jq": "按点分路径从输出中提取字段（如 data.commits.0.sha）",
   "flag.lang": "显示语言",
   "flag.limit": "每页条目数",
   "flag.org.id": "组织 ID",
