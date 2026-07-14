@@ -364,6 +364,15 @@ gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 --body-file c
 # Batch comment on issues
 gitlink-cli issue +batch-comment --owner Gitlink --repo forgeplus --numbers 123,124 --body-file comment.md --dry-run
 
+# Reply to a comment and list a comment's replies
+gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "Agreed" --reply-to 456
+gitlink-cli issue +comment-replies --owner Gitlink --repo forgeplus -n 123 -c 456
+
+# List, edit, and delete issue comments
+gitlink-cli issue +comments --owner Gitlink --repo forgeplus -n 123 --category comment
+gitlink-cli issue +comment-edit --owner Gitlink --repo forgeplus -n 123 -c 456 -b "Updated"
+gitlink-cli issue +comment-delete --owner Gitlink --repo forgeplus -n 123 -c 456
+
 # List issue assigners
 gitlink-cli issue +assigners --owner Gitlink --repo forgeplus
 

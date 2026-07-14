@@ -45,6 +45,8 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		newBatchCloseShortcut(),
+		newBatchUpdateShortcut(),
+		newBatchDeleteShortcut(),
 		{
 			Name:        "list",
 			Description: tr.T("cmd.issue.list.short"),
@@ -272,18 +274,168 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.issue.comment.short"),
 			Flags: appendIssueNumberFlags(
 				common.Flag{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
-				common.Flag{Name: "parent-id", Usage: "Parent comment ID when creating a child comment"},
-				common.Flag{Name: "reply-id", Usage: "Reply target comment ID"},
-				common.Flag{Name: "attachment-ids", Usage: "Comma-separated attachment IDs"},
-				common.Flag{Name: "receivers", Short: "r", Usage: "Comma-separated @ receiver login names"},
-				common.Flag{Name: "dry-run", Usage: "Preview the request body without creating the comment", Bool: true, Default: "false"},
+				common.Flag{Name: "reply-to", Usage: tr.T("flag.issue.comment_reply_to")},
 			),
-			Run: runIssueComment,
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				number, err := issueNumberArg(ctx)
+				if err != nil {
+					return err
+				}
+				body, err := ctx.RequireArg("body")
+				if err != nil {
+					return err
+				}
+				payload := map[string]interface{}{
+					"notes": body,
+				}
+				if replyTo := ctx.Arg("reply-to"); replyTo != "" {
+					id, err := strconv.Atoi(replyTo)
+					if err != nil {
+						return fmt.Errorf("--reply-to must be an integer, got %q", replyTo)
+					}
+					payload["parent_id"] = id
+					payload["reply_id"] = id
+				}
+				env, err := ctx.CallAPI("POST", fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number), payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
 		},
-		newIssueCommentsShortcut(),
-		newIssueCommentUpdateShortcut(),
-		newIssueCommentDeleteShortcut(),
-		newIssueCommentChildrenShortcut(),
+		{
+			Name:        "comments",
+			Description: tr.T("cmd.issue.comments.short"),
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "category", Usage: tr.T("flag.issue.comments.category")},
+				common.Flag{Name: "keyword", Short: "k", Usage: tr.T("flag.issue.comments.keyword")},
+				common.Flag{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				common.Flag{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+			),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				number, err := issueNumberArg(ctx)
+				if err != nil {
+					return err
+				}
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				if category := ctx.Arg("category"); category != "" {
+					q.Set("category", category)
+				}
+				if keyword := ctx.Arg("keyword"); keyword != "" {
+					q.Set("keyword", keyword)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number), q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "comment-replies",
+			Description: tr.T("cmd.issue.comment_replies.short"),
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "comment-id", Short: "c", Usage: tr.T("flag.issue.comment_id"), Required: true},
+				common.Flag{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				common.Flag{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+			),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				number, err := issueNumberArg(ctx)
+				if err != nil {
+					return err
+				}
+				commentID, err := ctx.RequireArg("comment-id")
+				if err != nil {
+					return err
+				}
+				if _, err := strconv.Atoi(commentID); err != nil {
+					return fmt.Errorf("--comment-id must be an integer, got %q", commentID)
+				}
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("%s/issues/%s/journals/%s/children_journals", v1RepoPath(ctx), number, commentID), q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "comment-edit",
+			Description: tr.T("cmd.issue.comment_edit.short"),
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "comment-id", Short: "c", Usage: tr.T("flag.issue.comment_id"), Required: true},
+				common.Flag{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
+			),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				number, err := issueNumberArg(ctx)
+				if err != nil {
+					return err
+				}
+				commentID, err := ctx.RequireArg("comment-id")
+				if err != nil {
+					return err
+				}
+				if _, err := strconv.Atoi(commentID); err != nil {
+					return fmt.Errorf("--comment-id must be an integer, got %q", commentID)
+				}
+				body, err := ctx.RequireArg("body")
+				if err != nil {
+					return err
+				}
+				payload := map[string]interface{}{
+					"notes": body,
+				}
+				env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/issues/%s/journals/%s", v1RepoPath(ctx), number, commentID), payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "comment-delete",
+			Description: tr.T("cmd.issue.comment_delete.short"),
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "comment-id", Short: "c", Usage: tr.T("flag.issue.comment_id"), Required: true},
+			),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				number, err := issueNumberArg(ctx)
+				if err != nil {
+					return err
+				}
+				commentID, err := ctx.RequireArg("comment-id")
+				if err != nil {
+					return err
+				}
+				if _, err := strconv.Atoi(commentID); err != nil {
+					return fmt.Errorf("--comment-id must be an integer, got %q", commentID)
+				}
+				env, err := ctx.CallAPI("DELETE", fmt.Sprintf("%s/issues/%s/journals/%s", v1RepoPath(ctx), number, commentID), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
 		{
 			Name:        "assigners",
 			Description: "List issue assigners",
