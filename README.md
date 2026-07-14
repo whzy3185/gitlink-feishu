@@ -314,6 +314,19 @@ gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role D
 gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
 ```
 
+### Attachment Operations
+
+```bash
+# Upload a local file
+gitlink-cli attachment +upload -f ./build.log -d "CI build log"
+
+# Upload a file and attach container metadata
+gitlink-cli attachment +upload -f ./release-notes.md --container-id 42 --container-type VersionRelease
+
+# Delete an uploaded attachment
+gitlink-cli attachment +delete -i 791eccbf-2e35-4301-ad95-8c937a117f40
+```
+
 ### Issue Management
 
 ```bash

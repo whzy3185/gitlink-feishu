@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/auth"
@@ -26,12 +29,6 @@ type APIError struct {
 	Message    string
 }
 
-type DownloadResult struct {
-	Data               []byte
-	ContentType        string
-	ContentDisposition string
-}
-
 func (e *APIError) Error() string {
 	return fmt.Sprintf("[%v] %s", e.Code, e.Message)
 }
@@ -48,10 +45,6 @@ func New() (*Client, error) {
 }
 
 func (c *Client) Do(method, path string, body interface{}, query url.Values) (*output.Envelope, error) {
-	return c.DoWithHeaders(method, path, body, query, nil)
-}
-
-func (c *Client) DoWithHeaders(method, path string, body interface{}, query url.Values, headers http.Header) (*output.Envelope, error) {
 	path = normalizeAPIPath(c.BaseURL, path)
 
 	// Append .json suffix if not already present (GitLink API convention)
@@ -88,14 +81,60 @@ func (c *Client) DoWithHeaders(method, path string, body interface{}, query url.
 	if err != nil {
 		return nil, err
 	}
-	for key, values := range headers {
-		for _, value := range values {
-			req.Header.Add(key, value)
+
+	return c.doRequest(req)
+}
+
+func (c *Client) PostMultipart(path, fileField, filePath string, fields map[string]string) (*output.Envelope, error) {
+	path = normalizeAPIPath(c.BaseURL, path)
+	if idx := strings.Index(path, "?"); idx != -1 {
+		basePath := path[:idx]
+		queryStr := path[idx:]
+		if shouldAppendJSONSuffix(basePath) {
+			path = basePath + ".json" + queryStr
+		}
+	} else if shouldAppendJSONSuffix(path) {
+		path += ".json"
+	}
+	fullURL := c.BaseURL + path
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("open file: %w", err)
+	}
+	defer file.Close()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	part, err := writer.CreateFormFile(fileField, filepath.Base(filePath))
+	if err != nil {
+		return nil, fmt.Errorf("create form file: %w", err)
+	}
+	if _, err := io.Copy(part, file); err != nil {
+		return nil, fmt.Errorf("copy file: %w", err)
+	}
+	for key, value := range fields {
+		if err := writer.WriteField(key, value); err != nil {
+			return nil, fmt.Errorf("write form field %s: %w", key, err)
 		}
 	}
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("close multipart writer: %w", err)
+	}
 
+	req, err := http.NewRequest("POST", fullURL, &body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	return c.doRequest(req)
+}
+
+func (c *Client) doRequest(req *http.Request) (*output.Envelope, error) {
 	if c.Debug {
-		fmt.Printf("-> %s %s\n", method, fullURL)
+		fmt.Printf("-> %s %s\n", req.Method, req.URL.String())
 	}
 
 	resp, err := c.HTTP.Do(req)
@@ -130,35 +169,22 @@ func (c *Client) DoWithHeaders(method, path string, body interface{}, query url.
 	}
 
 	// Check GitLink error-in-body pattern
-	// Support both {"status":N, "message":"..."} and gateway {"code":N, "msg":"..."}
-	var bodyCode float64
-	var bodyMsg string
 	if status, ok := raw["status"]; ok {
+		var statusCode float64
 		switch v := status.(type) {
 		case float64:
-			bodyCode = v
+			statusCode = v
 		case int:
-			bodyCode = float64(v)
+			statusCode = float64(v)
 		}
-		bodyMsg, _ = raw["message"].(string)
-	} else if code, ok := raw["code"]; ok {
-		switch v := code.(type) {
-		case float64:
-			bodyCode = v
-		case int:
-			bodyCode = float64(v)
-		}
-		bodyMsg, _ = raw["msg"].(string)
-		if bodyMsg == "" {
-			bodyMsg, _ = raw["message"].(string)
-		}
-	}
-	if bodyCode != 0 && bodyCode != 200 && bodyCode != 201 && bodyCode != 204 && bodyCode != 1 {
-		suggestion := suggestFix(int(bodyCode))
-		return output.ErrorEnvelope(int(bodyCode), bodyMsg, suggestion), &APIError{
-			StatusCode: int(bodyCode),
-			Code:       int(bodyCode),
-			Message:    bodyMsg,
+		if statusCode != 0 && statusCode != 200 && statusCode != 1 {
+			msg, _ := raw["message"].(string)
+			suggestion := suggestFix(int(statusCode))
+			return output.ErrorEnvelope(int(statusCode), msg, suggestion), &APIError{
+				StatusCode: int(statusCode),
+				Code:       int(statusCode),
+				Message:    msg,
+			}
 		}
 	}
 
@@ -188,82 +214,6 @@ func (c *Client) DoWithHeaders(method, path string, body interface{}, query url.
 	return output.SuccessEnvelope(raw, meta), nil
 }
 
-func (c *Client) Download(path string) (*DownloadResult, error) {
-	fullURL, err := c.resolveDownloadURL(path)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", fullURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	if c.Debug {
-		fmt.Printf("-> GET %s\n", fullURL)
-	}
-
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-	if c.Debug {
-		fmt.Printf("<- %d %d bytes\n", resp.StatusCode, len(data))
-	}
-	if resp.StatusCode >= 400 {
-		return nil, &APIError{
-			StatusCode: resp.StatusCode,
-			Code:       resp.StatusCode,
-			Message:    fmt.Sprintf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(data))),
-		}
-	}
-
-	return &DownloadResult{
-		Data:               data,
-		ContentType:        resp.Header.Get("Content-Type"),
-		ContentDisposition: resp.Header.Get("Content-Disposition"),
-	}, nil
-}
-
-func (c *Client) resolveDownloadURL(path string) (string, error) {
-	if path == "" {
-		return "", fmt.Errorf("download url is empty")
-	}
-	if u, err := url.Parse(path); err == nil && u.IsAbs() {
-		return path, nil
-	}
-	if strings.HasPrefix(path, "/api/") || path == "/api" {
-		return apiDownloadURL(c.BaseURL, path), nil
-	}
-	if strings.HasPrefix(path, "/") {
-		return webBaseURL(c.BaseURL) + path, nil
-	}
-	return c.BaseURL + normalizeAPIPath(c.BaseURL, path), nil
-}
-
-func apiDownloadURL(baseURL, path string) string {
-	base := strings.TrimRight(baseURL, "/")
-	if strings.HasSuffix(base, "/api") {
-		return base + strings.TrimPrefix(path, "/api")
-	}
-	return webBaseURL(base) + path
-}
-
-func webBaseURL(baseURL string) string {
-	base := strings.TrimRight(baseURL, "/")
-	for _, suffix := range []string{"/api/v1", "/api"} {
-		if strings.HasSuffix(base, suffix) {
-			return strings.TrimSuffix(base, suffix)
-		}
-	}
-	return base
-}
-
 func shouldAppendJSONSuffix(path string) bool {
 	if strings.HasSuffix(path, ".json") {
 		return false
@@ -273,10 +223,6 @@ func shouldAppendJSONSuffix(path string) bool {
 		if part == "raw" && i >= 2 && i+2 < len(parts) {
 			return false
 		}
-	}
-	// Wiki open API endpoints do not use .json suffix
-	if len(parts) >= 3 && parts[0] == "wiki" && parts[1] == "open" {
-		return false
 	}
 	return true
 }

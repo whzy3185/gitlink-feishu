@@ -11,10 +11,10 @@ func TestRegisterAll(t *testing.T) {
 	RegisterAll(root)
 
 	expectedGroups := []string{
-		"repo", "issue", "label", "license", "pr", "profile", "release", "branch",
-		"org", "user", "search", "tag", "ci", "workflow",
+		"attachment", "repo", "issue", "label", "license", "pr", "release", "branch",
+		"org", "user", "search", "ci", "workflow",
 		"compare", "member", "milestone", "pipeline", "webhook",
-		"dataset", "health", "ignore", "wiki", "notification",
+		"health",
 	}
 
 	groupSet := map[string]bool{}
