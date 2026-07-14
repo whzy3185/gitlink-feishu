@@ -1,6 +1,7 @@
 package pr
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -52,6 +53,135 @@ func TestPRCommentPostsToCorrectIssueJournal(t *testing.T) {
 		t.Fatal("journal endpoint was not called")
 	}
 	assertEqual(t, journalPayload["notes"], "LGTM, looks good!")
+}
+
+func TestPRCreateSameRepoBranchUsesSimplePayload(t *testing.T) {
+	var payload map[string]interface{}
+	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("feature/search"))
+	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+encodedHead+"..."+encodedBase+".json":
+			writeJSON(t, w, map[string]interface{}{
+				"commits_count": float64(2),
+				"files_count":   float64(5),
+			})
+		case r.Method == "POST" && r.URL.Path == "/owner/repo/pulls.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"status": float64(0), "pull_request_number": float64(22)})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "create", map[string]string{
+		"title": "feat: search",
+		"head":  "feature/search",
+		"base":  "master",
+		"body":  "Add search support",
+	})
+	if err != nil {
+		t.Fatalf("create shortcut failed: %v", err)
+	}
+
+	assertEqual(t, payload["head"], "feature/search")
+	assertEqual(t, payload["base"], "master")
+	assertEqual(t, payload["is_original"], false)
+	assertEqual(t, payload["commits_count"], float64(2))
+	assertEqual(t, payload["files_count"], float64(5))
+	if _, ok := payload["merge_user_login"]; ok {
+		t.Fatal("same-repo PR should not include merge_user_login")
+	}
+}
+
+func TestPRCreateForkBranchAddsGitLinkForkFields(t *testing.T) {
+	var payload map[string]interface{}
+	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("alice:feature/JIRA-123/fix"))
+	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/alice/fork-repo.json":
+			writeJSON(t, w, map[string]interface{}{
+				"project_id":         float64(1546652),
+				"project_identifier": "fork-repo",
+			})
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+encodedHead+"..."+encodedBase+".json":
+			writeJSON(t, w, map[string]interface{}{
+				"commits_count": float64(3),
+				"files_count":   float64(7),
+			})
+		case r.Method == "POST" && r.URL.Path == "/owner/repo/pulls.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"status": float64(0), "pull_request_number": float64(23)})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "create", map[string]string{
+		"title": "feat: fork support",
+		"head":  "alice/fork-repo:feature/JIRA-123/fix",
+		"base":  "master",
+	})
+	if err != nil {
+		t.Fatalf("create shortcut failed: %v", err)
+	}
+
+	assertEqual(t, payload["head"], "feature/JIRA-123/fix")
+	assertEqual(t, payload["is_original"], true)
+	assertEqual(t, payload["merge_user_login"], "alice")
+	assertEqual(t, payload["merge_project_identifier"], "fork-repo")
+	assertEqual(t, payload["fork_project_id"], float64(1546652))
+	assertEqual(t, payload["commits_count"], float64(3))
+	assertEqual(t, payload["files_count"], float64(7))
+}
+
+func TestFetchPRCompareCountsUsesURLSafeBase64(t *testing.T) {
+	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("alice:feature/fork"))
+	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
+
+	if encodedHead != "YWxpY2U6ZmVhdHVyZS9mb3Jr" {
+		t.Fatalf("unexpected encoded head: %s", encodedHead)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		wantPath := "/owner/repo/compare/" + encodedHead + "..." + encodedBase + ".json"
+		if r.Method != "GET" || r.URL.Path != wantPath {
+			t.Fatalf("unexpected request: %s %s, want GET %s", r.Method, r.URL.Path, wantPath)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"commits_count": float64(4),
+			"files_count":   float64(9),
+		})
+	}))
+	defer server.Close()
+
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{
+			HTTP:    server.Client(),
+			BaseURL: server.URL,
+		},
+		Owner: "owner",
+		Repo:  "repo",
+	}
+
+	counts, err := fetchPRCompareCounts(ctx, "alice:feature/fork", "master")
+	if err != nil {
+		t.Fatalf("fetchPRCompareCounts failed: %v", err)
+	}
+
+	assertEqual(t, counts["commits_count"], 4)
+	assertEqual(t, counts["files_count"], 9)
+}
+
+func TestParsePRHeadRejectsInvalidForkSyntax(t *testing.T) {
+	_, err := parsePRHead("alice:feature/fork")
+	if err == nil {
+		t.Fatal("expected invalid head syntax to fail")
+	}
 }
 
 func TestPRCommentFailsWhenPRNotFound(t *testing.T) {
@@ -328,15 +458,18 @@ func TestPRListStateAllOmitsStatus(t *testing.T) {
 
 func TestPRCreate(t *testing.T) {
 	var payload map[string]interface{}
+	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("feature/x"))
+	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Fatalf("expected POST, got %s", r.Method)
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+encodedHead+"..."+encodedBase+".json":
+			writeJSON(t, w, map[string]interface{}{"commits_count": float64(1), "files_count": float64(2)})
+		case r.Method == "POST" && r.URL.Path == "/owner/repo/pulls.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"id": float64(42), "title": "feat: new"})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		if r.URL.Path != "/owner/repo/pulls.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"id": float64(42), "title": "feat: new"})
 	}))
 	defer server.Close()
 
@@ -357,9 +490,18 @@ func TestPRCreate(t *testing.T) {
 
 func TestPRCreateNoBody(t *testing.T) {
 	var payload map[string]interface{}
+	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("feature/y"))
+	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"id": float64(43), "title": "feat: nob"})
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+encodedHead+"..."+encodedBase+".json":
+			writeJSON(t, w, map[string]interface{}{"commits_count": float64(0), "files_count": float64(0)})
+		case r.Method == "POST" && r.URL.Path == "/owner/repo/pulls.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"id": float64(43), "title": "feat: nob"})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
