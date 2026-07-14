@@ -113,11 +113,9 @@
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
-| 🔔 通知 | 列出消息、标记已读、删除消息、发送 @ 提及 |
 | 📖 Wiki | 列出、查看、创建、更新、删除 Wiki 页面 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 📊 数据集 | 按项目查询科研数据集 |
-| 📄 文件 | 无需克隆即可查看、搜索、创建、更新、删除仓库文件 |
 | 👤 用户 | 查看用户资料和信息 |
 | 📊 画像 | 用户开发能力、角色定位、专业定位、近期活动、贡献热力图统计 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
@@ -287,30 +285,6 @@ gitlink-cli webhook +test --owner Gitlink --repo forgeplus --id 68
 gitlink-cli webhook +tasks --owner Gitlink --repo forgeplus --id 68
 ```
 
-### 通知管理
-
-```bash
-# 列出当前认证用户的未读通知
-gitlink-cli notification +list --status unread --limit 20
-
-# 列出指定用户的 @ 我消息
-gitlink-cli notification +list --user zhangsan --type atme --status unread
-
-# 预览并将指定消息标记为已读
-gitlink-cli notification +read --ids 740214,740213 --dry-run
-gitlink-cli notification +read --ids 740214,740213 --yes
-
-# 预览将全部未读系统通知标记为已读
-gitlink-cli notification +read --type notification --all-unread --dry-run
-
-# 预览删除指定消息
-gitlink-cli notification +delete --ids 740214,740213 --dry-run
-
-# 为 Issue、PR 或 Journal 目标发送 @ 提及消息
-gitlink-cli notification +send-atme --receivers alice,bob \
-  --atmeable-type Issue --atmeable-id 123 --dry-run
-```
-
 ### Wiki 管理
 
 ```bash
@@ -390,12 +364,24 @@ gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --ids 101,102 -
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --dry-run
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --yes
 
+# 将筛选后的 Issue 导出为 CSV，便于离线分析或生成周报
+gitlink-cli issue +export --owner Gitlink --repo forgeplus --state open --keyword bug --export-format csv --output issues.csv
+
 # 添加评论
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "已修复"
 
-# 列出 Issue 动态记录或评论活动
-gitlink-cli issue +journals --owner Gitlink --repo forgeplus --number 123 --page 1 --limit 50
-gitlink-cli issue +activity --owner Gitlink --repo forgeplus --number 123 --category comment
+# 回复评论并携带附件和 @ 用户
+gitlink-cli issue +comment --owner Gitlink --repo forgeplus --number 123 -b "请查看日志" --parent-id 456 --reply-id 456 --attachment-ids 7,8 --receivers alice,bob
+
+# 列出评论；需要操作记录时可传 --category all
+gitlink-cli issue +comments --owner Gitlink --repo forgeplus --number 123 --category comment --keyword fixed
+
+# 更新或删除评论
+gitlink-cli issue +comment-update --owner Gitlink --repo forgeplus --number 123 --comment-id 456 -b "更新后的评论"
+gitlink-cli issue +comment-delete --owner Gitlink --repo forgeplus --number 123 --comment-id 456
+
+# 列出评论下的回复
+gitlink-cli issue +comment-replies --owner Gitlink --repo forgeplus --number 123 --comment-id 456
 
 # 列出 Issue 负责人
 gitlink-cli issue +assigners --owner Gitlink --repo forgeplus
@@ -494,49 +480,6 @@ gitlink-cli release +update --owner Gitlink --repo forgeplus -i <version_id> -b 
 gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --dry-run
 ```
 
-### 健康度诊断
-
-`gitlink health diagnose` 从 5 个维度分析仓库健康度：文档、许可证、社区、成熟度、CI/CD。
-
-```bash
-# 基础诊断（文本输出）
-gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli
-
-# JSON 输出，便于脚本和 AI Agent 处理
-gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli --format json
-
-# Markdown 输出，用于报告
-gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli --format markdown
-
-# 详细模式，显示完整分解
-gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli --verbose
-
-# 自定义数据库路径，用于历史追踪
-gitlink-cli health diagnose --owner Gitlink --repo gitlink-cli --db ./health.db
-```
-
-**评分维度（总分 100 分）：**
-
-| 维度 | 权重 | 评估标准 |
-|------|------|----------|
-| 文档 | 20 | README 质量、贡献指南、行为准则 |
-| 许可证 | 15 | 许可证存在性及 OSI 认证 |
-| 社区 | 25 | 贡献者数量、活跃度、巴士系数 |
-| 成熟度 | 20 | 发布版本、版本稳定性、项目年龄 |
-| CI/CD | 20 | 构建成功率、流水线配置 |
-
-**健康状态阈值：**
-
-- `good` (≥70%)：健康项目，维护活跃
-- `warning` (≥40%)：部分领域需要关注
-- `critical` (<40%)：需要立即改进
-
-**输出格式：**
-
-- `text`（默认）：人类可读的摘要和建议
-- `json`：结构化数据，便于脚本和 AI Agent 处理
-- `markdown`：格式化报告，用于文档
-
 ### 流水线管理
 
 ```bash
@@ -623,29 +566,6 @@ gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --ye
 ```
 
 > 注意：`dataset +list`（平台数据集查询）已在生产 gitlink.org.cn 验证可用。按仓库的 `+view`/`+create`/`+update` 遵循已发布的 OpenAPI 契约，但生产环境尚未部署（当前返回 404），待平台上线后即可生效。
-### 文件操作
-
-`file` 无需克隆即可读写仓库文件内容，非常适合需要读取或修改单个文件的 AI Agent。目录列表和 README 查看请使用 `repo +tree` 和 `repo +readme`。
-
-```bash
-# 查看文件（--raw 仅输出解码后的文件内容，方便管道处理）
-gitlink-cli file +view --owner Gitlink --repo forgeplus --path README.md
-gitlink-cli file +view --owner Gitlink --repo forgeplus --path README.md --raw > README.md
-
-# 按文件名搜索
-gitlink-cli file +search --owner Gitlink --repo forgeplus --keyword controller
-
-# 创建 / 更新文件（内容可内联或来自本地文件）
-gitlink-cli file +create --owner me --repo proj --path docs/note.md -c "# 笔记" -b master -m "add note"
-gitlink-cli file +update --owner me --repo proj --path docs/note.md --content-file note.md -b master
-
-# 提交到从 --branch 新建的分支
-gitlink-cli file +update --owner me --repo proj --path docs/note.md -c "..." -b master --new-branch feature/docs
-
-# 删除文件
-gitlink-cli file +delete --owner me --repo proj --path docs/note.md -b master -m "remove note"
-```
-
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：
@@ -719,7 +639,6 @@ git push gitlink
 | `gitlink-user` | 用户管理（个人信息等） |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |
 | `gitlink-workflow` | AI 自动化工作流（Issue 分类、PR Review、Release Notes 等） |
-| `gitlink-health` | 项目健康度诊断（5 维度评分：文档、许可证、社区、成熟度、CI/CD） |
 
 ## 项目结构
 

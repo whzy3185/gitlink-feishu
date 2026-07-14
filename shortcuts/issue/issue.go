@@ -45,14 +45,9 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		newBatchCloseShortcut(),
-		newBatchReopenShortcut(),
-		newBatchLabelShortcut(),
-		newBatchAssignShortcut(),
-		newBatchCommentShortcut(),
-		newBatchExportShortcut(),
-		newBatchImportShortcut(),
 		newBatchUpdateShortcut(),
 		newBatchDeleteShortcut(),
+		newExportShortcut(tr),
 		{
 			Name:        "list",
 			Description: tr.T("cmd.issue.list.short"),
@@ -280,40 +275,55 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.issue.comment.short"),
 			Flags: appendIssueNumberFlags(
 				common.Flag{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
+				common.Flag{Name: "parent-id", Usage: "Parent comment ID for a threaded reply"},
+				common.Flag{Name: "reply-id", Usage: "Comment ID being replied to"},
+				common.Flag{Name: "attachment-ids", Usage: "Comma-separated attachment IDs"},
+				common.Flag{Name: "receivers", Usage: "Comma-separated user logins to mention"},
 			),
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				number, err := issueNumberArg(ctx)
-				if err != nil {
-					return err
-				}
-				body, err := ctx.RequireArg("body")
-				if err != nil {
-					return err
-				}
-				payload := map[string]interface{}{
-					"notes": body,
-				}
-				env, err := ctx.CallAPI("POST", fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number), payload)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
+			Run: runIssueComment,
 		},
 		{
-			Name:        "journals",
-			Description: tr.T("cmd.issue.journals.short"),
-			Flags:       issueJournalFlags(tr),
-			Run:         runIssueJournals,
+			Name:        "comments",
+			Description: "List issue comments and operation records",
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "category", Short: "c", Usage: "Filter by all, comment, or operate", Default: "comment"},
+				common.Flag{Name: "keyword", Short: "k", Usage: "Search comment content"},
+				common.Flag{Name: "sort-by", Usage: "Sort field: created_on or updated_on"},
+				common.Flag{Name: "sort-direction", Usage: "Sort direction: asc or desc"},
+				common.Flag{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				common.Flag{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+			),
+			Run: runIssueComments,
 		},
 		{
-			Name:        "activity",
-			Description: tr.T("cmd.issue.activity.short"),
-			Flags:       issueJournalFlags(tr),
-			Run:         runIssueJournals,
+			Name:        "comment-update",
+			Description: "Update an issue comment",
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "comment-id", Usage: "Comment ID", Required: true},
+				common.Flag{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
+				common.Flag{Name: "attachment-ids", Usage: "Comma-separated attachment IDs"},
+				common.Flag{Name: "receivers", Usage: "Comma-separated user logins to mention"},
+			),
+			Run: runIssueCommentUpdate,
+		},
+		{
+			Name:        "comment-delete",
+			Description: "Delete an issue comment",
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "comment-id", Usage: "Comment ID", Required: true},
+			),
+			Run: runIssueCommentDelete,
+		},
+		{
+			Name:        "comment-replies",
+			Description: "List replies under an issue comment",
+			Flags: appendIssueNumberFlags(
+				common.Flag{Name: "comment-id", Usage: "Parent comment ID", Required: true},
+				common.Flag{Name: "keyword", Short: "k", Usage: "Search reply content"},
+				common.Flag{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				common.Flag{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+			),
+			Run: runIssueCommentReplies,
 		},
 		{
 			Name:        "assigners",
@@ -453,14 +463,6 @@ func appendIssueNumberFlags(flags ...common.Flag) []common.Flag {
 	return append(issueNumberFlags(), flags...)
 }
 
-func issueJournalFlags(tr *i18n.Translator) []common.Flag {
-	return appendIssueNumberFlags(
-		common.Flag{Name: "category", Short: "c", Usage: tr.T("flag.issue.journal_category")},
-		common.Flag{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
-		common.Flag{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "50"},
-	)
-}
-
 func issueNumberArg(ctx *common.RuntimeContext) (string, error) {
 	if number := strings.TrimSpace(ctx.Arg("number")); number != "" {
 		return number, nil
@@ -471,7 +473,30 @@ func issueNumberArg(ctx *common.RuntimeContext) (string, error) {
 	return "", fmt.Errorf("required flag --number is missing (or use --id as a compatibility alias)")
 }
 
-func runIssueJournals(ctx *common.RuntimeContext) error {
+func runIssueComment(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	number, err := issueNumberArg(ctx)
+	if err != nil {
+		return err
+	}
+	body, err := ctx.RequireArg("body")
+	if err != nil {
+		return err
+	}
+	payload, err := issueCommentPayload(ctx, body, true)
+	if err != nil {
+		return err
+	}
+	env, err := ctx.CallAPI("POST", issueJournalPath(ctx, number), payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runIssueComments(ctx *common.RuntimeContext) error {
 	if err := ctx.ResolveOwnerRepo(); err != nil {
 		return err
 	}
@@ -481,13 +506,148 @@ func runIssueJournals(ctx *common.RuntimeContext) error {
 	}
 	q := url.Values{}
 	setIssueQueryIfPresent(q, "category", ctx.Arg("category"))
+	setIssueQueryIfPresent(q, "keyword", ctx.Arg("keyword"))
+	setIssueQueryIfPresent(q, "sort_by", ctx.Arg("sort-by"))
+	setIssueQueryIfPresent(q, "sort_direction", ctx.Arg("sort-direction"))
 	setIssueQueryIfPresent(q, "page", ctx.Arg("page"))
 	setIssueQueryIfPresent(q, "limit", ctx.Arg("limit"))
-	env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), number), q)
+	env, err := ctx.CallAPIWithQuery("GET", issueJournalPath(ctx, number), q)
 	if err != nil {
 		return err
 	}
 	return ctx.Output(env)
+}
+
+func runIssueCommentUpdate(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	number, commentID, err := issueCommentTarget(ctx)
+	if err != nil {
+		return err
+	}
+	body, err := ctx.RequireArg("body")
+	if err != nil {
+		return err
+	}
+	payload, err := issueCommentPayload(ctx, body, false)
+	if err != nil {
+		return err
+	}
+	env, err := ctx.CallAPI("PATCH", issueJournalItemPath(ctx, number, commentID), payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runIssueCommentDelete(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	number, commentID, err := issueCommentTarget(ctx)
+	if err != nil {
+		return err
+	}
+	env, err := ctx.CallAPI("DELETE", issueJournalItemPath(ctx, number, commentID), nil)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runIssueCommentReplies(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	number, commentID, err := issueCommentTarget(ctx)
+	if err != nil {
+		return err
+	}
+	q := url.Values{}
+	setIssueQueryIfPresent(q, "keyword", ctx.Arg("keyword"))
+	setIssueQueryIfPresent(q, "page", ctx.Arg("page"))
+	setIssueQueryIfPresent(q, "limit", ctx.Arg("limit"))
+	env, err := ctx.CallAPIWithQuery("GET", issueJournalItemPath(ctx, number, commentID)+"/children_journals", q)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func issueJournalPath(ctx *common.RuntimeContext, number string) string {
+	return fmt.Sprintf("%s/issues/%s/journals", v1RepoPath(ctx), url.PathEscape(number))
+}
+
+func issueJournalItemPath(ctx *common.RuntimeContext, number, commentID string) string {
+	return fmt.Sprintf("%s/%s", issueJournalPath(ctx, number), url.PathEscape(commentID))
+}
+
+func issueCommentTarget(ctx *common.RuntimeContext) (string, string, error) {
+	number, err := issueNumberArg(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	commentID, err := ctx.RequireArg("comment-id")
+	if err != nil {
+		return "", "", err
+	}
+	if _, err := parseIssueID(commentID, "comment-id"); err != nil {
+		return "", "", err
+	}
+	return number, strings.TrimSpace(commentID), nil
+}
+
+func issueCommentPayload(ctx *common.RuntimeContext, body string, includeThreading bool) (map[string]interface{}, error) {
+	payload := map[string]interface{}{"notes": body}
+	if includeThreading {
+		if parentID := ctx.Arg("parent-id"); parentID != "" {
+			id, err := parseIssueID(parentID, "parent-id")
+			if err != nil {
+				return nil, err
+			}
+			payload["parent_id"] = id
+		}
+		if replyID := ctx.Arg("reply-id"); replyID != "" {
+			id, err := parseIssueID(replyID, "reply-id")
+			if err != nil {
+				return nil, err
+			}
+			payload["reply_id"] = id
+		}
+	}
+	if attachmentIDs := ctx.Arg("attachment-ids"); attachmentIDs != "" {
+		ids, err := parseIssueIDList(attachmentIDs, "attachment-ids")
+		if err != nil {
+			return nil, err
+		}
+		payload["attachment_ids"] = ids
+	}
+	if receivers := parseIssueStringList(ctx.Arg("receivers")); len(receivers) > 0 {
+		payload["receivers_login"] = receivers
+	}
+	return payload, nil
+}
+
+func setIssueQueryIfPresent(q url.Values, name, value string) {
+	if strings.TrimSpace(value) != "" {
+		q.Set(name, strings.TrimSpace(value))
+	}
+}
+
+func parseIssueStringList(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	seen := map[string]bool{}
+	for _, part := range parts {
+		item := strings.TrimSpace(part)
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		result = append(result, item)
+	}
+	return result
 }
 
 // normalizeIssueListIDs adds "number" (project_issues_index) and renames
@@ -694,10 +854,4 @@ func parseIssueID(value, flagName string) (int, error) {
 		return 0, fmt.Errorf("--%s must contain positive numeric IDs", flagName)
 	}
 	return id, nil
-}
-
-func setIssueQueryIfPresent(q url.Values, key, value string) {
-	if value := strings.TrimSpace(value); value != "" {
-		q.Set(key, value)
-	}
 }

@@ -28,6 +28,7 @@ metadata:
 | `issue +batch-close` | 批量关闭 Issue，支持 `--dry-run` 预览 | 是（dry-run 不写入） |
 | `issue +batch-update` | 按 API issue id 批量更新状态、优先级、里程碑、标签、负责人 | 是（dry-run 不写入） |
 | `issue +batch-delete` | 按 API issue id 批量删除 Issue；真实删除必须 `--yes` | 是（dry-run 不写入） |
+| `issue +export` | 按筛选条件批量导出 Issue 到 CSV/JSON/Markdown | 否（公开项目） |
 | `issue +comment` | 添加评论 | 是 |
 | `issue +journals` | 查询 Issue 动态记录，支持分类和分页 | 否（公开项目） |
 | `issue +activity` | 查询 Issue 活动事件，复用 journals 端点 | 否（公开项目） |
@@ -70,6 +71,9 @@ gitlink-cli issue +batch-update --owner myuser --repo myrepo --ids 101,102 --sta
 # 危险批量删除：必须先 dry-run，真实执行还要 --yes
 gitlink-cli issue +batch-delete --owner myuser --repo myrepo --ids 101,102 --dry-run
 gitlink-cli issue +batch-delete --owner myuser --repo myrepo --ids 101,102 --yes
+
+# 导出打开的 Issue 到 CSV，用于周报、迁移或离线分析
+gitlink-cli issue +export --owner Gitlink --repo forgeplus --state open --keyword 登录 --export-format csv --output issues.csv
 
 # 添加评论
 gitlink-cli issue +comment --number 4 --body "已修复，请验证"

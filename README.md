@@ -378,8 +378,24 @@ gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --ids 101,102 -
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --dry-run
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --yes
 
+# Export filtered issues to CSV for offline triage or reports
+gitlink-cli issue +export --owner Gitlink --repo forgeplus --state open --keyword bug --export-format csv --output issues.csv
+
 # Add a comment
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "Fixed"
+
+# Reply to a comment with attachments and mentions
+gitlink-cli issue +comment --owner Gitlink --repo forgeplus --number 123 -b "Thanks, please check the log" --parent-id 456 --reply-id 456 --attachment-ids 7,8 --receivers alice,bob
+
+# List comments only, or include operation records with --category all
+gitlink-cli issue +comments --owner Gitlink --repo forgeplus --number 123 --category comment --keyword fixed
+
+# Update or delete a comment
+gitlink-cli issue +comment-update --owner Gitlink --repo forgeplus --number 123 --comment-id 456 -b "Updated comment"
+gitlink-cli issue +comment-delete --owner Gitlink --repo forgeplus --number 123 --comment-id 456
+
+# List replies under a comment
+gitlink-cli issue +comment-replies --owner Gitlink --repo forgeplus --number 123 --comment-id 456
 
 # List issue assigners
 gitlink-cli issue +assigners --owner Gitlink --repo forgeplus

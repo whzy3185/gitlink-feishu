@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -94,6 +96,58 @@ func assertNumberSlice(t *testing.T, got interface{}, want []float64) {
 	}
 }
 
+func assertStringSliceEqual(t *testing.T, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+}
+
+func assertNumberSliceEqual(t *testing.T, got, want []int) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+}
+
+func interfaceSliceToStrings(value interface{}) []string {
+	items, ok := value.([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func interfaceSliceToInts(value interface{}) []int {
+	items, ok := value.([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]int, 0, len(items))
+	for _, item := range items {
+		if n, ok := item.(float64); ok {
+			out = append(out, int(n))
+		}
+	}
+	return out
+}
+
 // --- list ---
 
 func TestIssueList(t *testing.T) {
@@ -168,6 +222,183 @@ func TestIssueListStateAll(t *testing.T) {
 	err := runShortcut(t, server, "list", map[string]string{"state": "all", "page": "1", "limit": "20"})
 	if err != nil {
 		t.Fatalf("list all failed: %v", err)
+	}
+}
+
+// --- export ---
+
+func TestIssueExportCSVWithFiltersAndPagination(t *testing.T) {
+	var pages []string
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/owner/repo/issues.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		query := r.URL.Query()
+		assertEqual(t, query.Get("category"), "opened")
+		assertEqual(t, query.Get("keyword"), "release")
+		assertEqual(t, query.Get("participant_category"), "assignedme")
+		assertEqual(t, query.Get("author_id"), "10")
+		assertEqual(t, query.Get("assigner_id"), "11")
+		assertEqual(t, query.Get("milestone_id"), "12")
+		assertEqual(t, query.Get("status_id"), "1")
+		assertEqual(t, query.Get("issue_tag_ids"), "2,3")
+		assertEqual(t, query.Get("sort_by"), "issues.updated_on")
+		assertEqual(t, query.Get("sort_direction"), "desc")
+		assertEqual(t, query.Get("limit"), "2")
+		pages = append(pages, query.Get("page"))
+
+		switch query.Get("page") {
+		case "1":
+			writeJSON(t, w, map[string]interface{}{
+				"total_count": 3,
+				"issues": []interface{}{
+					map[string]interface{}{
+						"id":                   float64(101),
+						"project_issues_index": float64(1),
+						"subject":              "release blocker",
+						"status":               map[string]interface{}{"id": float64(1), "name": "New"},
+						"priority":             map[string]interface{}{"id": float64(2), "name": "Normal"},
+						"author":               map[string]interface{}{"login": "alice"},
+						"assigners": []interface{}{
+							map[string]interface{}{"login": "bob"},
+						},
+						"tags": []interface{}{
+							map[string]interface{}{"name": "bug"},
+						},
+						"updated_on": "2026-06-01",
+					},
+					map[string]interface{}{
+						"id":                   float64(102),
+						"project_issues_index": float64(2),
+						"subject":              "release notes",
+						"status":               map[string]interface{}{"id": float64(1), "name": "New"},
+						"priority":             map[string]interface{}{"id": float64(3), "name": "High"},
+						"author":               map[string]interface{}{"login": "carol"},
+						"updated_on":           "2026-06-02",
+					},
+				},
+			})
+		case "2":
+			writeJSON(t, w, map[string]interface{}{
+				"total_count": 3,
+				"issues": []interface{}{
+					map[string]interface{}{
+						"id":                   float64(103),
+						"project_issues_index": float64(3),
+						"subject":              "release checklist",
+						"status":               map[string]interface{}{"id": float64(5), "name": "Closed"},
+						"priority":             map[string]interface{}{"id": float64(2), "name": "Normal"},
+						"author":               map[string]interface{}{"login": "dave"},
+						"updated_on":           "2026-06-03",
+					},
+				},
+			})
+		default:
+			t.Fatalf("unexpected page %s", query.Get("page"))
+		}
+	})
+	defer server.Close()
+
+	outputPath := filepath.Join(t.TempDir(), "issues.csv")
+	err := runShortcut(t, server, "export", map[string]string{
+		"state":          "open",
+		"keyword":        "release",
+		"participant":    "assignedme",
+		"author-id":      "10",
+		"assignee-id":    "11",
+		"milestone-id":   "12",
+		"status-id":      "1",
+		"tag-ids":        "2,3",
+		"sort-by":        "issues.updated_on",
+		"sort-direction": "desc",
+		"limit":          "2",
+		"fields":         "number,title,status,priority,author,assignees,tags,updated_at,url",
+		"export-format":  "csv",
+		"output":         outputPath,
+	})
+	if err != nil {
+		t.Fatalf("export failed: %v", err)
+	}
+	assertEqual(t, strings.Join(pages, ","), "1,2")
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read export file: %v", err)
+	}
+	got := string(content)
+	if !strings.Contains(got, "number,title,status,priority,author,assignees,tags,updated_at,url") {
+		t.Fatalf("missing csv header: %s", got)
+	}
+	if !strings.Contains(got, "1,release blocker,New,Normal,alice,bob,bug,2026-06-01,https://www.gitlink.org.cn/owner/repo/issues/1") {
+		t.Fatalf("missing first issue row: %s", got)
+	}
+	if !strings.Contains(got, "3,release checklist,Closed,Normal,dave,,,2026-06-03,https://www.gitlink.org.cn/owner/repo/issues/3") {
+		t.Fatalf("missing second page issue row: %s", got)
+	}
+}
+
+func TestIssueExportMaxStopsWithinPage(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") != "1" {
+			t.Fatalf("unexpected page: %s", r.URL.Query().Get("page"))
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"total_count": 3,
+			"issues": []interface{}{
+				map[string]interface{}{"project_issues_index": float64(1), "subject": "one"},
+				map[string]interface{}{"project_issues_index": float64(2), "subject": "two"},
+			},
+		})
+	})
+	defer server.Close()
+
+	outputPath := filepath.Join(t.TempDir(), "issues.json")
+	err := runShortcut(t, server, "export", map[string]string{
+		"limit":         "2",
+		"max":           "1",
+		"fields":        "number,title",
+		"export-format": "json",
+		"output":        outputPath,
+	})
+	if err != nil {
+		t.Fatalf("export failed: %v", err)
+	}
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read export file: %v", err)
+	}
+	if strings.Contains(string(content), `"title": "two"`) {
+		t.Fatalf("expected max=1 to omit second issue: %s", content)
+	}
+	if !strings.Contains(string(content), `"title": "one"`) {
+		t.Fatalf("expected first issue in json export: %s", content)
+	}
+}
+
+func TestIssueExportMarkdownEscapesCells(t *testing.T) {
+	content := renderIssueExportMarkdown([]issueExportRecord{
+		{"number": "1", "title": "pipe | newline\ntext"},
+	}, []string{"number", "title"})
+	got := string(content)
+	if !strings.Contains(got, "pipe \\| newline text") {
+		t.Fatalf("markdown cell not escaped: %s", got)
+	}
+}
+
+func TestIssueExportRejectsInvalidOptions(t *testing.T) {
+	if _, err := parseIssueExportFields("number,unknown"); err == nil {
+		t.Fatal("expected invalid field error")
+	}
+	if _, err := normalizeIssueExportFormat("xml"); err == nil {
+		t.Fatal("expected invalid format error")
+	}
+	if _, err := boundedPositiveInt("0", 50, 100, "limit"); err == nil {
+		t.Fatal("expected invalid limit error")
+	}
+	if _, err := nonNegativeInt("-1", "max"); err == nil {
+		t.Fatal("expected invalid max error")
 	}
 }
 
@@ -717,6 +948,136 @@ func TestIssueCommentAcceptsIDAlias(t *testing.T) {
 	assertEqual(t, commentPayload["notes"], "Fixed")
 }
 
+func TestIssueCommentSupportsThreadingAttachmentsAndReceivers(t *testing.T) {
+	var commentPayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		commentPayload = decodeJSON(t, r)
+		writeJSON(t, w, commentPayload)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment", map[string]string{
+		"number":         "42",
+		"body":           "Reply with context",
+		"parent-id":      "10",
+		"reply-id":       "11",
+		"attachment-ids": "5, 6",
+		"receivers":      "alice, bob, alice",
+	})
+	if err != nil {
+		t.Fatalf("comment shortcut failed: %v", err)
+	}
+	assertEqual(t, commentPayload["notes"], "Reply with context")
+	assertEqual(t, commentPayload["parent_id"], float64(10))
+	assertEqual(t, commentPayload["reply_id"], float64(11))
+	assertStringSliceEqual(t, interfaceSliceToStrings(commentPayload["receivers_login"]), []string{"alice", "bob"})
+	assertNumberSliceEqual(t, interfaceSliceToInts(commentPayload["attachment_ids"]), []int{5, 6})
+}
+
+func TestIssueCommentsListSendsFilters(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		q := r.URL.Query()
+		assertEqual(t, q.Get("category"), "all")
+		assertEqual(t, q.Get("keyword"), "panic")
+		assertEqual(t, q.Get("sort_by"), "updated_on")
+		assertEqual(t, q.Get("sort_direction"), "desc")
+		assertEqual(t, q.Get("page"), "2")
+		assertEqual(t, q.Get("limit"), "50")
+		writeJSON(t, w, map[string]interface{}{
+			"total_count": float64(1),
+			"journals": []interface{}{
+				map[string]interface{}{"id": float64(7), "notes": "panic fixed"},
+			},
+		})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comments", map[string]string{
+		"number":         "42",
+		"category":       "all",
+		"keyword":        "panic",
+		"sort-by":        "updated_on",
+		"sort-direction": "desc",
+		"page":           "2",
+		"limit":          "50",
+	})
+	if err != nil {
+		t.Fatalf("comments shortcut failed: %v", err)
+	}
+}
+
+func TestIssueCommentUpdate(t *testing.T) {
+	var commentPayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/issues/42/journals/9.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		commentPayload = decodeJSON(t, r)
+		writeJSON(t, w, commentPayload)
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-update", map[string]string{
+		"number":         "42",
+		"comment-id":     "9",
+		"body":           "Updated",
+		"attachment-ids": "8",
+		"receivers":      "alice",
+	})
+	if err != nil {
+		t.Fatalf("comment-update failed: %v", err)
+	}
+	assertEqual(t, commentPayload["notes"], "Updated")
+	assertNumberSliceEqual(t, interfaceSliceToInts(commentPayload["attachment_ids"]), []int{8})
+	assertStringSliceEqual(t, interfaceSliceToStrings(commentPayload["receivers_login"]), []string{"alice"})
+}
+
+func TestIssueCommentDelete(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/issues/42/journals/9.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"status": float64(0), "message": "success"})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-delete", map[string]string{"number": "42", "comment-id": "9"})
+	if err != nil {
+		t.Fatalf("comment-delete failed: %v", err)
+	}
+}
+
+func TestIssueCommentReplies(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42/journals/9/children_journals.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		q := r.URL.Query()
+		assertEqual(t, q.Get("keyword"), "thanks")
+		assertEqual(t, q.Get("page"), "3")
+		assertEqual(t, q.Get("limit"), "10")
+		writeJSON(t, w, map[string]interface{}{"total_count": float64(0), "journals": []interface{}{}})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "comment-replies", map[string]string{
+		"number":     "42",
+		"comment-id": "9",
+		"keyword":    "thanks",
+		"page":       "3",
+		"limit":      "10",
+	})
+	if err != nil {
+		t.Fatalf("comment-replies failed: %v", err)
+	}
+}
+
 func TestIssueCommentMissingBody(t *testing.T) {
 	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("no API call expected")
@@ -726,74 +1087,6 @@ func TestIssueCommentMissingBody(t *testing.T) {
 	err := runShortcut(t, server, "comment", map[string]string{"number": "42"})
 	if err == nil {
 		t.Fatal("expected error for missing body")
-	}
-}
-
-// --- journals / activity ---
-
-func TestIssueJournals(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Fatalf("expected GET, got %s", r.Method)
-		}
-		if r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		assertEqual(t, r.URL.Query().Get("category"), "comment")
-		assertEqual(t, r.URL.Query().Get("page"), "2")
-		assertEqual(t, r.URL.Query().Get("limit"), "50")
-		writeJSON(t, w, map[string]interface{}{
-			"journals": []interface{}{
-				map[string]interface{}{"id": float64(1), "notes": "hello"},
-			},
-		})
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "journals", map[string]string{
-		"number":   "42",
-		"category": "comment",
-		"page":     "2",
-		"limit":    "50",
-	})
-	if err != nil {
-		t.Fatalf("journals failed: %v", err)
-	}
-}
-
-func TestIssueActivityUsesSameJournalEndpoint(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		if got := r.URL.Query().Get("category"); got != "" {
-			t.Fatalf("category should be omitted when not passed, got %q", got)
-		}
-		assertEqual(t, r.URL.Query().Get("page"), "1")
-		assertEqual(t, r.URL.Query().Get("limit"), "20")
-		writeJSON(t, w, map[string]interface{}{"journals": []interface{}{}})
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "activity", map[string]string{
-		"id":    "42",
-		"page":  "1",
-		"limit": "20",
-	})
-	if err != nil {
-		t.Fatalf("activity failed: %v", err)
-	}
-}
-
-func TestIssueJournalsMissingNumber(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "journals", map[string]string{"category": "comment"})
-	if err == nil {
-		t.Fatal("expected error for missing number")
 	}
 }
 
@@ -811,8 +1104,10 @@ func TestIssueNumberOrIDIsRequired(t *testing.T) {
 		{name: "close", args: map[string]string{}},
 		{name: "update", args: map[string]string{"title": "New title"}},
 		{name: "comment", args: map[string]string{"body": "Fixed"}},
-		{name: "journals", args: map[string]string{}},
-		{name: "activity", args: map[string]string{}},
+		{name: "comments", args: map[string]string{}},
+		{name: "comment-update", args: map[string]string{"comment-id": "9", "body": "Updated"}},
+		{name: "comment-delete", args: map[string]string{"comment-id": "9"}},
+		{name: "comment-replies", args: map[string]string{"comment-id": "9"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -822,6 +1117,32 @@ func TestIssueNumberOrIDIsRequired(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), "--number") || !strings.Contains(err.Error(), "--id") {
 				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestIssueCommentRejectsInvalidIDs(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("invalid IDs should not call API, got %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	cases := []struct {
+		name string
+		cmd  string
+		args map[string]string
+	}{
+		{name: "bad parent", cmd: "comment", args: map[string]string{"number": "42", "body": "x", "parent-id": "abc"}},
+		{name: "bad attachment", cmd: "comment", args: map[string]string{"number": "42", "body": "x", "attachment-ids": "1,,"}},
+		{name: "bad update comment", cmd: "comment-update", args: map[string]string{"number": "42", "comment-id": "0", "body": "x"}},
+		{name: "bad delete comment", cmd: "comment-delete", args: map[string]string{"number": "42", "comment-id": "-1"}},
+		{name: "bad replies comment", cmd: "comment-replies", args: map[string]string{"number": "42", "comment-id": "abc"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := runShortcut(t, server, tc.cmd, tc.args); err == nil {
+				t.Fatal("expected validation error")
 			}
 		})
 	}
@@ -1105,18 +1426,6 @@ func TestIssueUpdateHTTPError(t *testing.T) {
 	err := runShortcut(t, server, "update", map[string]string{"number": "42", "title": "new"})
 	if err == nil {
 		t.Fatal("expected error for PATCH HTTP 500")
-	}
-}
-
-func TestIssueJournalsHTTPError(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		writeText(t, w, http.StatusInternalServerError, "server error")
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "journals", map[string]string{"number": "42"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
 	}
 }
 
