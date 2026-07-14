@@ -48,7 +48,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				defer db.Close()
+				defer func() { _ = db.Close() }()
 
 				repoID, err := getOrCreateRepo(db, ctx.Repo, ctx.Owner)
 				if err != nil {

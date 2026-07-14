@@ -21,6 +21,9 @@ linters:
     - misspell       # spelling mistakes in identifiers
 
   settings:
+    misspell:
+      ignore-rules:
+        - creater  # GitLink API/DB 字段拼写（creater_id），非笔误
     gosec:
       excludes:
         - G104  # errcheck already handles unchecked errors
@@ -57,3 +60,6 @@ linters:
       # apiInt: intentional uint64->int truncation for API response parsing
       - linters: [gosec]
         text: "G115: integer overflow conversion uint64 -> int"
+      # apiInt: same intentional truncation for uint on 32-bit platforms
+      - linters: [gosec]
+        text: "G115: integer overflow conversion uint -> int"

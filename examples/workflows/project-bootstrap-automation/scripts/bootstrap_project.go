@@ -268,9 +268,9 @@ func runCommand(cliBin string, args []string, apply bool) CommandResult {
 	if !apply {
 		return CommandResult{Command: command, Status: "planned"}
 	}
-	cmd := exec.Command(cliBin, args...)
+	cmd := exec.Command(cliBin, args...) // #nosec G204 -- cliBin 与 args 由用户配置显式给出，CLI 包装器的预期行为
 	if strings.HasSuffix(strings.ToLower(cliBin), ".cmd") || strings.HasSuffix(strings.ToLower(cliBin), ".bat") {
-		cmd = exec.Command("cmd", append([]string{"/c", cliBin}, args...)...)
+		cmd = exec.Command("cmd", append([]string{"/c", cliBin}, args...)...) // #nosec G204
 	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -318,7 +318,7 @@ func writeOutputs(config ProjectConfig, outputDir string, now time.Time) (Output
 	owner := config.Repository.Owner
 	repo := config.Repository.Name
 	prefix := fmt.Sprintf("%s_%s_%s", safeName(owner), safeName(repo), now.UTC().Format("20060102_150405"))
-	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+	if err := os.MkdirAll(outputDir, 0o750); err != nil {
 		return OutputPaths{}, err
 	}
 	files := plannedFiles(config)
@@ -367,7 +367,7 @@ func writeOutputs(config ProjectConfig, outputDir string, now time.Time) (Output
 		paths.Files:    filesJSON,
 	}
 	for path, data := range writes {
-		if err := os.WriteFile(path, data, 0o644); err != nil {
+		if err := os.WriteFile(path, data, 0o600); err != nil {
 			return OutputPaths{}, err
 		}
 	}
@@ -455,7 +455,7 @@ func main() {
 		os.Exit(1)
 	}
 	commandLogPath := filepath.Join(opts.OutputDir, fmt.Sprintf("command_log_%s.json", now.UTC().Format("20060102_150405")))
-	if err := os.WriteFile(commandLogPath, commandLogJSON, 0o644); err != nil {
+	if err := os.WriteFile(commandLogPath, commandLogJSON, 0o600); err != nil {
 		fmt.Fprintf(os.Stderr, "写入命令日志失败: %v\n", err)
 		os.Exit(1)
 	}

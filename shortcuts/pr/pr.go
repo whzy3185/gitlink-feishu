@@ -391,7 +391,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 							"approved": "approved", "rejected": "rejected", "common": "commented",
 						}[status]
 						summary := fmt.Sprintf("## Review: %s\n\n%s", statusLabel, content)
-						ctx.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, issueID),
+						_, _ = ctx.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, issueID),
 							map[string]interface{}{"notes": summary})
 					}
 				}
