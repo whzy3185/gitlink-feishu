@@ -278,10 +278,13 @@ gitlink-cli webhook +tasks --owner Gitlink --repo forgeplus --id 68
 ### Wiki Management
 
 ```bash
-# List wiki pages (table of contents)
-gitlink-cli wiki +list --owner Gitlink --repo forgeplus --project-id 12345
+# List wiki pages (table of contents); --project-id is auto-resolved from the repository when omitted
+gitlink-cli wiki +list --owner Gitlink --repo forgeplus
 
 # View a wiki page by page name
+gitlink-cli wiki +view --owner Gitlink --repo forgeplus -n home
+
+# Pass --project-id explicitly to skip the extra lookup request
 gitlink-cli wiki +view --owner Gitlink --repo forgeplus --project-id 12345 -n home
 
 # Create a wiki page

@@ -289,10 +289,13 @@ gitlink-cli webhook +tasks --owner Gitlink --repo forgeplus --id 68
 ### Wiki 管理
 
 ```bash
-# 列出 Wiki 页面（目录结构）
-gitlink-cli wiki +list --owner Gitlink --repo forgeplus --project-id 12345
+# 列出 Wiki 页面（目录结构）；省略 --project-id 时自动从仓库信息解析
+gitlink-cli wiki +list --owner Gitlink --repo forgeplus
 
 # 查看 Wiki 页面
+gitlink-cli wiki +view --owner Gitlink --repo forgeplus -n home
+
+# 也可显式传 --project-id 以省去一次查询请求
 gitlink-cli wiki +view --owner Gitlink --repo forgeplus --project-id 12345 -n home
 
 # 创建 Wiki 页面
