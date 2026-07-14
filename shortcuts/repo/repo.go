@@ -107,20 +107,20 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "readme",
-			Description: "Show repository README content",
+			Description: tr.T("cmd.repo.readme.short"),
 			Flags: []common.Flag{
-				{Name: "ref", Usage: "Branch, tag, or commit SHA"},
-				{Name: "path", Usage: "README directory path"},
+				{Name: "ref", Usage: tr.T("flag.repo.readme_ref")},
+				{Name: "path", Usage: tr.T("flag.repo.readme_path")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
 				q := url.Values{}
-				if ref := ctx.Arg("ref"); ref != "" {
+				if ref := strings.TrimSpace(ctx.Arg("ref")); ref != "" {
 					q.Set("ref", ref)
 				}
-				if path := ctx.Arg("path"); path != "" {
+				if path := strings.Trim(strings.TrimSpace(ctx.Arg("path")), "/"); path != "" {
 					q.Set("filepath", path)
 				}
 				env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/readme", q)
