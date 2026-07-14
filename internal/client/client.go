@@ -21,6 +21,9 @@ type Client struct {
 	HTTP    *http.Client
 	BaseURL string
 	Debug   bool
+	// NoProgress suppresses per-byte transfer progress on stderr; used when
+	// several transfers run concurrently and interleaved lines would garble.
+	NoProgress bool
 }
 
 type APIError struct {

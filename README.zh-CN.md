@@ -423,6 +423,30 @@ gitlink-cli release +update --owner Gitlink --repo forgeplus -i <version_id> -b 
 gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --dry-run
 ```
 
+### 附件上传与下载
+
+`attachment` 为大文件传输提供可脚本化的 CLI 通道（不必走网页端）。上传返回的附件 id 可直接用于 `release +create --attachment-ids`。
+
+```bash
+# 上传本地文件为平台附件（返回附件 id）
+gitlink-cli attachment +upload -f ./dist/app-v1.0.0.tar.gz -d "v1.0.0 发布产物"
+
+# 多文件并发上传（逗号分隔；-c 指定并发数，默认 3）
+gitlink-cli attachment +upload -f ./dist/app.tar.gz,./dist/app.sha256,./dist/CHANGELOG.md -c 3
+
+# 按 id 下载附件到本地文件
+gitlink-cli attachment +download -i <attachment_id> -o ./app-v1.0.0.tar.gz
+
+# 按 tag 一步下载发行版全部附件（对标 `gh release download`）
+gitlink-cli release +download -i v1.0.0 -o ./assets
+
+# 按 id 删除附件
+gitlink-cli attachment +delete -i <attachment_id>
+
+# 一步到位：上传本地文件并附加到新发行版
+gitlink-cli release +create -t v1.0.0 -n "v1.0.0" --attachment-files ./dist/app.tar.gz,./dist/app.sha256
+```
+
 ### 流水线管理
 
 ```bash

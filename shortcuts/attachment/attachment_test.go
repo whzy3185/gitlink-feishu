@@ -2,182 +2,269 @@ package attachment
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func TestAttachmentUploadDryRunDoesNotCallAPI(t *testing.T) {
-	server := newAttachmentTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	err := runAttachmentShortcut(t, server, "upload", map[string]string{
-		"file":           filepath.Join(t.TempDir(), "missing.txt"),
-		"description":    "design screenshot",
-		"container-id":   "123",
-		"container-type": "Issue",
-		"dry-run":        "true",
-	})
-	if err != nil {
-		t.Fatalf("upload dry-run failed: %v", err)
+func TestShortcutsRegistered(t *testing.T) {
+	shortcuts := Shortcuts()
+	if len(shortcuts) != 3 {
+		t.Fatalf("expected 3 shortcuts, got %d", len(shortcuts))
+	}
+	names := map[string]bool{}
+	for _, s := range shortcuts {
+		names[s.Name] = true
+		if s.Description == "" {
+			t.Fatalf("shortcut %q has empty description", s.Name)
+		}
+	}
+	for _, want := range []string{"upload", "download", "delete"} {
+		if !names[want] {
+			t.Fatalf("missing shortcut %q", want)
+		}
 	}
 }
 
-func TestAttachmentUploadMultipartPayload(t *testing.T) {
-	tmpDir := t.TempDir()
-	filePath := filepath.Join(tmpDir, "note.txt")
-	if err := os.WriteFile(filePath, []byte("hello attachment"), 0600); err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
-
-	server := newAttachmentTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertAttachmentRequest(t, r, "POST", "/attachments.json")
-		if got := r.Header.Get("Content-Type"); !strings.HasPrefix(got, "multipart/form-data;") {
-			t.Fatalf("got content-type %q, want multipart/form-data", got)
-		}
-		if err := r.ParseMultipartForm(1 << 20); err != nil {
-			t.Fatalf("failed to parse multipart form: %v", err)
-		}
-		assertFormValue(t, r.MultipartForm, "description", "design screenshot")
-		assertFormValue(t, r.MultipartForm, "container_id", "123")
-		assertFormValue(t, r.MultipartForm, "container_type", "Issue")
-		file, header, err := r.FormFile("file")
-		if err != nil {
-			t.Fatalf("file field missing: %v", err)
-		}
-		defer file.Close()
-		if header.Filename != "note.txt" {
-			t.Fatalf("got filename %q, want note.txt", header.Filename)
-		}
-		data, err := io.ReadAll(file)
-		if err != nil {
-			t.Fatalf("failed to read uploaded file: %v", err)
-		}
-		if string(data) != "hello attachment" {
-			t.Fatalf("got file content %q", string(data))
-		}
-		writeAttachmentJSON(t, w, map[string]interface{}{
-			"id":           "uuid-1",
-			"title":        "note.txt",
-			"filesize":     "16 Bytes",
-			"is_pdf":       false,
-			"url":          "/api/attachments/uuid-1",
-			"content_type": "text/plain",
-		})
-	})
-	defer server.Close()
-
-	err := runAttachmentShortcut(t, server, "upload", map[string]string{
-		"file":           filePath,
-		"description":    "design screenshot",
-		"container-id":   "123",
-		"container-type": "Issue",
-	})
-	if err != nil {
-		t.Fatalf("upload shortcut failed: %v", err)
-	}
-}
-
-func TestAttachmentUploadMissingFile(t *testing.T) {
-	server := newAttachmentTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("missing file should not call API, got: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	err := runAttachmentShortcut(t, server, "upload", map[string]string{"file": filepath.Join(t.TempDir(), "missing.txt")})
-	if err == nil {
-		t.Fatal("expected missing file to return an error")
-	}
-	if !strings.Contains(err.Error(), "open attachment file") {
-		t.Fatalf("got error %q, want open attachment file", err.Error())
-	}
-}
-
-func TestAttachmentDelete(t *testing.T) {
-	server := newAttachmentTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertAttachmentRequest(t, r, "DELETE", "/attachments/uuid-1.json")
-		writeAttachmentJSON(t, w, map[string]interface{}{"status": 0, "message": "删除成功"})
-	})
-	defer server.Close()
-
-	if err := runAttachmentShortcut(t, server, "delete", map[string]string{"uuid": "uuid-1"}); err != nil {
-		t.Fatalf("delete shortcut failed: %v", err)
-	}
-}
-
-func TestAttachmentDeleteDryRunDoesNotCallAPI(t *testing.T) {
-	server := newAttachmentTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	if err := runAttachmentShortcut(t, server, "delete", map[string]string{"uuid": "uuid-1", "dry-run": "true"}); err != nil {
-		t.Fatalf("delete dry-run failed: %v", err)
-	}
-}
-
-func runAttachmentShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
+func findShortcut(t *testing.T, name string) *common.Shortcut {
 	t.Helper()
-	shortcut := findAttachmentShortcut(t, name)
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{
-			HTTP:    server.Client(),
-			BaseURL: server.URL,
-		},
-		Format: "json",
-		Args:   args,
-	}
-	if ctx.Args == nil {
-		ctx.Args = map[string]string{}
-	}
-	return shortcut.Run(ctx)
-}
-
-func findAttachmentShortcut(t *testing.T, name string) *common.Shortcut {
-	t.Helper()
-	for _, shortcut := range Shortcuts() {
-		if shortcut.Name == name {
-			return shortcut
+	for _, s := range Shortcuts() {
+		if s.Name == name {
+			return s
 		}
 	}
 	t.Fatalf("shortcut %q not found", name)
 	return nil
 }
 
-func newAttachmentTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
+func newTestContext(t *testing.T, handler http.HandlerFunc, args map[string]string) *common.RuntimeContext {
 	t.Helper()
-	return httptest.NewServer(handler)
-}
-
-func assertAttachmentRequest(t *testing.T, r *http.Request, method, path string) {
-	t.Helper()
-	if r.Method != method || r.URL.Path != path {
-		t.Fatalf("got request %s %s, want %s %s", r.Method, r.URL.Path, method, path)
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	return &common.RuntimeContext{
+		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+		Format: "json",
+		Args:   args,
 	}
 }
 
-func assertFormValue(t *testing.T, form *multipart.Form, key, want string) {
-	t.Helper()
-	values := form.Value[key]
-	if len(values) != 1 || values[0] != want {
-		t.Fatalf("got form field %s=%v, want %q", key, values, want)
+func TestUploadMultipart(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "asset.txt")
+	if err := os.WriteFile(src, []byte("hello attachment"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var gotFilename, gotDescription string
+	ctx := newTestContext(t, func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			t.Fatalf("parse multipart: %v", err)
+		}
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			t.Fatalf("form file: %v", err)
+		}
+		defer file.Close()
+		data, _ := io.ReadAll(file)
+		if string(data) != "hello attachment" {
+			t.Fatalf("unexpected file content: %q", data)
+		}
+		gotFilename = header.Filename
+		gotDescription = r.FormValue("description")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"id": 123, "filename": header.Filename})
+	}, map[string]string{"file": src, "description": "test asset"})
+	ctx.Tr = i18n.Default()
+
+	if err := findShortcut(t, "upload").Run(ctx); err != nil {
+		t.Fatalf("upload error: %v", err)
+	}
+	if gotFilename != "asset.txt" {
+		t.Fatalf("filename = %q", gotFilename)
+	}
+	if gotDescription != "test asset" {
+		t.Fatalf("description = %q", gotDescription)
 	}
 }
 
-func writeAttachmentJSON(t *testing.T, w http.ResponseWriter, payload interface{}) {
-	t.Helper()
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		t.Fatalf("failed to write response: %v", err)
+func TestUploadMissingFile(t *testing.T) {
+	ctx := newTestContext(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("server should not be reached")
+	}, map[string]string{"file": "/nonexistent/path/file.bin"})
+	ctx.Tr = i18n.Default()
+
+	if err := findShortcut(t, "upload").Run(ctx); err == nil {
+		t.Fatal("expected error for missing file")
+	}
+}
+
+func TestUploadRejectsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	ctx := newTestContext(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("server should not be reached")
+	}, map[string]string{"file": dir})
+	ctx.Tr = i18n.Default()
+
+	if err := findShortcut(t, "upload").Run(ctx); err == nil {
+		t.Fatal("expected error for directory")
+	}
+}
+
+func TestDownloadWritesFile(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "out.bin")
+	ctx := newTestContext(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/attachments/42" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Write([]byte("binary-content"))
+	}, map[string]string{"id": "42", "output": dest})
+	ctx.Tr = i18n.Default()
+
+	if err := findShortcut(t, "download").Run(ctx); err != nil {
+		t.Fatalf("download error: %v", err)
+	}
+	data, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "binary-content" {
+		t.Fatalf("unexpected content: %q", data)
+	}
+}
+
+func TestDownloadJSONErrorBody(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "out.bin")
+	ctx := newTestContext(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Write([]byte(`{"status":404,"message":"不存在或已被删除"}`))
+	}, map[string]string{"id": "deleted", "output": dest})
+	ctx.Tr = i18n.Default()
+
+	if err := findShortcut(t, "download").Run(ctx); err == nil {
+		t.Fatal("expected error for JSON error body")
+	}
+	if _, err := os.Stat(dest); err == nil {
+		t.Fatal("output file should not be created on JSON error body")
+	}
+}
+
+func TestDownloadHTMLFallback(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "out.bin")
+	ctx := newTestContext(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte("<!doctype html><html></html>"))
+	}, map[string]string{"id": "unknown", "output": dest})
+	ctx.Tr = i18n.Default()
+
+	if err := findShortcut(t, "download").Run(ctx); err == nil {
+		t.Fatal("expected error for HTML fallback page")
+	}
+	if _, err := os.Stat(dest); err == nil {
+		t.Fatal("output file should not be created on HTML fallback")
+	}
+}
+
+func TestDownloadHTTPError(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "out.bin")
+	ctx := newTestContext(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("not found"))
+	}, map[string]string{"id": "999", "output": dest})
+	ctx.Tr = i18n.Default()
+
+	if err := findShortcut(t, "download").Run(ctx); err == nil {
+		t.Fatal("expected error for HTTP 404")
+	}
+	if _, err := os.Stat(dest); err == nil {
+		t.Fatal("output file should not be created on HTTP error")
+	}
+}
+
+func TestDeleteAttachment(t *testing.T) {
+	var gotMethod, gotPath string
+	ctx := newTestContext(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": 0, "message": "删除成功"})
+	}, map[string]string{"id": "abc-uuid"})
+	ctx.Tr = i18n.Default()
+
+	if err := findShortcut(t, "delete").Run(ctx); err != nil {
+		t.Fatalf("delete error: %v", err)
+	}
+	if gotMethod != http.MethodDelete {
+		t.Fatalf("method = %q, want DELETE", gotMethod)
+	}
+	if gotPath != "/attachments/abc-uuid.json" {
+		t.Fatalf("path = %q, want /attachments/abc-uuid.json", gotPath)
+	}
+}
+
+func TestSplitFiles(t *testing.T) {
+	got := splitFiles(" a.txt, b.bin ,,c ")
+	want := []string{"a.txt", "b.bin", "c"}
+	if len(got) != len(want) {
+		t.Fatalf("splitFiles = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("splitFiles[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestUploadMultipleFilesConcurrently(t *testing.T) {
+	dir := t.TempDir()
+	var files []string
+	for _, name := range []string{"one.txt", "two.txt", "three.txt"} {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("data-"+name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, p)
+	}
+
+	var mu sync.Mutex
+	seen := map[string]bool{}
+	ctx := newTestContext(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/attachments" && r.URL.Path != "/attachments.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			t.Fatalf("parse multipart: %v", err)
+		}
+		_, hdr, err := r.FormFile("file")
+		if err != nil {
+			t.Fatalf("form file: %v", err)
+		}
+		mu.Lock()
+		seen[hdr.Filename] = true
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"id":%q,"msg":"success"}`, hdr.Filename)
+	}, map[string]string{
+		"file":        strings.Join(files, ","),
+		"concurrency": "2",
+	})
+	if err := findShortcut(t, "upload").Run(ctx); err != nil {
+		t.Fatalf("multi-file upload failed: %v", err)
+	}
+	if len(seen) != 3 {
+		t.Fatalf("uploaded %d files, want 3: %v", len(seen), seen)
 	}
 }
