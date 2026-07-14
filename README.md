@@ -121,6 +121,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 👤 User | View user profiles and info |
 | 📊 Profile | User ability, role, major, activity, and contribution statistics |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
+| 📝 Template | Manage project templates for issues and pull requests |
 | 🤖 Workflow | AI-powered issue triage, PR review, release notes |
 
 ## Installation & Quick Start
@@ -435,6 +436,30 @@ gitlink-cli label +update --owner Gitlink --repo forgeplus -i 42 -c "#00FF00"
 
 # Delete a label
 gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
+```
+
+### Template Management
+
+```bash
+# List project templates
+gitlink-cli template +list --owner Gitlink --repo forgeplus
+
+# Get template details
+gitlink-cli template +get --owner Gitlink --repo forgeplus -i 1
+
+# Create an issue template
+gitlink-cli template +create --owner Gitlink --repo forgeplus \
+  -t "ProjectTemplates::Issue" -n "Bug Report" -c "## Description\n..."
+
+# Create a pull request template
+gitlink-cli template +create --owner Gitlink --repo forgeplus \
+  -t "ProjectTemplates::PullRequest" -n "Feature PR" -c "## Summary\n..."
+
+# Update a template
+gitlink-cli template +update --owner Gitlink --repo forgeplus -i 1 -n "Updated Name"
+
+# Delete a template
+gitlink-cli template +delete --owner Gitlink --repo forgeplus -i 1
 ```
 
 ### Pull Requests
