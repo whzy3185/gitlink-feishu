@@ -3,6 +3,7 @@ package pr
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
@@ -432,7 +433,91 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "comments",
+			Description: tr.T("cmd.pr.comments.short"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, _ := ctx.RequireArg("id")
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s/journals", v1RepoPath(ctx), id), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "comment-edit",
+			Description: tr.T("cmd.pr.comment_edit.short"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "comment-id", Short: "c", Usage: tr.T("flag.pr.comment_id"), Required: true},
+				{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
+				{Name: "state", Short: "s", Usage: tr.T("flag.pr.comment_state"), Default: "opened"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, _ := ctx.RequireArg("id")
+				commentID, err := requireIntFlag(ctx, "comment-id")
+				if err != nil {
+					return err
+				}
+				body, _ := ctx.RequireArg("body")
+				state := ctx.Arg("state")
+				switch state {
+				case "opened", "resolved", "disabled":
+				default:
+					return fmt.Errorf("--state must be one of opened, resolved, disabled; got %q", state)
+				}
+				env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/pulls/%s/journals/%s", v1RepoPath(ctx), id, commentID), map[string]interface{}{"note": body, "state": state})
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "comment-delete",
+			Description: tr.T("cmd.pr.comment_delete.short"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "comment-id", Short: "c", Usage: tr.T("flag.pr.comment_id"), Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, _ := ctx.RequireArg("id")
+				commentID, err := requireIntFlag(ctx, "comment-id")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("DELETE", fmt.Sprintf("%s/pulls/%s/journals/%s", v1RepoPath(ctx), id, commentID), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
 	}
+}
+
+func requireIntFlag(ctx *common.RuntimeContext, name string) (string, error) {
+	value, err := ctx.RequireArg(name)
+	if err != nil {
+		return "", err
+	}
+	if _, err := strconv.Atoi(value); err != nil {
+		return "", fmt.Errorf("--%s must be an integer, got %q", name, value)
+	}
+	return value, nil
 }
 
 func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
