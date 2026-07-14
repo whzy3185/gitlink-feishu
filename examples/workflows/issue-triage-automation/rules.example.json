@@ -1,0 +1,72 @@
+{
+  "rules": [
+    {
+      "name": "bug",
+      "keywords_any": [
+        "bug",
+        "崩溃",
+        "报错",
+        "错误",
+        "失败",
+        "404",
+        "500",
+        "panic"
+      ],
+      "set_priority": "紧急",
+      "add_tags": [
+        "bug"
+      ],
+      "route_to": null,
+      "set_priority_id": 4
+    },
+    {
+      "name": "feature",
+      "keywords_any": [
+        "feature",
+        "新增",
+        "希望",
+        "建议",
+        "支持",
+        "功能请求"
+      ],
+      "set_priority": "正常",
+      "add_tags": [
+        "enhancement"
+      ],
+      "route_to": null,
+      "set_priority_id": 2
+    },
+    {
+      "name": "docs",
+      "keywords_any": [
+        "文档",
+        "readme",
+        "typo",
+        "错别字",
+        "翻译"
+      ],
+      "set_priority": "低",
+      "add_tags": [
+        "documentation"
+      ],
+      "route_to": null,
+      "set_priority_id": 1
+    },
+    {
+      "name": "question",
+      "keywords_any": [
+        "怎么",
+        "如何",
+        "请问",
+        "question",
+        "how to"
+      ],
+      "set_priority": "低",
+      "add_tags": [
+        "question"
+      ],
+      "route_to": null,
+      "set_priority_id": 1
+    }
+  ]
+}
