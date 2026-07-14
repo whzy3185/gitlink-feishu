@@ -490,6 +490,58 @@ func TestRepoCreateWithOptions(t *testing.T) {
 	}
 }
 
+// --- rename ---
+
+func TestRepoRename(t *testing.T) {
+	cases := []struct {
+		name     string
+		arg      string
+		wantName string
+	}{
+		{name: "simple name", arg: "new-repo", wantName: "new-repo"},
+		{name: "trims surrounding whitespace", arg: "  renamed  ", wantName: "renamed"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var body map[string]interface{}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assertRequest(t, r, "PATCH", "/owner/repo.json")
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatalf("decode request body: %v", err)
+				}
+				writeJSON(t, w, map[string]interface{}{
+					"id":         float64(21),
+					"name":       tc.wantName,
+					"identifier": tc.wantName,
+				})
+			}))
+			defer server.Close()
+
+			if err := runShortcut(t, server, "rename", map[string]string{"name": tc.arg}); err != nil {
+				t.Fatalf("rename failed: %v", err)
+			}
+			// Renaming updates both the display name and the URL identifier, so the
+			// PATCH payload must carry the new name in each field.
+			assertEqual(t, body["name"], tc.wantName)
+			assertEqual(t, body["identifier"], tc.wantName)
+		})
+	}
+}
+
+func TestRepoRenameRejectsBlankName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("blank name should not call API, got: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	for _, args := range []map[string]string{nil, {"name": "   "}} {
+		if err := runShortcut(t, server, "rename", args); err == nil {
+			t.Fatal("expected validation error for missing or blank name")
+		}
+	}
+}
+
 // --- validation/error paths ---
 
 func TestRepoInsightValidation(t *testing.T) {
