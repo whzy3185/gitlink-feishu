@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -636,28 +635,30 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	}
 }
 
-func TestRepoActivityForwardsFilters(t *testing.T) {
-	var query string
+func TestRepoForksListsForkUsers(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/owner/repo/activity.json" {
+		if r.Method != "GET" || r.URL.Path != "/owner/repo/forks.json" {
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		query = r.URL.RawQuery
-		writeJSON(t, w, map[string]interface{}{"project_trends": []interface{}{}})
+		writeJSON(t, w, map[string]interface{}{"count": 0, "users": []interface{}{}})
 	}))
 	defer server.Close()
 
-	args := map[string]string{"type": "Issue", "status": "create", "time": "30", "page": "1", "limit": "20"}
-	if err := runShortcut(t, server, "activity", args); err != nil {
-		t.Fatalf("activity failed: %v", err)
+	if err := runShortcut(t, server, "forks", map[string]string{}); err != nil {
+		t.Fatalf("forks failed: %v", err)
 	}
-	for _, want := range []string{"type=Issue", "status=create", "time=30"} {
-		if !strings.Contains(query, want) {
-			t.Fatalf("expected %q in query, got %q", want, query)
-		}
-	}
+}
 
-	if err := runShortcut(t, server, "activity", map[string]string{"time": "abc", "page": "1", "limit": "20"}); err == nil {
-		t.Fatal("expected error for non-integer --time")
+func TestRepoTopCountsUsesTopCountsEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/owner/repo/top_counts.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"tags_count": float64(1)})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "top-counts", map[string]string{}); err != nil {
+		t.Fatalf("top-counts failed: %v", err)
 	}
 }

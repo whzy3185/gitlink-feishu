@@ -227,17 +227,17 @@ gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
 
-# Line-by-line blame for a file
-gitlink-cli repo +blame --owner Gitlink --repo forgeplus -p README.md --ref master
-
 # Show language breakdown
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 
 # List contributors
 gitlink-cli repo +contributors --owner Gitlink --repo forgeplus
 
-# Repository activity feed, filterable by type/action/time window
-gitlink-cli repo +activity --owner Gitlink --repo forgeplus -t Issue -s close --time 30
+# List users who forked the repository
+gitlink-cli repo +forks --owner Gitlink --repo forgeplus
+
+# Top-line counts (tags, branches, commits, releases, size)
+gitlink-cli repo +top-counts --owner Gitlink --repo forgeplus
 
 # Show contributor code-line stats for a branch, tag, or commit
 gitlink-cli repo +contributor-stats --owner Gitlink --repo forgeplus --ref master --pass-year 1
