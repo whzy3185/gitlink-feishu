@@ -115,6 +115,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🏢 Org | Manage organizations, list members, and inspect teams |
 | 🔧 CI | View builds, logs, CI/CD operations |
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
+| 🔔 Message Settings | Inspect and update personal message delivery preferences |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
 | 📖 Wiki | List, view, create, update, and delete wiki pages |
 | 🔍 Search | Search repositories, users |
@@ -315,6 +316,29 @@ gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --dry-run
 
 # Confirm canceling a pending repository transfer
 gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --yes
+```
+
+### Message Settings
+
+```bash
+# List the available message setting groups and keys
+gitlink-cli message-settings +catalog
+
+# View the current user's effective message settings
+gitlink-cli message-settings +view
+
+# View another user's managed-repository notification settings
+gitlink-cli message-settings +view --login Mengz --group ManageProject
+
+# Preview disabling notification messages for selected keys
+gitlink-cli message-settings +update \
+  --channel notification \
+  --state off \
+  --keys Normal::Permission,ManageProject::Issue \
+  --dry-run
+
+# Apply a preset to every known setting
+gitlink-cli message-settings +preset --name notification-only --all
 ```
 
 ### Webhook Management
