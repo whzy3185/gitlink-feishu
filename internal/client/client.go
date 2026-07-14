@@ -26,6 +26,12 @@ type APIError struct {
 	Message    string
 }
 
+type DownloadResult struct {
+	Data               []byte
+	ContentType        string
+	ContentDisposition string
+}
+
 func (e *APIError) Error() string {
 	return fmt.Sprintf("[%v] %s", e.Code, e.Message)
 }
@@ -80,7 +86,7 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 	}
 
 	if c.Debug {
-		fmt.Printf("→ %s %s\n", method, fullURL)
+		fmt.Printf("-> %s %s\n", method, fullURL)
 	}
 
 	resp, err := c.HTTP.Do(req)
@@ -95,7 +101,7 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 	}
 
 	if c.Debug {
-		fmt.Printf("← %d %s\n", resp.StatusCode, string(respData[:min(len(respData), 200)]))
+		fmt.Printf("<- %d %s\n", resp.StatusCode, string(respData[:min(len(respData), 200)]))
 	}
 
 	// Check HTTP-level errors
@@ -171,6 +177,82 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 	}
 
 	return output.SuccessEnvelope(raw, meta), nil
+}
+
+func (c *Client) Download(path string) (*DownloadResult, error) {
+	fullURL, err := c.resolveDownloadURL(path)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if c.Debug {
+		fmt.Printf("-> GET %s\n", fullURL)
+	}
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+	if c.Debug {
+		fmt.Printf("<- %d %d bytes\n", resp.StatusCode, len(data))
+	}
+	if resp.StatusCode >= 400 {
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			Code:       resp.StatusCode,
+			Message:    fmt.Sprintf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(data))),
+		}
+	}
+
+	return &DownloadResult{
+		Data:               data,
+		ContentType:        resp.Header.Get("Content-Type"),
+		ContentDisposition: resp.Header.Get("Content-Disposition"),
+	}, nil
+}
+
+func (c *Client) resolveDownloadURL(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("download url is empty")
+	}
+	if u, err := url.Parse(path); err == nil && u.IsAbs() {
+		return path, nil
+	}
+	if strings.HasPrefix(path, "/api/") || path == "/api" {
+		return apiDownloadURL(c.BaseURL, path), nil
+	}
+	if strings.HasPrefix(path, "/") {
+		return webBaseURL(c.BaseURL) + path, nil
+	}
+	return c.BaseURL + normalizeAPIPath(c.BaseURL, path), nil
+}
+
+func apiDownloadURL(baseURL, path string) string {
+	base := strings.TrimRight(baseURL, "/")
+	if strings.HasSuffix(base, "/api") {
+		return base + strings.TrimPrefix(path, "/api")
+	}
+	return webBaseURL(base) + path
+}
+
+func webBaseURL(baseURL string) string {
+	base := strings.TrimRight(baseURL, "/")
+	for _, suffix := range []string{"/api/v1", "/api"} {
+		if strings.HasSuffix(base, suffix) {
+			return strings.TrimSuffix(base, suffix)
+		}
+	}
+	return base
 }
 
 func shouldAppendJSONSuffix(path string) bool {

@@ -136,6 +136,26 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "assets",
+			Description: tr.T("cmd.release.assets.short"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.release.id"), Required: true},
+			},
+			Run: runReleaseAssets,
+		},
+		{
+			Name:        "download",
+			Description: tr.T("cmd.release.download.short"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.release.id"), Required: true},
+				{Name: "asset", Short: "a", Usage: tr.T("flag.release.asset")},
+				{Name: "archive", Usage: tr.T("flag.release.archive")},
+				{Name: "output", Short: "o", Usage: tr.T("flag.release.output"), Default: "."},
+				{Name: "force", Usage: tr.T("flag.release.force"), Bool: true, Default: "false"},
+			},
+			Run: runReleaseDownload,
+		},
+		{
 			Name:        "update",
 			Description: "Update a release while preserving unspecified fields",
 			Flags: []common.Flag{
@@ -182,12 +202,12 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					// Verify by checking if the release still exists.
 					_, viewErr := ctx.CallAPI("GET", path, nil)
 					if viewErr != nil {
-						// Release no longer exists — delete actually succeeded
+						// Release no longer exists - delete actually succeeded.
 						return ctx.Output(output.SuccessEnvelope(map[string]interface{}{
 							"message": "删除成功",
 						}, nil))
 					}
-					// Release still exists — delete truly failed
+					// Release still exists - delete truly failed.
 					return delErr
 				}
 				return ctx.Output(output.SuccessEnvelope(map[string]interface{}{

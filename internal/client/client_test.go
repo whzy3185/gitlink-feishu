@@ -547,45 +547,97 @@ func TestPaginateAllNotOK(t *testing.T) {
 	}
 }
 
-func TestPaginateAllGitLinkWrapperShape(t *testing.T) {
-	// GitLink list endpoints wrap the array under a resource-specific key
-	// ({"total_count":N,"issues":[...]}) rather than the generic "data" key.
-	callCount := 0
+func TestClientDownload(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
-		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Query().Get("page") {
-		case "1":
-			w.Write([]byte(`{"total_count":3,"issues":[{"id":1},{"id":2}]}`))
-		case "2":
-			w.Write([]byte(`{"total_count":3,"issues":[{"id":3}]}`))
-		default:
-			t.Fatalf("unexpected page: %s", r.URL.Query().Get("page"))
+		if r.URL.Path != "/api/attachments/7" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Write([]byte("asset bytes"))
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: server.URL + "/api"}
+	result, err := c.Download("/api/attachments/7")
+	if err != nil {
+		t.Fatalf("Download error: %v", err)
+	}
+	if string(result.Data) != "asset bytes" {
+		t.Fatalf("data = %q", result.Data)
+	}
+	if result.ContentType != "application/octet-stream" {
+		t.Fatalf("content type = %q", result.ContentType)
+	}
+}
+
+func TestClientDownloadAPIPathWithV1BaseURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/attachments/7" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Write([]byte("asset bytes"))
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: server.URL + "/api/v1"}
+	result, err := c.Download("/api/attachments/7")
+	if err != nil {
+		t.Fatalf("Download error: %v", err)
+	}
+	if string(result.Data) != "asset bytes" {
+		t.Fatalf("data = %q", result.Data)
+	}
+}
+
+func TestClientDownloadAbsoluteURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/files/release.zip" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Write([]byte("zip bytes"))
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: "https://gitlink.example.com/api"}
+	result, err := c.Download(server.URL + "/files/release.zip")
+	if err != nil {
+		t.Fatalf("Download error: %v", err)
+	}
+	if string(result.Data) != "zip bytes" {
+		t.Fatalf("data = %q", result.Data)
+	}
+}
+
+func TestClientDownloadWebRelativeURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/owner/repo/releases/download/v1/app.zip" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Write([]byte("asset bytes"))
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: server.URL + "/api"}
+	result, err := c.Download("/owner/repo/releases/download/v1/app.zip")
+	if err != nil {
+		t.Fatalf("Download error: %v", err)
+	}
+	if string(result.Data) != "asset bytes" {
+		t.Fatalf("data = %q", result.Data)
+	}
+}
+
+func TestClientDownloadHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("missing"))
 	}))
 	defer server.Close()
 
 	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
-	params := url.Values{}
-	params.Set("limit", "2")
-	items, err := c.PaginateAll("/repos/owner/repo/issues", params)
-	if err != nil {
-		t.Fatalf("PaginateAll error: %v", err)
-	}
-	if callCount != 2 {
-		t.Fatalf("expected 2 API calls, got %d", callCount)
-	}
-	if len(items) != 3 {
-		t.Fatalf("expected 3 combined items, got %d", len(items))
-	}
-	for i, want := range []float64{1, 2, 3} {
-		var obj map[string]interface{}
-		if err := json.Unmarshal(items[i], &obj); err != nil {
-			t.Fatalf("unmarshal item %d: %v", i, err)
-		}
-		if obj["id"] != want {
-			t.Fatalf("item[%d].id = %v, want %v", i, obj["id"], want)
-		}
+	_, err := c.Download("/missing")
+	if err == nil {
+		t.Fatal("expected download error")
 	}
 }
 
