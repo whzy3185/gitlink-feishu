@@ -29,5 +29,8 @@ jobs:
       - name: Test
         run: make test
 
+      - name: Validate research Skills
+        run: make validate-research-skills
+
       - name: Check formatting
         run: make fmt

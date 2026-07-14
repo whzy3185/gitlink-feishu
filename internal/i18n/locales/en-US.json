@@ -46,6 +46,7 @@
   "cmd.dataset.view.short": "View a repository's dataset",
   "cmd.doctor.long": "Run local diagnostics for gitlink-cli configuration, authentication, repository context and API connectivity.",
   "cmd.doctor.short": "Diagnose gitlink-cli environment problems",
+  "cmd.ignore.short": "Ignore file template operations",
   "cmd.issue.batch_close.long": "Close filtered issues in bulk.\n\nThis command defaults to dry-run mode and only prints matching issues.\nPass --yes to execute remote close operations. Use restrictive filters and a small limit.\n\nExamples:\n  gitlink-cli issue +batch-close --owner Gitlink --repo gitlink-cli --older-than-days 60 --limit 20\n  gitlink-cli issue +batch-close --owner Gitlink --repo gitlink-cli --older-than-days 60 --limit 20 --yes",
   "cmd.issue.batch_close.short": "Close filtered issues in bulk. Defaults to dry-run; pass --yes to execute.",
   "cmd.issue.batch_label.long": "Add a label to filtered issues in bulk.\n\nThis command defaults to dry-run mode and only prints matching issues.\nPass --yes to execute remote label operations. The current implementation does not fake label writes when the API endpoint is unavailable.\n\nExamples:\n  gitlink-cli issue +batch-label --owner Gitlink --repo gitlink-cli --add-label stale --older-than-days 30 --limit 50\n  gitlink-cli issue +batch-label --owner Gitlink --repo gitlink-cli --add-label stale --older-than-days 30 --limit 50 --yes",

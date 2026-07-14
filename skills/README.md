@@ -105,6 +105,48 @@ skills/
 │   └── SKILL.md                       # Wiki 操作指南
 ├── gitlink-pm/                        # 项目管理
 │   └── SKILL.md                       # PM 操作指南
+├── gitlink-research-reproducibility/  # 科研仓库复现性审计
+│   ├── SKILL.md
+│   ├── references/
+│   │   └── checklist.md
+│   └── examples/
+│       └── reproducibility-audit.md
+├── gitlink-research-compliance/       # 科研开源合规与敏感风险检查
+│   ├── SKILL.md
+│   ├── references/
+│   │   └── risk-rules.md
+│   └── examples/
+│       └── compliance-audit.md
+├── gitlink-research-progress-tracker/ # 科研项目进度跟踪与预警
+│   ├── SKILL.md
+│   ├── references/
+│   │   └── risk-model.md
+│   └── examples/
+│       └── weekly-report.md
+├── gitlink-research-collaboration-map/ # 科研协作画像与合作建议
+│   ├── SKILL.md
+│   ├── references/
+│   │   └── profile-fields.md
+│   └── examples/
+│       └── collaboration-map.md
+├── gitlink-research-knowledge-graph/  # 科研热点追踪与轻量知识图谱
+│   ├── SKILL.md
+│   ├── references/
+│   │   └── graph-schema.md
+│   └── examples/
+│       └── keyword-map.md
+├── gitlink-research-data-provenance/  # 科研数据来源与隐私审计
+│   ├── SKILL.md
+│   ├── references/
+│   │   └── provenance-rules.md
+│   └── examples/
+│       └── data-provenance-audit.md
+├── gitlink-research-artifact-handbook/ # 科研成果沉淀手册生成
+│   ├── SKILL.md
+│   ├── references/
+│   │   └── handbook-template.md
+│   └── examples/
+│       └── artifact-handbook.md
 ├── gitlink-health/                    # 项目健康度分析
 │   ├── SKILL.md                       # 健康度分析指南
 │   ├── data/
@@ -148,6 +190,18 @@ skills/
 | **gitlink-workflow** | AI 工作流 | `workflow +triage`, `workflow +pr-summary`, `workflow +review-context`, `workflow +repo-report` |
 | **gitlink-health** | 开源项目健康度 | 详情见SKILL.md |
 | **gitlink-semantic-audit** | CLI/平台语义审计（伪成功、参数错配、端点失效体检） | `api GET/POST ...` 与 shortcut 对照 |
+
+### 科研场景 Skills
+
+| Skill | 说明 | 常用命令 |
+|-------|------|----------|
+| **gitlink-research-reproducibility** | 科研仓库复现性审计，检查 README、LICENSE、依赖、测试、CI、示例和数据说明 | `repo +info`, `repo +tree`, `api GET /sub_entries` |
+| **gitlink-research-compliance** | 科研开源合规与敏感风险检查 | `repo +info`, `repo +tree`, `api GET /sub_entries` |
+| **gitlink-research-progress-tracker** | 科研项目周报、Issue/PR 队列和停滞风险预警 | `issue +list`, `pr +list`, `release +list`, `repo +contributors` |
+| **gitlink-research-collaboration-map** | 科研协作画像、核心维护者识别和合作建议 | `repo +contributors`, `issue +list`, `pr +list`, `user +info` |
+| **gitlink-research-knowledge-graph** | 关键词科研热点追踪和轻量知识图谱 | `search +repos`, `repo +info`, `repo +languages`, `repo +contributors` |
+| **gitlink-research-data-provenance** | 科研数据来源、数据许可证、引用链和隐私风险审计 | `repo +info`, `repo +tree`, `api GET /sub_entries` |
+| **gitlink-research-artifact-handbook** | 科研成果沉淀手册和课题组交接材料生成 | `repo +info`, `repo +readme`, `repo +tree`, `release +list` |
 
 ---
 
@@ -253,6 +307,15 @@ gitlink-cli org +teams -i Gitlink
 **组织和用户**:
 - [gitlink-org/SKILL.md](gitlink-org/SKILL.md) - 组织命令
 - [gitlink-user/SKILL.md](gitlink-user/SKILL.md) - 用户命令
+
+**科研场景**:
+- [gitlink-research-reproducibility/SKILL.md](gitlink-research-reproducibility/SKILL.md) - 复现性审计
+- [gitlink-research-compliance/SKILL.md](gitlink-research-compliance/SKILL.md) - 开源合规与敏感风险
+- [gitlink-research-progress-tracker/SKILL.md](gitlink-research-progress-tracker/SKILL.md) - 项目进度跟踪与预警
+- [gitlink-research-collaboration-map/SKILL.md](gitlink-research-collaboration-map/SKILL.md) - 协作画像与合作建议
+- [gitlink-research-knowledge-graph/SKILL.md](gitlink-research-knowledge-graph/SKILL.md) - 热点追踪与知识图谱
+- [gitlink-research-data-provenance/SKILL.md](gitlink-research-data-provenance/SKILL.md) - 数据来源与隐私审计
+- [gitlink-research-artifact-handbook/SKILL.md](gitlink-research-artifact-handbook/SKILL.md) - 成果沉淀手册
 
 ---
 
