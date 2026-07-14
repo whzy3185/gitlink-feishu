@@ -1,36 +1,33 @@
 package template
 
 import (
+	"errors"
 	"fmt"
+	"net/url"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-// v1RepoPath returns the v1 API path prefix: /v1/{owner}/{repo}
-func v1RepoPath(ctx *common.RuntimeContext) string {
-	return fmt.Sprintf("/v1/%s/%s", ctx.Owner, ctx.Repo)
-}
-
-// templatePath returns the API path for template collection.
-func templatePath(ctx *common.RuntimeContext) string {
-	return v1RepoPath(ctx) + "/project_templates"
-}
-
-// templateItemPath returns the API path for a single template.
-func templateItemPath(ctx *common.RuntimeContext, id string) string {
-	return templatePath(ctx) + "/" + id
+// templateTypes enumerates the supported project template types.
+var templateTypes = []string{
+	"ProjectTemplates::Issue",
+	"ProjectTemplates::PullRequest",
+	"ProjectTemplates::Commit",
 }
 
 // Shortcuts returns project template management shortcuts.
 //
-// Project templates are reusable content templates (e.g., issue templates)
-// that can be applied when creating new resources.
-func Shortcuts() []*common.Shortcut {
+// Project templates provide reusable content scaffolds for issues, pull
+// requests and commits. Until now they could only be managed through the raw
+// REST API; these shortcuts expose list/get/create/update/delete as
+// first-class commands.
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "列出项目模板",
-			Flags:       []common.Flag{},
+			Description: tr.T("cmd.template.list.short"),
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
@@ -44,9 +41,9 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "get",
-			Description: "根据 ID 获取项目模板",
+			Description: tr.T("cmd.template.get.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "模板 ID", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.template.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -65,83 +62,30 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: "创建项目模板",
+			Description: tr.T("cmd.template.create.short"),
 			Flags: []common.Flag{
-				{Name: "type", Short: "t", Usage: "模板类型（如：ProjectTemplates::Issue、ProjectTemplates::PullRequest）", Required: true},
-				{Name: "name", Short: "n", Usage: "模板名称", Required: true},
-				{Name: "content", Short: "c", Usage: "模板内容（支持 Markdown）", Required: true},
+				{Name: "type", Short: "t", Usage: tr.T("flag.template.type"), Required: true},
+				{Name: "name", Short: "n", Usage: tr.T("flag.template.name"), Required: true},
+				{Name: "content", Short: "c", Usage: tr.T("flag.template.content"), Required: true},
 			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				templateType, err := ctx.RequireArg("type")
-				if err != nil {
-					return err
-				}
-				name, err := ctx.RequireArg("name")
-				if err != nil {
-					return err
-				}
-				content, err := ctx.RequireArg("content")
-				if err != nil {
-					return err
-				}
-				payload := map[string]interface{}{
-					"type":    templateType,
-					"name":    name,
-					"content": content,
-				}
-				env, err := ctx.CallAPI("POST", templatePath(ctx), payload)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
+			Run: runCreate,
 		},
 		{
 			Name:        "update",
-			Description: "更新项目模板",
+			Description: tr.T("cmd.template.update.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "模板 ID", Required: true},
-				{Name: "type", Short: "t", Usage: "模板类型（如：ProjectTemplates::Issue、ProjectTemplates::PullRequest）"},
-				{Name: "name", Short: "n", Usage: "模板名称"},
-				{Name: "content", Short: "c", Usage: "模板内容（支持 Markdown）"},
+				{Name: "id", Short: "i", Usage: tr.T("flag.template.id"), Required: true},
+				{Name: "type", Short: "t", Usage: tr.T("flag.template.type"), Required: true},
+				{Name: "name", Short: "n", Usage: tr.T("flag.template.name"), Required: true},
+				{Name: "content", Short: "c", Usage: tr.T("flag.template.content"), Required: true},
 			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				id, err := ctx.RequireArg("id")
-				if err != nil {
-					return err
-				}
-				// At least one field must be provided for update
-				if ctx.Arg("type") == "" && ctx.Arg("name") == "" && ctx.Arg("content") == "" {
-					return fmt.Errorf("至少需要提供 --type、--name 或 --content 中的一个")
-				}
-				payload := map[string]interface{}{}
-				if t := ctx.Arg("type"); t != "" {
-					payload["type"] = t
-				}
-				if n := ctx.Arg("name"); n != "" {
-					payload["name"] = n
-				}
-				if c := ctx.Arg("content"); c != "" {
-					payload["content"] = c
-				}
-				env, err := ctx.CallAPI("PUT", templateItemPath(ctx, id), payload)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
+			Run: runUpdate,
 		},
 		{
 			Name:        "delete",
-			Description: "删除项目模板",
+			Description: tr.T("cmd.template.delete.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "模板 ID", Required: true},
+				{Name: "id", Short: "i", Usage: tr.T("flag.template.id"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -159,4 +103,103 @@ func Shortcuts() []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func runCreate(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	payload, err := buildPayload(ctx)
+	if err != nil {
+		return err
+	}
+	env, err := ctx.CallAPI("POST", templatePath(ctx), payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runUpdate(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	id, err := ctx.RequireArg("id")
+	if err != nil {
+		return err
+	}
+	payload, err := buildPayload(ctx)
+	if err != nil {
+		return err
+	}
+	env, err := ctx.CallAPI("PUT", templateItemPath(ctx, id), payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+// buildPayload collects the required type/name/content fields and validates
+// the template type against the known set.
+func buildPayload(ctx *common.RuntimeContext) (map[string]interface{}, error) {
+	typ, err := ctx.RequireArg("type")
+	if err != nil {
+		return nil, err
+	}
+	if !isValidTemplateType(typ) {
+		var msg string
+		if ctx.Tr != nil {
+			msg = ctx.Tr.Tf("error.template.invalid_type", i18n.Args{
+				"type":  typ,
+				"types": fmt.Sprintf("%v", templateTypes),
+			})
+		} else {
+			msg = fmt.Sprintf("invalid --type %q; expected one of %v", typ, templateTypes)
+		}
+		return nil, errors.New(msg)
+	}
+	name, err := ctx.RequireArg("name")
+	if err != nil {
+		return nil, err
+	}
+	content, err := ctx.RequireArg("content")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"type":    typ,
+		"name":    name,
+		"content": content,
+	}, nil
+}
+
+func isValidTemplateType(value string) bool {
+	for _, candidate := range templateTypes {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
+}
+
+func templatePath(ctx *common.RuntimeContext) string {
+	return fmt.Sprintf("/v1/%s/%s/project_templates", ctx.Owner, ctx.Repo)
+}
+
+func templateItemPath(ctx *common.RuntimeContext, id string) string {
+	return fmt.Sprintf("%s/%s", templatePath(ctx), url.PathEscape(id))
+}
+
+// setQueryIfPresent is a small helper kept for future list-filter extensions.
+func setQueryIfPresent(q url.Values, name, value string) {
+	if value != "" {
+		q.Set(name, value)
+	}
+}
+
+func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
+	if len(translators) > 0 && translators[0] != nil {
+		return translators[0]
+	}
+	return i18n.Default()
 }

@@ -396,6 +396,27 @@ gitlink-cli label +update --owner Gitlink --repo forgeplus -i 42 -c "#00FF00"
 gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
 ```
 
+### Template Management
+
+```bash
+# List project templates
+gitlink-cli template +list --owner Gitlink --repo forgeplus
+
+# Get a template by id
+gitlink-cli template +get --owner Gitlink --repo forgeplus -i 42
+
+# Create an issue template
+gitlink-cli template +create --owner Gitlink --repo forgeplus \
+  -t "ProjectTemplates::Issue" -n "Bug Report" -c "## Description\n## Steps to Reproduce\n## Expected Behavior"
+
+# Update a template
+gitlink-cli template +update --owner Gitlink --repo forgeplus \
+  -i 5 -t "ProjectTemplates::Issue" -n "Bug Report v2" -c "## Updated content"
+
+# Delete a template
+gitlink-cli template +delete --owner Gitlink --repo forgeplus -i 5
+```
+
 ### Pull Requests
 
 ```bash

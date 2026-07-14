@@ -60,6 +60,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"ignore":    ignore.Shortcuts(),
 		"template":  template.Shortcuts(),
 		"workflow":  workflow.Shortcuts(),
+		"template":  template.Shortcuts(tr),
 	}
 
 	descriptions := map[string]string{
@@ -86,6 +87,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"ignore":    tr.T("cmd.ignore.short"),
 		"template":  "项目模板操作",
 		"workflow":  "AI agent workflow analysis",
+		"template":  tr.T("cmd.template.short"),
 	}
 
 	for name, shortcuts := range groups {

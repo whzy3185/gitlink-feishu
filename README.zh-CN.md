@@ -108,7 +108,7 @@
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
 | 👥 成员 | 列出、添加、移除仓库成员，调整角色，生成和接受邀请链接 |
-| 🌿 分支 | 创建、删除、恢复、筛选、保护分支，并切换默认分支 |
+| 🌿 分支 | 创建、删除、保护分支 |
 | 🏷️ 发布 | 创建、编辑、更新、查看、删除 Release |
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
@@ -119,7 +119,6 @@
 | 👤 用户 | 查看用户资料和信息 |
 | 📊 画像 | 用户开发能力、角色定位、专业定位、近期活动、贡献热力图统计 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
-| 📝 模板 | 管理 Issue 和 Pull Request 项目模板 |
 | 🤖 工作流 | AI 驱动的 Issue 分类、PR Review、Release Notes |
 
 ## 安装与快速上手
@@ -239,11 +238,6 @@ gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
 
-# 读取原始文件和常见依赖清单
-gitlink-cli repo +raw --owner Gitlink --repo forgeplus --path LICENSE --ref master
-gitlink-cli repo +file-exists --owner Gitlink --repo forgeplus --path package.json --ref master
-gitlink-cli repo +manifest --owner Gitlink --repo forgeplus --kind go --ref master
-
 # 查看语言占比
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 
@@ -348,13 +342,13 @@ gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: 登录失败
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: 登录失败" --priority-id 3 --tag-ids 4,5 --assigner-ids 7
 
 # 查看 Issue
-gitlink-cli issue +view --owner Gitlink --repo forgeplus --number 123
+gitlink-cli issue +view --owner Gitlink --repo forgeplus -i 123
 
 # 更新 Issue 元数据
 gitlink-cli issue +update --owner Gitlink --repo forgeplus --number 123 --priority-id 4 --branch bugfix/login --due-date 2026-06-15
 
 # 关闭 Issue
-gitlink-cli issue +close --owner Gitlink --repo forgeplus --number 123
+gitlink-cli issue +close --owner Gitlink --repo forgeplus -i 123
 
 # 预览批量关闭，不修改数据
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,124 --dry-run
@@ -370,39 +364,8 @@ gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --ids 101,102 -
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --dry-run
 gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --yes
 
-# 将筛选后的 Issue 导出为 CSV，便于离线分析或生成周报
-gitlink-cli issue +export --owner Gitlink --repo forgeplus --state open --keyword bug --export-format csv --output issues.csv
-
 # 添加评论
-gitlink-cli issue +comment --owner Gitlink --repo forgeplus --number 123 -b "已修复"
-
-# 查看、更新、删除 Issue 评论/操作记录
-gitlink-cli issue +comments --owner Gitlink --repo forgeplus --number 123 --category comment
-gitlink-cli issue +comment-update --owner Gitlink --repo forgeplus --number 123 --comment-id 58 -b "更新评论" --dry-run
-gitlink-cli issue +comment-delete --owner Gitlink --repo forgeplus --number 123 --comment-id 58 --dry-run
-gitlink-cli issue +comment-children --owner Gitlink --repo forgeplus --number 123 --comment-id 58
-
-# 回复评论并携带附件和 @ 用户
-gitlink-cli issue +comment --owner Gitlink --repo forgeplus --number 123 -b "请查看日志" --parent-id 456 --reply-id 456 --attachment-ids 7,8 --receivers alice,bob
-
-# 列出评论；需要操作记录时可传 --category all
-gitlink-cli issue +comments --owner Gitlink --repo forgeplus --number 123 --category comment --keyword fixed
-
-# 更新或删除评论
-gitlink-cli issue +comment-update --owner Gitlink --repo forgeplus --number 123 --comment-id 456 -b "更新后的评论"
-gitlink-cli issue +comment-delete --owner Gitlink --repo forgeplus --number 123 --comment-id 456
-
-# 列出评论下的回复
-gitlink-cli issue +comment-replies --owner Gitlink --repo forgeplus --number 123 --comment-id 456
-
-# 回复评论并列出某条评论的回复
-gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "同意" --reply-to 456
-gitlink-cli issue +comment-replies --owner Gitlink --repo forgeplus -n 123 -c 456
-
-# 列出、编辑、删除议题评论
-gitlink-cli issue +comments --owner Gitlink --repo forgeplus -n 123 --category comment
-gitlink-cli issue +comment-edit --owner Gitlink --repo forgeplus -n 123 -c 456 -b "更新内容"
-gitlink-cli issue +comment-delete --owner Gitlink --repo forgeplus -n 123 -c 456
+gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "已修复"
 
 # 列出 Issue 负责人
 gitlink-cli issue +assigners --owner Gitlink --repo forgeplus
@@ -449,22 +412,19 @@ gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
 # 列出项目模板
 gitlink-cli template +list --owner Gitlink --repo forgeplus
 
-# 获取模板详情
-gitlink-cli template +get --owner Gitlink --repo forgeplus -i 1
+# 按 ID 获取模板详情
+gitlink-cli template +get --owner Gitlink --repo forgeplus -i 42
 
 # 创建 Issue 模板
 gitlink-cli template +create --owner Gitlink --repo forgeplus \
-  -t "ProjectTemplates::Issue" -n "Bug 报告" -c "## 描述\n..."
-
-# 创建 Pull Request 模板
-gitlink-cli template +create --owner Gitlink --repo forgeplus \
-  -t "ProjectTemplates::PullRequest" -n "功能 PR" -c "## 概述\n..."
+  -t "ProjectTemplates::Issue" -n "缺陷报告" -c "## 问题描述\n## 复现步骤\n## 期望行为"
 
 # 更新模板
-gitlink-cli template +update --owner Gitlink --repo forgeplus -i 1 -n "新名称"
+gitlink-cli template +update --owner Gitlink --repo forgeplus \
+  -i 5 -t "ProjectTemplates::Issue" -n "缺陷报告 v2" -c "## 更新后的内容"
 
 # 删除模板
-gitlink-cli template +delete --owner Gitlink --repo forgeplus -i 1
+gitlink-cli template +delete --owner Gitlink --repo forgeplus -i 5
 ```
 
 ### Pull Request
@@ -503,43 +463,6 @@ gitlink-cli pr +reviews --owner Gitlink --repo forgeplus -i 42
 # 创建 PR 审查（支持 dry-run 预览）
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM" --dry-run
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
-
-# 查看和管理 PR Review 行评论
-gitlink-cli pr +review-comments --owner Gitlink --repo forgeplus -i 42 --state opened
-gitlink-cli pr +review-comment --owner Gitlink --repo forgeplus -i 42 --review-id 10 --commit abc123 --line-code abc123_0_10 --path README.md --note "请修改" --dry-run
-gitlink-cli pr +review-comment-update --owner Gitlink --repo forgeplus -i 42 --comment-id 200 --state resolved --dry-run
-gitlink-cli pr +review-comment-delete --owner Gitlink --repo forgeplus -i 42 --comment-id 200 --dry-run
-```
-
-### 分支管理
-
-```bash
-# 列出分支
-gitlink-cli branch +list --owner Gitlink --repo forgeplus
-
-# 列出已删除分支，或按关键字筛选
-gitlink-cli branch +list --owner Gitlink --repo forgeplus --state deleted --keyword release/
-
-# 列出全部分支及归档下载链接
-gitlink-cli branch +all --owner Gitlink --repo forgeplus
-
-# 创建分支
-gitlink-cli branch +create --name feature/new-feature
-
-# 删除分支
-gitlink-cli branch +delete --name feature/old-feature
-
-# 切换默认分支
-gitlink-cli branch +set-default --name main
-
-# 恢复已删除分支
-gitlink-cli branch +restore --branch-id 7 --name feature/old-feature
-
-# 设置分支保护
-gitlink-cli branch +protect --name main
-
-# 移除分支保护
-gitlink-cli branch +unprotect --name main
 ```
 
 ### 发布管理
@@ -582,25 +505,6 @@ gitlink-cli pipeline +results --owner Gitlink --repo forgeplus --run-id 99
 # 启停或删除流水线工作流，写入/删除前先预览
 gitlink-cli pipeline +disable --owner Gitlink --repo forgeplus --id 7 --workflow build.yml --dry-run
 gitlink-cli pipeline +delete --owner Gitlink --repo forgeplus --id 7 --dry-run
-```
-
-### 项目管理
-
-`pm` 暴露 GitLink 项目管理数据，覆盖看板、Sprint、周报、标签、流水线和 Action 运行记录。
-PM 命令需要传入数字项目 ID。
-
-```bash
-# 查询 PM 看板和 Sprint Issue
-gitlink-cli pm +dashboards --project-id 123 --limit 20
-gitlink-cli pm +sprint-issues --project-id 123 --page 1 --limit 20
-
-# 查询周报 Issue 和 PM Issue 标签
-gitlink-cli pm +weekly-issues --project-id 123
-gitlink-cli pm +issue-tags --project-id 123
-
-# 查询 PM 流水线和 Action 运行记录
-gitlink-cli pm +pipelines --project-id 123
-gitlink-cli pm +action-runs --project-id 123
 ```
 
 ### 忽略文件模板
@@ -768,7 +672,6 @@ gitlink-cli/
 │   ├── org/                  # 组织 shortcuts
 │   ├── ci/                   # CI shortcuts
 │   ├── pipeline/             # Pipeline shortcuts
-│   ├── pm/                   # 项目管理 shortcuts
 │   ├── search/               # 搜索 shortcuts
 │   ├── user/                 # 用户 shortcuts
 │   └── register.go           # 注册入口
