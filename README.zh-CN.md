@@ -108,7 +108,7 @@
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
 | 👥 成员 | 列出、添加、移除仓库成员，调整角色，生成和接受邀请链接 |
-| 🌿 分支 | 创建、删除、保护分支 |
+| 🌿 分支 | 创建、删除、恢复、筛选、保护分支，并切换默认分支 |
 | 🏷️ 发布 | 创建、编辑、更新、查看、删除 Release |
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
@@ -509,6 +509,37 @@ gitlink-cli pr +review-comments --owner Gitlink --repo forgeplus -i 42 --state o
 gitlink-cli pr +review-comment --owner Gitlink --repo forgeplus -i 42 --review-id 10 --commit abc123 --line-code abc123_0_10 --path README.md --note "请修改" --dry-run
 gitlink-cli pr +review-comment-update --owner Gitlink --repo forgeplus -i 42 --comment-id 200 --state resolved --dry-run
 gitlink-cli pr +review-comment-delete --owner Gitlink --repo forgeplus -i 42 --comment-id 200 --dry-run
+```
+
+### 分支管理
+
+```bash
+# 列出分支
+gitlink-cli branch +list --owner Gitlink --repo forgeplus
+
+# 列出已删除分支，或按关键字筛选
+gitlink-cli branch +list --owner Gitlink --repo forgeplus --state deleted --keyword release/
+
+# 列出全部分支及归档下载链接
+gitlink-cli branch +all --owner Gitlink --repo forgeplus
+
+# 创建分支
+gitlink-cli branch +create --name feature/new-feature
+
+# 删除分支
+gitlink-cli branch +delete --name feature/old-feature
+
+# 切换默认分支
+gitlink-cli branch +set-default --name main
+
+# 恢复已删除分支
+gitlink-cli branch +restore --branch-id 7 --name feature/old-feature
+
+# 设置分支保护
+gitlink-cli branch +protect --name main
+
+# 移除分支保护
+gitlink-cli branch +unprotect --name main
 ```
 
 ### 发布管理

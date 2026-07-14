@@ -1,28 +1,28 @@
 # Branch Lifecycle Shortcuts
 
-## Background
+This change expands branch management coverage so repository maintainers can complete more of the branch lifecycle from `gitlink-cli` without falling back to manual API calls.
 
-GitLink OpenAPI exposes branch lifecycle capabilities that were not fully reachable from `gitlink-cli`: keyword/state branch listing, no-pagination listing, default branch switching, and deleted branch restoration.
+## Commands
 
-## What Changed
+- `branch +all`
+- `branch +set-default`
+- `branch +restore`
 
-Extended the `branch` shortcut group with documented OpenAPI coverage:
+## Improvements
 
-- `branch +list --keyword --state` maps to `GET /api/v1/{owner}/{repo}/branches.json` query parameters.
-- `branch +all` maps to `GET /api/v1/{owner}/{repo}/branches/all.json`.
-- `branch +set-default --name` maps to `PATCH /api/v1/{owner}/{repo}/branches/update_default_branch.json?name=...`.
-- `branch +restore --id --name` maps to `POST /api/v1/{owner}/{repo}/branches/restore.json` with `branch_id` and `branch_name`.
+- `branch +list` now supports `--state` so users can inspect visible branches, deleted branches, or all branch records.
+- `branch +list` now supports `--keyword` to filter branches by name on the server side.
+- The README examples document the deleted-branch recovery flow so users can retrieve `branch_id` and restore the branch in one CLI workflow.
 
-Write operations support `--dry-run` so users and Agents can inspect the exact request before changing branch state.
+## API Mapping
 
-## Validation
+| Shortcut | Method | API path |
+|----------|--------|----------|
+| `branch +all` | GET | `/api/v1/{owner}/{repo}/branches/all.json` |
+| `branch +set-default` | PATCH | `/api/v1/{owner}/{repo}/branches/update_default_branch.json?name=...` |
+| `branch +restore` | POST | `/api/v1/{owner}/{repo}/branches/restore.json` |
 
-```bash
-git diff --check
-GOPROXY=https://goproxy.cn,direct go test ./shortcuts/branch ./shortcuts
-go vet ./shortcuts/branch ./shortcuts
-go run . branch +set-default --help
-go run . branch +restore --help
-GOPROXY=https://goproxy.cn,direct go test ./...
-go vet ./...
-```
+## Verification
+
+- Unit tests cover request methods, paths, query parameters, restore payloads, invalid `branch-id` validation, and HTTP error handling.
+- Documentation now includes branch filtering, default-branch switching, and deleted-branch restore examples.

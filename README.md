@@ -108,7 +108,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
 | 👥 Member | List, add, remove repository members, change roles, create and accept invite links |
-| 🌿 Branch | Create, delete, list, protect, unprotect branches |
+| 🌿 Branch | Create, delete, restore, list, filter, protect, unprotect, and switch default branches |
 | 🏷️ Release | Create, edit, update, view, delete releases |
 | 🏢 Org | Manage organizations, members, teams |
 | 🔧 CI | View builds, logs, CI/CD operations |
@@ -440,11 +440,23 @@ gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved 
 # List branches
 gitlink-cli branch +list --owner Gitlink --repo forgeplus
 
+# List deleted branches or search by keyword
+gitlink-cli branch +list --owner Gitlink --repo forgeplus --state deleted --keyword release/
+
+# List all branches with archive download URLs
+gitlink-cli branch +all --owner Gitlink --repo forgeplus
+
 # Create a branch
 gitlink-cli branch +create --name feature/new-feature
 
 # Delete a branch
 gitlink-cli branch +delete --name feature/old-feature
+
+# Set the default branch
+gitlink-cli branch +set-default --name main
+
+# Restore a deleted branch
+gitlink-cli branch +restore --branch-id 7 --name feature/old-feature
 
 # Protect a branch
 gitlink-cli branch +protect --name main
