@@ -361,6 +361,9 @@ gitlink-cli issue +update --owner Gitlink --repo forgeplus --number 123 --priori
 # 关闭 Issue
 gitlink-cli issue +close --owner Gitlink --repo forgeplus -i 123
 
+# 删除 Issue（破坏性操作，需 --yes 确认）
+gitlink-cli issue +delete --owner Gitlink --repo forgeplus --number 123 --yes
+
 # 预览批量关闭，不修改数据
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,124 --dry-run
 
