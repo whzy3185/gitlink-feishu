@@ -253,6 +253,10 @@ func TestPRCreate(t *testing.T) {
 func TestPRCreateNoBody(t *testing.T) {
 	var payload map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/owner/repo.json" {
+			writeJSON(t, w, map[string]interface{}{"default_branch": "main"})
+			return
+		}
 		payload = decodeJSON(t, r)
 		writeJSON(t, w, map[string]interface{}{"id": float64(43), "title": "feat: nob"})
 	}))
@@ -267,6 +271,9 @@ func TestPRCreateNoBody(t *testing.T) {
 	}
 	if _, ok := payload["body"]; ok {
 		t.Fatal("body should not be in payload when not provided")
+	}
+	if payload["base"] != "main" {
+		t.Fatalf("expected base to fall back to default branch main, got %v", payload["base"])
 	}
 }
 

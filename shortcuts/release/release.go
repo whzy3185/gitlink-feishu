@@ -42,7 +42,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "tag", Short: "t", Usage: tr.T("flag.release.tag"), Required: true},
 				{Name: "name", Short: "n", Usage: tr.T("flag.release.name"), Required: true},
 				{Name: "body", Short: "b", Usage: tr.T("flag.release.body")},
-				{Name: "target", Usage: tr.T("flag.release.target"), Default: "master"},
+				{Name: "target", Usage: tr.T("flag.release.target")},
 				{Name: "prerelease", Usage: tr.T("flag.release.prerelease"), Default: "false"},
 				{Name: "draft", Usage: "Mark as draft (true/false)", Default: "false"},
 				{Name: "attachment-ids", Usage: "Comma-separated attachment IDs"},

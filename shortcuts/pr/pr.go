@@ -98,7 +98,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "title", Short: "t", Usage: tr.T("flag.pr.title"), Required: true},
 				{Name: "body", Short: "b", Usage: tr.T("flag.pr.body")},
 				{Name: "head", Usage: tr.T("flag.pr.head"), Required: true},
-				{Name: "base", Usage: tr.T("flag.pr.base"), Default: "master"},
+				{Name: "base", Usage: tr.T("flag.pr.base")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -108,7 +108,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				head, _ := ctx.RequireArg("head")
 				base := ctx.Arg("base")
 				if base == "" {
-					base = "master"
+					var err error
+					if base, err = ctx.DefaultBranch(); err != nil {
+						return err
+					}
 				}
 				payload := map[string]interface{}{
 					"title": title,

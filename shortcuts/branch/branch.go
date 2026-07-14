@@ -56,7 +56,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.branch.create.short"),
 			Flags: []common.Flag{
 				{Name: "name", Short: "n", Usage: tr.T("flag.branch.name"), Required: true},
-				{Name: "from", Short: "f", Usage: tr.T("flag.branch.from"), Default: "master"},
+				{Name: "from", Short: "f", Usage: tr.T("flag.branch.from")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -65,7 +65,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				name, _ := ctx.RequireArg("name")
 				from := ctx.Arg("from")
 				if from == "" {
-					from = "master"
+					var err error
+					if from, err = ctx.DefaultBranch(); err != nil {
+						return err
+					}
 				}
 				payload := map[string]interface{}{
 					"new_branch_name": name,
