@@ -368,6 +368,10 @@ gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 -
 # 添加评论
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "已修复"
 
+# 列出 Issue 动态记录或评论活动
+gitlink-cli issue +journals --owner Gitlink --repo forgeplus --number 123 --page 1 --limit 50
+gitlink-cli issue +activity --owner Gitlink --repo forgeplus --number 123 --category comment
+
 # 列出 Issue 负责人
 gitlink-cli issue +assigners --owner Gitlink --repo forgeplus
 

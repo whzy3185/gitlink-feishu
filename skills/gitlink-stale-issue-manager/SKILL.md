@@ -52,7 +52,7 @@ gitlink-cli issue +list --state open --owner <owner> --repo <repo> --page 1 --li
 
 ```bash
 # 获取某个 Issue 的评论列表（如果数据量过大，可能需要翻到最后一页取最后十条）
-gitlink-cli api GET /v1/:owner/:repo/issues/:number/journals?category=comment&page=1&limit=50 --format json
+gitlink-cli issue +journals --owner <owner> --repo <repo> --number <number> --category comment --page 1 --limit 50 --format json
 ```
 
 **AI 判断逻辑**：
@@ -412,7 +412,7 @@ gitlink-cli issue +list --state open --owner <owner> --repo <repo> --format json
 # Step 2：判断 Issue 最后活动时间
 #   a. 如果 created_at == updated_at → 最后活动时间 = created_at（无需查询评论）
 #   b. 如果 created_at != updated_at → 查询评论列表获取最新评论时间
-gitlink-cli api GET /v1/:owner/:repo/issues/:number/journals --format json
+gitlink-cli issue +journals --owner <owner> --repo <repo> --number <number> --category comment --page 1 --limit 50 --format json
 #   - 有评论 → 最后活动时间 = 最新评论的 created_at
 #   - 无评论 → 最后活动时间 = updated_at
 # 需注意排除skill自动发送的评论内容

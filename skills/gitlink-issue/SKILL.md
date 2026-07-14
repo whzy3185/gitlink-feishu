@@ -1,7 +1,7 @@
 ---
 name: gitlink-issue
-version: 2.0.0
-description: "Issue 管理：创建、查看、更新、关闭/批量关闭/批量更新/批量删除/批量重开/批量标签/批量指派/批量评论/批量导出/批量导入 Issue，添加评论。当用户需要操作 GitLink Issue 时触发。"
+version: 3.0.0
+description: "Issue 管理：创建、查看、更新、关闭/批量关闭/批量更新/批量删除 Issue，添加评论，查看动态记录和活动。当用户需要操作 GitLink Issue 时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -26,15 +26,11 @@ metadata:
 | `issue +update` | 更新 Issue | 是 |
 | `issue +close` | 关闭 Issue | 是 |
 | `issue +batch-close` | 批量关闭 Issue，支持 `--dry-run` 预览 | 是（dry-run 不写入） |
-| `issue +batch-reopen` | 批量重开已关闭 Issue，支持 `--dry-run` 预览 | 是（dry-run 不写入） |
 | `issue +batch-update` | 按 API issue id 批量更新状态、优先级、里程碑、标签、负责人 | 是（dry-run 不写入） |
 | `issue +batch-delete` | 按 API issue id 批量删除 Issue；真实删除必须 `--yes` | 是（dry-run 不写入） |
-| `issue +batch-label` | 按 API issue id 批量添加/移除标签 | 是（dry-run 不写入） |
-| `issue +batch-assign` | 按 API issue id 批量指派/取消指派负责人 | 是（dry-run 不写入） |
-| `issue +batch-comment` | 批量添加评论到多个 Issue | 是（dry-run 不写入） |
-| `issue +batch-export` | 导出 Issue 到 CSV 或 JSON 格式 | 否（公开项目） |
-| `issue +batch-import` | 从 CSV 文件批量创建 Issue | 是（dry-run 不写入） |
 | `issue +comment` | 添加评论 | 是 |
+| `issue +journals` | 查询 Issue 动态记录，支持分类和分页 | 否（公开项目） |
+| `issue +activity` | 查询 Issue 活动事件，复用 journals 端点 | 否（公开项目） |
 | `issue +assigners` | 查询 Issue 负责人列表 | 否（公开项目） |
 | `issue +authors` | 查询 Issue 发布人列表 | 否（公开项目） |
 | `issue +statuses` | 查询 Issue 状态列表 | 否（公开项目） |
@@ -75,35 +71,12 @@ gitlink-cli issue +batch-update --owner myuser --repo myrepo --ids 101,102 --sta
 gitlink-cli issue +batch-delete --owner myuser --repo myrepo --ids 101,102 --dry-run
 gitlink-cli issue +batch-delete --owner myuser --repo myrepo --ids 101,102 --yes
 
-# 批量重开已关闭的 Issue
-gitlink-cli issue +batch-reopen --owner myuser --repo myrepo --numbers 123,124 --dry-run
-
-# 批量添加标签（使用 API issue id 和标签 id）
-gitlink-cli issue +batch-label --owner myuser --repo myrepo --ids 101,102 --add 1,2 --dry-run
-
-# 批量移除标签
-gitlink-cli issue +batch-label --owner myuser --repo myrepo --ids 101,102 --remove 3,4
-
-# 批量指派负责人（使用 API issue id 和用户 id）
-gitlink-cli issue +batch-assign --owner myuser --repo myrepo --ids 101,102 --add 5,6 --dry-run
-
-# 批量取消指派
-gitlink-cli issue +batch-assign --owner myuser --repo myrepo --ids 101,102 --remove 5,6
-
-# 批量添加评论
-gitlink-cli issue +batch-comment --owner myuser --repo myrepo --numbers 123,124 --message "已修复，请验证" --dry-run
-
-# 导出 Issue 到 CSV
-gitlink-cli issue +batch-export --owner myuser --repo myrepo --output issues.csv
-
-# 导出 Issue 到 JSON（带过滤条件）
-gitlink-cli issue +batch-export --owner myuser --repo myrepo --format json --status-id 5 --output closed_issues.json
-
-# 从 CSV 文件批量创建 Issue
-gitlink-cli issue +batch-import --owner myuser --repo myrepo --file issues.csv --dry-run
-
 # 添加评论
 gitlink-cli issue +comment --number 4 --body "已修复，请验证"
+
+# 查询 Issue 评论和活动记录
+gitlink-cli issue +journals --number 4 --category comment --page 1 --limit 50
+gitlink-cli issue +activity --number 4 --page 1 --limit 50
 
 # 查询 Issue 负责人
 gitlink-cli issue +assigners --owner Gitlink --repo forgeplus --keyword alice
@@ -114,50 +87,17 @@ gitlink-cli issue +authors --owner Gitlink --repo forgeplus --keyword bob
 
 ## 批量维护安全约束
 
-### ID 类型说明
-
-- **网页 Issue 编号**（`project_issues_index`）：用于 `--numbers` 参数
-  - `issue +batch-close --numbers`
-  - `issue +batch-reopen --numbers`
-  - `issue +batch-comment --numbers`
-
-- **API Issue ID**（数据库内部 ID）：用于 `--ids` 参数
-  - `issue +batch-update --ids`
-  - `issue +batch-delete --ids`
-  - `issue +batch-label --ids`
-  - `issue +batch-assign --ids`
-
-### 安全操作流程
-
-- 执行 `batch-update` / `batch-delete` / `batch-label` / `batch-assign` 前，先用 `issue +list` 或 `issue +view` 确认 API issue id 来源。
+- `issue +batch-close --numbers` 使用网页 URL 中的 Issue 编号，即 `project_issues_index`。
+- `issue +batch-update --ids` 和 `issue +batch-delete --ids` 使用 OpenAPI 返回的 API issue id，不是网页 Issue 编号。
+- 执行 `batch-update` / `batch-delete` 前，先用 `issue +list` 或 `issue +view` 确认 id 来源。
 - 写操作先执行 `--dry-run`，展示 `method`、`path`、`body` 给用户确认。
 - `batch-delete` 是破坏性操作，真实执行必须显式传 `--yes`。
-- `batch-label` 和 `batch-assign` 会保留现有标签/负责人，仅添加/移除指定的项。
-
-### CSV 文件格式
-
-`batch-import` 支持的 CSV 列：
-- `subject`（必需）：Issue 标题
-- `description`（可选）：Issue 描述
-- `priority_id`（可选）：优先级 ID
-- `status_id`（可选）：状态 ID（默认为 1）
-- `assigner_ids`（可选）：负责人 ID 列表（逗号分隔）
-- `issue_tag_ids`（可选）：标签 ID 列表（逗号分隔）
 
 ## Raw API 补充
 
 ```bash
-# 获取 Issue 评论列表（使用 v1 API，按 issue number 查询）
-gitlink-cli api GET /v1/:owner/:repo/issues/:number/journals
-
 # 批量更新 Issue（仍使用旧版 API，需传数据库 ID）
 gitlink-cli api POST /:owner/:repo/issues/series_update --body '{"ids":[1,2,3],"status_id":"closed"}'
-
-# 批量添加评论（使用 v1 API）
-gitlink-cli api POST /v1/:owner/:repo/issues/:number/journals --body '{"notes":"评论内容"}'
-
-# 导出 Issue 列表（使用 v1 API）
-gitlink-cli api GET /v1/:owner/:repo/issues.json
 ```
 
 ## GitLink Issue 字段映射
