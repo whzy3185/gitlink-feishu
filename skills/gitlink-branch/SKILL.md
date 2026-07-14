@@ -1,7 +1,7 @@
 ---
 name: gitlink-branch
-version: 1.0.0
-description: "分支管理：创建、查看、删除、保护分支。当用户需要操作 GitLink 分支时触发。"
+version: 1.1.0
+description: "分支管理：创建、查看、过滤、删除、保护、设置默认分支、恢复已删除分支。当用户需要操作 GitLink 分支时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -21,10 +21,13 @@ metadata:
 | Shortcut | 说明 | 操作类型 |
 |----------|------|----------|
 | `branch +list` | 列出仓库的所有分支 | Read |
+| `branch +all` | 无分页列出仓库所有分支 | Read |
 | `branch +create` | 创建新分支 | ⚠️ Write Operation |
 | `branch +delete` | 删除分支 | 🔴 Destructive Operation |
 | `branch +protect` | 设置分支保护规则 | ⚠️ Write Operation |
 | `branch +unprotect` | 移除分支保护规则 | ⚠️ Write Operation |
+| `branch +set-default` | 设置默认分支 | ⚠️ Write Operation |
+| `branch +restore` | 恢复已删除分支 | ⚠️ Write Operation |
 
 ## 参数参考
 
@@ -36,6 +39,17 @@ metadata:
 | `--repo` | 是* | 仓库名称（可从 git remote 自动推断） |
 | `--page, -p` | 否 | 页码（默认 `1`） |
 | `--limit, -l` | 否 | 每页条数（默认 `20`） |
+| `--keyword, -k` | 否 | 分支关键词过滤 |
+| `--state, -s` | 否 | 分支状态：`all` 或 `deleted` |
+| `--format` | 否 | 输出格式：`json`/`table`/`yaml` |
+| `--debug` | 否 | 启用调试输出 |
+
+### branch +all
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `--owner` | 是* | 仓库所有者（可从 git remote 自动推断） |
+| `--repo` | 是* | 仓库名称（可从 git remote 自动推断） |
 | `--format` | 否 | 输出格式：`json`/`table`/`yaml` |
 | `--debug` | 否 | 启用调试输出 |
 
@@ -80,6 +94,29 @@ metadata:
 | `--format` | 否 | 输出格式：`json`/`table`/`yaml` |
 | `--debug` | 否 | 启用调试输出 |
 
+### branch +set-default
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `--name, -n` | 是 | 要设为默认分支的名称 |
+| `--dry-run` | 否 | 预览请求，不修改默认分支 |
+| `--owner` | 是* | 仓库所有者（可从 git remote 自动推断） |
+| `--repo` | 是* | 仓库名称（可从 git remote 自动推断） |
+| `--format` | 否 | 输出格式：`json`/`table`/`yaml` |
+| `--debug` | 否 | 启用调试输出 |
+
+### branch +restore
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `--id, -i` | 是 | 已删除分支的 branch_id |
+| `--name, -n` | 是 | 要恢复的分支名称 |
+| `--dry-run` | 否 | 预览请求，不恢复分支 |
+| `--owner` | 是* | 仓库所有者（可从 git remote 自动推断） |
+| `--repo` | 是* | 仓库名称（可从 git remote 自动推断） |
+| `--format` | 否 | 输出格式：`json`/`table`/`yaml` |
+| `--debug` | 否 | 启用调试输出 |
+
 > *如果在 GitLink 仓库目录下执行，`--owner` 和 `--repo` 可自动推断。
 
 ## 使用示例
@@ -90,6 +127,12 @@ gitlink-cli branch +list
 
 # 指定仓库并分页
 gitlink-cli branch +list --owner Gitlink --repo forgeplus --page 1 --limit 10
+
+# 搜索分支或查看已删除分支
+gitlink-cli branch +list --owner Gitlink --repo forgeplus --keyword fix --state deleted
+
+# 无分页列出所有分支
+gitlink-cli branch +all --owner Gitlink --repo forgeplus
 
 # 输出为 JSON
 gitlink-cli branch +list --format json
@@ -117,6 +160,14 @@ gitlink-cli branch +protect --name main --owner someone --repo myrepo
 
 # 移除分支保护（仅简单分支名，含 / 的路径需通过 Web 操作）
 gitlink-cli branch +unprotect --name main
+
+# 设置默认分支（先 dry-run 预览）
+gitlink-cli branch +set-default --name main --dry-run
+gitlink-cli branch +set-default --name main
+
+# 恢复已删除分支（先 dry-run 预览）
+gitlink-cli branch +restore --id 7 --name feature/old --dry-run
+gitlink-cli branch +restore --id 7 --name feature/old
 ```
 
 ## Workflow 注意事项
@@ -156,6 +207,24 @@ gitlink-cli branch +unprotect --name main
 1. 确认用户希望移除保护的分支名称。
 2. 执行 `branch +unprotect --name <name>`。
 3. 输出结果。
+
+### branch +set-default（Write Operation）
+
+> [!CAUTION]
+> This is a **Write Operation** — confirm user intent.
+
+1. 确认用户希望切换默认分支。
+2. 先执行 `branch +set-default --name <name> --dry-run` 预览。
+3. 用户确认后执行不带 `--dry-run` 的命令。
+
+### branch +restore（Write Operation）
+
+> [!CAUTION]
+> This is a **Write Operation** — confirm user intent.
+
+1. 通过 `branch +list --state deleted` 确认 `branch_id` 和分支名。
+2. 先执行 `branch +restore --id <branch_id> --name <name> --dry-run` 预览。
+3. 用户确认后执行不带 `--dry-run` 的命令。
 
 > **注意：** 含 `/` 的分支名（如 `feature/my-branch`）可能无法通过 CLI 解除保护（受限于 API 路由），需通过 Web 页面操作。
 

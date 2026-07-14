@@ -460,6 +460,10 @@ gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved 
 ```bash
 # List branches
 gitlink-cli branch +list --owner Gitlink --repo forgeplus
+gitlink-cli branch +list --owner Gitlink --repo forgeplus --keyword fix --state deleted
+
+# List all branches without pagination
+gitlink-cli branch +all --owner Gitlink --repo forgeplus
 
 # Create a branch
 gitlink-cli branch +create --name feature/new-feature
@@ -472,6 +476,10 @@ gitlink-cli branch +protect --name main
 
 # Remove branch protection
 gitlink-cli branch +unprotect --name main
+
+# Set default branch or restore a deleted branch (preview first)
+gitlink-cli branch +set-default --owner Gitlink --repo forgeplus --name main --dry-run
+gitlink-cli branch +restore --owner Gitlink --repo forgeplus --id 7 --name feature/old --dry-run
 ```
 
 ### Release Management

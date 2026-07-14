@@ -107,24 +107,19 @@
 | 🐛 Issue | 创建、更新、关闭、批量关闭/更新/删除、评论 Issue |
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
-| 🧭 Compare | 对比分支、标签或提交，查看变更文件，筛选提交并汇总差异热点 |
 | 👥 成员 | 列出、添加、移除仓库成员，调整角色，生成和接受邀请链接 |
-| 📨 邀请 | 生成邀请链接、查看邀请信息、接受邀请、加入/退出项目 |
 | 🌿 分支 | 创建、删除、保护分支 |
 | 🏷️ 发布 | 创建、编辑、更新、查看、删除 Release |
-| 🏢 组织 | 管理组织、列出成员、查看团队 |
+| 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
-| 🔔 消息通知设置 | 查看并更新个人消息通知投递偏好 |
 | 📖 Wiki | 列出、查看、创建、更新、删除 Wiki 页面 |
-| 🔔 通知 | 列出、已读、删除用户消息 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 📊 数据集 | 按项目查询科研数据集 |
-| 👤 用户 | 查看用户资料、贡献热力图、活跃度与能力统计 |
+| 👤 用户 | 查看用户资料和信息 |
 | 📊 画像 | 用户开发能力、角色定位、专业定位、近期活动、贡献热力图统计 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
 | 🤖 工作流 | AI 驱动的 Issue 分类、PR Review、Release Notes |
-| 🩺 Doctor | 一键体检配置、认证、仓库上下文与 API 连通性 |
 
 ## 安装与快速上手
 
@@ -185,29 +180,6 @@ export GITLINK_TOKEN="your-token" # 或设置环境变量（适用于 CI/CD、�
 gitlink-cli repo +list
 ```
 
-#### Shell 自动补全
-
-安装后可以为常用 shell 生成自动补全脚本：
-
-```bash
-# Bash
-mkdir -p ~/.local/share/bash-completion/completions
-gitlink-cli completion bash > ~/.local/share/bash-completion/completions/gitlink-cli
-
-# Zsh
-gitlink-cli completion zsh > "${fpath[1]}/_gitlink-cli"
-
-# Fish
-mkdir -p ~/.config/fish/completions
-gitlink-cli completion fish > ~/.config/fish/completions/gitlink-cli.fish
-
-# PowerShell
-gitlink-cli completion powershell > gitlink-cli.ps1
-. ./gitlink-cli.ps1
-```
-
-如果当前终端不需要补全说明文本，可以追加 `--no-descriptions` 生成更精简的脚本。
-
 ### 快速上手（AI Agent）
 
 > 以下步骤面向 AI Agent。部分步骤需要用户在浏览器中完成操作。
@@ -259,17 +231,8 @@ gitlink-cli repo +list
 # 查看仓库信息
 gitlink-cli repo +info --owner Gitlink --repo forgeplus
 
-# 使用 git 克隆仓库（对标 `gh repo clone`）
-gitlink-cli repo +clone --owner Gitlink --repo forgeplus
-gitlink-cli repo +clone --owner Gitlink --repo forgeplus -d ./forgeplus -b develop
-
 # 读取仓库 README
 gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
-gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master --path docs
-
-# 读取仓库任意文件
-gitlink-cli repo +file --owner Gitlink --repo forgeplus --path go.mod --ref master
-gitlink-cli repo +file --owner Gitlink --repo forgeplus --path .gitignore --content-only
 
 # 列出仓库根目录或指定目录文件
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
@@ -301,74 +264,8 @@ gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 # 创建仓库
 gitlink-cli repo +create -n my-project -d "项目描述"
 
-# 更新仓库设置（只修改指定字段）
-gitlink-cli repo +edit --owner me --repo my-project -d "新描述" --website "https://example.org"
-gitlink-cli repo +edit --owner me --repo my-project --private true
-gitlink-cli repo +edit --owner me --repo my-project --default-branch main
-
 # Fork 仓库
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
-
-# 列出可接收仓库转移的组织
-gitlink-cli repo +transfer-orgs --owner Gitlink --repo forgeplus
-
-# 预览仓库转移请求，不修改线上数据
-gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org --dry-run
-
-# 确认后发起仓库转移
-gitlink-cli repo +transfer --owner Gitlink --repo forgeplus --target-owner my-org --yes
-
-# 预览取消待处理的仓库转移
-gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --dry-run
-
-# 确认后取消待处理的仓库转移
-gitlink-cli repo +transfer-cancel --owner Gitlink --repo forgeplus --yes
-```
-
-### 消息通知设置
-
-```bash
-# 列出可用的消息通知设置分组和键
-gitlink-cli message-settings +catalog
-
-# 查看当前用户生效中的消息通知设置
-gitlink-cli message-settings +view
-
-# 只看另一个用户的仓库管理类消息设置
-gitlink-cli message-settings +view --login Mengz --group ManageProject
-
-# 预览关闭指定设置键的站内通知，不发送请求
-gitlink-cli message-settings +update \
-  --channel notification \
-  --state off \
-  --keys Normal::Permission,ManageProject::Issue \
-  --dry-run
-
-# 将预设应用到所有已知设置
-gitlink-cli message-settings +preset --name notification-only --all
-```
-
-### 消息通知设置
-
-```bash
-# 列出可用的消息通知设置分组和键
-gitlink-cli message-settings +catalog
-
-# 查看当前用户生效中的消息通知设置
-gitlink-cli message-settings +view
-
-# 只看另一个用户的仓库管理类消息设置
-gitlink-cli message-settings +view --login Mengz --group ManageProject
-
-# 预览关闭指定设置键的站内通知，不发送请求
-gitlink-cli message-settings +update \
-  --channel notification \
-  --state off \
-  --keys Normal::Permission,ManageProject::Issue \
-  --dry-run
-
-# 将预设应用到所有已知设置
-gitlink-cli message-settings +preset --name notification-only --all
 ```
 
 ### Webhook 管理
@@ -391,13 +288,10 @@ gitlink-cli webhook +tasks --owner Gitlink --repo forgeplus --id 68
 ### Wiki 管理
 
 ```bash
-# 列出 Wiki 页面（目录结构）；省略 --project-id 时自动从仓库信息解析
-gitlink-cli wiki +list --owner Gitlink --repo forgeplus
+# 列出 Wiki 页面（目录结构）
+gitlink-cli wiki +list --owner Gitlink --repo forgeplus --project-id 12345
 
 # 查看 Wiki 页面
-gitlink-cli wiki +view --owner Gitlink --repo forgeplus -n home
-
-# 也可显式传 --project-id 以省去一次查询请求
 gitlink-cli wiki +view --owner Gitlink --repo forgeplus --project-id 12345 -n home
 
 # 创建 Wiki 页面
@@ -411,25 +305,6 @@ gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n 
 
 # 删除 Wiki 页面
 gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 12345 -n old-page
-```
-
-### 通知管理
-
-```bash
-# 列出当前用户未读系统消息
-gitlink-cli notification +list --type notification --status unread
-
-# 列出指定用户的 @我消息
-gitlink-cli notification +list --user Mengz --type atme
-
-# 标记消息为已读
-gitlink-cli notification +read --type atme --ids 101,102
-
-# 将全部未读系统消息标记为已读
-gitlink-cli notification +read --type notification --ids -1
-
-# 删除消息
-gitlink-cli notification +delete --type notification --ids 101,102
 ```
 
 ### 成员管理
@@ -452,29 +327,6 @@ gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role D
 
 # 生成邀请链接
 gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
-
-# 通过邀请码申请加入项目
-gitlink-cli member +apply --code MPzQgH --role developer --dry-run
-
-# 退出仓库成员关系
-gitlink-cli member +quit --owner Gitlink --repo forgeplus --dry-run
-gitlink-cli member +quit --owner Gitlink --repo forgeplus --yes
-```
-
-### 组织管理
-
-```bash
-# 列出组织
-gitlink-cli org +list
-
-# 查看组织详情
-gitlink-cli org +info --id Gitlink
-
-# 列出组织成员
-gitlink-cli org +members --id Gitlink --page 1 --limit 20
-
-# 列出组织团队
-gitlink-cli org +teams --id Gitlink --page 1 --limit 20
 ```
 
 ### Issue 管理
@@ -497,9 +349,6 @@ gitlink-cli issue +update --owner Gitlink --repo forgeplus --number 123 --priori
 
 # 关闭 Issue
 gitlink-cli issue +close --owner Gitlink --repo forgeplus -i 123
-
-# 删除 Issue（破坏性操作，需 --yes 确认）
-gitlink-cli issue +delete --owner Gitlink --repo forgeplus --number 123 --yes
 
 # 预览批量关闭，不修改数据
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,124 --dry-run
@@ -553,35 +402,8 @@ gitlink-cli label +create --owner Gitlink --repo forgeplus -n bug -d "功能缺�
 # 更新标签（未指定的字段会被保留）
 gitlink-cli label +update --owner Gitlink --repo forgeplus -i 42 -c "#00FF00"
 
-# 安全删除标签
-gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42 --dry-run
-gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42 --yes
-
-# 安全批量创建标签
-gitlink-cli label +batch-create --owner Gitlink --repo forgeplus \
-  --labels 'bug:#ee0701:Bug 修复;feature:#0075ca:新功能' --dry-run
-gitlink-cli label +batch-create --owner Gitlink --repo forgeplus \
-  --labels 'bug:#ee0701:Bug 修复;feature:#0075ca:新功能' --yes
-
-# 安全批量删除标签
-gitlink-cli label +batch-delete --owner Gitlink --repo forgeplus --ids 3,5,8 --dry-run
-gitlink-cli label +batch-delete --owner Gitlink --repo forgeplus --ids 3,5,8 --yes
-```
-
-### Compare
-
-```bash
-# 对比两个分支、标签或提交
-gitlink-cli compare +view --owner Gitlink --repo forgeplus --head feature/search --base master
-
-# 列出两个版本之间的变更文件
-gitlink-cli compare +files --owner Gitlink --repo forgeplus --head feature/search --base master
-
-# 按作者或关键字筛选提交
-gitlink-cli compare +commits --owner Gitlink --repo forgeplus --head feature/search --base master --author alice -k fix -l 10
-
-# 汇总提交、热点文件、目录分布和扩展名分布
-gitlink-cli compare +summary --owner Gitlink --repo forgeplus --head feature/search --base master --top-files 5
+# 删除标签
+gitlink-cli label +delete --owner Gitlink --repo forgeplus -i 42
 ```
 
 ### Pull Request
@@ -598,11 +420,6 @@ gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: 新功能" --h
 
 # 查看 PR
 gitlink-cli pr +view --owner Gitlink --repo forgeplus -i 42
-# 对于已合并或已关闭的 PR，JSON 输出会尽量补齐 `created_at`、`merged_at`、`closed_at` 和 `closed_on`。
-
-# 在本地检出 PR 分支（对标 `gh pr checkout`；需在 git 克隆目录内执行）
-gitlink-cli pr +checkout --owner Gitlink --repo forgeplus -i 42
-gitlink-cli pr +checkout --owner Gitlink --repo forgeplus -i 42 -b review-42
 
 # 合并 PR
 gitlink-cli pr +merge --owner Gitlink --repo forgeplus -i 42
@@ -625,32 +442,26 @@ gitlink-cli pr +reviews --owner Gitlink --repo forgeplus -i 42
 # 创建 PR 审查（支持 dry-run 预览）
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM" --dry-run
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
-
-# 查看行级审查评论和未解决讨论
-gitlink-cli pr +review-comments --owner Gitlink --repo forgeplus -i 42 --state opened --need-respond true --full
-
-# 创建行级审查评论或回复
-gitlink-cli pr +review-comment --owner Gitlink --repo forgeplus -i 42 -b "请处理这个边界情况" --type problem --review-id 7 --line-code abc_1_2 --commit deadbeef --path main.go --dry-run
-
-# 解决、编辑或删除审查评论
-gitlink-cli pr +review-comment-update --owner Gitlink --repo forgeplus -i 42 --comment-id 99 --state resolved
-gitlink-cli pr +review-comment-delete --owner Gitlink --repo forgeplus -i 42 --comment-id 99
 ```
 
-### 工作流 Agent 命令
+### 分支管理
 
 ```bash
-# 只读获取 PR 审查上下文包（仓库、PR、文件、Review、Issue、标签）
-gitlink-cli workflow +review-context --owner Gitlink --repo forgeplus --number 42 --format json
+# 列出分支，支持关键词和删除分支过滤
+gitlink-cli branch +list --owner Gitlink --repo forgeplus
+gitlink-cli branch +list --owner Gitlink --repo forgeplus --keyword fix --state deleted
 
-# 生成 PR 审查摘要
-gitlink-cli workflow +pr-summary --owner Gitlink --repo forgeplus --number 42 --format markdown
+# 无分页列出全部分支
+gitlink-cli branch +all --owner Gitlink --repo forgeplus
 
-# 生成仓库工作流报告
-gitlink-cli workflow +repo-report --owner Gitlink --repo forgeplus --format markdown
+# 创建 / 删除分支
+gitlink-cli branch +create --owner Gitlink --repo forgeplus --name feature/new-feature
+gitlink-cli branch +delete --owner Gitlink --repo forgeplus --name feature/old-feature
+
+# 设置默认分支或恢复已删除分支（先 dry-run 预览）
+gitlink-cli branch +set-default --owner Gitlink --repo forgeplus --name main --dry-run
+gitlink-cli branch +restore --owner Gitlink --repo forgeplus --id 7 --name feature/old --dry-run
 ```
-
-> `workflow +review-context` 只读取 GitLink 数据，不会评论、审批、拒绝、合并或修改标签。
 
 ### 发布管理
 
@@ -670,26 +481,6 @@ gitlink-cli release +update --owner Gitlink --repo forgeplus -i <version_id> -b 
 
 # 删除前先预览请求
 gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --dry-run
-```
-
-### CI/CD 操作
-
-```bash
-# 查看构建列表
-gitlink-cli ci +builds --owner Gitlink --repo forgeplus
-
-# 查看构建日志
-gitlink-cli ci +logs --owner Gitlink --repo forgeplus --build <build_id>
-
-# 重启或停止构建
-gitlink-cli ci +restart --owner Gitlink --repo forgeplus --build <build_id>
-gitlink-cli ci +stop --owner Gitlink --repo forgeplus --build <build_id>
-
-# 查看 CI 授权状态并安全启停仓库 CI
-gitlink-cli ci +authorize --owner Gitlink --repo forgeplus
-gitlink-cli ci +activate --owner Gitlink --repo forgeplus --dry-run
-gitlink-cli ci +activate --owner Gitlink --repo forgeplus --yes
-gitlink-cli ci +deactivate --owner Gitlink --repo forgeplus --dry-run
 ```
 
 ### 流水线管理
@@ -714,25 +505,6 @@ gitlink-cli pipeline +disable --owner Gitlink --repo forgeplus --id 7 --workflow
 gitlink-cli pipeline +delete --owner Gitlink --repo forgeplus --id 7 --dry-run
 ```
 
-### 项目邀请管理
-
-```bash
-# 生成邀请链接
-gitlink-cli invite +generate --owner Gitlink --repo forgeplus --role developer --is-apply true
-
-# 查看邀请链接信息
-gitlink-cli invite +show --owner Gitlink --repo forgeplus --invite-sign abc123
-
-# 通过链接接受邀请
-gitlink-cli invite +accept --owner Gitlink --repo forgeplus --invite-sign abc123
-
-# 通过邀请码加入项目
-gitlink-cli invite +join --code ABCDEF --role developer
-
-# 退出项目
-gitlink-cli invite +quit --owner Gitlink --repo forgeplus
-```
-
 ### 忽略文件模板
 
 ```bash
@@ -743,21 +515,6 @@ gitlink-cli ignore +list
 gitlink-cli ignore +list --name Go
 ```
 
-### 用户统计
-
-```bash
-# 用户资料与当前账户
-gitlink-cli user +me
-gitlink-cli user +info --login alice
-
-# 贡献和活跃度分析
-gitlink-cli user +activity --login alice
-gitlink-cli user +headmap --login alice --year 2026
-gitlink-cli user +develop --login alice --start-time 1717200000 --end-time 1719800000
-gitlink-cli user +role --login alice
-gitlink-cli user +major --login alice
-```
-
 ### 搜索
 
 ```bash
@@ -766,9 +523,6 @@ gitlink-cli search +repos -k "machine learning"
 
 # 搜索用户
 gitlink-cli search +users -k "zhangsan"
-
-# 列出推荐/精选项目
-gitlink-cli search +recommend
 ```
 
 ### 用户画像
@@ -794,49 +548,6 @@ gitlink-cli profile +activity
 gitlink-cli profile +contribution --user zhangsan --year 2025
 ```
 
-### Workflow Agent 命令
-
-`workflow` 提供面向维护者和 AI Agent 的规则化仓库分析能力，目前支持：
-
-- `workflow +triage`
-- `workflow +health`
-- `workflow +pr-summary`
-- `workflow +repo-report`
-- `workflow +release-notes`
-
-`workflow +pr-summary` 在未指定 `--format` 时默认输出 `table`。
-`workflow +repo-report` 和 `workflow +release-notes` 在未指定 `--format` 时默认输出 `markdown`。
-
-示例：
-
-```bash
-# Issue 分诊
-gitlink-cli workflow +triage --title "安装失败" --body "运行 go install 时报错" --format table
-
-# 仓库健康度
-gitlink-cli workflow +health --owner Gitlink --repo gitlink-cli --stale-days 30 --format table
-
-# PR 审阅摘要
-gitlink-cli workflow +pr-summary --owner Gitlink --repo gitlink-cli --number 1 --format markdown
-
-# 仓库工作流报告
-gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
-
-# 基于只读 compare fetch 生成 Release Notes
-gitlink-cli workflow +release-notes --owner Gitlink --repo gitlink-cli --from-ref v0.1.0 --to-ref master --version v0.2.0 --format markdown
-
-# 从本地 JSON 生成 Release Notes
-gitlink-cli workflow +release-notes --from shortcuts/workflow/testdata/release_notes.json --format json
-```
-
-安全边界：
-
-- 当前 workflow 命令默认只读，可读取 GitLink 数据或本地 JSON。
-- 不依赖 LLM API。
-- `workflow +pr-summary` 不评论、不 approve/reject、不合并 PR。
-- `workflow +repo-report` 聚合健康度、Issue 分诊和 PR 摘要信号，不写远端。
-- `workflow +release-notes` 只读取 compare 数据并渲染版本说明，不创建 Release 或评论。
-
 ### 数据集
 
 `dataset` 管理并查询 GitLink 科研数据集（标题、描述、论文内容、许可证、所属项目）。
@@ -858,21 +569,6 @@ gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --ye
 ```
 
 > 注意：`dataset +list`（平台数据集查询）已在生产 gitlink.org.cn 验证可用。按仓库的 `+view`/`+create`/`+update` 遵循已发布的 OpenAPI 契约，但生产环境尚未部署（当前返回 404），待平台上线后即可生效。
-### 环境自诊断（Doctor）
-
-```bash
-# 运行全部检查：配置文件、配置取值、认证、仓库上下文、API 连通性
-gitlink-cli doctor
-
-# 结构化输出，适合脚本 / AI Agent 使用
-gitlink-cli doctor --format json
-
-# 离线模式：跳过需认证的 API 连通性检查
-gitlink-cli doctor --skip-network
-```
-
-每项检查返回 `ok` / `warning` / `error` 及修复建议（suggestion）；warning 不影响使用。
-
 ### Raw API
 
 Shortcuts 未覆盖的接口可通过 Raw API 直接调用：
@@ -892,37 +588,7 @@ Get-Content issue.json | gitlink-cli api POST /Gitlink/forgeplus/issues --body-s
 
 # 带查询参数
 gitlink-cli api GET /Gitlink/forgeplus/commits --query 'page=1&limit=5'
-
-# 鍗曟璇锋眰涓洿鎺ュ鐢?--owner / --repo 鍗犱綅绗?
-gitlink-cli api GET /:owner/:repo/issues --owner Gitlink --repo gitlink-cli --query 'page=1&limit=5'
-
-# 鍦?path / query / body / header 涓覆鏌撲竴娆℃€фā鏉垮彉閲?
-gitlink-cli api POST /{{owner}}/{{repo}}/issues/{{number}}/journals \
-  --var owner=Gitlink --var repo=gitlink-cli --var number=42 --var actor=codex \
-  --query 'notify={{actor}}' \
-  --header 'X-Actor: {{actor}}' \
-  --body '{"notes":"handled by {{actor}}"}'
 ```
-
-### Shell 自动补全
-
-`gitlink-cli` 内置 bash / zsh / fish / PowerShell 补全：
-
-```bash
-# Bash（加入 ~/.bashrc）
-source <(gitlink-cli completion bash)
-
-# Zsh（加入 ~/.zshrc）
-source <(gitlink-cli completion zsh)
-
-# Fish
-gitlink-cli completion fish | source
-
-# PowerShell
-gitlink-cli completion powershell | Out-String | Invoke-Expression
-```
-
-各 shell 的一次性安装方式见 `gitlink-cli completion <shell> --help`。
 
 ## 全局参数
 
@@ -932,8 +598,6 @@ gitlink-cli completion powershell | Out-String | Invoke-Expression
 | `--repo` | 仓库名称 | `--repo forgeplus` |
 | `--format` | 输出格式（json/table/yaml） | `--format json` |
 | `--debug` | 启用调试输出 | `--debug` |
-| `--lang` | 界面语言（en/zh） | `--lang zh` |
-| `--jq` | 按点分路径从输出中提取字段 | `--jq data.issues.0.subject` |
 
 **自动上下文解析**：在 git 仓库目录下，`--owner` 和 `--repo` 会自动从 `git remote origin` 解析。
 
@@ -970,12 +634,10 @@ git push gitlink
 | `gitlink-issue` | Issue 操作（创建、更新、关闭、批量更新/删除、评论等） |
 | `gitlink-pr` | Pull Request 操作（创建、合并、Review 等） |
 | `gitlink-member` | 仓库成员与邀请链接管理 |
-| `gitlink-invite` | 项目邀请管理（生成链接、接受邀请、加入/退出项目） |
 | `gitlink-release` | 发布管理（创建、编辑、更新、查看、删除等） |
 | `gitlink-org` | 组织管理（成员、团队等） |
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |
 | `gitlink-pipeline` | 流水线工作流操作（运行、日志、启停、删除等） |
-| `gitlink-notification` | 用户消息（列表、标记已读、删除） |
 | `gitlink-search` | 搜索功能（仓库、用户等） |
 | `gitlink-user` | 用户管理（个人信息等） |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |
@@ -1074,14 +736,6 @@ gitlink-cli auth login --token
 export GITLINK_TOKEN="your-private-token"
 gitlink-cli repo +list   # 直接可用
 gitlink-cli auth status   # 显示 "✓ Logged in via GITLINK_TOKEN environment variable"
-```
-
-脚本中复用当前生效的 token（例如直接 `curl` CLI 尚未封装的端点）：
-
-```bash
-curl -H "Authorization: Bearer $(gitlink-cli auth token)" https://www.gitlink.org.cn/api/v1/...
-gitlink-cli auth status --show-token   # 查看原始 token（默认隐藏）
-echo $MY_TOKEN | gitlink-cli auth login --with-token   # 非交互登录（CI/脚本）
 ```
 
 Token 优先级：`GITLINK_TOKEN` 环境变量 > keyring/文件存储的 token。不设置环境变量时完全兼容原有交互式登录。

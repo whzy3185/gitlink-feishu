@@ -60,6 +60,56 @@ func TestBranchList(t *testing.T) {
 	}
 }
 
+func TestBranchListFilters(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/owner/repo/branches.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("keyword"); got != "feature" {
+			t.Fatalf("keyword = %q, want feature", got)
+		}
+		if got := r.URL.Query().Get("state"); got != "deleted" {
+			t.Fatalf("state = %q, want deleted", got)
+		}
+		writeJSON(w, map[string]interface{}{"total_count": 0, "branches": []interface{}{}})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "list", map[string]string{
+		"page": "1", "limit": "20", "keyword": "feature", "state": "deleted",
+	})
+	if err != nil {
+		t.Fatalf("list with filters failed: %v", err)
+	}
+}
+
+func TestBranchListRejectsInvalidState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("invalid state should not call API, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "list", map[string]string{"page": "1", "limit": "20", "state": "open"})
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+}
+
+func TestBranchAll(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/branches/all.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(w, []interface{}{map[string]interface{}{"name": "master"}})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "all", nil)
+	if err != nil {
+		t.Fatalf("all failed: %v", err)
+	}
+}
+
 // --- create ---
 
 func TestBranchCreate(t *testing.T) {
@@ -158,6 +208,69 @@ func TestBranchUnprotect(t *testing.T) {
 	err := runShortcut(t, server, "unprotect", map[string]string{"name": "master"})
 	if err != nil {
 		t.Fatalf("unprotect failed: %v", err)
+	}
+}
+
+func TestBranchSetDefault(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/branches/update_default_branch.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.URL.Query().Get("name"); got != "main" {
+			t.Fatalf("name query = %q, want main", got)
+		}
+		writeJSON(w, map[string]interface{}{"status": 0, "message": "success"})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "set-default", map[string]string{"name": "main"}); err != nil {
+		t.Fatalf("set-default failed: %v", err)
+	}
+}
+
+func TestBranchSetDefaultDryRunDoesNotCallAPI(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "set-default", map[string]string{"name": "main", "dry-run": "true"}); err != nil {
+		t.Fatalf("set-default dry-run failed: %v", err)
+	}
+}
+
+func TestBranchRestore(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/branches/restore.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		writeJSON(w, map[string]interface{}{"status": 0, "message": "success"})
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "restore", map[string]string{"id": "7", "name": "feature/deleted"}); err != nil {
+		t.Fatalf("restore failed: %v", err)
+	}
+	if payload["branch_id"] != float64(7) {
+		t.Fatalf("branch_id = %v, want 7", payload["branch_id"])
+	}
+	if payload["branch_name"] != "feature/deleted" {
+		t.Fatalf("branch_name = %v, want feature/deleted", payload["branch_name"])
+	}
+}
+
+func TestBranchRestoreValidation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("invalid restore should not call API, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	if err := runShortcut(t, server, "restore", map[string]string{"id": "0", "name": "feature/deleted"}); err == nil {
+		t.Fatal("expected invalid id error")
 	}
 }
 
