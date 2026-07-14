@@ -244,3 +244,41 @@ func TestFormatValue(t *testing.T) {
 		})
 	}
 }
+
+func TestPrintTableUnwrapsResourceWrappedList(t *testing.T) {
+	env := SuccessEnvelope(map[string]interface{}{
+		"total_count": 2,
+		"tags": []interface{}{
+			map[string]interface{}{"name": "v1.0.0", "id": 1},
+			map[string]interface{}{"name": "v1.1.0", "id": 2},
+		},
+	}, nil)
+	var buf bytes.Buffer
+	if err := PrintTo(&buf, env, "table"); err != nil {
+		t.Fatalf("PrintTo returned error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "total_count: 2") {
+		t.Fatalf("missing summary line: %s", out)
+	}
+	if !strings.Contains(out, "v1.0.0") || !strings.Contains(out, "v1.1.0") {
+		t.Fatalf("missing table rows: %s", out)
+	}
+	if strings.Contains(out, "\"ok\"") {
+		t.Fatalf("should not fall back to JSON: %s", out)
+	}
+}
+
+func TestPrintTableKeepsJSONForNestedObjects(t *testing.T) {
+	env := SuccessEnvelope(map[string]interface{}{
+		"commit": map[string]interface{}{"sha": "abc"},
+		"files":  []interface{}{},
+	}, nil)
+	var buf bytes.Buffer
+	if err := PrintTo(&buf, env, "table"); err != nil {
+		t.Fatalf("PrintTo returned error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "\"ok\"") {
+		t.Fatalf("nested object map should fall back to JSON: %s", buf.String())
+	}
+}
