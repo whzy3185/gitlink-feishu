@@ -110,7 +110,7 @@
 | 👥 成员 | 列出、添加、移除仓库成员，调整角色，生成和接受邀请链接 |
 | 🌿 分支 | 创建、删除、保护分支 |
 | 🏷️ 发布 | 创建、编辑、更新、查看、删除 Release |
-| 🏢 组织 | 管理组织、成员、团队 |
+| 🏢 组织 | 管理组织、列出成员、查看团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
 | 📖 Wiki | 列出、查看、创建、更新、删除 Wiki 页面 |
@@ -366,6 +366,22 @@ gitlink-cli member +apply --code MPzQgH --role developer --dry-run
 # 退出仓库成员关系
 gitlink-cli member +quit --owner Gitlink --repo forgeplus --dry-run
 gitlink-cli member +quit --owner Gitlink --repo forgeplus --yes
+```
+
+### 组织管理
+
+```bash
+# 列出组织
+gitlink-cli org +list
+
+# 查看组织详情
+gitlink-cli org +info --id Gitlink
+
+# 列出组织成员
+gitlink-cli org +members --id Gitlink --page 1 --limit 20
+
+# 列出组织团队
+gitlink-cli org +teams --id Gitlink --page 1 --limit 20
 ```
 
 ### Issue 管理

@@ -140,7 +140,7 @@ skills/
 |-------|------|----------|
 | **gitlink-search** | 搜索功能 | `search +repos`, `search +users` |
 | **gitlink-user** | 用户管理 | `user +me`, `user +info` |
-| **gitlink-org** | 组织管理 | `org +list`, `org +info`, `org +members` |
+| **gitlink-org** | 组织管理 | `org +list`, `org +info`, `org +members`, `org +teams` |
 | **gitlink-ci** | CI/CD | `ci +builds`, `ci +logs` |
 | **gitlink-pipeline** | 流水线工作流 | `pipeline +runs`, `pipeline +run`, `pipeline +logs` |
 | **gitlink-wiki** | Wiki 页面管理 | `wiki +list`, `wiki +view`, `wiki +create`, `wiki +update`, `wiki +delete` |
@@ -217,6 +217,7 @@ gitlink-cli search +users -k "zhangsan"
 # 查看组织
 gitlink-cli org +list
 gitlink-cli org +info -i Gitlink
+gitlink-cli org +teams -i Gitlink
 ```
 
 详见: [gitlink-search/SKILL.md](gitlink-search/SKILL.md)
