@@ -1,0 +1,4 @@
+interface:
+  display_name: "维护者雷达"
+  short_description: "识别响应超时、review 失衡和责任停滞，生成维护者处置面板。"
+  default_prompt: "Use $gitlink-maintainer-radar 扫描这个 GitLink 仓库当前的响应 SLA、review 负载和责任停滞情况，输出按优先级排序的处置清单和建议动作。"
