@@ -3,7 +3,7 @@ BINARY   := gitlink-cli
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS  := -s -w -X '$(MODULE)/cmd.Version=$(VERSION)'
 
-.PHONY: build install clean test check vet fmt cover lint validate-research-skills
+.PHONY: build install clean test check vet fmt cover lint skills
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY) .
@@ -35,10 +35,10 @@ cover:
 lint:
 	golangci-lint run ./...
 
-validate-research-skills:
-	python3 scripts/validate-research-skills.py
+skills:
+	go run ./internal/skillmeta/cmd/check
 
-check: fmt vet lint test validate-research-skills
+check: fmt vet lint skills test
 	@echo "All checks passed."
 
 hooks:

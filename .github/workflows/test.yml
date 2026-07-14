@@ -26,8 +26,8 @@ jobs:
       - name: Scan i18n key references
         run: go run ./internal/i18n/cmd/check --scan-code
 
-      - name: Validate research Skills
-        run: python3 scripts/validate-research-skills.py
+      - name: Validate skill metadata
+        run: go run ./internal/skillmeta/cmd/check
 
       - name: Run Go tests
         run: go test ./...

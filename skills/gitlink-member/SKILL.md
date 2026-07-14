@@ -1,7 +1,10 @@
 ---
 name: gitlink-member
-description: "仓库成员管理：列出、添加、批量添加、移除成员，调整成员角色，生成/查看/接受邀请链接，通过邀请码申请加入项目，退出仓库成员关系。"
+version: 1.0.0
+description: "仓库成员管理：列出、添加、批量添加、移除成员，调整成员角色，生成、查看和接受项目邀请链接。当用户需要管理 GitLink 仓库成员、成员角色或邀请链接时触发。"
 metadata:
+  requires:
+    bins: ["gitlink-cli"]
   cliHelp: "gitlink-cli member --help"
 ---
 
@@ -21,8 +24,6 @@ metadata:
 | `member +invite-link` | 获取或生成当前邀请链接 |
 | `member +invite-info` | 查看邀请链接信息 |
 | `member +accept-invite` | 接受邀请链接 |
-| `member +apply` | 通过项目邀请码申请加入项目 |
-| `member +quit` | 退出当前仓库成员关系 |
 
 ## 示例
 
@@ -50,20 +51,10 @@ gitlink-cli member +invite-info --owner Gitlink --repo forgeplus --sign <invite_
 
 # 接受邀请链接
 gitlink-cli member +accept-invite --owner Gitlink --repo forgeplus --sign <invite_sign>
-
-# 通过邀请码申请加入项目。role 支持 manager、developer、reporter，建议先 dry-run。
-gitlink-cli member +apply --code MPzQgH --role developer --dry-run
-gitlink-cli member +apply --code MPzQgH --role developer
-
-# 退出仓库成员关系。真实执行必须显式 --yes。
-gitlink-cli member +quit --owner Gitlink --repo forgeplus --dry-run
-gitlink-cli member +quit --owner Gitlink --repo forgeplus --yes
 ```
 
 ## 安全规则
 
 - 执行 `member +remove`、`member +role`、`member +add`、`member +batch-add` 前，确认目标仓库和用户 ID。
-- 执行 `member +apply`、`member +quit` 前，确认邀请码、目标仓库和期望角色；优先使用 `--dry-run` 预览。
-- `member +quit` 会让当前用户离开仓库，真实执行必须带 `--yes`。
 - 批量添加前优先使用 `--dry-run` 预览。
 - 避免在公开日志中暴露邀请链接的完整 `sign`。
