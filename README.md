@@ -292,6 +292,11 @@ gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 # Create a repository
 gitlink-cli repo +create -n my-project -d "Project description"
 
+# Update repository settings (only the given fields change)
+gitlink-cli repo +edit --owner me --repo my-project -d "New description" --website "https://example.org"
+gitlink-cli repo +edit --owner me --repo my-project --private true
+gitlink-cli repo +edit --owner me --repo my-project --default-branch main
+
 # Fork a repository
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
 

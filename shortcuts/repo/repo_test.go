@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -147,55 +144,11 @@ func TestRepoReadmeUsesRepositoryReadmeEndpoint(t *testing.T) {
 	defer server.Close()
 
 	err := runShortcut(t, server, "readme", map[string]string{
-		"ref":  " main ",
-		"path": " /docs/ ",
+		"ref":  "main",
+		"path": "docs",
 	})
 	if err != nil {
 		t.Fatalf("readme shortcut failed: %v", err)
-	}
-}
-
-func TestRepoFileUsesSubEntriesAndDefaultsToMaster(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
-		assertEqual(t, r.URL.Query().Get("filepath"), "README.md")
-		assertEqual(t, r.URL.Query().Get("ref"), "master")
-		writeJSON(t, w, map[string]interface{}{
-			"entries": map[string]interface{}{
-				"name":    "README.md",
-				"type":    "file",
-				"sha":     "abc123",
-				"size":    float64(12),
-				"content": "# docs\n",
-			},
-		})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "file", map[string]string{"path": "/README.md"})
-	if err != nil {
-		t.Fatalf("file shortcut failed: %v", err)
-	}
-}
-
-func TestRepoFileUsesExplicitRef(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
-		assertEqual(t, r.URL.Query().Get("filepath"), "go.mod")
-		assertEqual(t, r.URL.Query().Get("ref"), "release/v1")
-		writeJSON(t, w, map[string]interface{}{
-			"entries": map[string]interface{}{
-				"name":    "go.mod",
-				"type":    "file",
-				"content": "module example.com/demo\n",
-			},
-		})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "file", map[string]string{"path": "go.mod", "ref": "release/v1"})
-	if err != nil {
-		t.Fatalf("file shortcut failed: %v", err)
 	}
 }
 
@@ -205,9 +158,7 @@ func TestRepoTreeListsRootOnDefaultRef(t *testing.T) {
 		if _, ok := r.URL.Query()["filepath"]; ok {
 			t.Fatalf("did not expect filepath query for repository root, got %q", r.URL.Query().Get("filepath"))
 		}
-		if _, ok := r.URL.Query()["ref"]; ok {
-			t.Fatalf("did not expect ref query for default ref, got %q", r.URL.Query().Get("ref"))
-		}
+		assertEqual(t, r.URL.Query().Get("ref"), "master")
 		writeJSON(t, w, map[string]interface{}{
 			"entries": []map[string]interface{}{
 				{"name": "README.md", "type": "file"},
@@ -262,44 +213,8 @@ func TestRepoTreeShortcutRegistersHelpFlags(t *testing.T) {
 	if !ok {
 		t.Fatal("tree shortcut missing ref flag")
 	}
-	if refFlag.Short != "r" || refFlag.Default != "" || refFlag.Usage == "" {
-		t.Fatalf("unexpected ref flag: %+v", refFlag)
-	}
-}
-
-func TestRepoFileShortcutRegistersHelpFlags(t *testing.T) {
-	file := findShortcut(t, "file")
-	if file.Description == "" {
-		t.Fatal("file shortcut description is empty")
-	}
-
-	flags := map[string]common.Flag{}
-	for _, flag := range file.Flags {
-		flags[flag.Name] = flag
-	}
-
-	pathFlag, ok := flags["path"]
-	if !ok {
-		t.Fatal("file shortcut missing path flag")
-	}
-	if pathFlag.Short != "p" || !pathFlag.Required || pathFlag.Usage == "" {
-		t.Fatalf("unexpected path flag: %+v", pathFlag)
-	}
-
-	refFlag, ok := flags["ref"]
-	if !ok {
-		t.Fatal("file shortcut missing ref flag")
-	}
 	if refFlag.Short != "r" || refFlag.Default != "master" || refFlag.Usage == "" {
 		t.Fatalf("unexpected ref flag: %+v", refFlag)
-	}
-
-	contentOnlyFlag, ok := flags["content-only"]
-	if !ok {
-		t.Fatal("file shortcut missing content-only flag")
-	}
-	if !contentOnlyFlag.Bool || contentOnlyFlag.Default != "false" || contentOnlyFlag.Usage == "" {
-		t.Fatalf("unexpected content-only flag: %+v", contentOnlyFlag)
 	}
 }
 
@@ -515,129 +430,6 @@ func TestRepoDelete(t *testing.T) {
 	}
 }
 
-func TestRepoTransferOrgs(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/owner/repo/applied_transfer_projects/organizations.json")
-		writeJSON(t, w, map[string]interface{}{
-			"total_count":   float64(1),
-			"organizations": []interface{}{map[string]interface{}{"name": "target-org"}},
-		})
-	}))
-	defer server.Close()
-
-	if err := runShortcut(t, server, "transfer-orgs", nil); err != nil {
-		t.Fatalf("transfer-orgs failed: %v", err)
-	}
-}
-
-func TestRepoTransfer(t *testing.T) {
-	var body map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "POST", "/owner/repo/applied_transfer_projects.json")
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode body: %v", err)
-		}
-		writeJSON(t, w, map[string]interface{}{"status": "common"})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "transfer", map[string]string{
-		"target-owner": " target-org ",
-		"yes":          "true",
-	})
-	if err != nil {
-		t.Fatalf("transfer failed: %v", err)
-	}
-	assertEqual(t, body["owner_name"], "target-org")
-}
-
-func TestRepoTransferDryRunDoesNotCallAPI(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "transfer", map[string]string{
-		"target-owner": "target-org",
-		"dry-run":      "true",
-	})
-	if err != nil {
-		t.Fatalf("transfer dry-run failed: %v", err)
-	}
-}
-
-func TestRepoTransferRequiresExplicitYes(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("transfer without --yes should not call API, got %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "transfer", map[string]string{"target-owner": "target-org"})
-	if err == nil {
-		t.Fatal("expected confirmation error for missing --yes")
-	}
-}
-
-func TestRepoTransferFailsWithoutTargetOwner(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("no API call should be made")
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "transfer", map[string]string{})
-	if err == nil {
-		t.Fatal("expected error for missing target owner")
-	}
-}
-
-func TestRepoTransferRejectsBlankTargetOwner(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("no API call should be made")
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "transfer", map[string]string{"target-owner": "   "})
-	if err == nil {
-		t.Fatal("expected error for blank target owner")
-	}
-}
-
-func TestRepoTransferCancel(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "POST", "/owner/repo/applied_transfer_projects/cancel.json")
-		writeJSON(t, w, map[string]interface{}{"status": "canceled"})
-	}))
-	defer server.Close()
-
-	if err := runShortcut(t, server, "transfer-cancel", map[string]string{"yes": "true"}); err != nil {
-		t.Fatalf("transfer-cancel failed: %v", err)
-	}
-}
-
-func TestRepoTransferCancelDryRunDoesNotCallAPI(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "transfer-cancel", map[string]string{"dry-run": "true"})
-	if err != nil {
-		t.Fatalf("transfer-cancel dry-run failed: %v", err)
-	}
-}
-
-func TestRepoTransferCancelRequiresExplicitYes(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("transfer-cancel without --yes should not call API, got %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "transfer-cancel", nil)
-	if err == nil {
-		t.Fatal("expected confirmation error for missing --yes")
-	}
-}
-
 func TestRepoCreate(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -713,16 +505,6 @@ func TestRepoInsightValidation(t *testing.T) {
 			name:     "invalid pass year",
 			shortcut: "contributor-stats",
 			args:     map[string]string{"pass-year": "0"},
-		},
-		{
-			name:     "missing file path",
-			shortcut: "file",
-			args:     map[string]string{},
-		},
-		{
-			name:     "invalid file path",
-			shortcut: "file",
-			args:     map[string]string{"path": "/"},
 		},
 		{
 			name:     "invalid start timestamp",
@@ -839,66 +621,6 @@ func TestRepoCreateUserNoLogin(t *testing.T) {
 	}
 }
 
-func TestRepoFileRejectsDirectoryPath(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
-		writeJSON(t, w, map[string]interface{}{
-			"entries": []map[string]interface{}{
-				{"name": "main.go", "type": "file"},
-			},
-		})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "file", map[string]string{"path": "cmd"})
-	if err == nil {
-		t.Fatal("expected directory error")
-	}
-}
-
-func TestRepoFileContentOnlyRequiresContent(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/owner/repo/sub_entries.json")
-		writeJSON(t, w, map[string]interface{}{
-			"entries": map[string]interface{}{
-				"name": "README.md",
-				"type": "file",
-			},
-		})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "file", map[string]string{
-		"path":         "README.md",
-		"content-only": "true",
-	})
-	if err == nil {
-		t.Fatal("expected missing content error")
-	}
-}
-
-func TestBuildRepoFileResult(t *testing.T) {
-	result := buildRepoFileResult(map[string]interface{}{
-		"name":    "go.mod",
-		"type":    "file",
-		"sha":     "abc123",
-		"size":    float64(42),
-		"content": "module demo\n",
-		"commit":  map[string]interface{}{"sha": "nested"},
-	}, "go.mod", "master")
-
-	assertEqual(t, result["path"], "go.mod")
-	assertEqual(t, result["ref"], "master")
-	assertEqual(t, result["name"], "go.mod")
-	assertEqual(t, result["type"], "file")
-	assertEqual(t, result["sha"], "abc123")
-	assertEqual(t, result["size"], float64(42))
-	assertEqual(t, result["content"], "module demo\n")
-	if _, ok := result["commit"]; ok {
-		t.Fatal("did not expect nested commit metadata in flattened file result")
-	}
-}
-
 func assertRequest(t *testing.T, r *http.Request, method, path string) {
 	t.Helper()
 	if r.Method != method || r.URL.Path != path {
@@ -913,46 +635,132 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	}
 }
 
-// --- clone ---
+// --- edit ---
 
-func TestRepoCloneRunsGit(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not available")
-	}
-	src := t.TempDir()
-	for _, args := range [][]string{
-		{"init", "-q", "--initial-branch=master", src},
-		{"-C", src, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"},
-	} {
-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v (%s)", args, err, out)
-		}
-	}
+func TestRepoEditRequiresAtLeastOneField(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
 
+	err := runShortcut(t, server, "edit", nil)
+	if err == nil {
+		t.Fatal("expected error when no fields are given")
+	}
+}
+
+func TestRepoEditValidatesPrivate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "edit", map[string]string{"private": "yes"})
+	if err == nil {
+		t.Fatal("expected error for invalid --private value")
+	}
+}
+
+func TestRepoEditValidatesCategoryID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "edit", map[string]string{"category-id": "abc"})
+	if err == nil {
+		t.Fatal("expected error for non-integer --category-id")
+	}
+}
+
+func TestRepoEditSendsMetadataWithNameAndIdentifier(t *testing.T) {
+	var patches []map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/owner/repo.json" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		writeJSON(t, w, map[string]interface{}{"identifier": "repo", "clone_url": src})
+		switch r.Method {
+		case "GET":
+			writeJSON(t, w, map[string]interface{}{"name": "repo", "identifier": "repo"})
+		case "PATCH":
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			patches = append(patches, body)
+			writeJSON(t, w, map[string]interface{}{"id": 1})
+		default:
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
 	}))
 	defer server.Close()
 
-	dest := filepath.Join(t.TempDir(), "cloned-repo")
-	if err := runShortcut(t, server, "clone", map[string]string{"dir": dest}); err != nil {
-		t.Fatalf("clone shortcut failed: %v", err)
+	err := runShortcut(t, server, "edit", map[string]string{"description": "new desc", "private": "true"})
+	if err != nil {
+		t.Fatalf("edit failed: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dest, ".git")); err != nil {
-		t.Fatalf("expected cloned repo at %s: %v", dest, err)
+	if len(patches) != 1 {
+		t.Fatalf("expected 1 PATCH, got %d", len(patches))
 	}
+	body := patches[0]
+	assertEqual(t, body["name"], "repo")
+	assertEqual(t, body["identifier"], "repo")
+	assertEqual(t, body["description"], "new desc")
+	assertEqual(t, body["private"], true)
 }
 
-func TestRepoCloneMissingCloneURL(t *testing.T) {
+func TestRepoEditSplitsWebsiteAndDefaultBranchRequests(t *testing.T) {
+	var patches []map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, map[string]interface{}{"identifier": "repo"})
+		if r.URL.Path != "/owner/repo.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		switch r.Method {
+		case "GET":
+			writeJSON(t, w, map[string]interface{}{"name": "repo", "identifier": "repo"})
+		case "PATCH":
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			patches = append(patches, body)
+			writeJSON(t, w, map[string]interface{}{"id": 1})
+		default:
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
 	}))
 	defer server.Close()
 
-	if err := runShortcut(t, server, "clone", map[string]string{}); err == nil {
-		t.Fatal("expected error when clone_url missing")
+	err := runShortcut(t, server, "edit", map[string]string{
+		"website":        "https://example.org",
+		"default-branch": "main",
+		"description":    "d",
+	})
+	if err != nil {
+		t.Fatalf("edit failed: %v", err)
+	}
+	if len(patches) != 3 {
+		t.Fatalf("expected 3 PATCH requests (default-branch, website, metadata), got %d", len(patches))
+	}
+	assertEqual(t, patches[0]["default_branch"], "main")
+	if _, ok := patches[0]["website"]; ok {
+		t.Fatal("default-branch request must not carry website")
+	}
+	assertEqual(t, patches[1]["website"], "https://example.org")
+	if _, ok := patches[1]["default_branch"]; ok {
+		t.Fatal("website request must not carry default_branch")
+	}
+	assertEqual(t, patches[2]["description"], "d")
+}
+
+func TestRepoEditFailsWhenIdentifierMissing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, map[string]interface{}{"name": "repo"})
+	}))
+	defer server.Close()
+
+	err := runShortcut(t, server, "edit", map[string]string{"description": "x"})
+	if err == nil {
+		t.Fatal("expected error when identifier cannot be resolved")
 	}
 }

@@ -298,6 +298,11 @@ gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
 # 创建仓库
 gitlink-cli repo +create -n my-project -d "项目描述"
 
+# 更新仓库设置（只修改指定字段）
+gitlink-cli repo +edit --owner me --repo my-project -d "新描述" --website "https://example.org"
+gitlink-cli repo +edit --owner me --repo my-project --private true
+gitlink-cli repo +edit --owner me --repo my-project --default-branch main
+
 # Fork 仓库
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
 
