@@ -15,7 +15,6 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/label"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/license"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/member"
-	"github.com/gitlink-org/gitlink-cli/shortcuts/messagesetting"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/milestone"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/org"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/pipeline"
@@ -25,6 +24,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/repo"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/search"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/user"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/watch"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/webhook"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/wiki"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
@@ -37,55 +37,55 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		tr = translators[0]
 	}
 	groups := map[string][]*common.Shortcut{
-		"repo":             repo.Shortcuts(tr),
-		"issue":            issue.Shortcuts(tr),
-		"label":            label.Shortcuts(),
-		"license":          license.Shortcuts(),
-		"member":           member.Shortcuts(),
-		"message-settings": messagesetting.Shortcuts(tr),
-		"milestone":        milestone.Shortcuts(),
-		"pipeline":         pipeline.Shortcuts(),
-		"pr":               pr.Shortcuts(tr),
-		"profile":          profile.Shortcuts(tr),
-		"release":          release.Shortcuts(tr),
-		"branch":           branch.Shortcuts(tr),
-		"org":              org.Shortcuts(tr),
-		"user":             user.Shortcuts(tr),
-		"search":           search.Shortcuts(tr),
-		"ci":               ci.Shortcuts(tr),
-		"compare":          compare.Shortcuts(),
-		"dataset":          dataset.Shortcuts(tr),
-		"webhook":          webhook.Shortcuts(tr),
-		"wiki":             wiki.Shortcuts(),
-		"health":           health.Shortcuts(tr),
-		"ignore":           ignore.Shortcuts(),
-		"workflow":         workflow.Shortcuts(),
+		"repo":      repo.Shortcuts(tr),
+		"issue":     issue.Shortcuts(tr),
+		"label":     label.Shortcuts(),
+		"license":   license.Shortcuts(),
+		"member":    member.Shortcuts(),
+		"milestone": milestone.Shortcuts(),
+		"pipeline":  pipeline.Shortcuts(),
+		"pr":        pr.Shortcuts(tr),
+		"profile":   profile.Shortcuts(tr),
+		"release":   release.Shortcuts(tr),
+		"branch":    branch.Shortcuts(tr),
+		"org":       org.Shortcuts(tr),
+		"user":      user.Shortcuts(tr),
+		"search":    search.Shortcuts(tr),
+		"watch":     watch.Shortcuts(),
+		"ci":        ci.Shortcuts(tr),
+		"compare":   compare.Shortcuts(),
+		"dataset":   dataset.Shortcuts(tr),
+		"webhook":   webhook.Shortcuts(tr),
+		"wiki":      wiki.Shortcuts(),
+		"health":    health.Shortcuts(tr),
+		"ignore":    ignore.Shortcuts(),
+		"workflow":  workflow.Shortcuts(),
 	}
 
 	descriptions := map[string]string{
-		"repo":             tr.T("cmd.repo.short"),
-		"issue":            tr.T("cmd.issue.short"),
-		"label":            "Issue label operations",
-		"license":          "License operations",
-		"member":           "Repository member operations",
-		"message-settings": tr.T("cmd.message_settings.short"),
-		"milestone":        "Milestone operations",
-		"pipeline":         "Pipeline operations",
-		"pr":               tr.T("cmd.pr.short"),
-		"profile":          tr.T("cmd.profile.short"),
-		"release":          tr.T("cmd.release.short"),
-		"branch":           tr.T("cmd.branch.short"),
-		"org":              tr.T("cmd.org.short"),
-		"user":             tr.T("cmd.user.short"),
-		"search":           tr.T("cmd.search.short"),
-		"ci":               tr.T("cmd.ci.short"),
-		"compare":          "Compare branches, tags, or commits",
-		"dataset":          tr.T("cmd.dataset.short"),
-		"webhook":          tr.T("cmd.webhook.short"),
-		"wiki":             "Wiki page management",
-		"health":           "Project health data collection",
-		"ignore":           tr.T("cmd.ignore.short"),
-		"workflow":         "AI agent workflow analysis",
+		"repo":      tr.T("cmd.repo.short"),
+		"issue":     tr.T("cmd.issue.short"),
+		"label":     "Issue label operations",
+		"license":   "License operations",
+		"member":    "Repository member operations",
+		"milestone": "Milestone operations",
+		"pipeline":  "Pipeline operations",
+		"pr":        tr.T("cmd.pr.short"),
+		"profile":   tr.T("cmd.profile.short"),
+		"release":   tr.T("cmd.release.short"),
+		"branch":    tr.T("cmd.branch.short"),
+		"org":       tr.T("cmd.org.short"),
+		"user":      tr.T("cmd.user.short"),
+		"search":    tr.T("cmd.search.short"),
+		"watch":     "Watch (subscribe) repository operations",
+		"ci":        tr.T("cmd.ci.short"),
+		"compare":   "Compare branches, tags, or commits",
+		"dataset":   tr.T("cmd.dataset.short"),
+		"webhook":   tr.T("cmd.webhook.short"),
+		"wiki":      "Wiki page management",
+		"health":    "Project health data collection",
+		"ignore":    tr.T("cmd.ignore.short"),
+		"workflow":  "AI agent workflow analysis",
 	}
 
 	for name, shortcuts := range groups {
