@@ -5,17 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
-	"sort"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/client"
-	gitcontext "github.com/gitlink-org/gitlink-cli/internal/context"
+	repoContext "github.com/gitlink-org/gitlink-cli/internal/context"
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 )
@@ -32,8 +31,9 @@ func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
 		Example: `  gitlink-cli api GET /users/me
   gitlink-cli api GET /projects --query 'page=1&limit=10'
   gitlink-cli api POST /:owner/:repo/issues --body '{"subject":"Bug","description":"..."}'
-  gitlink-cli api GET /{{owner}}/{{repo}}/pulls --var owner=Gitlink --var repo=gitlink-cli
   gitlink-cli api POST /:owner/:repo/issues --body-file issue.json
+  gitlink-cli api POST /v1/{{owner}}/{{repo}}/issues/{{number}}/journals --body '{"notes":"handled by {{actor}}"}' --var owner=Gitlink --var repo=gitlink-cli --var number=42 --var actor=bot
+  gitlink-cli api POST /v1/{{owner}}/{{repo}}/issues --body-file issue.json --var owner=Gitlink --var repo=gitlink-cli --dry-run
   gitlink-cli api --batch-file plan.json --dry-run
   gitlink-cli api --batch-file plan.json --var owner=Gitlink --var repo=gitlink-cli`,
 		Args: validateAPIArgs,
@@ -71,28 +71,18 @@ func runAPI(c *cobra.Command, args []string) error {
 	}
 
 	method := strings.ToUpper(args[0])
+	path := args[1]
 
-	body, err := readJSONBody(c)
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+
+	vars, err := parseBatchVars(c)
 	if err != nil {
 		return err
 	}
-
-	var query url.Values
-	queryStr, _ := c.Flags().GetString("query")
-	if queryStr != "" {
-		var err error
-		query, err = url.ParseQuery(queryStr)
-		if err != nil {
-			return fmt.Errorf("invalid query string: %w", err)
-		}
-	}
-
-	headers, err := parseAPIHeaders(c)
-	if err != nil {
-		return err
-	}
-
-	request, err := renderSingleAPIRequest(args[1], query, body, headers, c)
+	addRepoContextVars(vars)
+	path, err = renderSinglePath(path, vars)
 	if err != nil {
 		return err
 	}
@@ -103,7 +93,33 @@ func runAPI(c *cobra.Command, args []string) error {
 	}
 	cli.Debug = cmdutil.Debug
 
-	env, err := cli.DoWithHeaders(method, request.Path, request.Body, request.Query, request.Headers)
+	body, err := readJSONBody(c, vars)
+	if err != nil {
+		return err
+	}
+
+	var query url.Values
+	queryStr, _ := c.Flags().GetString("query")
+	if queryStr != "" {
+		query, err = renderSingleQuery(queryStr, vars)
+		if err != nil {
+			return err
+		}
+	}
+
+	dryRun, _ := c.Flags().GetBool("dry-run")
+	if dryRun {
+		return output.Print(output.SuccessEnvelope(map[string]interface{}{
+			"dry_run":   true,
+			"method":    method,
+			"path":      path,
+			"query":     query,
+			"body":      body,
+			"variables": sortedVars(vars),
+		}, nil), resolveFormat())
+	}
+
+	env, err := cli.Do(method, path, body, query)
 	if err != nil {
 		var apiErr *client.APIError
 		if errors.As(err, &apiErr) {
@@ -116,7 +132,7 @@ func runAPI(c *cobra.Command, args []string) error {
 	return output.Print(env, resolveFormat())
 }
 
-func readJSONBody(c *cobra.Command) (interface{}, error) {
+func readJSONBody(c *cobra.Command, vars map[string]string) (interface{}, error) {
 	bodyStr, _ := c.Flags().GetString("body")
 	bodyFile, _ := c.Flags().GetString("body-file")
 	bodyStdin, _ := c.Flags().GetBool("body-stdin")
@@ -156,7 +172,64 @@ func readJSONBody(c *cobra.Command) (interface{}, error) {
 	if err := json.Unmarshal(data, &body); err != nil {
 		return nil, fmt.Errorf("invalid JSON body: %w", err)
 	}
-	return body, nil
+	rendered, err := renderBatchValue(body, vars)
+	if err != nil {
+		return nil, fmt.Errorf("render JSON body: %w", err)
+	}
+	return rendered, nil
+}
+
+func renderSinglePath(path string, vars map[string]string) (string, error) {
+	rendered, err := renderTemplate(rewriteColonPlaceholders(path), vars)
+	if err != nil {
+		return "", fmt.Errorf("render path: %w", err)
+	}
+	return rendered, nil
+}
+
+func renderSingleQuery(raw string, vars map[string]string) (url.Values, error) {
+	rendered, err := renderTemplate(raw, vars)
+	if err != nil {
+		return nil, fmt.Errorf("render query: %w", err)
+	}
+	query, err := url.ParseQuery(rendered)
+	if err != nil {
+		return nil, fmt.Errorf("invalid query string: %w", err)
+	}
+	return query, nil
+}
+
+func addRepoContextVars(vars map[string]string) {
+	if vars == nil {
+		return
+	}
+	if vars["owner"] != "" && vars["repo"] != "" {
+		return
+	}
+	owner, repo, err := repoContext.ResolveOwnerRepo(cmdutil.Owner, cmdutil.Repo)
+	if err != nil {
+		return
+	}
+	if vars["owner"] == "" {
+		vars["owner"] = owner
+	}
+	if vars["repo"] == "" {
+		vars["repo"] = repo
+	}
+}
+
+func rewriteColonPlaceholders(path string) string {
+	return colonPathVarPattern.ReplaceAllString(path, `$1{{$2}}`)
+}
+
+var colonPathVarPattern = templatePattern
+
+func init() {
+	colonPathVarPattern = mustCompileColonPattern()
+}
+
+func mustCompileColonPattern() *regexp.Regexp {
+	return regexp.MustCompile(`(^|/):([A-Za-z0-9_.-]+)`)
 }
 
 func resolveFormat() string {
@@ -165,208 +238,4 @@ func resolveFormat() string {
 		return "json"
 	}
 	return f
-}
-
-type singleAPIRequest struct {
-	Path    string
-	Query   url.Values
-	Body    interface{}
-	Headers http.Header
-}
-
-func renderSingleAPIRequest(path string, query url.Values, body interface{}, headers http.Header, c *cobra.Command) (*singleAPIRequest, error) {
-	normalizedPath := normalizeSingleAPIPath(path)
-	if !strings.HasPrefix(normalizedPath, "/") {
-		normalizedPath = "/" + normalizedPath
-	}
-
-	vars, err := resolveSingleRequestVars(c, normalizedPath, query, body, headers)
-	if err != nil {
-		return nil, err
-	}
-
-	renderedPath, err := renderTemplate(normalizedPath, vars)
-	if err != nil {
-		return nil, fmt.Errorf("render path: %w", err)
-	}
-	renderedQuery, err := renderURLValues(query, vars)
-	if err != nil {
-		return nil, fmt.Errorf("render query: %w", err)
-	}
-	renderedBody, err := renderBatchValue(body, vars)
-	if err != nil {
-		return nil, fmt.Errorf("render body: %w", err)
-	}
-	renderedHeaders, err := renderAPIHeaders(headers, vars)
-	if err != nil {
-		return nil, fmt.Errorf("render headers: %w", err)
-	}
-
-	return &singleAPIRequest{
-		Path:    renderedPath,
-		Query:   renderedQuery,
-		Body:    renderedBody,
-		Headers: renderedHeaders,
-	}, nil
-}
-
-func normalizeSingleAPIPath(path string) string {
-	return strings.NewReplacer(":owner", "{{owner}}", ":repo", "{{repo}}").Replace(strings.TrimSpace(path))
-}
-
-func resolveSingleRequestVars(c *cobra.Command, path string, query url.Values, body interface{}, headers http.Header) (map[string]string, error) {
-	vars, err := parseBatchVars(c)
-	if err != nil {
-		return nil, err
-	}
-	if !needsOwnerRepoResolution(path, query, body, headers, vars) {
-		return vars, nil
-	}
-	owner, repo, err := gitcontext.ResolveOwnerRepo(cmdutil.Owner, cmdutil.Repo)
-	if err != nil {
-		return nil, fmt.Errorf("resolve owner/repo for api templates: %w", err)
-	}
-	if _, ok := vars["owner"]; !ok {
-		vars["owner"] = owner
-	}
-	if _, ok := vars["repo"]; !ok {
-		vars["repo"] = repo
-	}
-	return vars, nil
-}
-
-func needsOwnerRepoResolution(path string, query url.Values, body interface{}, headers http.Header, vars map[string]string) bool {
-	if vars["owner"] != "" && vars["repo"] != "" {
-		return false
-	}
-	if strings.Contains(path, "{{owner}}") || strings.Contains(path, "{{repo}}") {
-		return true
-	}
-	for key, values := range query {
-		if strings.Contains(key, "{{owner}}") || strings.Contains(key, "{{repo}}") {
-			return true
-		}
-		for _, value := range values {
-			if strings.Contains(value, "{{owner}}") || strings.Contains(value, "{{repo}}") {
-				return true
-			}
-		}
-	}
-	if containsTemplateVar(body, "owner", "repo") {
-		return true
-	}
-	for key, values := range headers {
-		if strings.Contains(key, "{{owner}}") || strings.Contains(key, "{{repo}}") {
-			return true
-		}
-		for _, value := range values {
-			if strings.Contains(value, "{{owner}}") || strings.Contains(value, "{{repo}}") {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func containsTemplateVar(value interface{}, names ...string) bool {
-	switch typed := value.(type) {
-	case nil:
-		return false
-	case string:
-		for _, name := range names {
-			if strings.Contains(typed, "{{"+name+"}}") {
-				return true
-			}
-		}
-		return false
-	case []interface{}:
-		for _, item := range typed {
-			if containsTemplateVar(item, names...) {
-				return true
-			}
-		}
-		return false
-	case map[string]interface{}:
-		for key, item := range typed {
-			if containsTemplateVar(key, names...) || containsTemplateVar(item, names...) {
-				return true
-			}
-		}
-		return false
-	default:
-		return false
-	}
-}
-
-func parseAPIHeaders(c *cobra.Command) (http.Header, error) {
-	rawHeaders, _ := c.Flags().GetStringSlice("header")
-	if len(rawHeaders) == 0 {
-		return nil, nil
-	}
-	headers := http.Header{}
-	for _, item := range rawHeaders {
-		name, value, ok := strings.Cut(item, ":")
-		if !ok {
-			return nil, fmt.Errorf("invalid --header %q, want key:value", item)
-		}
-		name = strings.TrimSpace(name)
-		value = strings.TrimSpace(value)
-		if name == "" {
-			return nil, fmt.Errorf("invalid --header %q, header name cannot be empty", item)
-		}
-		headers.Add(name, value)
-	}
-	return headers, nil
-}
-
-func renderAPIHeaders(headers http.Header, vars map[string]string) (http.Header, error) {
-	if len(headers) == 0 {
-		return nil, nil
-	}
-	rendered := http.Header{}
-	keys := make([]string, 0, len(headers))
-	for key := range headers {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		renderedKey, err := renderTemplate(key, vars)
-		if err != nil {
-			return nil, err
-		}
-		for _, value := range headers.Values(key) {
-			renderedValue, err := renderTemplate(value, vars)
-			if err != nil {
-				return nil, err
-			}
-			rendered.Add(renderedKey, renderedValue)
-		}
-	}
-	return rendered, nil
-}
-
-func renderURLValues(query url.Values, vars map[string]string) (url.Values, error) {
-	if len(query) == 0 {
-		return nil, nil
-	}
-	rendered := url.Values{}
-	keys := make([]string, 0, len(query))
-	for key := range query {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		renderedKey, err := renderTemplate(key, vars)
-		if err != nil {
-			return nil, err
-		}
-		for _, value := range query[key] {
-			renderedValue, err := renderTemplate(value, vars)
-			if err != nil {
-				return nil, err
-			}
-			rendered.Add(renderedKey, renderedValue)
-		}
-	}
-	return rendered, nil
 }

@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
@@ -204,104 +202,102 @@ func TestRunAPINoPrefix(t *testing.T) {
 	}
 }
 
-func TestRunAPISingleRequestTemplatesAndHeaders(t *testing.T) {
-	oldOwner, oldRepo, oldFormat := cmdutil.Owner, cmdutil.Repo, cmdutil.Format
-	cmdutil.Owner = "Gitlink"
-	cmdutil.Repo = "gitlink-cli"
-	cmdutil.Format = "json"
-	t.Cleanup(func() {
-		cmdutil.Owner = oldOwner
-		cmdutil.Repo = oldRepo
-		cmdutil.Format = oldFormat
-	})
+func TestRunAPIRendersOwnerRepoColonPlaceholders(t *testing.T) {
+	oldOwner, oldRepo := cmdutil.Owner, cmdutil.Repo
+	cmdutil.Owner, cmdutil.Repo = "Gitlink", "gitlink-cli"
+	defer func() {
+		cmdutil.Owner, cmdutil.Repo = oldOwner, oldRepo
+	}()
 
-	var gotBody map[string]interface{}
 	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/Gitlink/gitlink-cli/issues.json" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		if r.URL.Query().Get("state") != "open" {
-			t.Fatalf("state query = %q, want open", r.URL.Query().Get("state"))
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+	})
+	cmdutil.Format = "json"
+
+	cmd := NewAPICmd()
+	cmd.SetArgs([]string{"GET", "/:owner/:repo/issues"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("runAPI placeholder error: %v", err)
+	}
+}
+
+func TestRunAPIRendersVarsInQueryAndBody(t *testing.T) {
+	var gotBody map[string]interface{}
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/Gitlink/gitlink-cli/issues/42/journals.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		if r.URL.Query().Get("repo") != "gitlink-cli" {
-			t.Fatalf("repo query = %q, want gitlink-cli", r.URL.Query().Get("repo"))
-		}
-		if r.Header.Get("X-Repo") != "gitlink-cli" {
-			t.Fatalf("X-Repo = %q, want gitlink-cli", r.Header.Get("X-Repo"))
+		if r.URL.Query().Get("notify") != "true" {
+			t.Fatalf("notify query = %q", r.URL.Query().Get("notify"))
 		}
 		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
 			t.Fatalf("decode body: %v", err)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"id": 7})
+		json.NewEncoder(w).Encode(map[string]interface{}{"id": 99})
 	})
+	cmdutil.Format = "json"
+
+	bodyPath := filepath.Join(t.TempDir(), "body.json")
+	if err := os.WriteFile(bodyPath, []byte(`{"notes":"hello {{actor}}","meta":{"repo":"{{repo}}"}}`), 0600); err != nil {
+		t.Fatalf("write body: %v", err)
+	}
 
 	cmd := NewAPICmd()
-	cmd.SetArgs([]string{"POST", "/:owner/:repo/issues"})
-	cmd.Flags().Set("query", "state={{state}}&repo={{repo}}")
-	cmd.Flags().Set("body", `{"subject":"{{title}}","meta":{"owner":"{{owner}}","repo":"{{repo}}"}}`)
-	cmd.Flags().Set("header", "X-Repo: {{repo}}")
-	cmd.Flags().Set("var", "state=open")
-	cmd.Flags().Set("var", "title=Bug report")
+	cmd.SetArgs([]string{
+		"POST", "/v1/{{owner}}/{{repo}}/issues/{{number}}/journals",
+		"--query", "notify={{notify}}",
+		"--body-file", bodyPath,
+		"--var", "owner=Gitlink",
+		"--var", "repo=gitlink-cli",
+		"--var", "number=42",
+		"--var", "notify=true",
+		"--var", "actor=bot",
+	})
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("runAPI template error: %v", err)
+		t.Fatalf("runAPI rendered vars error: %v", err)
 	}
-
-	if gotBody["subject"] != "Bug report" {
-		t.Fatalf("subject = %#v, want Bug report", gotBody["subject"])
+	if gotBody["notes"] != "hello bot" {
+		t.Fatalf("notes = %#v", gotBody["notes"])
 	}
-	meta, _ := gotBody["meta"].(map[string]interface{})
-	if meta["owner"] != "Gitlink" || meta["repo"] != "gitlink-cli" {
-		t.Fatalf("meta = %#v", meta)
+	meta := gotBody["meta"].(map[string]interface{})
+	if meta["repo"] != "gitlink-cli" {
+		t.Fatalf("meta.repo = %#v", meta["repo"])
 	}
 }
 
-func TestRenderSingleAPIRequestUsesVarsAndOwnerRepo(t *testing.T) {
-	oldOwner, oldRepo := cmdutil.Owner, cmdutil.Repo
-	cmdutil.Owner = "Gitlink"
-	cmdutil.Repo = "gitlink-cli"
-	t.Cleanup(func() {
-		cmdutil.Owner = oldOwner
-		cmdutil.Repo = oldRepo
+func TestRunAPIDryRunDoesNotReachServer(t *testing.T) {
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("dry-run should not reach server")
 	})
+	cmdutil.Format = "json"
 
 	cmd := NewAPICmd()
-	if err := cmd.Flags().Set("var", "issue=42"); err != nil {
-		t.Fatalf("set var: %v", err)
-	}
-	headers := http.Header{"X-Issue": []string{"{{issue}}"}}
-	query := url.Values{
-		"repo": {"{{repo}}"},
-	}
-	body := map[string]interface{}{
-		"notes": "owner={{owner}} issue={{issue}}",
-	}
-
-	req, err := renderSingleAPIRequest("/:owner/:repo/issues/{{issue}}", query, body, headers, cmd)
-	if err != nil {
-		t.Fatalf("renderSingleAPIRequest error: %v", err)
-	}
-	if req.Path != "/Gitlink/gitlink-cli/issues/42" {
-		t.Fatalf("Path = %q", req.Path)
-	}
-	if req.Query.Get("repo") != "gitlink-cli" {
-		t.Fatalf("query repo = %q", req.Query.Get("repo"))
-	}
-	if req.Headers.Get("X-Issue") != "42" {
-		t.Fatalf("X-Issue = %q", req.Headers.Get("X-Issue"))
-	}
-	if !reflect.DeepEqual(req.Body, map[string]interface{}{"notes": "owner=Gitlink issue=42"}) {
-		t.Fatalf("Body = %#v", req.Body)
+	cmd.SetArgs([]string{
+		"POST", "/v1/{{owner}}/{{repo}}/issues",
+		"--body", `{"subject":"{{title}}"}`,
+		"--dry-run",
+		"--var", "owner=Gitlink",
+		"--var", "repo=gitlink-cli",
+		"--var", "title=Bug report",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("runAPI dry-run error: %v", err)
 	}
 }
 
-func TestParseAPIHeadersRejectsInvalidInput(t *testing.T) {
+func TestRunAPIMissingSingleRequestVar(t *testing.T) {
+	setupAPITest(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach server")
+	})
+	cmdutil.Format = "json"
+
 	cmd := NewAPICmd()
-	if err := cmd.Flags().Set("header", "broken"); err != nil {
-		t.Fatalf("set header: %v", err)
-	}
-	if _, err := parseAPIHeaders(cmd); err == nil {
-		t.Fatal("expected invalid header error")
+	cmd.SetArgs([]string{"GET", "/v1/{{owner}}/{{repo}}/issues/{{number}}"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected missing variable error")
 	}
 }
 

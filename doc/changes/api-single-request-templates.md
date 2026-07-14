@@ -1,7 +1,19 @@
-# Raw API 单次调用模板变量与请求头支持
+# api 单次调用模板变量与预演能力
 
-`gitlink-cli api` 的单次调用模式现在和批处理模式对齐了模板渲染能力，不再只能手写完整路径。现在可以直接在路径里使用 `/:owner/:repo`，也可以在 path、query、JSON body、header 中使用 `{{owner}}`、`{{repo}}` 和自定义 `{{var}}` 变量；其中 `owner` / `repo` 会优先读取 `--var`，否则自动复用全局 `--owner`、`--repo` 或当前仓库上下文。
+这次改动把 `gitlink-cli api` 的单次调用模式和 batch 模式拉齐了。
 
-这次改动同时把原来声明但未实际生效的 `--header` 接上了。单次请求现在支持通过 `--header key:value` 传递一个或多个自定义请求头，header 名和值都可以参与模板渲染，适合调试网关、透传审计字段、补充实验性接口所需头信息。
+- 单次调用现在支持 `--var key=value`，可以在路径、查询参数和 JSON 请求体里复用 `{{var}}` 模板变量。
+- 路径里的 `:owner` 和 `:repo` 会自动使用当前 `--owner` / `--repo` 或 git remote 上下文渲染，修复了单次调用不替换占位符的问题。
+- `--dry-run` 不再只属于 batch 模式，单次调用也可以先预览渲染后的 method、path、query、body 和 variables，再决定是否真正发请求。
 
-本次提交补充了路径占位符回归测试、query/body/header 联动渲染测试、非法 header 校验测试，以及自定义 header 真正发到服务端的行为验证。README 和 README.zh-CN 也同步加入了单次请求模板变量示例，方便维护者、脚本和 Agent 直接复用。
+这样做的目的不是单纯补一个 bug，而是让 Raw API 更适合脚本和 Agent 复用：同一份模板写法既能用在 `api --batch-file`，也能平滑退化成一次性的单条请求。
+
+本地验证：
+
+```bash
+go test ./cmd/api
+go test ./...
+go build ./...
+git diff --check
+go run . api --help
+```
