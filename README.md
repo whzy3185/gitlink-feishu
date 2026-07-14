@@ -471,6 +471,11 @@ gitlink-cli release +view --owner Gitlink --repo forgeplus -i <version_id>
 gitlink-cli release +edit --owner Gitlink --repo forgeplus -i <version_id>
 gitlink-cli release +update --owner Gitlink --repo forgeplus -i <version_id> -b "Updated changelog" --dry-run
 
+# List and download release assets
+gitlink-cli release +assets --owner Gitlink --repo forgeplus -i <version_id>
+gitlink-cli release +download --owner Gitlink --repo forgeplus -i <version_id> --asset gitlink-cli_linux_amd64.tar.gz -o dist/
+gitlink-cli release +download --owner Gitlink --repo forgeplus -i <version_id> --archive zip -o dist/source.zip
+
 # Preview release deletion before executing it
 gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --dry-run
 ```
@@ -708,7 +713,7 @@ See [skills/README.md](skills/README.md) for details.
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
 | `gitlink-member` | Repository member and invite link management |
 | `gitlink-branch` | Branch management (create, delete, list, protect, unprotect) |
-| `gitlink-release` | Release management (create, edit, update, view, delete, etc.) |
+| `gitlink-release` | Release management (create, edit, update, view, delete, asset download, etc.) |
 | `gitlink-ci` | CI/CD operations (builds, logs, etc.) |
 | `gitlink-pipeline` | Pipeline workflow operations (runs, logs, enable, disable, delete, etc.) |
 | `gitlink-search` | Search (repositories, users, etc.) |
