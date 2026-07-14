@@ -124,6 +124,31 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "branches",
+			Description: tr.T("cmd.pr.branches.short"),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/pulls/get_branches", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "check-can-merge",
+			Description: tr.T("cmd.pr.check_can_merge.short"),
+			Flags: []common.Flag{
+				{Name: "head", Usage: tr.T("flag.pr.head"), Required: true},
+				{Name: "base", Usage: tr.T("flag.pr.base"), Default: "master"},
+				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
+				{Name: "yes", Usage: tr.T("flag.pr.check_yes"), Bool: true, Default: "false"},
+			},
+			Run: runCheckCanMerge,
+		},
+		{
 			Name:        "view",
 			Description: tr.T("cmd.pr.view.short"),
 			Flags: []common.Flag{
@@ -467,6 +492,43 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 	}
+}
+
+func runCheckCanMerge(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	head, err := ctx.RequireArg("head")
+	if err != nil {
+		return err
+	}
+	base := ctx.Arg("base")
+	if base == "" {
+		base = "master"
+	}
+	payload := map[string]interface{}{
+		"head": head,
+		"base": base,
+	}
+	path := ctx.RepoPath() + "/pulls/check_can_merge"
+	if ctx.Arg("dry-run") == "true" {
+		return ctx.OutputData(map[string]interface{}{
+			"repository": fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+			"dry_run":    true,
+			"action":     "check_can_merge",
+			"method":     "POST",
+			"path":       path,
+			"payload":    payload,
+		})
+	}
+	if ctx.Arg("yes") != "true" {
+		return fmt.Errorf("check-can-merge calls a remote POST endpoint; run with --dry-run first, then pass --yes to execute")
+	}
+	env, err := ctx.CallAPI("POST", path, payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
 }
 
 func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
