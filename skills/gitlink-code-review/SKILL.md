@@ -1,5 +1,6 @@
 ---
 name: gitlink-code-review
+version: 1.0.0
 description: "智能代码审查：获取 PR 变更、分析代码质量、自动生成 Review 评论与摘要报告。当用户需要审查 Pull Request、检查代码质量或生成审查报告时触发。"
 metadata:
   requires:
@@ -17,7 +18,7 @@ metadata:
 
 ## 工作流概览
 
-本 Skill 提供一套完整的 AI 驱动代码审查工作流，覆盖从获取 PR 变更到生成审查报告的全过程。优先使用 `workflow +review-context` 获取结构化上下文，避免手工拼接多个 Raw API 请求。
+本 Skill 提供一套完整的 AI 驱动代码审查工作流，覆盖从获取 PR 变更到生成审查报告的全过程。不需要额外的 CLI Shortcuts——现有 `gitlink-cli` 命令 + AI Agent 的分析能力即可完成。
 
 | 阶段 | 操作 | AI Agent 角色 |
 |------|------|--------------|
@@ -38,11 +39,14 @@ metadata:
 #### Step 1：获取 PR 上下文
 
 ```bash
-# 一次性获取仓库、PR、变更文件、已有 Review、开放 Issue 和标签上下文
-gitlink-cli workflow +review-context --owner <owner> --repo <repo> --number <pr_id> --format json
+# 获取 PR 详情
+gitlink-cli pr +view --id <pr_id> --format json
 
-# 如只需要规则化审查摘要
-gitlink-cli workflow +pr-summary --owner <owner> --repo <repo> --number <pr_id> --format markdown
+# 获取变更文件列表
+gitlink-cli pr +files --id <pr_id> --format json
+
+# 获取 Diff 内容（含变更行号和代码上下文）
+gitlink-cli pr +diff --id <pr_id> --format json
 ```
 
 #### Step 2：逐文件分析
@@ -166,11 +170,12 @@ gitlink-cli repo +tree --owner <owner> --repo <repo> --path tests --ref master -
 # 3. 获取关键文件内容
 gitlink-cli repo +raw --owner <owner> --repo <repo> --path README.md --ref master --format json
 gitlink-cli repo +raw --owner <owner> --repo <repo> --path .gitignore --ref master --format json
+gitlink-cli repo +raw --owner <owner> --repo <repo> --path .eslintrc.js --ref master --format json
 gitlink-cli repo +manifest --owner <owner> --repo <repo> --kind node --ref master --format json
 
 # 4. 获取语言统计和贡献者
-gitlink-cli repo +languages --owner <owner> --repo <repo> --format json
-gitlink-cli repo +contributors --owner <owner> --repo <repo> --format json
+gitlink-cli api GET /:owner/:repo/languages
+gitlink-cli api GET /:owner/:repo/contributors
 ```
 
 **健康度检查清单：**
@@ -250,28 +255,34 @@ gitlink-cli api POST /:owner/:repo/issues/:id --body '{
 
 ---
 
-## Shortcut 参考
+## Raw API 参考
 
 代码审查相关的 GitLink API 端点：
 
 ```bash
-# 获取 PR 审查上下文包
-gitlink-cli workflow +review-context --owner <owner> --repo <repo> --number <id> --format json
+# 获取 PR 详情
+gitlink-cli api GET /:owner/:repo/pulls/:id --format json
 
-# 获取规则化 PR 审查摘要
-gitlink-cli workflow +pr-summary --owner <owner> --repo <repo> --number <id> --format markdown
+# 获取 PR 变更文件列表
+gitlink-cli api GET /:owner/:repo/pulls/:id/files --format json
 
-# 提交 PR Review（写操作前必须确认用户意图，可先 dry-run）
-gitlink-cli pr +review --owner <owner> --repo <repo> -i <id> --status common -c "..." --dry-run
+# 获取 PR Diff
+gitlink-cli api GET /:owner/:repo/pulls/:id/diff --format json
+
+# 提交 PR Review
+gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{"body":"...","event":"COMMENT"}'
 
 # 获取仓库文件列表
 gitlink-cli repo +tree --owner <owner> --repo <repo> --path <path> --ref <branch> --format json
 
 # 获取仓库语言统计
-gitlink-cli repo +languages --owner <owner> --repo <repo> --format json
+gitlink-cli api GET /:owner/:repo/languages --format json
 
 # 获取贡献者列表
-gitlink-cli repo +contributors --owner <owner> --repo <repo> --format json
+gitlink-cli api GET /:owner/:repo/contributors --format json
+
+# 获取仓库动态
+gitlink-cli api GET /:owner/:repo/activity --format json
 ```
 
 ## 代码审查最佳实践

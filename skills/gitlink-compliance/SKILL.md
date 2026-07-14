@@ -39,10 +39,10 @@ metadata:
 
 ```bash
 # 1. 获取仓库文件结构
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=&ref=master'
+gitlink-cli repo +tree --owner <owner> --repo <repo> --ref master --format json
 
 # 2. 读取 LICENSE 文件
-gitlink-cli api GET /:owner/:repo/raw/master/LICENSE
+gitlink-cli repo +raw --owner <owner> --repo <repo> --path LICENSE --ref master --format json
 
 # 3. 检查关键文档是否存在
 # 检查以下文件是否存在：
@@ -54,14 +54,14 @@ gitlink-cli api GET /:owner/:repo/raw/master/LICENSE
 # - README.md
 
 # 4. 获取依赖配置
-gitlink-cli api GET /:owner/:repo/raw/master/package.json    # Node.js
-gitlink-cli api GET /:owner/:repo/raw/master/go.mod           # Go
-gitlink-cli api GET /:owner/:repo/raw/master/requirements.txt # Python
-gitlink-cli api GET /:owner/:repo/raw/master/Cargo.toml       # Rust
-gitlink-cli api GET /:owner/:repo/raw/master/pom.xml          # Java/Maven
+gitlink-cli repo +manifest --owner <owner> --repo <repo> --kind node --ref master --format json
+gitlink-cli repo +manifest --owner <owner> --repo <repo> --kind go --ref master --format json
+gitlink-cli repo +manifest --owner <owner> --repo <repo> --kind python --ref master --format json
+gitlink-cli repo +manifest --owner <owner> --repo <repo> --kind rust --ref master --format json
+gitlink-cli repo +manifest --owner <owner> --repo <repo> --kind java --ref master --format json
 
 # 5. 获取源文件检查（按语言采样）
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=src&ref=master'
+gitlink-cli repo +tree --owner <owner> --repo <repo> --path src --ref master --format json
 
 # 6. 获取仓库基本信息
 gitlink-cli repo +info --owner <owner> --repo <repo> --format json
@@ -146,7 +146,7 @@ gitlink-cli repo +info --owner <owner> --repo <repo> --format json
 
 ```bash
 # 1. 获取依赖配置文件
-gitlink-cli api GET /:owner/:repo/raw/master/package.json
+gitlink-cli repo +manifest --owner <owner> --repo <repo> --kind node --ref master --format json
 ```
 
 ### 许可证兼容性参考
@@ -181,10 +181,10 @@ gitlink-cli api GET /:owner/:repo/raw/master/package.json
 
 ```bash
 # 1. 遍历源文件目录
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=src&ref=master'
+gitlink-cli repo +tree --owner <owner> --repo <repo> --path src --ref master --format json
 
 # 2. 采样检查源文件头部（取前 5-10 行）
-gitlink-cli api GET /:owner/:repo/raw/master/src/main.py
+gitlink-cli repo +raw --owner <owner> --repo <repo> --path src/main.py --ref master --format json
 ```
 
 ### 标准版权声明模板
@@ -210,10 +210,10 @@ gitlink-cli api GET /:owner/:repo/raw/master/src/main.py
 
 ```bash
 # 获取文件内容
-gitlink-cli api GET /:owner/:repo/raw/<branch>/<path>
+gitlink-cli repo +raw --owner <owner> --repo <repo> --path <path> --ref <branch> --format json
 
 # 获取文件列表（遍历目录）
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=<path>&ref=<branch>'
+gitlink-cli repo +tree --owner <owner> --repo <repo> --path <path> --ref <branch> --format json
 
 # 获取仓库信息
 gitlink-cli api GET /:owner/:repo --format json

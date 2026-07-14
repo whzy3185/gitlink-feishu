@@ -82,41 +82,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "units",
-			Description: tr.T("cmd.repo.units.short"),
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", repoUnitsPath(ctx), nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "set-units",
-			Description: tr.T("cmd.repo.set_units.short"),
-			Flags: []common.Flag{
-				{Name: "units", Short: "u", Usage: tr.T("flag.repo.units"), Required: true},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				units, err := parseRepoUnits(ctx.Arg("units"))
-				if err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("POST", repoUnitsPath(ctx), map[string]interface{}{"unit_types": units})
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
 			Name:        "tree",
 			Description: tr.T("cmd.repo.tree.short"),
 			Flags: []common.Flag{
@@ -142,6 +107,33 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}
 				return ctx.Output(env)
 			},
+		},
+		{
+			Name:        "raw",
+			Description: tr.T("cmd.repo.raw.short"),
+			Flags: []common.Flag{
+				{Name: "path", Short: "p", Usage: tr.T("flag.repo.raw.path"), Required: true},
+				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.raw.ref"), Default: "master"},
+			},
+			Run: runRawFile,
+		},
+		{
+			Name:        "file-exists",
+			Description: tr.T("cmd.repo.file_exists.short"),
+			Flags: []common.Flag{
+				{Name: "path", Short: "p", Usage: tr.T("flag.repo.file_exists.path"), Required: true},
+				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.raw.ref"), Default: "master"},
+			},
+			Run: runFileExists,
+		},
+		{
+			Name:        "manifest",
+			Description: tr.T("cmd.repo.manifest.short"),
+			Flags: []common.Flag{
+				{Name: "kind", Short: "k", Usage: tr.T("flag.repo.manifest.kind"), Required: true},
+				{Name: "ref", Short: "r", Usage: tr.T("flag.repo.raw.ref"), Default: "master"},
+			},
+			Run: runManifest,
 		},
 		{
 			Name:        "languages",
@@ -275,89 +267,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "transfer-orgs",
-			Description: tr.T("cmd.repo.transfer_orgs.short"),
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", repoTransferPath(ctx, "organizations"), nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "transfer",
-			Description: tr.T("cmd.repo.transfer.short"),
-			Flags: []common.Flag{
-				{Name: "target-owner", Usage: tr.T("flag.repo.target_owner"), Required: true},
-				{Name: "dry-run", Usage: tr.T("flag.repo.transfer_dry_run"), Bool: true, Default: "false"},
-				{Name: "yes", Usage: tr.T("flag.repo.transfer_yes"), Bool: true, Default: "false"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				targetOwner, err := ctx.RequireArg("target-owner")
-				if err != nil {
-					return err
-				}
-				targetOwner = strings.TrimSpace(targetOwner)
-				if targetOwner == "" {
-					return fmt.Errorf("required flag --target-owner is missing")
-				}
-				payload := map[string]interface{}{"owner_name": targetOwner}
-				path := repoTransferPath(ctx, "")
-				if ctx.Arg("dry-run") == "true" {
-					return ctx.OutputData(map[string]interface{}{
-						"dry_run": true,
-						"method":  "POST",
-						"path":    path,
-						"payload": payload,
-					})
-				}
-				if err := requireRepoTransferConfirmation(ctx, "transfer"); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("POST", path, payload)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "transfer-cancel",
-			Description: tr.T("cmd.repo.transfer_cancel.short"),
-			Flags: []common.Flag{
-				{Name: "dry-run", Usage: tr.T("flag.repo.transfer_cancel_dry_run"), Bool: true, Default: "false"},
-				{Name: "yes", Usage: tr.T("flag.repo.transfer_yes"), Bool: true, Default: "false"},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				path := repoTransferPath(ctx, "cancel")
-				if ctx.Arg("dry-run") == "true" {
-					return ctx.OutputData(map[string]interface{}{
-						"dry_run": true,
-						"method":  "POST",
-						"path":    path,
-					})
-				}
-				if err := requireRepoTransferConfirmation(ctx, "transfer-cancel"); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("POST", path, nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
 			Name:        "delete",
 			Description: tr.T("cmd.repo.delete.short"),
 			Run: func(ctx *common.RuntimeContext) error {
@@ -374,19 +283,12 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	}
 }
 
-func repoTransferPath(ctx *common.RuntimeContext, action string) string {
-	base := ctx.RepoPath() + "/applied_transfer_projects"
-	if action == "" {
-		return base
-	}
-	return fmt.Sprintf("%s/%s", base, action)
-}
-
-func requireRepoTransferConfirmation(ctx *common.RuntimeContext, shortcut string) error {
-	if ctx.Arg("yes") == "true" {
-		return nil
-	}
-	return fmt.Errorf("refusing to run repo +%s without --yes; use --dry-run to preview the request first", shortcut)
+var manifestPathsByKind = map[string][]string{
+	"go":     {"go.mod"},
+	"node":   {"package.json"},
+	"python": {"requirements.txt", "pyproject.toml", "Pipfile", "setup.py"},
+	"rust":   {"Cargo.toml"},
+	"java":   {"pom.xml", "build.gradle", "build.gradle.kts"},
 }
 
 func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
@@ -394,6 +296,79 @@ func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
 		return translators[0]
 	}
 	return i18n.Default()
+}
+
+func runRawFile(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	path, err := requireRepoPathArg(ctx, "path")
+	if err != nil {
+		return err
+	}
+	ref := repoRef(ctx.Arg("ref"))
+	env, err := ctx.CallAPI("GET", rawFilePath(ctx, ref, path), nil)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runFileExists(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	path, err := requireRepoPathArg(ctx, "path")
+	if err != nil {
+		return err
+	}
+	ref := repoRef(ctx.Arg("ref"))
+	exists, entry, err := repoFileExists(ctx, path, ref)
+	if err != nil {
+		return err
+	}
+	return ctx.OutputData(map[string]interface{}{
+		"repository": fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+		"ref":        ref,
+		"path":       path,
+		"exists":     exists,
+		"entry":      entry,
+	})
+}
+
+func runManifest(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	kind := strings.ToLower(strings.TrimSpace(ctx.Arg("kind")))
+	paths, ok := manifestPathsByKind[kind]
+	if !ok {
+		return fmt.Errorf("invalid --kind %q: use go, node, python, rust, or java", ctx.Arg("kind"))
+	}
+	ref := repoRef(ctx.Arg("ref"))
+	checked := make([]string, 0, len(paths))
+	for _, path := range paths {
+		checked = append(checked, path)
+		exists, _, err := repoFileExists(ctx, path, ref)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+		env, err := ctx.CallAPI("GET", rawFilePath(ctx, ref, path), nil)
+		if err != nil {
+			return err
+		}
+		return ctx.Output(env)
+	}
+	return ctx.OutputData(map[string]interface{}{
+		"repository": fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+		"ref":        ref,
+		"kind":       kind,
+		"found":      false,
+		"checked":    checked,
+	})
 }
 
 func runLanguages(ctx *common.RuntimeContext) error {
@@ -615,6 +590,116 @@ func setRepoQueryIfPresent(q url.Values, key, value string) {
 	}
 }
 
+func repoRef(ref string) string {
+	if ref := strings.TrimSpace(ref); ref != "" {
+		return ref
+	}
+	return "master"
+}
+
+func requireRepoPathArg(ctx *common.RuntimeContext, name string) (string, error) {
+	path, err := ctx.RequireArg(name)
+	if err != nil {
+		return "", err
+	}
+	path = cleanRepoFilePath(path)
+	if path == "" {
+		return "", fmt.Errorf("--%s must not be empty", name)
+	}
+	if hasParentPathSegment(path) {
+		return "", fmt.Errorf("--%s must not contain '..'", name)
+	}
+	return path, nil
+}
+
+func cleanRepoFilePath(path string) string {
+	path = strings.TrimSpace(path)
+	path = strings.TrimPrefix(path, "/")
+	return strings.Trim(path, "/")
+}
+
+func rawFilePath(ctx *common.RuntimeContext, ref, path string) string {
+	parts := []string{ctx.RepoPath(), "raw", url.PathEscape(ref)}
+	for _, part := range strings.Split(cleanRepoFilePath(path), "/") {
+		if part == "" {
+			continue
+		}
+		parts = append(parts, url.PathEscape(part))
+	}
+	return strings.Join(parts, "/")
+}
+
+func hasParentPathSegment(path string) bool {
+	for _, part := range strings.Split(cleanRepoFilePath(path), "/") {
+		if part == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+func repoFileExists(ctx *common.RuntimeContext, path, ref string) (bool, map[string]interface{}, error) {
+	q := url.Values{}
+	q.Set("filepath", path)
+	q.Set("ref", ref)
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/sub_entries", q)
+	if err != nil {
+		return false, nil, err
+	}
+	entry := findRepoSubEntry(env.Data, path)
+	return entry != nil, entry, nil
+}
+
+func findRepoSubEntry(data interface{}, path string) map[string]interface{} {
+	target := lastRepoPathPart(path)
+	if entry, ok := data.(map[string]interface{}); ok {
+		if matchesRepoEntry(entry, target, path) {
+			return entry
+		}
+		for _, key := range []string{"entries", "sub_entries", "files", "data"} {
+			if found := findRepoSubEntryList(entry[key], target, path); found != nil {
+				return found
+			}
+		}
+	}
+	return findRepoSubEntryList(data, target, path)
+}
+
+func findRepoSubEntryList(data interface{}, target, path string) map[string]interface{} {
+	entries, ok := data.([]interface{})
+	if !ok {
+		return nil
+	}
+	for _, raw := range entries {
+		entry, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if matchesRepoEntry(entry, target, path) {
+			return entry
+		}
+	}
+	return nil
+}
+
+func matchesRepoEntry(entry map[string]interface{}, target, path string) bool {
+	for _, key := range []string{"name", "filename", "path", "filepath"} {
+		value, _ := entry[key].(string)
+		if value == target || cleanRepoFilePath(value) == path {
+			return true
+		}
+	}
+	return false
+}
+
+func lastRepoPathPart(path string) string {
+	parts := strings.Split(cleanRepoFilePath(path), "/")
+	if len(parts) == 0 {
+		return ""
+	}
+	return parts[len(parts)-1]
+}
+
 func parseOptionalRepoNonNegativeInt(value, name string) (int, bool, error) {
 	if strings.TrimSpace(value) == "" {
 		return 0, false, nil
@@ -632,42 +717,4 @@ func parseRepoPositiveInt(value, name string) (int, error) {
 		return 0, fmt.Errorf("invalid --%s %q: use a positive integer", name, value)
 	}
 	return parsed, nil
-}
-
-func repoUnitsPath(ctx *common.RuntimeContext) string {
-	return ctx.RepoPath() + "/project_units"
-}
-
-func parseRepoUnits(raw string) ([]string, error) {
-	allowed := map[string]bool{
-		"code":      true,
-		"issues":    true,
-		"pulls":     true,
-		"devops":    true,
-		"versions":  true,
-		"wiki":      true,
-		"services":  true,
-		"resources": true,
-	}
-
-	seen := map[string]bool{}
-	units := []string{}
-	for _, part := range strings.Split(raw, ",") {
-		unit := strings.ToLower(strings.TrimSpace(part))
-		if unit == "" {
-			continue
-		}
-		if !allowed[unit] {
-			return nil, fmt.Errorf("invalid repository unit %q; allowed values: code,issues,pulls,devops,versions,wiki,services,resources", unit)
-		}
-		if seen[unit] {
-			continue
-		}
-		seen[unit] = true
-		units = append(units, unit)
-	}
-	if len(units) == 0 {
-		return nil, fmt.Errorf("at least one repository unit is required")
-	}
-	return units, nil
 }
