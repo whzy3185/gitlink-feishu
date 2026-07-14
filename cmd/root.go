@@ -44,9 +44,11 @@ func NewRootCmd(opts RootOptions, tr *i18n.Translator) (*cobra.Command, error) {
 		Use:           "gitlink-cli",
 		Short:         tr.T("cmd.root.short"),
 		Long:          tr.T("cmd.root.long"),
+		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	rootCmd.SetVersionTemplate(tr.Tf("output.version", i18n.Args{"version": version}) + "\n")
 
 	rootCmd.PersistentFlags().StringVar(&cmdutil.Owner, "owner", "", tr.T("flag.owner"))
 	rootCmd.PersistentFlags().StringVar(&cmdutil.Repo, "repo", "", tr.T("flag.repo"))
