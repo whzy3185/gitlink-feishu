@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -16,9 +15,6 @@ import (
 func Print(envelope *Envelope, format string) error {
 	if format == "" {
 		format = "json"
-	}
-	if Query != "" {
-		return PrintQuery(os.Stdout, envelope, Query)
 	}
 	return PrintTo(os.Stdout, envelope, format)
 }
@@ -57,13 +53,9 @@ func printYAML(w io.Writer, envelope *Envelope) error {
 func printTable(w io.Writer, envelope *Envelope) error {
 	if !envelope.OK {
 		if envelope.Error != nil {
-			if envelope.Error.Code != nil && fmt.Sprintf("%v", envelope.Error.Code) != "" {
-				fmt.Fprintf(w, "Error [%v]: %s\n", envelope.Error.Code, envelope.Error.Message)
-			} else {
-				fmt.Fprintf(w, "Error: %s\n", envelope.Error.Message)
-			}
+			fmt.Fprintf(w, "%s %s\n", red("Error:"), envelope.Error.Message)
 			if envelope.Error.Suggestion != "" {
-				fmt.Fprintf(w, "Suggestion: %s\n", envelope.Error.Suggestion)
+				fmt.Fprintf(w, "%s %s\n", yellow("Suggestion:"), envelope.Error.Suggestion)
 			}
 		}
 		return nil
@@ -74,21 +66,11 @@ func printTable(w io.Writer, envelope *Envelope) error {
 		return nil
 	}
 
-	// Detect and render diff data in git-diff style
-	if isDiffData(envelope.Data) {
-		return printDiffTable(w, envelope)
-	}
-
 	// Try to render as table if data is a slice of maps
 	switch data := envelope.Data.(type) {
 	case []interface{}:
 		return printSliceTable(w, data)
 	case map[string]interface{}:
-		// Resource-wrapped list responses ({"total_count": N, "<resource>": [...]})
-		// render the wrapped array as a table with the scalar fields as a summary.
-		if items, ok := unwrapListMap(w, data); ok {
-			return printSliceTable(w, items)
-		}
 		// For maps with nested structures, prefer JSON
 		if hasComplexValues(data) {
 			return printJSON(w, envelope)
@@ -98,47 +80,6 @@ func printTable(w io.Writer, envelope *Envelope) error {
 		// Fallback to JSON
 		return printJSON(w, envelope)
 	}
-}
-
-// unwrapListMap detects a map containing exactly one array value while every
-// other value is a scalar (the shape of the platform's paginated list
-// responses). It prints the scalar fields as a summary line and returns the
-// wrapped array for table rendering.
-func unwrapListMap(w io.Writer, m map[string]interface{}) ([]interface{}, bool) {
-	var items []interface{}
-	arrays := 0
-	for _, v := range m {
-		switch value := v.(type) {
-		case []interface{}:
-			arrays++
-			items = value
-		case map[string]interface{}:
-			return nil, false
-		}
-	}
-	if arrays != 1 {
-		return nil, false
-	}
-	scalars := make([]string, 0, len(m))
-	for _, k := range sortedKeys(m) {
-		if _, ok := m[k].([]interface{}); ok {
-			continue
-		}
-		scalars = append(scalars, fmt.Sprintf("%s: %s", k, formatValue(m[k])))
-	}
-	if len(scalars) > 0 {
-		fmt.Fprintln(w, strings.Join(scalars, "  "))
-	}
-	return items, true
-}
-
-func sortedKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 func hasComplexValues(m map[string]interface{}) bool {
@@ -168,8 +109,12 @@ func printSliceTable(w io.Writer, items []interface{}) error {
 	headers := collectKeys(first)
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 
-	// Print headers
-	fmt.Fprintln(tw, strings.Join(headers, "\t"))
+	// Print headers (bold/colored)
+	coloredHeaders := make([]string, len(headers))
+	for i, h := range headers {
+		coloredHeaders[i] = bold(h)
+	}
+	fmt.Fprintln(tw, strings.Join(coloredHeaders, "\t"))
 	dashes := make([]string, len(headers))
 	for i, h := range headers {
 		dashes[i] = strings.Repeat("-", len(h))
@@ -184,7 +129,8 @@ func printSliceTable(w io.Writer, items []interface{}) error {
 		}
 		vals := make([]string, len(headers))
 		for i, h := range headers {
-			vals[i] = formatValue(m[h])
+			raw := formatValue(m[h])
+			vals[i] = colorForKey(h, raw)
 		}
 		fmt.Fprintln(tw, strings.Join(vals, "\t"))
 	}
@@ -195,10 +141,8 @@ func printMapTable(w io.Writer, m map[string]interface{}) error {
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(tw, "KEY\tVALUE")
 	fmt.Fprintln(tw, "---\t-----")
-	// collectKeys yields a deterministic order (priority keys first, then the
-	// remaining keys sorted), so table output is stable across runs.
-	for _, k := range collectKeys(m) {
-		fmt.Fprintf(tw, "%s\t%s\n", k, formatValue(m[k]))
+	for k, v := range m {
+		fmt.Fprintf(tw, "%s\t%s\n", k, formatValue(v))
 	}
 	return tw.Flush()
 }
@@ -206,7 +150,7 @@ func printMapTable(w io.Writer, m map[string]interface{}) error {
 func collectKeys(m map[string]interface{}) []string {
 	keys := make([]string, 0, len(m))
 	// Prefer common keys first
-	priority := []string{"number", "id", "name", "login", "title", "status", "state", "created_at", "updated_at"}
+	priority := []string{"id", "name", "login", "title", "status", "state", "created_at", "updated_at"}
 	seen := map[string]bool{}
 	for _, k := range priority {
 		if _, ok := m[k]; ok {
@@ -214,16 +158,11 @@ func collectKeys(m map[string]interface{}) []string {
 			seen[k] = true
 		}
 	}
-	remaining := make([]string, 0, len(m))
 	for k := range m {
 		if !seen[k] {
-			remaining = append(remaining, k)
+			keys = append(keys, k)
 		}
 	}
-	// Sort the non-priority keys so column/row order is deterministic instead of
-	// depending on Go's randomized map iteration order.
-	sort.Strings(remaining)
-	keys = append(keys, remaining...)
 	return keys
 }
 
@@ -243,100 +182,4 @@ func formatValue(v interface{}) string {
 	default:
 		return fmt.Sprintf("%v", v)
 	}
-}
-
-// isDiffData checks whether the envelope data is a PR diff response with sections.
-// Distinguishes from the simpler files listing by checking for sections in files.
-func isDiffData(data interface{}) bool {
-	m, ok := data.(map[string]interface{})
-	if !ok {
-		return false
-	}
-	files, hasFiles := m["files"].([]interface{})
-	if !hasFiles || len(files) == 0 {
-		return false
-	}
-	// Diff data has files with "sections"; simple file listing does not.
-	firstFile, ok := files[0].(map[string]interface{})
-	if !ok {
-		return false
-	}
-	_, hasSections := firstFile["sections"]
-	return hasSections
-}
-
-// printDiffTable renders diff data in git-diff style text output.
-func printDiffTable(w io.Writer, envelope *Envelope) error {
-	data, ok := envelope.Data.(map[string]interface{})
-	if !ok {
-		return printJSON(w, envelope)
-	}
-
-	files, ok := data["files"].([]interface{})
-	if !ok {
-		return printJSON(w, envelope)
-	}
-
-	// Summary header
-	fileNums, _ := data["file_nums"].(float64)
-	totalAdd, _ := data["total_addition"].(float64)
-	totalDel, _ := data["total_deletion"].(float64)
-	fmt.Fprintf(w, " %d files changed, %d insertions(+), %d deletions(-)\n\n",
-		int(fileNums), int(totalAdd), int(totalDel))
-
-	for _, f := range files {
-		fm, ok := f.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		name, _ := fm["name"].(string)
-		addition, _ := fm["addition"].(float64)
-		deletion, _ := fm["deletion"].(float64)
-
-		// File header
-		fmt.Fprintf(w, "diff --git a/%s b/%s\n", name, name)
-
-		if isCreated, _ := fm["is_created"].(bool); isCreated {
-			fmt.Fprintf(w, "new file\n")
-		}
-		if isDeleted, _ := fm["is_deleted"].(bool); isDeleted {
-			fmt.Fprintf(w, "deleted file\n")
-		}
-
-		fmt.Fprintf(w, "--- a/%s\n", name)
-		fmt.Fprintf(w, "+++ b/%s\n", name)
-		fmt.Fprintf(w, "@@ +%d -%d @@\n", int(addition), int(deletion))
-
-		// Render each line
-		sections, _ := fm["sections"].([]interface{})
-		for _, sec := range sections {
-			secMap, ok := sec.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			lines, _ := secMap["lines"].([]interface{})
-			for _, l := range lines {
-				lineMap, ok := l.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				content, _ := lineMap["content"].(string)
-				lineType, _ := lineMap["type"].(float64)
-
-				switch int(lineType) {
-				case 4: // diff hunk header
-					fmt.Fprintf(w, "%s\n", content)
-				case 2: // addition
-					fmt.Fprintf(w, "%s\n", content)
-				case 3: // deletion
-					fmt.Fprintf(w, "%s\n", content)
-				default: // context line
-					fmt.Fprintf(w, "%s\n", content)
-				}
-			}
-		}
-		fmt.Fprintln(w)
-	}
-	return nil
 }

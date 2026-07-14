@@ -1,197 +1,103 @@
-# 新人引导完整工作流示例
+# gitlink-onboarding — 使用示例
 
-**场景**：一个新贡献者想参与 GitLink 上的开源项目，AI Agent 引导其完成从了解项目到提交首次贡献的全过程。
+## 场景 1：good-first-issue 自动标记
 
-## 前置条件
+**用户 Prompt：**
+> 请阅读 skills/gitlink-onboarding/SKILL.md，帮我找出 ylly/gitlink-cli 中适合新人的 Issue 并打上标签。
 
-- `gitlink-cli` 已安装并登录
-- 目标仓库为公开项目
-
-## 工作流步骤
-
-### Step 1：获取项目概览
+**Agent 执行过程：**
 
 ```bash
-# 获取仓库基本信息
-gitlink-cli repo +info --owner Gitlink --repo forgeplus --format json
+# Step 1：获取开放 Issue
+gitlink-cli issue +list --owner ylly --repo gitlink-cli --format json
+# 返回 7 个 Issue，AI 按新人友好标准筛选 → #8 适合新人
+
+# Step 2：查找现有标签
+gitlink-cli label +list --owner ylly --repo gitlink-cli --format json
+# 无 good-first-issue 标签
+
+# Step 3：创建标签
+gitlink-cli label +create --owner ylly --repo gitlink-cli \
+  --name "good first" --color "#7057ff"
+# → id 382660（注：GitLink 标签限 15 字符，"good first issue" 会被截断，故用 "good first"）
+
+# Step 4：打标签
+gitlink-cli issue +update --owner ylly --repo gitlink-cli \
+  --number 8 --label 382660
 ```
 
-**输出示例：**
-```json
-{
-  "ok": true,
-  "data": {
-    "identifier": "forgeplus",
-    "name": "ForgePlus",
-    "description": "开源研发创新平台",
-    "language": "Ruby",
-    "default_branch": "master",
-    "license_name": "Apache-2.0"
-  }
-}
-```
-
-```bash
-# 获取 README
-gitlink-cli repo +readme --owner Gitlink --repo forgeplus
-
-# 获取语言统计
-gitlink-cli repo +languages --owner Gitlink --repo forgeplus --format json
-
-# 查看贡献者
-gitlink-cli repo +contributors --owner Gitlink --repo forgeplus --format json
-```
-
-### Step 2：搜索适合新人的 Issue
-
-```bash
-# 搜索 good-first-issue
-gitlink-cli search +issues --owner Gitlink --repo forgeplus --keyword "good first issue" --category opened
-
-# 如果没有 good-first-issue 标签，查看所有开放的 Issue
-gitlink-cli issue +list --state open --format json
-```
-
-**AI 分析 Issue 列表，推荐最适合新人的任务：**
+**Agent 输出：**
 
 ```markdown
-## 🎯 推荐新手任务
+🌱 新人友好 Issue 标记报告 — ylly/gitlink-cli
 
-### ⭐ 强烈推荐
+| Issue | 标题 | 适合新人理由 | 标签 |
+|-------|------|------------|:----:|
+| #8 | docs: 补充 wiki 命令的使用示例文档 | 文档类、范围明确 | ✅ |
 
-1. **Issue #156** — 修复 README 中的过期链接
-   - 📁 涉及文件：`README.md`
-   - 📝 改动范围：约 3 行
-   - 💡 提示：找到文档中的链接，替换为新地址即可
-
-2. **Issue #203** — 添加缺失的 API 参数文档
-   - 📁 涉及文件：`doc/api_reference.md`
-   - 📝 改动范围：约 15 行
-   - 💡 提示：参考代码中的参数定义补充文档
-```
-
-### Step 3：为推荐 Issue 生成引导评论
-
-```bash
-# 查看 Issue 详情
-gitlink-cli issue +view --number 156 --format json
-```
-
-**AI 生成引导评论：**
-
-```markdown
-## 🌟 欢迎贡献！
-
-这是一个很适合首次贡献的任务。
-
-### 🗺️ 代码定位
-- 需要修改的文件：`README.md`（项目根目录）
-- 相关位置：第 45 行附近的"相关链接"章节
-
-### ✏️ 修改步骤
-1. Fork 项目
-2. 创建分支 `git checkout -b fix/readme-links`
-3. 打开 `README.md`，找到第 45 行的链接
-4. 将 `https://old-domain.com/docs` 替换为 `https://new-domain.com/docs`
-5. 本地预览确认链接正确
-6. 提交 PR
-
-### 💡 提示
-- 只需修改一处，改动量极小
-- 不需要运行测试
-- PR 标题建议：`docs: update broken link in README`
-```
-
-### Step 4：发布引导评论
-
-```bash
-gitlink-cli issue +comment \
-  --number 156 \
-  --body "## 🌟 欢迎贡献！\n\n这是一个很适合首次贡献的任务。\n\n### 🗺️ 代码定位\n- 需要修改的文件：README.md\n\n### ✏️ 修改步骤\n1. Fork 项目\n2. 修改 README.md 中的链接\n3. 提交 PR\n\n### 💡 提示\n只需修改一处链接即可"
-```
-
-### Step 5：引导新人完成 Fork-PR 流程
-
-```bash
-# 1. Fork 仓库
-gitlink-cli repo +fork --owner Gitlink --repo forgeplus
-
-# 2. Clone
-git clone https://www.gitlink.org.cn/MyUser/forgeplus.git
-cd forgeplus
-
-# 3. 配置 upstream
-git remote add upstream https://www.gitlink.org.cn/Gitlink/forgeplus.git
-
-# 4. 创建分支
-git checkout -b fix/readme-links
-
-# 5. 修改代码（用户手动操作）
-# ...
-
-# 6. 提交
-git add README.md
-git commit -m "docs: update broken link in README"
-
-# 7. 推送到 Fork
-git push origin fix/readme-links
-
-# 8. 创建 PR
-gitlink-cli pr +create \
-  --owner Gitlink --repo forgeplus \
-  --head MyUser:fix/readme-links --base master \
-  --title "docs: update broken link in README" \
-  --body "## 变更说明\n\nFixes #156\n\n更新了 README 中的过期链接。"
-```
-
-### Step 6：生成新人上手指南
-
-**AI 输出完整的新人上手指南：**
-
-```markdown
-# 🚀 ForgePlus 新人上手指南
-
-## 项目简介
-ForgePlus 是一个开源研发创新平台，主要使用 Ruby 开发。
-
-## 环境搭建
-1. Fork 项目：`gitlink-cli repo +fork --owner Gitlink --repo forgeplus`
-2. Clone：`git clone https://www.gitlink.org.cn/<you>/forgeplus.git`
-3. 安装依赖：`bundle install`
-4. 配置数据库：`cp config/database.yml.example config/database.yml`
-5. 运行测试：`bundle exec rspec`
-
-## 推荐的第一个任务
-- Issue #156：修复 README 过期链接（难度：⭐）
-- Issue #203：补充 API 文档（难度：⭐⭐）
-
-## 贡献流程
-Fork → Branch → Code → Test → PR
-
-## 获取帮助
-在 Issue 中 @maintainer 或在 Wiki 中查阅贡献指南
+共标记 1 个 good-first-issue。
 ```
 
 ---
 
-## 完整命令速览
+## 场景 2：引导评论生成
+
+**用户 Prompt：**
+> 帮我给 #8 写一个引导评论，让新人知道怎么入手。
+
+**Agent 执行过程：**
 
 ```bash
-# 项目信息
-gitlink-cli repo +info --owner <owner> --repo <repo> --format json
-gitlink-cli repo +readme --owner <owner> --repo <repo>
-gitlink-cli repo +languages --owner <owner> --repo <repo> --format json
-gitlink-cli repo +contributors --owner <owner> --repo <repo> --format json
+# 读取 Issue 详情
+gitlink-cli issue +view --owner ylly --repo gitlink-cli --number 8 --format json
 
-# 搜索 Issue
-gitlink-cli search +issues --owner <owner> --repo <repo> --keyword "good first issue" --category opened
-gitlink-cli issue +list --state open --format json
-gitlink-cli issue +view --number <n> --format json
+# AI 根据 Issue 内容生成个性化评论并发布
+gitlink-cli issue +comment --owner ylly --repo gitlink-cli \
+  --number 8 \
+  --body "👋 欢迎贡献！任务目标：为 wiki 命令补充示例。
+建议入手位置：README.md、shortcuts/wiki/wiki.go
+本地准备：Fork → 克隆 → go build → 建分支 docs/wiki-examples
+提交 PR 关联 #8。"
+```
 
-# 发布引导评论
-gitlink-cli issue +comment --number <n> --body "<引导内容>"
+**输出：** 评论已发布（comment id 476548）
 
-# Fork 和 PR
-gitlink-cli repo +fork --owner <owner> --repo <repo>
-gitlink-cli pr +create --owner <owner> --repo <repo> --head <you>:<branch> --base master --title "..." --body "..."
+---
+
+## 场景 3：项目入门指南
+
+**用户 Prompt：**
+> 帮我生成一份 gitlink-cli 的新人入门指南。
+
+**Agent 执行过程：**
+
+```bash
+gitlink-cli repo +info --owner ylly --repo gitlink-cli --format json
+gitlink-cli repo +readme --owner ylly --repo gitlink-cli
+```
+
+**Agent 输出入门指南 Markdown：**
+
+```markdown
+🚀 gitlink-cli 新人入门指南
+
+## 环境准备
+- Go 1.26+，GitLink 账号 + auth login
+
+## 项目结构
+| 目录 | 作用 |
+|------|------|
+| cmd/ | 命令定义 |
+| shortcuts/ | Shortcut 实现（核心）|
+| skills/ | AI Agent Skills |
+
+## 第一个贡献
+1. 找带 good-first-issue 标签的 Issue
+2. Fork + 克隆 + 建分支
+3. go build && go test ./...
+4. 提交 PR 关联 Issue
+
+## 提交规范
+- feat / fix / docs / refactor
+- 新增模块需在 shortcuts/register.go 注册
 ```

@@ -2,41 +2,21 @@ package label
 
 import (
 	"fmt"
-	"net/url"
+	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-// Shortcuts returns all shortcuts for label management.
 func Shortcuts() []*common.Shortcut {
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "List issue labels (tags)",
-			Flags: []common.Flag{
-				{Name: "keyword", Short: "k", Usage: "Search keyword"},
-				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
-				{Name: "order-by", Usage: "Sort field: updated_on, created_on, issues_count", Default: "created_on"},
-				{Name: "order-direction", Usage: "Sort direction: asc, desc", Default: "desc"},
-			},
+			Description: "List repository labels",
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				q := url.Values{}
-				q.Set("page", ctx.Arg("page"))
-				q.Set("limit", ctx.Arg("limit"))
-				if k := ctx.Arg("keyword"); k != "" {
-					q.Set("keyword", k)
-				}
-				if o := ctx.Arg("order-by"); o != "" {
-					q.Set("order_by", o)
-				}
-				if d := ctx.Arg("order-direction"); d != "" {
-					q.Set("order_direction", d)
-				}
-				env, err := ctx.CallAPIWithQuery("GET", v1Path(ctx)+"/issue_tags", q)
+				env, err := ctx.CallAPI("GET", labelPath(ctx), nil)
 				if err != nil {
 					return err
 				}
@@ -45,11 +25,10 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: "Create an issue label (tag)",
+			Description: "Create a repository label",
 			Flags: []common.Flag{
 				{Name: "name", Short: "n", Usage: "Label name", Required: true},
-				{Name: "color", Short: "c", Usage: "Color hex (e.g. #FF0000)"},
-				{Name: "description", Short: "d", Usage: "Label description"},
+				{Name: "color", Short: "c", Usage: "Label color (hex, e.g. #ff0000)", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -59,16 +38,14 @@ func Shortcuts() []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				body := map[string]interface{}{
-					"name": name,
+				color, err := ctx.RequireArg("color")
+				if err != nil {
+					return err
 				}
-				if c := ctx.Arg("color"); c != "" {
-					body["color"] = c
-				}
-				if d := ctx.Arg("description"); d != "" {
-					body["description"] = d
-				}
-				env, err := ctx.CallAPI("POST", v1Path(ctx)+"/issue_tags", body)
+				env, err := ctx.CallAPI("POST", labelPath(ctx), map[string]interface{}{
+					"name":  name,
+					"color": color,
+				})
 				if err != nil {
 					return err
 				}
@@ -77,12 +54,11 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "update",
-			Description: "Update an issue label (tag)",
+			Description: "Update a repository label",
 			Flags: []common.Flag{
 				{Name: "id", Short: "i", Usage: "Label ID", Required: true},
 				{Name: "name", Short: "n", Usage: "New label name"},
-				{Name: "color", Short: "c", Usage: "New color hex (e.g. #FF0000)"},
-				{Name: "description", Short: "d", Usage: "New description"},
+				{Name: "color", Short: "c", Usage: "New label color (hex)"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -93,20 +69,13 @@ func Shortcuts() []*common.Shortcut {
 					return err
 				}
 				payload := map[string]interface{}{}
-				if n := ctx.Arg("name"); n != "" {
-					payload["name"] = n
+				if v := ctx.Arg("name"); v != "" {
+					payload["name"] = v
 				}
-				if c := ctx.Arg("color"); c != "" {
-					payload["color"] = c
+				if v := ctx.Arg("color"); v != "" {
+					payload["color"] = v
 				}
-				if d := ctx.Arg("description"); d != "" {
-					payload["description"] = d
-				}
-				if len(payload) == 0 {
-					return fmt.Errorf("至少需要指定 --name, --color 或 --description 之一")
-				}
-				env, err := ctx.CallAPI("PATCH",
-					fmt.Sprintf("%s/issue_tags/%s", v1Path(ctx), id), payload)
+				env, err := ctx.CallAPI("PATCH", labelItemPath(ctx, id), payload)
 				if err != nil {
 					return err
 				}
@@ -115,7 +84,7 @@ func Shortcuts() []*common.Shortcut {
 		},
 		{
 			Name:        "delete",
-			Description: "Delete an issue label (tag)",
+			Description: "Delete a repository label",
 			Flags: []common.Flag{
 				{Name: "id", Short: "i", Usage: "Label ID", Required: true},
 			},
@@ -127,16 +96,63 @@ func Shortcuts() []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("DELETE", fmt.Sprintf("%s/issue_tags/%s", v1Path(ctx), id), nil)
+				env, err := ctx.CallAPI("DELETE", labelItemPath(ctx, id), nil)
 				if err != nil {
 					return err
 				}
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "batch-create",
+			Description: "Create multiple labels at once (names/colors comma-separated)",
+			Flags: []common.Flag{
+				{Name: "names", Short: "n", Usage: "Label names (comma-separated, e.g. bug,feature,docs)", Required: true},
+				{Name: "colors", Short: "c", Usage: "Colors (comma-separated, e.g. #ee0701,#84b6eb,#0075ca). If fewer than names, repeats last.", Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				namesRaw, _ := ctx.RequireArg("names")
+				colorsRaw, _ := ctx.RequireArg("colors")
+				names := strings.Split(namesRaw, ",")
+				colors := strings.Split(colorsRaw, ",")
+				results := []map[string]interface{}{}
+				for i, name := range names {
+					name = strings.TrimSpace(name)
+					if name == "" {
+						continue
+					}
+					color := "#cccccc"
+					if i < len(colors) {
+						color = strings.TrimSpace(colors[i])
+					} else if len(colors) > 0 {
+						color = strings.TrimSpace(colors[len(colors)-1])
+					}
+					env, err := ctx.CallAPI("POST", labelPath(ctx), map[string]interface{}{
+						"name":  name,
+						"color": color,
+					})
+					if err != nil {
+						results = append(results, map[string]interface{}{"name": name, "ok": false, "error": err.Error()})
+					} else {
+						results = append(results, map[string]interface{}{"name": name, "ok": env.OK, "color": color})
+					}
+				}
+				return ctx.OutputData(map[string]interface{}{
+					"created": len(results),
+					"results": results,
+				})
+			},
+		},
 	}
 }
 
-func v1Path(ctx *common.RuntimeContext) string {
-	return fmt.Sprintf("/v1/%s/%s", ctx.Owner, ctx.Repo)
+func labelPath(ctx *common.RuntimeContext) string {
+	return fmt.Sprintf("/%s/%s/labels", ctx.Owner, ctx.Repo)
+}
+
+func labelItemPath(ctx *common.RuntimeContext, id string) string {
+	return fmt.Sprintf("%s/%s", labelPath(ctx), id)
 }

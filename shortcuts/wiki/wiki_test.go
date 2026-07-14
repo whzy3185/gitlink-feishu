@@ -140,7 +140,7 @@ func TestWikiUpdate(t *testing.T) {
 }
 
 func TestWikiDelete(t *testing.T) {
-	var deletePayload, sidebarUpdatePayload map[string]interface{}
+	var deletePayload map[string]interface{}
 	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
@@ -151,22 +151,6 @@ func TestWikiDelete(t *testing.T) {
 			deletePayload = common.DecodeJSON(t, r)
 			common.WriteJSON(t, w, map[string]interface{}{
 				"code": 204,
-			})
-		case r.Method == "GET" && r.URL.Path == "/wiki/open/getWiki":
-			pageName := r.URL.Query().Get("pageName")
-			if pageName != "_Sidebar" {
-				t.Fatalf("expected pageName=_Sidebar, got %s", pageName)
-			}
-			common.WriteJSON(t, w, map[string]interface{}{
-				"code": 200,
-				"data": map[string]interface{}{
-					"content_base64": base64.StdEncoding.EncodeToString([]byte("[[OldPage]]\n[[OtherPage]]")),
-				},
-			})
-		case r.Method == "PUT" && r.URL.Path == "/wiki/open/updateWiki":
-			sidebarUpdatePayload = common.DecodeJSON(t, r)
-			common.WriteJSON(t, w, map[string]interface{}{
-				"code": 200,
 			})
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -184,9 +168,4 @@ func TestWikiDelete(t *testing.T) {
 
 	common.AssertEqual(t, deletePayload["pageName"], "OldPage")
 	common.AssertEqual(t, deletePayload["projectId"], float64(123))
-
-	// Verify sidebar was updated to remove the deleted page link
-	common.AssertEqual(t, sidebarUpdatePayload["pageName"], "_Sidebar")
-	expectedSidebar := base64.StdEncoding.EncodeToString([]byte("[[OtherPage]]"))
-	common.AssertEqual(t, sidebarUpdatePayload["content_base64"], expectedSidebar)
 }

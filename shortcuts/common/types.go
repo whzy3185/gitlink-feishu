@@ -8,7 +8,6 @@ import (
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/client"
 	"github.com/gitlink-org/gitlink-cli/internal/context"
-	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 )
 
@@ -16,7 +15,6 @@ import (
 type Shortcut struct {
 	Name        string
 	Description string
-	Long        string
 	Flags       []Flag
 	Run         func(ctx *RuntimeContext) error
 }
@@ -38,15 +36,10 @@ type RuntimeContext struct {
 	Repo   string
 	Format string
 	Args   map[string]string
-	Tr     *i18n.Translator
 }
 
 // NewRuntimeContext creates a RuntimeContext with auto-resolved owner/repo.
-func NewRuntimeContext(args map[string]string, translators ...*i18n.Translator) (*RuntimeContext, error) {
-	tr := i18n.Default()
-	if len(translators) > 0 && translators[0] != nil {
-		tr = translators[0]
-	}
+func NewRuntimeContext(args map[string]string) (*RuntimeContext, error) {
 	cli, err := client.New()
 	if err != nil {
 		return nil, err
@@ -64,7 +57,6 @@ func NewRuntimeContext(args map[string]string, translators ...*i18n.Translator) 
 		Repo:   cmdutil.Repo,
 		Format: format,
 		Args:   args,
-		Tr:     tr,
 	}, nil
 }
 
@@ -94,14 +86,9 @@ func (ctx *RuntimeContext) CallAPIRaw(method, path string, body interface{}) (*o
 	return ctx.Client.DoRaw(method, path, body, nil)
 }
 
-// CallAPIRawWithQuery makes an API call with query parameters, without .json suffix.
+// CallAPIRawWithQuery makes an API call with query parameters without appending .json suffix.
 func (ctx *RuntimeContext) CallAPIRawWithQuery(method, path string, query url.Values) (*output.Envelope, error) {
 	return ctx.Client.DoRaw(method, path, nil, query)
-}
-
-// CallAPIRawForm makes an API call with form-encoded body, without .json suffix.
-func (ctx *RuntimeContext) CallAPIRawForm(method, path string, body url.Values) (*output.Envelope, error) {
-	return ctx.Client.DoForm(method, path, body, nil)
 }
 
 // PaginateAll fetches all pages.
@@ -136,11 +123,7 @@ func (ctx *RuntimeContext) Arg(name string) string {
 func (ctx *RuntimeContext) RequireArg(name string) (string, error) {
 	v := ctx.Arg(name)
 	if v == "" {
-		tr := ctx.Tr
-		if tr == nil {
-			tr = i18n.Default()
-		}
-		return "", fmt.Errorf("%s", tr.Tf("error.missing_required_flag", i18n.Args{"name": name}))
+		return "", fmt.Errorf("required flag --%s is missing", name)
 	}
 	return v, nil
 }
