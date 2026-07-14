@@ -1,49 +1,60 @@
 # pr +list
 
-> **前置条件：** 先阅读 [`../../gitlink-shared/SKILL.md`](../../gitlink-shared/SKILL.md) 了解认证、全局参数和安全规则。
+> Read [`../../gitlink-shared/SKILL.md`](../../gitlink-shared/SKILL.md) first for
+> authentication, global flags, and safety rules.
 
-列出仓库的 Pull Request 列表。
+List pull requests for a repository. The command supports state filtering,
+keyword search, pagination, and direct lookup by PR number.
 
-## 命令
+## Examples
 
 ```bash
-# 列出 PR（默认 state=open）
+# List open pull requests for the current repository
 gitlink-cli pr +list
 
-# 指定仓库和状态
-gitlink-cli pr +list --owner Gitlink --repo forgeplus --state open
+# List merged pull requests for a specific repository
+gitlink-cli pr +list --owner Gitlink --repo forgeplus --state merged
 
-# 分页
+# Search by keyword
+gitlink-cli pr +list --keyword release --sort-by updated_at --sort-direction desc
+
+# Search by PR number from the web URL
+gitlink-cli pr +list --number 42
+gitlink-cli pr +list --id 42
+
+# Paginate results
 gitlink-cli pr +list --page 2 --limit 10
-
-# 查看已合并的 PR（注意：state 仅影响统计计数）
-gitlink-cli pr +list --state merged --format json
 ```
 
-## 参数
+## Flags
 
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `--state` / `-s` | 否 | 过滤状态：`open`、`merged`、`closed`（默认 `open`） |
-| `--page` / `-p` | 否 | 页码（默认 `1`） |
-| `--limit` / `-l` | 否 | 每页条数（默认 `20`） |
+| Flag | Required | Description |
+|---|---|---|
+| `--state`, `-s` | No | Filter by `open`, `merged`, `closed`, or `all`. Default: `open`. |
+| `--keyword`, `-k` | No | Search PRs by keyword. |
+| `--number`, `-n` | No | Fetch one PR by the PR number shown in the web URL. |
+| `--id`, `-i` | No | Compatibility alias for `--number`. |
+| `--priority-id` | No | Filter by priority ID. |
+| `--tag-id` | No | Filter by issue tag ID. |
+| `--milestone-id` | No | Filter by milestone/version ID. |
+| `--reviewer-id` | No | Filter by reviewer ID. |
+| `--assignee-id` | No | Filter by assignee ID. |
+| `--sort-by` | No | Sort field, such as `updated_at` or `created_at`. |
+| `--sort-direction` | No | Sort direction: `asc` or `desc`. |
+| `--page`, `-p` | No | Page number. Default: `1`. |
+| `--limit`, `-l` | No | Page size. Default: `20`. |
 
-## API
+## Behavior Notes
 
-```
-GET /{owner}/{repo}/pulls?state={state}&page={page}&limit={limit}
-```
-
-## 注意事项
-
-- `--state` 参数**仅影响响应中的统计计数**（open_count / merged_count / closed_count），返回的 PR 列表可能包含所有状态的 PR
-- 如需精确过滤，请在客户端通过 `pull_request_status` 字段二次过滤：
-  - `0` = open
-  - `1` = merged
-  - `2` = closed
-- 返回的每条 PR 包含 `pull_request_number` 字段（即网页 URL `/pulls/N` 中的序号），用于 `pr +view`、`pr +merge`、`pr +close` 等操作
+- Regular list mode uses `GET /api/v1/{owner}/{repo}/pulls.json`.
+- `--number` / `--id` uses `GET /api/v1/{owner}/{repo}/pulls/{index}.json` and
+  returns the result in list form so scripts can keep using `pr +list`.
+- Each returned PR includes a user-facing `number` field that matches the web UI
+  URL `/pulls/N`.
+- The PR number is the project-level sequence number, not the global database
+  primary key.
 
 ## References
 
-- [gitlink-shared SKILL.md](../../gitlink-shared/SKILL.md) -- 认证与全局参数
-- [gitlink-pr SKILL.md](../SKILL.md) -- PR 操作总览
+- [gitlink-shared SKILL.md](../../gitlink-shared/SKILL.md)
+- [gitlink-pr SKILL.md](../SKILL.md)
