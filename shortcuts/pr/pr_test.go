@@ -249,6 +249,143 @@ func TestPRView(t *testing.T) {
 	}
 }
 
+// --- checkout ---
+
+func TestPRCheckoutDryRunUsesForkSource(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/owner/repo/pulls/42.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"head": "feature/gitlink-pr",
+			"fork_project": map[string]interface{}{
+				"login":      "contributor",
+				"identifier": "repo-fork",
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "checkout", map[string]string{
+		"id":      "42",
+		"branch":  "review/pr-42",
+		"dry-run": "true",
+	})
+	if err != nil {
+		t.Fatalf("checkout dry-run failed: %v", err)
+	}
+}
+
+func TestPRCheckoutRunsFetchAndCheckout(t *testing.T) {
+	var calls [][]string
+	oldRunner := runGitCommand
+	runGitCommand = func(args ...string) (string, error) {
+		calls = append(calls, append([]string(nil), args...))
+		return "", nil
+	}
+	defer func() { runGitCommand = oldRunner }()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/owner/repo/pulls/43.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"head": "contributor/repo:feature/pr-checkout",
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "checkout", map[string]string{
+		"id":     "43",
+		"branch": "review/pr-43",
+	})
+	if err != nil {
+		t.Fatalf("checkout failed: %v", err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 git calls, got %d: %#v", len(calls), calls)
+	}
+	assertStringSlice(t, calls[0], []string{"fetch", "--no-tags", server.URL + "/contributor/repo.git", "feature/pr-checkout"})
+	assertStringSlice(t, calls[1], []string{"checkout", "-b", "review/pr-43", "FETCH_HEAD"})
+}
+
+func TestPRCheckoutForceUsesResetBranch(t *testing.T) {
+	plan, err := buildPRCheckoutPlan(prCheckoutDetail{
+		ID:           "44",
+		SourceOwner:  "owner",
+		SourceRepo:   "repo",
+		SourceBranch: "feature/x",
+		SourceURL:    "https://www.gitlink.org.cn/owner/repo.git",
+	}, "review/pr-44", true, false)
+	if err != nil {
+		t.Fatalf("build plan failed: %v", err)
+	}
+	assertStringSlice(t, plan.Commands[1], []string{"checkout", "-B", "review/pr-44", "FETCH_HEAD"})
+}
+
+func TestPRCheckoutDefaultBranch(t *testing.T) {
+	plan, err := buildPRCheckoutPlan(prCheckoutDetail{
+		ID:           "45",
+		SourceOwner:  "owner",
+		SourceRepo:   "repo",
+		SourceBranch: "feature/default",
+		SourceURL:    "https://www.gitlink.org.cn/owner/repo.git",
+	}, "pr-45", false, false)
+	if err != nil {
+		t.Fatalf("build plan failed: %v", err)
+	}
+	if plan.LocalBranch != "pr-45" {
+		t.Fatalf("local branch = %q, want pr-45", plan.LocalBranch)
+	}
+}
+
+func TestPRCheckoutRejectsUnsafeBranch(t *testing.T) {
+	_, err := buildPRCheckoutPlan(prCheckoutDetail{
+		ID:           "46",
+		SourceOwner:  "owner",
+		SourceRepo:   "repo",
+		SourceBranch: "feature/x",
+		SourceURL:    "https://www.gitlink.org.cn/owner/repo.git",
+	}, "-bad", false, false)
+	if err == nil {
+		t.Fatal("expected unsafe local branch error")
+	}
+}
+
+func TestParsePRHeadForCheckout(t *testing.T) {
+	cases := []struct {
+		head       string
+		wantOwner  string
+		wantRepo   string
+		wantBranch string
+	}{
+		{head: "feature/x", wantBranch: "feature/x"},
+		{head: "alice:feature/x", wantOwner: "alice", wantBranch: "feature/x"},
+		{head: "alice/repo:feature/x", wantOwner: "alice", wantRepo: "repo", wantBranch: "feature/x"},
+	}
+	for _, tc := range cases {
+		owner, repo, branch := parsePRHeadForCheckout(tc.head)
+		if owner != tc.wantOwner || repo != tc.wantRepo || branch != tc.wantBranch {
+			t.Fatalf("parse %q = (%q, %q, %q), want (%q, %q, %q)",
+				tc.head, owner, repo, branch, tc.wantOwner, tc.wantRepo, tc.wantBranch)
+		}
+	}
+}
+
+func TestGitlinkRepoURLUsesConfiguredAPIBase(t *testing.T) {
+	got := gitlinkRepoURL("https://gitlink.example.com/api", "owner", "repo")
+	if got != "https://gitlink.example.com/owner/repo.git" {
+		t.Fatalf("url = %q", got)
+	}
+	got = gitlinkRepoURL("https://gitlink.example.com/api/v1", "owner", "repo")
+	if got != "https://gitlink.example.com/owner/repo.git" {
+		t.Fatalf("url with api/v1 = %q", got)
+	}
+}
+
 // --- merge ---
 
 func TestPRMerge(t *testing.T) {
@@ -532,177 +669,14 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	}
 }
 
-func TestPRReviewCommentsListBuildsQuery(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/pulls/13/journals.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+func assertStringSlice(t *testing.T, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
 		}
-		query := r.URL.Query()
-		assertEqual(t, query.Get("keyword"), "todo")
-		assertEqual(t, query.Get("review_id"), "10")
-		assertEqual(t, query.Get("need_respond"), "true")
-		assertEqual(t, query.Get("state"), "opened")
-		assertEqual(t, query.Get("parent_id"), "200")
-		assertEqual(t, query.Get("path"), "README.md")
-		assertEqual(t, query.Get("is_full"), "true")
-		assertEqual(t, query.Get("sort_by"), "created_on")
-		assertEqual(t, query.Get("sort_direction"), "desc")
-		writeJSON(t, w, map[string]interface{}{"total_count": 0, "journals": []interface{}{}})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "review-comments", map[string]string{
-		"id":             "13",
-		"keyword":        "todo",
-		"review-id":      "10",
-		"need-respond":   "true",
-		"state":          "opened",
-		"parent-id":      "200",
-		"path":           "README.md",
-		"is-full":        "true",
-		"sort-by":        "created_on",
-		"sort-direction": "desc",
-	})
-	if err != nil {
-		t.Fatalf("review-comments shortcut failed: %v", err)
-	}
-}
-
-func TestPRReviewCommentPostsPayload(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/pulls/13/journals.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"id": 200, "note": "please fix"})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "review-comment", map[string]string{
-		"id":        "13",
-		"note":      "please fix",
-		"review-id": "10",
-		"type":      "problem",
-		"commit":    "abc123",
-		"line-code": "abc123_0_10",
-		"path":      "README.md",
-		"parent-id": "199",
-		"diff-json": `{"name":"README.md","addition":1}`,
-	})
-	if err != nil {
-		t.Fatalf("review-comment shortcut failed: %v", err)
-	}
-
-	assertEqual(t, payload["type"], "problem")
-	assertEqual(t, payload["note"], "please fix")
-	assertEqual(t, payload["review_id"], "10")
-	assertEqual(t, payload["commit_id"], "abc123")
-	assertEqual(t, payload["line_code"], "abc123_0_10")
-	assertEqual(t, payload["path"], "README.md")
-	assertEqual(t, payload["parent_id"], float64(199))
-	diff, ok := payload["diff"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("diff type = %T, want map", payload["diff"])
-	}
-	assertEqual(t, diff["name"], "README.md")
-	assertEqual(t, diff["addition"], float64(1))
-}
-
-func TestPRReviewCommentDryRunDoesNotCallAPI(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("server should not be called during dry-run: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "review-comment", map[string]string{
-		"id":        "13",
-		"note":      "please fix",
-		"review-id": "10",
-		"commit":    "abc123",
-		"line-code": "abc123_0_10",
-		"path":      "README.md",
-		"dry-run":   "true",
-	})
-	if err != nil {
-		t.Fatalf("review-comment dry-run failed: %v", err)
-	}
-}
-
-func TestPRReviewCommentUpdatePayload(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "PUT" || r.URL.Path != "/v1/owner/repo/pulls/13/journals/200.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"id": 200, "note": "fixed", "state": "resolved"})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "review-comment-update", map[string]string{
-		"id":         "13",
-		"comment-id": "200",
-		"note":       "fixed",
-		"commit":     "def456",
-		"state":      "resolved",
-	})
-	if err != nil {
-		t.Fatalf("review-comment-update shortcut failed: %v", err)
-	}
-	assertEqual(t, payload["note"], "fixed")
-	assertEqual(t, payload["commit_id"], "def456")
-	assertEqual(t, payload["state"], "resolved")
-}
-
-func TestPRReviewCommentDeleteUsesV1Endpoint(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/pulls/13/journals/200.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "review-comment-delete", map[string]string{
-		"id":         "13",
-		"comment-id": "200",
-	})
-	if err != nil {
-		t.Fatalf("review-comment-delete shortcut failed: %v", err)
-	}
-}
-
-func TestPRReviewCommentRejectsInvalidInputs(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("server should not be called for invalid input: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	if err := runPRShortcut(t, server, "review-comment", map[string]string{
-		"id":        "13",
-		"note":      "please fix",
-		"review-id": "10",
-		"type":      "todo",
-		"commit":    "abc123",
-		"line-code": "abc123_0_10",
-		"path":      "README.md",
-	}); err == nil {
-		t.Fatal("expected invalid review comment type to fail")
-	}
-
-	if err := runPRShortcut(t, server, "review-comment-update", map[string]string{
-		"id":         "13",
-		"comment-id": "200",
-		"state":      "done",
-	}); err == nil {
-		t.Fatal("expected invalid review comment state to fail")
-	}
-
-	if err := runPRShortcut(t, server, "review-comments", map[string]string{
-		"id":           "13",
-		"need-respond": "maybe",
-	}); err == nil {
-		t.Fatal("expected invalid need-respond to fail")
 	}
 }

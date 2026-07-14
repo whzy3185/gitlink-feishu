@@ -22,6 +22,7 @@ metadata:
 | `pr +list` | PR 列表 | 否（公开项目） |
 | `pr +create` | 创建 PR | 是 |
 | `pr +view` | PR 详情 | 否（公开项目） |
+| `pr +checkout` | 拉取并切换到 PR 分支 | 否（公开项目，本地需要 git） |
 | `pr +merge` | 合并 PR | 是 |
 | `pr +refuse` | 拒绝并关闭 PR | 是 |
 | `pr +reopen` | 重开已关闭的 PR | 是 |
@@ -51,6 +52,10 @@ gitlink-cli pr +create --title "feat: 新增搜索功能" --head feature/search 
 
 # 查看 PR 详情（使用 pull_request_number，即网页 URL 中的序号）
 gitlink-cli pr +view --id 3
+
+# 拉取 PR 源分支到本地 review 分支，适合本地跑测试或复现问题
+gitlink-cli pr +checkout --id 3 --branch review/pr-3
+gitlink-cli pr +checkout --id 3 --force
 
 # 合并 PR（支持 merge/rebase/squash）
 gitlink-cli pr +merge --id 3

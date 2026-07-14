@@ -171,6 +171,18 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "checkout",
+			Description: tr.T("cmd.pr.checkout.short"),
+			Long:        tr.T("cmd.pr.checkout.long"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "branch", Short: "b", Usage: tr.T("flag.pr.checkout_branch")},
+				{Name: "force", Short: "f", Usage: tr.T("flag.pr.checkout_force"), Bool: true, Default: "false"},
+				{Name: "dry-run", Usage: tr.T("flag.pr.checkout_dry_run"), Bool: true, Default: "false"},
+			},
+			Run: runCheckout,
+		},
+		{
 			Name:        "merge",
 			Description: tr.T("cmd.pr.merge.short"),
 			Flags: []common.Flag{

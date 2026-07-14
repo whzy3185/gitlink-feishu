@@ -442,6 +442,9 @@ gitlink-cli pr +create --owner Gitlink --repo forgeplus -t "feat: 新功能" --h
 # 查看 PR
 gitlink-cli pr +view --owner Gitlink --repo forgeplus -i 42
 
+# 拉取并切换到 PR 分支
+gitlink-cli pr +checkout --owner Gitlink --repo forgeplus -i 42 --branch review/pr-42
+
 # 合并 PR
 gitlink-cli pr +merge --owner Gitlink --repo forgeplus -i 42
 
