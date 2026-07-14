@@ -456,6 +456,10 @@ gitlink-cli branch +create --name feature/new-feature
 # Delete a branch
 gitlink-cli branch +delete --name feature/old-feature
 
+# All branch names at once (no paging) and default-branch switch
+gitlink-cli branch +all --owner myname --repo myrepo
+gitlink-cli branch +set-default --owner myname --repo myrepo -n develop
+
 # Protect a branch
 gitlink-cli branch +protect --name main
 
