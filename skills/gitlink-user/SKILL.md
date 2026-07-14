@@ -28,6 +28,20 @@ metadata:
 | `user +role` | 查看用户角色定位统计 | 否 |
 | `user +major` | 查看用户专业定位 / 项目分类统计 | 否 |
 
+## SSH Public Keys
+
+Use these shortcuts to manage SSH public keys for the current authenticated user:
+
+```bash
+gitlink-cli user +keys
+gitlink-cli user +add-key --title laptop --from ~/.ssh/id_ed25519.pub
+gitlink-cli user +add-key --from ~/.ssh/id_rsa.pub
+gitlink-cli user +add-key --title laptop --key "ssh-ed25519 AAAA..."
+gitlink-cli user +delete-key --id 123
+```
+
+`user +add-key` accepts either `--key` or `--from`, not both. When `--from` is used without `--title`, the filename is used as the default title. `user +delete-key` requires a positive integer key ID.
+
 ## 使用示例
 
 ```bash

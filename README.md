@@ -530,6 +530,24 @@ gitlink-cli profile +activity
 gitlink-cli profile +contribution --user zhangsan --year 2025
 ```
 
+### User Account
+
+```bash
+# Show current authenticated user
+gitlink-cli user +me
+
+# List SSH public keys
+gitlink-cli user +keys
+
+# Add an SSH public key from inline content or a file
+gitlink-cli user +add-key --title laptop --key "ssh-ed25519 AAAA..."
+gitlink-cli user +add-key --title laptop --from ~/.ssh/id_ed25519.pub
+gitlink-cli user +add-key --from ~/.ssh/id_rsa.pub
+
+# Delete an SSH public key
+gitlink-cli user +delete-key --id 123
+```
+
 ### Workflow Agent Commands
 
 `workflow` provides rule-based repository analysis for maintainers and AI Agents. It currently supports:
@@ -726,7 +744,7 @@ See [skills/README.md](./skills/README.md) for details.
 | `gitlink-pipeline` | Pipeline workflow operations (runs, logs, enable, disable, delete, etc.) |
 | `gitlink-search` | Search (repositories, users, etc.) |
 | `gitlink-org` | Organization management (members, teams, etc.) |
-| `gitlink-user` | User management (profile info, etc.) |
+| `gitlink-user` | User management (profile info, SSH keys, etc.) |
 | `gitlink-pm` | Project management (sprints, kanban, weekly reports, etc.) |
 | `gitlink-workflow` | AI-powered workflows (issue triage, PR review, release notes, etc.) |
 | `gitlink-health` | Project health analysis (PR/Issue metrics aggregation, health reports) |
