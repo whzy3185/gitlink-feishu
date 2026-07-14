@@ -232,6 +232,10 @@ gitlink-cli repo +list
 # 查看仓库信息
 gitlink-cli repo +info --owner Gitlink --repo forgeplus
 
+# 使用 git 克隆仓库（对标 `gh repo clone`）
+gitlink-cli repo +clone --owner Gitlink --repo forgeplus
+gitlink-cli repo +clone --owner Gitlink --repo forgeplus -d ./forgeplus -b develop
+
 # 读取仓库 README
 gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 

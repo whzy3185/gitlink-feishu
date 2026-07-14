@@ -220,6 +220,10 @@ gitlink-cli repo +list
 # View repository info
 gitlink-cli repo +info --owner Gitlink --repo forgeplus
 
+# Clone a repository with git (mirrors `gh repo clone`)
+gitlink-cli repo +clone --owner Gitlink --repo forgeplus
+gitlink-cli repo +clone --owner Gitlink --repo forgeplus -d ./forgeplus -b develop
+
 # Read repository README
 gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 
