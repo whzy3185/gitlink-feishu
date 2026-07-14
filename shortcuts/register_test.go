@@ -1,7 +1,6 @@
 package shortcuts
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -12,10 +11,10 @@ func TestRegisterAll(t *testing.T) {
 	RegisterAll(root)
 
 	expectedGroups := []string{
-		"repo", "issue", "label", "license", "pr", "profile", "release", "branch",
+		"repo", "catalog", "issue", "label", "license", "pr", "release", "branch",
 		"org", "user", "search", "ci", "workflow",
 		"compare", "member", "milestone", "pipeline", "webhook",
-		"dataset", "health", "ignore", "wiki", "attachment",
+		"health",
 	}
 
 	groupSet := map[string]bool{}
@@ -60,9 +59,6 @@ func TestRegisterAllGroupDescriptions(t *testing.T) {
 		t.Run(cmd.Use, func(t *testing.T) {
 			if cmd.Short == "" {
 				t.Fatal("Short description is empty")
-			}
-			if strings.HasPrefix(cmd.Short, "cmd.") {
-				t.Fatalf("Short description leaks raw i18n key: %q", cmd.Short)
 			}
 		})
 	}

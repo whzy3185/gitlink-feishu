@@ -105,6 +105,7 @@
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
+| 📚 模板目录 | 查询 GitLink 许可证和 .gitignore 模板，用于仓库初始化 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 👤 用户 | 查看资料、管理 Public Keys、查询用户统计 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
@@ -255,6 +256,19 @@ gitlink-cli repo +create -n my-project -d "项目描述"
 
 # Fork 仓库
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
+```
+
+### 平台模板目录
+
+```bash
+# 列出许可证模板
+gitlink-cli catalog +licenses
+
+# 按名称筛选许可证模板
+gitlink-cli catalog +licenses --name MIT
+
+# 查询 .gitignore 模板
+gitlink-cli catalog +ignores --name Go
 ```
 
 ### Webhook 管理
@@ -569,6 +583,7 @@ git push gitlink
 |-------|------|
 | `gitlink-shared` | 认证、全局参数、安全规则、API 注意事项 |
 | `gitlink-repo` | 仓库操作（创建、查看、删除、Fork、洞察数据等） |
+| `gitlink-catalog` | 许可证和 .gitignore 模板查询 |
 | `gitlink-issue` | Issue 操作（创建、更新、关闭、评论等） |
 | `gitlink-pr` | Pull Request 操作（创建、合并、Review 等） |
 | `gitlink-member` | 仓库成员与邀请链接管理 |

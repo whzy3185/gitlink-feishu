@@ -98,6 +98,8 @@ skills/
 │   ├── SKILL.md                       # 搜索操作指南
 │   └── examples/
 │       └── search-workflow.md         # 搜索工作流
+├── gitlink-catalog/                   # 平台模板目录
+│   └── SKILL.md                       # 许可证与 .gitignore 模板查询
 ├── gitlink-user/                      # 用户管理
 │   └── SKILL.md                       # 用户操作指南
 ├── gitlink-org/                       # 组织管理
@@ -146,7 +148,8 @@ skills/
 | Skill | 说明 | 常用命令 |
 |-------|------|----------|
 | **gitlink-search** | 搜索功能 | `search +repos`, `search +users` |
-| **gitlink-user** | 用户管理 | `user +me`, `user +current`, `user +keys`, `user +activity` |
+| **gitlink-catalog** | 平台模板目录 | `catalog +licenses`, `catalog +ignores` |
+| **gitlink-user** | 用户管理 | `user +me`, `user +info` |
 | **gitlink-org** | 组织管理 | `org +list`, `org +info`, `org +members` |
 | **gitlink-ci** | CI/CD | `ci +builds`, `ci +logs` |
 | **gitlink-pipeline** | 流水线工作流 | `pipeline +runs`, `pipeline +run`, `pipeline +logs` |
@@ -253,6 +256,7 @@ gitlink-cli org +info -i Gitlink
 - [gitlink-release/SKILL.md](gitlink-release/SKILL.md) - Release 命令
 - [gitlink-pipeline/SKILL.md](gitlink-pipeline/SKILL.md) - Pipeline 命令
 - [gitlink-search/SKILL.md](gitlink-search/SKILL.md) - 搜索命令
+- [gitlink-catalog/SKILL.md](gitlink-catalog/SKILL.md) - 平台模板目录命令
 
 **组织和用户**:
 - [gitlink-org/SKILL.md](gitlink-org/SKILL.md) - 组织命令
