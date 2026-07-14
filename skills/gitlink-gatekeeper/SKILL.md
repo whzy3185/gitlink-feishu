@@ -96,20 +96,20 @@ behavior:
 
 | 步骤 | 数据 | 命令 |
 |------|------|------|
+| 聚合上下文 | 仓库、PR、文件、Review、Issue、标签 | `gitlink-cli workflow +review-context --number <id> --format json` |
 | PR 元信息 | 标题/描述/作者/关联 issue | `gitlink-cli pr +view -i <id> --format json` |
 | 变更文件 | 文件路径列表 | `gitlink-cli pr +files -i <id> --format json` |
 | Diff | 变更内容供 AI 审查 | `gitlink-cli pr +diff -i <id> --format json` |
-| commits | commit 列表（消息供 commit_quality） | `gitlink-cli api GET /:owner/:repo/pulls/:id/commits --format json` |
 | CI 状态 | 构建结果 | `gitlink-cli ci +builds --format json` |
 
-> 实测注意：`pr +files` 与 `pr +diff` 底层都打 `/pulls/:id/files`——`+files` 取路径列表，`+diff` 取含 patch 的同一份数据，按需取用即可。无 `pr +commits` 快捷命令，commit 列表只能走 Raw API。CI 通过/失败需从 builds 返回的 `status` 字段判断；**无 build 记录时按「CI 未知」处理**（见 §3.5）。
+> 实测注意：优先使用 `workflow +review-context` 获取聚合上下文；如需更细的 diff 再补充 `pr +diff`。CI 通过/失败需从 builds 返回的 `status` 字段判断；**无 build 记录时按「CI 未知」处理**（见 §3.5）。
 
 ```bash
 PR=42
+gitlink-cli workflow +review-context --number "$PR" --format json
 gitlink-cli pr +view  -i "$PR" --format json   # title / body / 关联 issue
 gitlink-cli pr +files -i "$PR" --format json   # changed files
 gitlink-cli pr +diff  -i "$PR" --format json   # diff（供 AI 审查）
-gitlink-cli api GET /:owner/:repo/pulls/$PR/commits --format json
 gitlink-cli ci +builds --format json
 ```
 
@@ -295,7 +295,7 @@ PR=42
 gitlink-cli pr +view  -i "$PR" --format json
 gitlink-cli pr +files -i "$PR" --format json
 gitlink-cli pr +diff  -i "$PR" --format json
-gitlink-cli api GET /:owner/:repo/pulls/$PR/commits --format json
+gitlink-cli workflow +review-context --number "$PR" --format json
 gitlink-cli ci +builds --format json
 # → AI 产出发现 → 按 §4 评分 → §5 硬门禁 → §6 裁决 → §7 渲染评分卡
 # → dry-run：仅把评分卡打印给用户，结尾提示「如需回写到 PR，请加 --apply」

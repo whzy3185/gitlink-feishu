@@ -679,6 +679,7 @@ gitlink-cli profile +contribution --user zhangsan --year 2025
 - `workflow +triage`
 - `workflow +health`
 - `workflow +pr-summary`
+- `workflow +review-context`
 - `workflow +repo-report`
 
 `workflow +pr-summary` defaults to `table` when `--format` is omitted.
@@ -747,6 +748,9 @@ gitlink-cli workflow +health --owner Gitlink --repo gitlink-cli --stale-days 30 
 # PR review summary by read-only GitLink fetch
 gitlink-cli workflow +pr-summary --owner Gitlink --repo gitlink-cli --number 1 --format markdown
 
+# PR review context bundle by read-only GitLink fetch
+gitlink-cli workflow +review-context --owner Gitlink --repo gitlink-cli --number 1 --format json
+
 # PR review summary from a local JSON file
 gitlink-cli workflow +pr-summary --from shortcuts/workflow/testdata/pr_summary.json --format json
 
@@ -769,6 +773,7 @@ Safety:
 - They do not modify remote GitLink data.
 - They do not depend on LLM APIs.
 - `workflow +pr-summary` does not comment, approve, reject, or merge pull requests.
+- `workflow +review-context` bundles repository, PR, file, review, issue, and label context without remote writes.
 - `workflow +repo-report` aggregates health, issue triage, and PR review summary signals without remote writes.
 
 ### Dataset

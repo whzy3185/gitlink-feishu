@@ -49,13 +49,13 @@ gitlink-cli pr +list --state open --format json
 gitlink-cli pr +list --state merged --format json
 
 # 4. 获取仓库文件结构（检查文档、CI 配置）
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=&ref=master'
+gitlink-cli repo +tree --owner <owner> --repo <repo> --ref master --format json
 
 # 5. 获取语言统计
-gitlink-cli api GET /:owner/:repo/languages --format json
+gitlink-cli repo +languages --owner <owner> --repo <repo> --format json
 
 # 6. 获取贡献者列表
-gitlink-cli api GET /:owner/:repo/contributors --format json
+gitlink-cli repo +contributors --owner <owner> --repo <repo> --format json
 ```
 
 ### 分析指标
@@ -172,7 +172,7 @@ gitlink-cli api GET /:owner/:repo/activity --format json
 
 ```bash
 # 1. 获取贡献者列表
-gitlink-cli api GET /:owner/:repo/contributors --format json
+gitlink-cli repo +contributors --owner <owner> --repo <repo> --format json
 
 # 2. 获取每个贡献者的 PR
 # 通过 PR 列表按 author 过滤
@@ -249,29 +249,29 @@ gitlink-cli issue +list --state open --format json
 
 ---
 
-## Raw API 参考
+## Shortcut 与 Raw API 参考
 
 ```bash
 # 仓库信息
-gitlink-cli api GET /:owner/:repo --format json
+gitlink-cli repo +info --owner <owner> --repo <repo> --format json
 
 # 仓库语言统计
-gitlink-cli api GET /:owner/:repo/languages --format json
+gitlink-cli repo +languages --owner <owner> --repo <repo> --format json
 
 # 贡献者列表
-gitlink-cli api GET /:owner/:repo/contributors --format json
+gitlink-cli repo +contributors --owner <owner> --repo <repo> --format json
 
-# 仓库动态
+# 仓库动态（当前未覆盖为 shortcut，保留 Raw API）
 gitlink-cli api GET /:owner/:repo/activity --format json
 
 # 文件列表（检查文档/配置完整性）
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=&ref=master'
+gitlink-cli repo +tree --owner <owner> --repo <repo> --ref master --format json
 
 # 获取用户信息
-gitlink-cli api GET /users/:user_id --format json
+gitlink-cli user +info --login <user_login> --format json
 
 # 用户贡献热力图
-gitlink-cli api GET /users/:user_id/headmaps --format json
+gitlink-cli user +heatmap --user <user_login> --format json
 ```
 
 ## 注意事项
