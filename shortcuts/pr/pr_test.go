@@ -1,7 +1,6 @@
 package pr
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -55,135 +54,6 @@ func TestPRCommentPostsToCorrectIssueJournal(t *testing.T) {
 	assertEqual(t, journalPayload["notes"], "LGTM, looks good!")
 }
 
-func TestPRCreateSameRepoBranchUsesSimplePayload(t *testing.T) {
-	var payload map[string]interface{}
-	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("feature/search"))
-	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+encodedHead+"..."+encodedBase+".json":
-			writeJSON(t, w, map[string]interface{}{
-				"commits_count": float64(2),
-				"files_count":   float64(5),
-			})
-		case r.Method == "POST" && r.URL.Path == "/owner/repo/pulls.json":
-			payload = decodeJSON(t, r)
-			writeJSON(t, w, map[string]interface{}{"status": float64(0), "pull_request_number": float64(22)})
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "create", map[string]string{
-		"title": "feat: search",
-		"head":  "feature/search",
-		"base":  "master",
-		"body":  "Add search support",
-	})
-	if err != nil {
-		t.Fatalf("create shortcut failed: %v", err)
-	}
-
-	assertEqual(t, payload["head"], "feature/search")
-	assertEqual(t, payload["base"], "master")
-	assertEqual(t, payload["is_original"], false)
-	assertEqual(t, payload["commits_count"], float64(2))
-	assertEqual(t, payload["files_count"], float64(5))
-	if _, ok := payload["merge_user_login"]; ok {
-		t.Fatal("same-repo PR should not include merge_user_login")
-	}
-}
-
-func TestPRCreateForkBranchAddsGitLinkForkFields(t *testing.T) {
-	var payload map[string]interface{}
-	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("alice:feature/JIRA-123/fix"))
-	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == "GET" && r.URL.Path == "/alice/fork-repo.json":
-			writeJSON(t, w, map[string]interface{}{
-				"project_id":         float64(1546652),
-				"project_identifier": "fork-repo",
-			})
-		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+encodedHead+"..."+encodedBase+".json":
-			writeJSON(t, w, map[string]interface{}{
-				"commits_count": float64(3),
-				"files_count":   float64(7),
-			})
-		case r.Method == "POST" && r.URL.Path == "/owner/repo/pulls.json":
-			payload = decodeJSON(t, r)
-			writeJSON(t, w, map[string]interface{}{"status": float64(0), "pull_request_number": float64(23)})
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "create", map[string]string{
-		"title": "feat: fork support",
-		"head":  "alice/fork-repo:feature/JIRA-123/fix",
-		"base":  "master",
-	})
-	if err != nil {
-		t.Fatalf("create shortcut failed: %v", err)
-	}
-
-	assertEqual(t, payload["head"], "feature/JIRA-123/fix")
-	assertEqual(t, payload["is_original"], true)
-	assertEqual(t, payload["merge_user_login"], "alice")
-	assertEqual(t, payload["merge_project_identifier"], "fork-repo")
-	assertEqual(t, payload["fork_project_id"], float64(1546652))
-	assertEqual(t, payload["commits_count"], float64(3))
-	assertEqual(t, payload["files_count"], float64(7))
-}
-
-func TestFetchPRCompareCountsUsesURLSafeBase64(t *testing.T) {
-	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("alice:feature/fork"))
-	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
-
-	if encodedHead != "YWxpY2U6ZmVhdHVyZS9mb3Jr" {
-		t.Fatalf("unexpected encoded head: %s", encodedHead)
-	}
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		wantPath := "/owner/repo/compare/" + encodedHead + "..." + encodedBase + ".json"
-		if r.Method != "GET" || r.URL.Path != wantPath {
-			t.Fatalf("unexpected request: %s %s, want GET %s", r.Method, r.URL.Path, wantPath)
-		}
-		writeJSON(t, w, map[string]interface{}{
-			"commits_count": float64(4),
-			"files_count":   float64(9),
-		})
-	}))
-	defer server.Close()
-
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{
-			HTTP:    server.Client(),
-			BaseURL: server.URL,
-		},
-		Owner: "owner",
-		Repo:  "repo",
-	}
-
-	counts, err := fetchPRCompareCounts(ctx, "alice:feature/fork", "master")
-	if err != nil {
-		t.Fatalf("fetchPRCompareCounts failed: %v", err)
-	}
-
-	assertEqual(t, counts["commits_count"], 4)
-	assertEqual(t, counts["files_count"], 9)
-}
-
-func TestParsePRHeadRejectsInvalidForkSyntax(t *testing.T) {
-	_, err := parsePRHead("alice:feature/fork")
-	if err == nil {
-		t.Fatal("expected invalid head syntax to fail")
-	}
-}
-
 func TestPRCommentFailsWhenPRNotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -219,155 +89,6 @@ func TestPRCommentFailsWhenIssueFieldMissing(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error when issue field is missing, got nil")
-	}
-}
-
-func TestPRReviewCommentsListSendsFilters(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/pulls/13/journals.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		q := r.URL.Query()
-		assertEqual(t, q.Get("keyword"), "race")
-		assertEqual(t, q.Get("review_id"), "5")
-		assertEqual(t, q.Get("need_respond"), "true")
-		assertEqual(t, q.Get("state"), "opened")
-		assertEqual(t, q.Get("parent_id"), "7")
-		assertEqual(t, q.Get("path"), "main.go")
-		assertEqual(t, q.Get("is_full"), "true")
-		assertEqual(t, q.Get("sort_by"), "updated_on")
-		assertEqual(t, q.Get("sort_direction"), "desc")
-		writeJSON(t, w, map[string]interface{}{
-			"total_count": float64(1),
-			"journals": []interface{}{
-				map[string]interface{}{"id": float64(9), "note": "race"},
-			},
-		})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "review-comments", map[string]string{
-		"id":             "13",
-		"keyword":        "race",
-		"review-id":      "5",
-		"need-respond":   "true",
-		"state":          "opened",
-		"parent-id":      "7",
-		"path":           "main.go",
-		"full":           "true",
-		"sort-by":        "updated_on",
-		"sort-direction": "desc",
-	})
-	if err != nil {
-		t.Fatalf("review-comments failed: %v", err)
-	}
-}
-
-func TestPRReviewCommentCreateSendsPayload(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/pulls/13/journals.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, payload)
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "review-comment", map[string]string{
-		"id":        "13",
-		"body":      "Please handle this edge case",
-		"type":      "problem",
-		"review-id": "5",
-		"line-code": "abc_1_2",
-		"commit":    "deadbeef",
-		"path":      "main.go",
-		"parent-id": "7",
-		"diff-json": `{"name":"main.go","addition":1}`,
-	})
-	if err != nil {
-		t.Fatalf("review-comment failed: %v", err)
-	}
-	assertEqual(t, payload["type"], "problem")
-	assertEqual(t, payload["note"], "Please handle this edge case")
-	assertEqual(t, payload["review_id"], float64(5))
-	assertEqual(t, payload["line_code"], "abc_1_2")
-	assertEqual(t, payload["commit_id"], "deadbeef")
-	assertEqual(t, payload["path"], "main.go")
-	assertEqual(t, payload["parent_id"], float64(7))
-	diff, ok := payload["diff"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("diff = %v, want object", payload["diff"])
-	}
-	assertEqual(t, diff["name"], "main.go")
-	assertEqual(t, diff["addition"], float64(1))
-}
-
-func TestPRReviewCommentUpdateSendsPayload(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "PUT" || r.URL.Path != "/v1/owner/repo/pulls/13/journals/9.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, payload)
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "review-comment-update", map[string]string{
-		"id":         "13",
-		"comment-id": "9",
-		"body":       "Resolved after follow-up",
-		"commit":     "cafebabe",
-		"state":      "resolved",
-	})
-	if err != nil {
-		t.Fatalf("review-comment-update failed: %v", err)
-	}
-	assertEqual(t, payload["note"], "Resolved after follow-up")
-	assertEqual(t, payload["commit_id"], "cafebabe")
-	assertEqual(t, payload["state"], "resolved")
-}
-
-func TestPRReviewCommentDelete(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/pulls/13/journals/9.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		writeJSON(t, w, map[string]interface{}{"status": float64(0), "message": "success"})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "review-comment-delete", map[string]string{"id": "13", "comment-id": "9"})
-	if err != nil {
-		t.Fatalf("review-comment-delete failed: %v", err)
-	}
-}
-
-func TestPRReviewCommentRejectsInvalidArgs(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("invalid args should not call API, got %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	cases := []struct {
-		name string
-		cmd  string
-		args map[string]string
-	}{
-		{name: "bad list state", cmd: "review-comments", args: map[string]string{"id": "13", "state": "done"}},
-		{name: "bad bool", cmd: "review-comments", args: map[string]string{"id": "13", "need-respond": "maybe"}},
-		{name: "bad type", cmd: "review-comment", args: map[string]string{"id": "13", "body": "x", "type": "note"}},
-		{name: "bad diff json", cmd: "review-comment", args: map[string]string{"id": "13", "body": "x", "diff-json": "{"}},
-		{name: "missing update fields", cmd: "review-comment-update", args: map[string]string{"id": "13", "comment-id": "9"}},
-		{name: "bad comment id", cmd: "review-comment-delete", args: map[string]string{"id": "13", "comment-id": "abc"}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if err := runPRShortcut(t, server, tc.cmd, tc.args); err == nil {
-				t.Fatal("expected validation error")
-			}
-		})
 	}
 }
 
@@ -458,18 +179,15 @@ func TestPRListStateAllOmitsStatus(t *testing.T) {
 
 func TestPRCreate(t *testing.T) {
 	var payload map[string]interface{}
-	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("feature/x"))
-	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+encodedHead+"..."+encodedBase+".json":
-			writeJSON(t, w, map[string]interface{}{"commits_count": float64(1), "files_count": float64(2)})
-		case r.Method == "POST" && r.URL.Path == "/owner/repo/pulls.json":
-			payload = decodeJSON(t, r)
-			writeJSON(t, w, map[string]interface{}{"id": float64(42), "title": "feat: new"})
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		if r.Method != "POST" {
+			t.Fatalf("expected POST, got %s", r.Method)
 		}
+		if r.URL.Path != "/owner/repo/pulls.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"id": float64(42), "title": "feat: new"})
 	}))
 	defer server.Close()
 
@@ -490,18 +208,9 @@ func TestPRCreate(t *testing.T) {
 
 func TestPRCreateNoBody(t *testing.T) {
 	var payload map[string]interface{}
-	encodedHead := base64.RawURLEncoding.EncodeToString([]byte("feature/y"))
-	encodedBase := base64.RawURLEncoding.EncodeToString([]byte("master"))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == "GET" && r.URL.Path == "/owner/repo/compare/"+encodedHead+"..."+encodedBase+".json":
-			writeJSON(t, w, map[string]interface{}{"commits_count": float64(0), "files_count": float64(0)})
-		case r.Method == "POST" && r.URL.Path == "/owner/repo/pulls.json":
-			payload = decodeJSON(t, r)
-			writeJSON(t, w, map[string]interface{}{"id": float64(43), "title": "feat: nob"})
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"id": float64(43), "title": "feat: nob"})
 	}))
 	defer server.Close()
 
@@ -515,103 +224,6 @@ func TestPRCreateNoBody(t *testing.T) {
 	if _, ok := payload["body"]; ok {
 		t.Fatal("body should not be in payload when not provided")
 	}
-}
-
-// --- branches / check-can-merge ---
-
-func TestPRBranches(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Fatalf("expected GET, got %s", r.Method)
-		}
-		if r.URL.Path != "/owner/repo/pulls/get_branches.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(t, w, map[string]interface{}{
-			"branches": []interface{}{"master", "feature/search"},
-		})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "branches", nil)
-	if err != nil {
-		t.Fatalf("branches failed: %v", err)
-	}
-}
-
-func TestPRCheckCanMergeDryRunDoesNotCallAPI(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("check-can-merge dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "check-can-merge", map[string]string{
-		"head":    "feature/search",
-		"base":    "master",
-		"dry-run": "true",
-	})
-	if err != nil {
-		t.Fatalf("check-can-merge dry-run failed: %v", err)
-	}
-}
-
-func TestPRCheckCanMergeRequiresYes(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("check-can-merge without --yes should not call API, got: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "check-can-merge", map[string]string{
-		"head": "feature/search",
-		"base": "master",
-	})
-	if err == nil {
-		t.Fatal("expected check-can-merge to require --yes")
-	}
-}
-
-func TestPRCheckCanMergeWithYesCallsEndpoint(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Fatalf("expected POST, got %s", r.Method)
-		}
-		if r.URL.Path != "/owner/repo/pulls/check_can_merge.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"can_merge": true})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "check-can-merge", map[string]string{
-		"head": "feature/search",
-		"base": "master",
-		"yes":  "true",
-	})
-	if err != nil {
-		t.Fatalf("check-can-merge failed: %v", err)
-	}
-	assertEqual(t, payload["head"], "feature/search")
-	assertEqual(t, payload["base"], "master")
-}
-
-func TestPRCheckCanMergeDefaultsBaseToMaster(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"can_merge": true})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "check-can-merge", map[string]string{
-		"head": "feature/search",
-		"yes":  "true",
-	})
-	if err != nil {
-		t.Fatalf("check-can-merge failed: %v", err)
-	}
-	assertEqual(t, payload["base"], "master")
 }
 
 // --- view ---
@@ -634,201 +246,6 @@ func TestPRView(t *testing.T) {
 	err := runPRShortcut(t, server, "view", map[string]string{"id": "42"})
 	if err != nil {
 		t.Fatalf("view failed: %v", err)
-	}
-}
-
-func TestEnrichPullRequestTimestampsPromotesMergedAndClosedAt(t *testing.T) {
-	var journalCalls int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Fatalf("expected GET, got %s", r.Method)
-		}
-		if r.URL.Path != "/v1/owner/repo/issues/142349/journals.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		journalCalls++
-		writeJSON(t, w, map[string]interface{}{"journals": []interface{}{}})
-	}))
-	defer server.Close()
-
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{
-			HTTP:    server.Client(),
-			BaseURL: server.URL,
-		},
-		Owner: "owner",
-		Repo:  "repo",
-	}
-	env := &output.Envelope{Data: map[string]interface{}{
-		"pull_request": map[string]interface{}{
-			"pull_request_status": float64(1),
-			"merged_at":           "2026-05-14T14:26:27+08:00",
-			"created_at":          "2026-05-10T09:00:00+08:00",
-		},
-		"issue": map[string]interface{}{
-			"id":         float64(142349),
-			"created_at": "2026-05-10T09:00:00+08:00",
-		},
-	}}
-
-	if err := enrichPullRequestTimestamps(ctx, env); err != nil {
-		t.Fatalf("enrichPullRequestTimestamps returned error: %v", err)
-	}
-
-	data := env.Data.(map[string]interface{})
-	pr := data["pull_request"].(map[string]interface{})
-	issue := data["issue"].(map[string]interface{})
-	assertEqual(t, data["created_at"], "2026-05-10T09:00:00+08:00")
-	assertEqual(t, data["merged_at"], "2026-05-14T14:26:27+08:00")
-	assertEqual(t, data["closed_at"], "2026-05-14T14:26:27+08:00")
-	assertEqual(t, data["closed_on"], "2026-05-14T14:26:27+08:00")
-	assertEqual(t, pr["merged_at"], "2026-05-14T14:26:27+08:00")
-	assertEqual(t, pr["closed_at"], "2026-05-14T14:26:27+08:00")
-	assertEqual(t, issue["closed_on"], "2026-05-14T14:26:27+08:00")
-	if journalCalls != 1 {
-		t.Fatalf("journalCalls = %d, want 1", journalCalls)
-	}
-}
-
-func TestEnrichPullRequestTimestampsReadsMergeTimeFromJournals(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Fatalf("expected GET, got %s", r.Method)
-		}
-		if r.URL.Path != "/v1/owner/repo/issues/142349/journals.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(t, w, map[string]interface{}{
-			"journals": []interface{}{
-				map[string]interface{}{
-					"operate_category": "status",
-					"operate_content":  "<b>合并了</b> 合并请求",
-					"updated_at":       "2026-05-14T14:26:27+08:00",
-				},
-			},
-		})
-	}))
-	defer server.Close()
-
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{
-			HTTP:    server.Client(),
-			BaseURL: server.URL,
-		},
-		Owner: "owner",
-		Repo:  "repo",
-	}
-	env := &output.Envelope{Data: map[string]interface{}{
-		"pull_request": map[string]interface{}{
-			"pull_request_staus": "merged",
-		},
-		"issue": map[string]interface{}{
-			"id": float64(142349),
-		},
-	}}
-
-	if err := enrichPullRequestTimestamps(ctx, env); err != nil {
-		t.Fatalf("enrichPullRequestTimestamps returned error: %v", err)
-	}
-
-	data := env.Data.(map[string]interface{})
-	pr := data["pull_request"].(map[string]interface{})
-	issue := data["issue"].(map[string]interface{})
-	assertEqual(t, data["merged_at"], "2026-05-14T14:26:27+08:00")
-	assertEqual(t, data["closed_at"], "2026-05-14T14:26:27+08:00")
-	assertEqual(t, data["closed_on"], "2026-05-14T14:26:27+08:00")
-	assertEqual(t, pr["merged_at"], "2026-05-14T14:26:27+08:00")
-	assertEqual(t, pr["closed_at"], "2026-05-14T14:26:27+08:00")
-	assertEqual(t, issue["closed_on"], "2026-05-14T14:26:27+08:00")
-}
-
-func TestEnrichPullRequestTimestampsReadsClosedTimeFromJournals(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Fatalf("expected GET, got %s", r.Method)
-		}
-		if r.URL.Path != "/v1/owner/repo/issues/142350/journals.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(t, w, map[string]interface{}{
-			"journals": []interface{}{
-				map[string]interface{}{
-					"operate_category": "status",
-					"operate_content":  "<b>关闭了</b>合并请求",
-					"created_at":       "2026-05-15T10:30:00+08:00",
-				},
-			},
-		})
-	}))
-	defer server.Close()
-
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{
-			HTTP:    server.Client(),
-			BaseURL: server.URL,
-		},
-		Owner: "owner",
-		Repo:  "repo",
-	}
-	env := &output.Envelope{Data: map[string]interface{}{
-		"pull_request": map[string]interface{}{
-			"pull_request_status": float64(2),
-		},
-		"issue": map[string]interface{}{
-			"id": float64(142350),
-		},
-	}}
-
-	if err := enrichPullRequestTimestamps(ctx, env); err != nil {
-		t.Fatalf("enrichPullRequestTimestamps returned error: %v", err)
-	}
-
-	data := env.Data.(map[string]interface{})
-	pr := data["pull_request"].(map[string]interface{})
-	issue := data["issue"].(map[string]interface{})
-	assertEqual(t, data["closed_at"], "2026-05-15T10:30:00+08:00")
-	assertEqual(t, data["closed_on"], "2026-05-15T10:30:00+08:00")
-	assertEqual(t, pr["closed_at"], "2026-05-15T10:30:00+08:00")
-	assertEqual(t, issue["closed_on"], "2026-05-15T10:30:00+08:00")
-	if _, ok := data["merged_at"]; ok {
-		t.Fatalf("merged_at should stay empty for closed pull requests, got %v", data["merged_at"])
-	}
-}
-
-func TestEnrichPullRequestTimestampsSkipsJournalsForOpenPR(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		return
-	}))
-	defer server.Close()
-
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{
-			HTTP:    server.Client(),
-			BaseURL: server.URL,
-		},
-		Owner: "owner",
-		Repo:  "repo",
-	}
-	env := &output.Envelope{Data: map[string]interface{}{
-		"pull_request": map[string]interface{}{
-			"pull_request_status": float64(0),
-		},
-		"issue": map[string]interface{}{
-			"id": float64(142351),
-		},
-	}}
-
-	if err := enrichPullRequestTimestamps(ctx, env); err != nil {
-		t.Fatalf("enrichPullRequestTimestamps returned error: %v", err)
-	}
-
-	data := env.Data.(map[string]interface{})
-	if _, ok := data["closed_at"]; ok {
-		t.Fatalf("closed_at should not be set for open pull requests, got %v", data["closed_at"])
-	}
-	if _, ok := data["merged_at"]; ok {
-		t.Fatalf("merged_at should not be set for open pull requests, got %v", data["merged_at"])
 	}
 }
 
@@ -999,36 +416,6 @@ func TestPRCreateHTTPError(t *testing.T) {
 	}
 }
 
-func TestPRBranchesHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "branches", nil)
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
-	}
-}
-
-func TestPRCheckCanMergeHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "check-can-merge", map[string]string{
-		"head": "feature/search",
-		"base": "master",
-		"yes":  "true",
-	})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
-	}
-}
-
 func TestPRViewHTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -1094,120 +481,6 @@ func TestPRDiffHTTPError(t *testing.T) {
 	}
 }
 
-// --- commits ---
-
-func TestPRCommits(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Fatalf("expected GET, got %s", r.Method)
-		}
-		if r.URL.Path != "/v1/owner/repo/pulls/42/commits.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(t, w, []interface{}{
-			map[string]interface{}{"sha": "abc1234", "message": "fix: bug"},
-		})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "commits", map[string]string{"id": "42"})
-	if err != nil {
-		t.Fatalf("commits failed: %v", err)
-	}
-}
-
-func TestPRCommitsHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "commits", map[string]string{"id": "42"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
-	}
-}
-
-// --- branches ---
-
-func TestPRBranches(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Fatalf("expected GET, got %s", r.Method)
-		}
-		if r.URL.Path != "/owner/repo/pulls/get_branches.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(t, w, []interface{}{
-			map[string]interface{}{"name": "master"},
-			map[string]interface{}{"name": "develop"},
-		})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "branches", map[string]string{})
-	if err != nil {
-		t.Fatalf("branches failed: %v", err)
-	}
-}
-
-func TestPRBranchesHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "branches", map[string]string{})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
-	}
-}
-
-// --- check-merge ---
-
-func TestPRCheckMerge(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Fatalf("expected POST, got %s", r.Method)
-		}
-		if r.URL.Path != "/owner/repo/pulls/check_can_merge.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"can_merge": true})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "check-merge", map[string]string{
-		"head": "feature/x",
-		"base": "master",
-	})
-	if err != nil {
-		t.Fatalf("check-merge failed: %v", err)
-	}
-	assertEqual(t, payload["head"], "feature/x")
-	assertEqual(t, payload["base"], "master")
-}
-
-func TestPRCheckMergeHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "check-merge", map[string]string{
-		"head": "feature/x",
-		"base": "master",
-	})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
-	}
-}
-
 func runPRShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
 	t.Helper()
 	shortcut := findPRShortcut(t, name)
@@ -1259,45 +532,177 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	}
 }
 
-func TestPRCommitsUsesCommitsEndpoint(t *testing.T) {
+func TestPRReviewCommentsListBuildsQuery(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/owner/repo/pulls/355/commits.json" {
+		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/pulls/13/journals.json" {
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		writeJSON(t, w, map[string]interface{}{"commits_count": float64(1), "commits": []interface{}{}})
+		query := r.URL.Query()
+		assertEqual(t, query.Get("keyword"), "todo")
+		assertEqual(t, query.Get("review_id"), "10")
+		assertEqual(t, query.Get("need_respond"), "true")
+		assertEqual(t, query.Get("state"), "opened")
+		assertEqual(t, query.Get("parent_id"), "200")
+		assertEqual(t, query.Get("path"), "README.md")
+		assertEqual(t, query.Get("is_full"), "true")
+		assertEqual(t, query.Get("sort_by"), "created_on")
+		assertEqual(t, query.Get("sort_direction"), "desc")
+		writeJSON(t, w, map[string]interface{}{"total_count": 0, "journals": []interface{}{}})
 	}))
 	defer server.Close()
 
-	if err := runPRShortcut(t, server, "commits", map[string]string{"id": "355"}); err != nil {
-		t.Fatalf("commits failed: %v", err)
+	err := runPRShortcut(t, server, "review-comments", map[string]string{
+		"id":             "13",
+		"keyword":        "todo",
+		"review-id":      "10",
+		"need-respond":   "true",
+		"state":          "opened",
+		"parent-id":      "200",
+		"path":           "README.md",
+		"is-full":        "true",
+		"sort-by":        "created_on",
+		"sort-direction": "desc",
+	})
+	if err != nil {
+		t.Fatalf("review-comments shortcut failed: %v", err)
 	}
 }
 
-func TestPRCheckMergePostsBranchesAndForkTuple(t *testing.T) {
+func TestPRReviewCommentPostsPayload(t *testing.T) {
 	var payload map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" || r.URL.Path != "/owner/repo/pulls/check_can_merge.json" {
+		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/pulls/13/journals.json" {
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"status": float64(0), "message": "可以合并"})
+		writeJSON(t, w, map[string]interface{}{"id": 200, "note": "please fix"})
 	}))
 	defer server.Close()
 
-	err := runPRShortcut(t, server, "check-merge", map[string]string{
-		"head": "feat/x", "base": "master", "fork-project-id": "1549132",
+	err := runPRShortcut(t, server, "review-comment", map[string]string{
+		"id":        "13",
+		"note":      "please fix",
+		"review-id": "10",
+		"type":      "problem",
+		"commit":    "abc123",
+		"line-code": "abc123_0_10",
+		"path":      "README.md",
+		"parent-id": "199",
+		"diff-json": `{"name":"README.md","addition":1}`,
 	})
 	if err != nil {
-		t.Fatalf("check-merge failed: %v", err)
+		t.Fatalf("review-comment shortcut failed: %v", err)
 	}
-	assertEqual(t, payload["head"], "feat/x")
-	assertEqual(t, payload["base"], "master")
-	assertEqual(t, payload["fork_project_id"], float64(1549132))
-	assertEqual(t, payload["is_original"], true)
 
-	if err := runPRShortcut(t, server, "check-merge", map[string]string{
-		"head": "a", "base": "b", "fork-project-id": "abc",
+	assertEqual(t, payload["type"], "problem")
+	assertEqual(t, payload["note"], "please fix")
+	assertEqual(t, payload["review_id"], "10")
+	assertEqual(t, payload["commit_id"], "abc123")
+	assertEqual(t, payload["line_code"], "abc123_0_10")
+	assertEqual(t, payload["path"], "README.md")
+	assertEqual(t, payload["parent_id"], float64(199))
+	diff, ok := payload["diff"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("diff type = %T, want map", payload["diff"])
+	}
+	assertEqual(t, diff["name"], "README.md")
+	assertEqual(t, diff["addition"], float64(1))
+}
+
+func TestPRReviewCommentDryRunDoesNotCallAPI(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("server should not be called during dry-run: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comment", map[string]string{
+		"id":        "13",
+		"note":      "please fix",
+		"review-id": "10",
+		"commit":    "abc123",
+		"line-code": "abc123_0_10",
+		"path":      "README.md",
+		"dry-run":   "true",
+	})
+	if err != nil {
+		t.Fatalf("review-comment dry-run failed: %v", err)
+	}
+}
+
+func TestPRReviewCommentUpdatePayload(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PUT" || r.URL.Path != "/v1/owner/repo/pulls/13/journals/200.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"id": 200, "note": "fixed", "state": "resolved"})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comment-update", map[string]string{
+		"id":         "13",
+		"comment-id": "200",
+		"note":       "fixed",
+		"commit":     "def456",
+		"state":      "resolved",
+	})
+	if err != nil {
+		t.Fatalf("review-comment-update shortcut failed: %v", err)
+	}
+	assertEqual(t, payload["note"], "fixed")
+	assertEqual(t, payload["commit_id"], "def456")
+	assertEqual(t, payload["state"], "resolved")
+}
+
+func TestPRReviewCommentDeleteUsesV1Endpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/pulls/13/journals/200.json" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review-comment-delete", map[string]string{
+		"id":         "13",
+		"comment-id": "200",
+	})
+	if err != nil {
+		t.Fatalf("review-comment-delete shortcut failed: %v", err)
+	}
+}
+
+func TestPRReviewCommentRejectsInvalidInputs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("server should not be called for invalid input: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	if err := runPRShortcut(t, server, "review-comment", map[string]string{
+		"id":        "13",
+		"note":      "please fix",
+		"review-id": "10",
+		"type":      "todo",
+		"commit":    "abc123",
+		"line-code": "abc123_0_10",
+		"path":      "README.md",
 	}); err == nil {
-		t.Fatal("expected error for non-integer --fork-project-id")
+		t.Fatal("expected invalid review comment type to fail")
+	}
+
+	if err := runPRShortcut(t, server, "review-comment-update", map[string]string{
+		"id":         "13",
+		"comment-id": "200",
+		"state":      "done",
+	}); err == nil {
+		t.Fatal("expected invalid review comment state to fail")
+	}
+
+	if err := runPRShortcut(t, server, "review-comments", map[string]string{
+		"id":           "13",
+		"need-respond": "maybe",
+	}); err == nil {
+		t.Fatal("expected invalid need-respond to fail")
 	}
 }

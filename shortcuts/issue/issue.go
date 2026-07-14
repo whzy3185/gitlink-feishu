@@ -45,8 +45,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
 		newBatchCloseShortcut(),
-		newBatchCommentShortcut(),
-		newBatchUpdateShortcut(),
 		{
 			Name:        "list",
 			Description: tr.T("cmd.issue.list.short"),
@@ -115,7 +113,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Flags: []common.Flag{
 				{Name: "title", Short: "t", Usage: tr.T("flag.issue.title"), Required: true},
 				{Name: "body", Short: "b", Usage: tr.T("flag.issue.body")},
-				{Name: "body-file", Usage: "Read issue description from a file"},
 				{Name: "assignee", Short: "a", Usage: tr.T("flag.issue.assignee")},
 				{Name: "milestone", Short: "m", Usage: tr.T("flag.issue.milestone")},
 				{Name: "label", Usage: tr.T("flag.issue.label")},
@@ -140,11 +137,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					"priority_id": 2, // 2 = normal
 					"done_ratio":  0,
 				}
-				desc, err := readIssueTextArg(ctx, "body", "body-file", false)
-				if err != nil {
-					return err
-				}
-				if desc != "" {
+				if desc := ctx.Arg("body"); desc != "" {
 					body["description"] = desc
 				}
 				if a := ctx.Arg("assignee"); a != "" {
@@ -218,7 +211,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Flags: appendIssueNumberFlags(
 				common.Flag{Name: "title", Short: "t", Usage: tr.T("flag.issue.new_title")},
 				common.Flag{Name: "body", Short: "b", Usage: tr.T("flag.issue.new_body")},
-				common.Flag{Name: "body-file", Usage: "Read the updated issue description from a file"},
 				common.Flag{Name: "state", Short: "s", Usage: tr.T("flag.issue.new_state")},
 				common.Flag{Name: "priority-id", Usage: "New priority ID"},
 				common.Flag{Name: "tag-ids", Usage: "Comma-separated issue tag IDs"},
@@ -235,16 +227,37 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				if _, err := buildIssueUpdatePreview(ctx); err != nil {
-					return err
+				title := ctx.Arg("title")
+				description := ctx.Arg("body")
+				state := ctx.Arg("state")
+				if title == "" && description == "" && state == "" && !hasIssueMetadataArgs(ctx) {
+					return fmt.Errorf("at least one update field is required")
 				}
+
 				current, err := fetchExistingIssue(ctx, number)
 				if err != nil {
 					return err
 				}
 
-				body, err := buildIssueUpdateBody(ctx, current)
-				if err != nil {
+				body := map[string]interface{}{
+					"subject":     current.Subject,
+					"description": current.Description,
+				}
+				preserveIssueMetadata(body, current)
+				if t := ctx.Arg("title"); t != "" {
+					body["subject"] = t
+				}
+				if b := ctx.Arg("body"); b != "" {
+					body["description"] = b
+				}
+				if s := ctx.Arg("state"); s != "" {
+					statusID, err := normalizeIssueStatus(s)
+					if err != nil {
+						return err
+					}
+					body["status_id"] = statusID
+				}
+				if err := applyIssueMetadataArgs(ctx, body); err != nil {
 					return err
 				}
 				env, err := ctx.CallAPI("PATCH", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), body)
@@ -258,28 +271,19 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "comment",
 			Description: tr.T("cmd.issue.comment.short"),
 			Flags: appendIssueNumberFlags(
-				common.Flag{Name: "body", Short: "b", Usage: tr.T("flag.comment.body")},
-				common.Flag{Name: "body-file", Usage: "Read comment body from a file"},
+				common.Flag{Name: "body", Short: "b", Usage: tr.T("flag.comment.body"), Required: true},
+				common.Flag{Name: "parent-id", Usage: "Parent comment ID when creating a child comment"},
+				common.Flag{Name: "reply-id", Usage: "Reply target comment ID"},
+				common.Flag{Name: "attachment-ids", Usage: "Comma-separated attachment IDs"},
+				common.Flag{Name: "receivers", Short: "r", Usage: "Comma-separated @ receiver login names"},
+				common.Flag{Name: "dry-run", Usage: "Preview the request body without creating the comment", Bool: true, Default: "false"},
 			),
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				number, err := issueNumberArg(ctx)
-				if err != nil {
-					return err
-				}
-				body, err := readIssueTextArg(ctx, "body", "body-file", true)
-				if err != nil {
-					return err
-				}
-				env, err := commentOnIssue(ctx, number, body)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
+			Run: runIssueComment,
 		},
+		newIssueCommentsShortcut(),
+		newIssueCommentUpdateShortcut(),
+		newIssueCommentDeleteShortcut(),
+		newIssueCommentChildrenShortcut(),
 		{
 			Name:        "assigners",
 			Description: "List issue assigners",
@@ -557,41 +561,6 @@ func normalizeIssueStatus(state string) (interface{}, error) {
 		}
 		return nil, fmt.Errorf("invalid --state %q: use open, closed, or a numeric status_id", state)
 	}
-}
-
-func buildIssueUpdateBody(ctx *common.RuntimeContext, current *existingIssue) (map[string]interface{}, error) {
-	description, err := readIssueTextArg(ctx, "body", "body-file", false)
-	if err != nil {
-		return nil, err
-	}
-	title := ctx.Arg("title")
-	state := ctx.Arg("state")
-	if title == "" && description == "" && state == "" && !hasIssueMetadataArgs(ctx) {
-		return nil, fmt.Errorf("at least one update field is required")
-	}
-
-	body := map[string]interface{}{
-		"subject":     current.Subject,
-		"description": current.Description,
-	}
-	preserveIssueMetadata(body, current)
-	if title != "" {
-		body["subject"] = title
-	}
-	if description != "" {
-		body["description"] = description
-	}
-	if state != "" {
-		statusID, err := normalizeIssueStatus(state)
-		if err != nil {
-			return nil, err
-		}
-		body["status_id"] = statusID
-	}
-	if err := applyIssueMetadataArgs(ctx, body); err != nil {
-		return nil, err
-	}
-	return body, nil
 }
 
 func hasIssueMetadataArgs(ctx *common.RuntimeContext) bool {

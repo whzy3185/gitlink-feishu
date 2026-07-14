@@ -475,6 +475,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		newPRReviewCommentsShortcut(),
+		newPRReviewCommentShortcut(),
+		newPRReviewCommentUpdateShortcut(),
+		newPRReviewCommentDeleteShortcut(),
 		{
 			Name:        "comment",
 			Description: tr.T("cmd.pr.comment.short"),

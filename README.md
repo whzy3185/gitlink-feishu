@@ -326,7 +326,7 @@ gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: Login failed
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: Login failed" --priority-id 3 --tag-ids 4,5 --assigner-ids 7
 
 # View an issue
-gitlink-cli issue +view --owner Gitlink --repo forgeplus -i 123
+gitlink-cli issue +view --owner Gitlink --repo forgeplus --number 123
 
 # Update issue metadata
 gitlink-cli issue +update --owner Gitlink --repo forgeplus --number 123 --priority-id 4 --branch bugfix/login --due-date 2026-06-15
@@ -335,7 +335,7 @@ gitlink-cli issue +update --owner Gitlink --repo forgeplus --number 123 --priori
 gitlink-cli issue +update --owner Gitlink --repo forgeplus --number 123 --body-file update.md
 
 # Close an issue
-gitlink-cli issue +close --owner Gitlink --repo forgeplus -i 123
+gitlink-cli issue +close --owner Gitlink --repo forgeplus --number 123
 
 # Preview batch close without changing data
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,124 --dry-run
@@ -350,7 +350,13 @@ gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --from issues.c
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --from issues.csv
 
 # Add a comment
-gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "Fixed"
+gitlink-cli issue +comment --owner Gitlink --repo forgeplus --number 123 -b "Fixed"
+
+# List, update, delete, and inspect issue comments/journals
+gitlink-cli issue +comments --owner Gitlink --repo forgeplus --number 123 --category comment
+gitlink-cli issue +comment-update --owner Gitlink --repo forgeplus --number 123 --comment-id 58 -b "Updated comment" --dry-run
+gitlink-cli issue +comment-delete --owner Gitlink --repo forgeplus --number 123 --comment-id 58 --dry-run
+gitlink-cli issue +comment-children --owner Gitlink --repo forgeplus --number 123 --comment-id 58
 
 # Add a comment from a file
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 --body-file comment.md
@@ -434,6 +440,12 @@ gitlink-cli pr +reviews --owner Gitlink --repo forgeplus -i 42
 # Create a PR review (with dry-run preview)
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM" --dry-run
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
+
+# List and manage PR review comments
+gitlink-cli pr +review-comments --owner Gitlink --repo forgeplus -i 42 --state opened
+gitlink-cli pr +review-comment --owner Gitlink --repo forgeplus -i 42 --review-id 10 --commit abc123 --line-code abc123_0_10 --path README.md --note "Please fix" --dry-run
+gitlink-cli pr +review-comment-update --owner Gitlink --repo forgeplus -i 42 --comment-id 200 --state resolved --dry-run
+gitlink-cli pr +review-comment-delete --owner Gitlink --repo forgeplus -i 42 --comment-id 200 --dry-run
 ```
 
 ### Branch Management

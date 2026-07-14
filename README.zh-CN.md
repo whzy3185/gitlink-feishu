@@ -343,13 +343,13 @@ gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: 登录失败
 gitlink-cli issue +create --owner Gitlink --repo forgeplus -t "Bug: 登录失败" --priority-id 3 --tag-ids 4,5 --assigner-ids 7
 
 # 查看 Issue
-gitlink-cli issue +view --owner Gitlink --repo forgeplus -i 123
+gitlink-cli issue +view --owner Gitlink --repo forgeplus --number 123
 
 # 更新 Issue 元数据
 gitlink-cli issue +update --owner Gitlink --repo forgeplus --number 123 --priority-id 4 --branch bugfix/login --due-date 2026-06-15
 
 # 关闭 Issue
-gitlink-cli issue +close --owner Gitlink --repo forgeplus -i 123
+gitlink-cli issue +close --owner Gitlink --repo forgeplus --number 123
 
 # 预览批量关闭，不修改数据
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,124 --dry-run
@@ -369,7 +369,13 @@ gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 -
 gitlink-cli issue +export --owner Gitlink --repo forgeplus --state open --keyword bug --export-format csv --output issues.csv
 
 # 添加评论
-gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "已修复"
+gitlink-cli issue +comment --owner Gitlink --repo forgeplus --number 123 -b "已修复"
+
+# 查看、更新、删除 Issue 评论/操作记录
+gitlink-cli issue +comments --owner Gitlink --repo forgeplus --number 123 --category comment
+gitlink-cli issue +comment-update --owner Gitlink --repo forgeplus --number 123 --comment-id 58 -b "更新评论" --dry-run
+gitlink-cli issue +comment-delete --owner Gitlink --repo forgeplus --number 123 --comment-id 58 --dry-run
+gitlink-cli issue +comment-children --owner Gitlink --repo forgeplus --number 123 --comment-id 58
 
 # 回复评论并携带附件和 @ 用户
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus --number 123 -b "请查看日志" --parent-id 456 --reply-id 456 --attachment-ids 7,8 --receivers alice,bob
@@ -483,6 +489,12 @@ gitlink-cli pr +reviews --owner Gitlink --repo forgeplus -i 42
 # 创建 PR 审查（支持 dry-run 预览）
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM" --dry-run
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
+
+# 查看和管理 PR Review 行评论
+gitlink-cli pr +review-comments --owner Gitlink --repo forgeplus -i 42 --state opened
+gitlink-cli pr +review-comment --owner Gitlink --repo forgeplus -i 42 --review-id 10 --commit abc123 --line-code abc123_0_10 --path README.md --note "请修改" --dry-run
+gitlink-cli pr +review-comment-update --owner Gitlink --repo forgeplus -i 42 --comment-id 200 --state resolved --dry-run
+gitlink-cli pr +review-comment-delete --owner Gitlink --repo forgeplus -i 42 --comment-id 200 --dry-run
 ```
 
 ### 发布管理
