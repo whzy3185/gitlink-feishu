@@ -64,62 +64,41 @@ skills/
 ├── README.md                          # 本文件
 ├── gitlink-shared/                    # 共享基础规则
 │   ├── SKILL.md                       # 认证、全局参数、安全规则、分支约定
-│   └── references/
-│       ├── api-reference.md           # API 详细参考、错误处理
-│       ├── raw-api-batch.md           # 批量 Raw API 调用参考
-│       └── troubleshooting.md         # 常见问题排查
+│   └── references/                    # API 参考、错误处理
 ├── gitlink-repo/                      # 仓库管理
 │   ├── SKILL.md                       # 仓库操作指南
-│   └── references/                    # 仓库命令参考文档
+│   └── references/                    # 仓库 API 参考
 ├── gitlink-issue/                     # Issue 管理
 │   ├── SKILL.md                       # Issue 操作指南
-│   └── references/                    # Issue 命令参考文档
+│   └── references/                    # Issue API 参考
 ├── gitlink-pr/                        # Pull Request
 │   ├── SKILL.md                       # PR 操作指南
-│   └── references/                    # PR 命令参考文档
-├── gitlink-member/                    # 仓库成员管理
-│   └── SKILL.md                       # 成员与邀请链接操作指南
+│   └── references/                    # PR API 参考
 ├── gitlink-branch/                    # 分支管理
 │   ├── SKILL.md                       # 分支操作指南
 │   └── examples/
 │       └── branch-workflow.md         # 分支工作流
-├── gitlink-tag/                       # Git 标签管理
-│   └── SKILL.md                       # 标签操作指南
 ├── gitlink-release/                   # 版本发布
 │   ├── SKILL.md                       # Release 操作指南
-│   └── references/                    # Release 命令参考文档
-├── gitlink-release-auto/              # 自动化 Release 管理
-│   └── SKILL.md                       # 自动发版、版本号推荐、Release Notes 生成
+│   └── references/                    # Release API 参考
 ├── gitlink-search/                    # 搜索功能
 │   ├── SKILL.md                       # 搜索操作指南
-│   └── references/                    # 搜索命令参考文档
+│   └── references/                    # 搜索参考
 ├── gitlink-user/                      # 用户管理
-│   ├── SKILL.md                       # 用户操作指南
-│   └── references/                    # 用户命令参考文档
+│   └── SKILL.md                       # 用户操作指南
 ├── gitlink-org/                       # 组织管理
 │   ├── SKILL.md                       # 组织操作指南
-│   └── references/                    # 组织命令参考文档
+│   └── references/                    # 组织参考
 ├── gitlink-ci/                        # CI/CD
 │   └── SKILL.md                       # CI 操作指南
-├── gitlink-pipeline/                  # 流水线工作流
-│   └── SKILL.md                       # Pipeline 操作指南
-├── gitlink-wiki/                      # Wiki 页面管理
-│   └── SKILL.md                       # Wiki 操作指南
-├── gitlink-notification/              # 用户消息
-│   └── SKILL.md                       # 消息查询、已读和删除指南
 ├── gitlink-pm/                        # 项目管理
 │   └── SKILL.md                       # PM 操作指南
-├── gitlink-health/                    # 项目健康度分析
-│   ├── SKILL.md                       # 健康度分析指南
-│   ├── data/
-│   │   ├── .gitignore                 # 忽略 *.db 文件
-│   │   └── .gitkeep                   # 占位文件
-│   ├── references/
-│   │   └── queries.md                 # SQL 查询参考
-│   └── asset/
-│       └── health_report_template.md  # 报告模板
-└── gitlink-workflow/                  # AI 自动化工作流
-    └── SKILL.md                       # 工作流模板（Issue 分类、PR Review、Release Notes）
+├── gitlink-workflow/                  # AI 自动化工作流
+│   └── SKILL.md                       # 工作流模板（Issue 分类、PR Review、Release Notes）
+└── gitlink-maintainer-copilot/        # 维护者驾驶舱
+    ├── SKILL.md                       # 证据包、治理剧本、写入确认
+    ├── references/                    # 证据包、剧本、治理 Issue 模板
+    └── examples/                      # 演示流程和样例报告
 ```
 
 ---
@@ -131,13 +110,11 @@ skills/
 | Skill | 说明 | 常用命令 |
 |-------|------|----------|
 | **gitlink-shared** | 认证、全局参数、API 参考、安全规则、分支约定 | `auth login`, `auth status` |
-| **gitlink-repo** | 仓库管理与洞察 | `repo +list`, `repo +info`, `repo +languages`, `repo +contributors`, `repo +code-stats`, `repo +follow`, `repo +like`, `repo +units`, `repo +set-units` |
-| **gitlink-issue** | Issue 管理 | `issue +create`, `issue +list`, `issue +view`, `issue +close`, `issue +batch-close`, `issue +batch-update`, `issue +batch-delete` |
-| **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +versions`, `pr +version-diff`, `pr +reviews`, `pr +review` |
-| **gitlink-member** | 仓库成员管理 | `member +list`, `member +add`, `member +batch-add`, `member +role`, `member +invite-link` |
+| **gitlink-repo** | 仓库管理 | `repo +list`, `repo +create`, `repo +info`, `repo +fork` |
+| **gitlink-issue** | Issue 管理 | `issue +create`, `issue +list`, `issue +view`, `issue +close`, `issue +batch-close` |
+| **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +review` |
 | **gitlink-branch** | 分支管理 | `branch +list`, `branch +create`, `branch +delete`, `branch +protect` |
-| **gitlink-tag** | Git 标签管理 | `tag +list`, `tag +names`, `tag +view`, `tag +delete` |
-| **gitlink-release** | 版本发布 | `release +list`, `release +create`, `release +edit`, `release +update`, `release +view` |
+| **gitlink-release** | 版本发布 | `release +list`, `release +create`, `release +view` |
 
 ### 辅助 Skills
 
@@ -147,12 +124,9 @@ skills/
 | **gitlink-user** | 用户管理 | `user +me`, `user +info` |
 | **gitlink-org** | 组织管理 | `org +list`, `org +info`, `org +members` |
 | **gitlink-ci** | CI/CD | `ci +builds`, `ci +logs` |
-| **gitlink-pipeline** | 流水线工作流 | `pipeline +runs`, `pipeline +run`, `pipeline +logs` |
-| **gitlink-wiki** | Wiki 页面管理 | `wiki +list`, `wiki +view`, `wiki +create`, `wiki +update`, `wiki +delete` |
-| **gitlink-notification** | 用户消息 | `notification +list`, `notification +read`, `notification +delete` |
 | **gitlink-pm** | 项目管理 | 通过 Raw API 访问 |
 | **gitlink-workflow** | AI 工作流 | Issue 分类、PR Review、Release Notes |
-| **gitlink-health** | 开源项目健康度 | 详情见SKILL.md |
+| **gitlink-maintainer-copilot** | 维护者驾驶舱 | 证据包、治理剧本、确认后创建治理 Issue |
 
 ---
 
@@ -178,13 +152,13 @@ gitlink-cli repo +info --owner wbtiger --repo gitlink-cli
 gitlink-cli issue +create -t "Bug: 登录失败" -b "复现步骤..."
 
 # 查看 Issue
-gitlink-cli issue +view -i 123
+gitlink-cli issue +view -n 123
 
 # 添加评论
 gitlink-cli issue +comment -i 123 -b "已修复"
 
 # 关闭 Issue
-gitlink-cli issue +close -i 123
+gitlink-cli issue +close -n 123
 
 # 预览批量关闭 Issue
 gitlink-cli issue +batch-close --numbers 123,124 --dry-run
@@ -226,6 +200,17 @@ gitlink-cli org +info -i Gitlink
 
 详见: [gitlink-search/SKILL.md](gitlink-search/SKILL.md)
 
+### 场景 5：生成维护者驾驶舱
+
+```bash
+# Agent 会先只读采集证据，再输出治理计划
+gitlink-cli repo +info --owner Gitlink --repo gitlink-cli --format json
+gitlink-cli issue +list --owner Gitlink --repo gitlink-cli --state open --format json
+gitlink-cli pr +list --owner Gitlink --repo gitlink-cli --state open --format json
+```
+
+详见: [gitlink-maintainer-copilot/SKILL.md](gitlink-maintainer-copilot/SKILL.md)
+
 ---
 
 ## 📚 文档导航
@@ -242,21 +227,22 @@ gitlink-cli org +info -i Gitlink
 **仓库操作**:
 - [gitlink-repo/SKILL.md](gitlink-repo/SKILL.md) - 仓库命令
 - [gitlink-branch/SKILL.md](gitlink-branch/SKILL.md) - 分支命令
-- [gitlink-repo/SKILL.md](gitlink-repo/SKILL.md) - 完整工作流
 
 **Issue 和 PR**:
 - [gitlink-issue/SKILL.md](gitlink-issue/SKILL.md) - Issue 命令
 - [gitlink-pr/SKILL.md](gitlink-pr/SKILL.md) - PR 命令
-- [gitlink-issue/SKILL.md](gitlink-issue/SKILL.md) - Issue 工作流
 
 **发布和搜索**:
 - [gitlink-release/SKILL.md](gitlink-release/SKILL.md) - Release 命令
-- [gitlink-pipeline/SKILL.md](gitlink-pipeline/SKILL.md) - Pipeline 命令
 - [gitlink-search/SKILL.md](gitlink-search/SKILL.md) - 搜索命令
 
 **组织和用户**:
 - [gitlink-org/SKILL.md](gitlink-org/SKILL.md) - 组织命令
 - [gitlink-user/SKILL.md](gitlink-user/SKILL.md) - 用户命令
+
+**维护者驾驶舱**:
+- [gitlink-maintainer-copilot/SKILL.md](gitlink-maintainer-copilot/SKILL.md) - 维护者诊断
+- [gitlink-maintainer-copilot/examples/maintainer-copilot-workflow.md](gitlink-maintainer-copilot/examples/maintainer-copilot-workflow.md) - 演示流程
 
 ---
 
@@ -318,6 +304,7 @@ AI 代理可以：
 - ✅ 自动分类 Issue
 - ✅ 自动生成 Release Notes
 - ✅ 自动执行代码审查
+- ✅ 自动生成维护者驾驶舱和治理 Issue 草稿
 
 ---
 
@@ -329,7 +316,7 @@ AI 代理可以：
 - 所有边界情况处理正确
 - 完整的文档和示例
 
-详见: [../doc/design.md](../doc/design.md)
+可通过 `cd npm && npm test` 验证 Skill 结构和安装脚本。
 
 ---
 
@@ -337,7 +324,6 @@ AI 代理可以：
 
 - [主项目 README](../README.md) - gitlink-cli 项目说明
 - [设计文档](../doc/design.md) - 架构设计和开发计划
-- [API 参考文档](../doc/gitlink_api_reference.md) - GitLink API 参考文档
 - [gitlink-bisync](https://www.gitlink.org.cn/wbtiger/gitlink-bisync) - 代码双向同步系统
 
 ---
