@@ -13,7 +13,6 @@ import (
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/client"
-	repocontext "github.com/gitlink-org/gitlink-cli/internal/context"
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
 )
@@ -41,6 +40,7 @@ func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
 	apiCmd.Flags().String("body-file", "", tr.T("flag.api.body_file"))
 	apiCmd.Flags().Bool("body-stdin", false, tr.T("flag.api.body_stdin"))
 	apiCmd.Flags().String("query", "", tr.T("flag.api.query"))
+	apiCmd.Flags().Bool("paginate", false, tr.T("flag.api.paginate"))
 	apiCmd.Flags().StringSlice("header", nil, tr.T("flag.api.header"))
 	apiCmd.Flags().String("batch-file", "", tr.T("flag.api.batch_file"))
 	apiCmd.Flags().Bool("dry-run", false, tr.T("flag.api.batch_dry_run"))
@@ -74,11 +74,6 @@ func runAPI(c *cobra.Command, args []string) error {
 		path = "/" + path
 	}
 
-	path, err := resolvePathPlaceholders(path)
-	if err != nil {
-		return err
-	}
-
 	cli, err := client.New()
 	if err != nil {
 		return err
@@ -100,6 +95,10 @@ func runAPI(c *cobra.Command, args []string) error {
 		}
 	}
 
+	if paginate, _ := c.Flags().GetBool("paginate"); paginate {
+		return runAPIPaginate(cli, method, path, query)
+	}
+
 	env, err := cli.Do(method, path, body, query)
 	if err != nil {
 		var apiErr *client.APIError
@@ -113,25 +112,25 @@ func runAPI(c *cobra.Command, args []string) error {
 	return output.Print(env, resolveFormat())
 }
 
-// resolvePathPlaceholders substitutes :owner/:repo (and {{owner}}/{{repo}})
-// segments in a single-call path with the global --owner/--repo flags or the
-// values auto-resolved from the current git remote, matching the help-text
-// examples. Paths without placeholders are returned unchanged.
-func resolvePathPlaceholders(path string) (string, error) {
-	hasColon := strings.Contains(path, "/:owner") || strings.Contains(path, "/:repo")
-	hasBrace := strings.Contains(path, "{{owner}}") || strings.Contains(path, "{{repo}}")
-	if !hasColon && !hasBrace {
-		return path, nil
+// runAPIPaginate walks every page and prints the concatenated items as one array.
+// PaginateAll drives GET only, so a non-GET method must fail loudly rather than
+// silently degrade.
+func runAPIPaginate(cli *client.Client, method, path string, query url.Values) error {
+	if method != "GET" {
+		return fmt.Errorf("--paginate only supports GET requests, got %s", method)
 	}
-	owner, repo, err := repocontext.ResolveOwnerRepo(cmdutil.Owner, cmdutil.Repo)
+
+	items, err := cli.PaginateAll(path, query)
 	if err != nil {
-		return "", fmt.Errorf("path contains :owner/:repo placeholders: %w", err)
+		var apiErr *client.APIError
+		if errors.As(err, &apiErr) {
+			errEnv := output.ErrorEnvelope(apiErr.Code, apiErr.Message, "")
+			return output.Print(errEnv, resolveFormat())
+		}
+		return err
 	}
-	path = strings.ReplaceAll(path, "/:owner", "/"+owner)
-	path = strings.ReplaceAll(path, "/:repo", "/"+repo)
-	path = strings.ReplaceAll(path, "{{owner}}", owner)
-	path = strings.ReplaceAll(path, "{{repo}}", repo)
-	return path, nil
+
+	return output.Print(output.SuccessEnvelope(items, nil), resolveFormat())
 }
 
 func readJSONBody(c *cobra.Command) (interface{}, error) {

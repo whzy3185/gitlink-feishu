@@ -547,6 +547,48 @@ func TestPaginateAllNotOK(t *testing.T) {
 	}
 }
 
+func TestPaginateAllGitLinkWrapperShape(t *testing.T) {
+	// GitLink list endpoints wrap the array under a resource-specific key
+	// ({"total_count":N,"issues":[...]}) rather than the generic "data" key.
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Query().Get("page") {
+		case "1":
+			w.Write([]byte(`{"total_count":3,"issues":[{"id":1},{"id":2}]}`))
+		case "2":
+			w.Write([]byte(`{"total_count":3,"issues":[{"id":3}]}`))
+		default:
+			t.Fatalf("unexpected page: %s", r.URL.Query().Get("page"))
+		}
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
+	params := url.Values{}
+	params.Set("limit", "2")
+	items, err := c.PaginateAll("/repos/owner/repo/issues", params)
+	if err != nil {
+		t.Fatalf("PaginateAll error: %v", err)
+	}
+	if callCount != 2 {
+		t.Fatalf("expected 2 API calls, got %d", callCount)
+	}
+	if len(items) != 3 {
+		t.Fatalf("expected 3 combined items, got %d", len(items))
+	}
+	for i, want := range []float64{1, 2, 3} {
+		var obj map[string]interface{}
+		if err := json.Unmarshal(items[i], &obj); err != nil {
+			t.Fatalf("unmarshal item %d: %v", i, err)
+		}
+		if obj["id"] != want {
+			t.Fatalf("item[%d].id = %v, want %v", i, obj["id"], want)
+		}
+	}
+}
+
 func TestShouldAppendJSONSuffixSkipsRawFilePath(t *testing.T) {
 	if shouldAppendJSONSuffix("/Gitlink/forgeplus/raw/master/README.md") {
 		t.Fatal("raw file path should not get .json suffix")

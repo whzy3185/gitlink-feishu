@@ -158,6 +158,7 @@
   "flag.api.body_file": "Read request body JSON from a file",
   "flag.api.body_stdin": "Read request body JSON from stdin",
   "flag.api.header": "Additional headers (key:value)",
+  "flag.api.paginate": "Fetch every page of results and output as one combined array",
   "flag.api.query": "Query parameters (key=val&key2=val2)",
   "flag.auth.token": "Login by pasting an existing token",
   "flag.branch.from": "Source branch or commit",
