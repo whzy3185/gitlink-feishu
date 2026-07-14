@@ -452,3 +452,25 @@ func writeBatchPlan(t *testing.T, payload interface{}) string {
 	}
 	return path
 }
+
+func TestRestoreAPIPath(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{"normal v1 path unchanged", "/v1/owner/repo", "/v1/owner/repo"},
+		{"msys2 polluted v1", "C:/Program Files/Git/v1/owner/repo", "/v1/owner/repo"},
+		{"msys2 polluted v2", "D:/Git/v2/x/y", "/v2/x/y"},
+		{"msys2 polluted api prefix", "C:/Program Files/Git/api/v1/users", "/api/v1/users"},
+		{"drive letter but no known prefix", "C:/something/else", "C:/something/else"},
+		{"empty path", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := restoreAPIPath(tt.path); got != tt.want {
+				t.Fatalf("restoreAPIPath(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
