@@ -4,55 +4,26 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/url"
+	"strconv"
 
-	"github.com/gitlink-org/gitlink-cli/internal/config"
-	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-// switchToGateway overrides the client base URL with the gateway URL from config.
-func switchToGateway(ctx *common.RuntimeContext) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-	if cfg.GatewayURL == "" {
-		cfg.GatewayURL = config.DefaultGatewayURL
-	}
-	ctx.Client.BaseURL = cfg.GatewayURL
-	return nil
-}
-
-// gatewayFlag returns the common --gateway flag definition.
-func gatewayFlag(tr *i18n.Translator) common.Flag {
-	return common.Flag{Name: "gateway", Short: "g", Usage: tr.T("flag.wiki.gateway"), Bool: true}
-}
-
-// Shortcuts returns all wiki shortcuts.
-func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
-	tr := shortcutTranslator(translators...)
+func Shortcuts() []*common.Shortcut {
 	return []*common.Shortcut{
 		{
-			Name:        "list",
-			Description: tr.T("cmd.wiki.list.short"),
-			Flags: []common.Flag{
-				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
-				gatewayFlag(tr),
-			},
+			Name:        "pages",
+			Description: "List repository wiki pages",
+			Flags:       wikiProjectFlags(),
 			Run: func(ctx *common.RuntimeContext) error {
-				if ctx.Arg("gateway") == "true" {
-					if err := switchToGateway(ctx); err != nil {
-						return err
-					}
-				}
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				q := url.Values{}
-				q.Set("owner", ctx.Owner)
-				q.Set("repo", ctx.Repo)
-				q.Set("projectId", ctx.Arg("project-id"))
-				env, err := ctx.CallAPIWithQuery("GET", "/wiki/open/wikiPages", q)
+				q, err := wikiProjectQuery(ctx)
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPIWithQuery("GET", "/wiki/wikiPages", q)
 				if err != nil {
 					return err
 				}
@@ -61,27 +32,24 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "view",
-			Description: tr.T("cmd.wiki.view.short"),
-			Flags: []common.Flag{
-				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
-				{Name: "page-name", Short: "n", Usage: tr.T("flag.wiki.page_name"), Required: true},
-				gatewayFlag(tr),
-			},
+			Description: "Show a wiki page",
+			Flags: append(wikiProjectFlags(),
+				common.Flag{Name: "page", Short: "p", Usage: "Wiki page name", Required: true},
+			),
 			Run: func(ctx *common.RuntimeContext) error {
-				if ctx.Arg("gateway") == "true" {
-					if err := switchToGateway(ctx); err != nil {
-						return err
-					}
-				}
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				q := url.Values{}
-				q.Set("owner", ctx.Owner)
-				q.Set("repo", ctx.Repo)
-				q.Set("projectId", ctx.Arg("project-id"))
-				q.Set("pageName", ctx.Arg("page-name"))
-				env, err := ctx.CallAPIWithQuery("GET", "/wiki/open/getWiki", q)
+				q, err := wikiProjectQuery(ctx)
+				if err != nil {
+					return err
+				}
+				page, err := ctx.RequireArg("page")
+				if err != nil {
+					return err
+				}
+				q.Set("pageName", page)
+				env, err := ctx.CallAPIWithQuery("GET", "/wiki/getWiki", q)
 				if err != nil {
 					return err
 				}
@@ -90,35 +58,17 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "create",
-			Description: tr.T("cmd.wiki.create.short"),
-			Flags: []common.Flag{
-				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
-				{Name: "page-name", Short: "n", Usage: tr.T("flag.wiki.page_name"), Required: true},
-				{Name: "title", Short: "t", Usage: tr.T("flag.wiki.title"), Required: true},
-				{Name: "content", Short: "c", Usage: tr.T("flag.wiki.content"), Required: true},
-				{Name: "message", Short: "m", Usage: tr.T("flag.wiki.message")},
-				gatewayFlag(tr),
-			},
+			Description: "Create a wiki page",
+			Flags:       wikiWriteFlags(true),
 			Run: func(ctx *common.RuntimeContext) error {
-				if ctx.Arg("gateway") == "true" {
-					if err := switchToGateway(ctx); err != nil {
-						return err
-					}
-				}
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				content := ctx.Arg("content")
-				payload := map[string]interface{}{
-					"owner":          ctx.Owner,
-					"repo":           ctx.Repo,
-					"projectId":      ctx.Arg("project-id"),
-					"pageName":       ctx.Arg("page-name"),
-					"title":          ctx.Arg("title"),
-					"content_base64": base64.StdEncoding.EncodeToString([]byte(content)),
-					"message":        ctx.Arg("message"),
+				payload, err := wikiWritePayload(ctx, true)
+				if err != nil {
+					return err
 				}
-				env, err := ctx.CallAPI("POST", "/wiki/open/createWiki", payload)
+				env, err := ctx.CallAPI("POST", "/wiki/createWiki", payload)
 				if err != nil {
 					return err
 				}
@@ -127,41 +77,17 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "update",
-			Description: tr.T("cmd.wiki.update.short"),
-			Flags: []common.Flag{
-				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
-				{Name: "page-name", Short: "n", Usage: tr.T("flag.wiki.page_name"), Required: true},
-				{Name: "title", Short: "t", Usage: tr.T("flag.wiki.title"), Required: true},
-				{Name: "content", Short: "c", Usage: tr.T("flag.wiki.content")},
-				{Name: "message", Short: "m", Usage: tr.T("flag.wiki.message")},
-				gatewayFlag(tr),
-			},
+			Description: "Update a wiki page",
+			Flags:       wikiWriteFlags(false),
 			Run: func(ctx *common.RuntimeContext) error {
-				if ctx.Arg("gateway") == "true" {
-					if err := switchToGateway(ctx); err != nil {
-						return err
-					}
-				}
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				title := ctx.Arg("title")
-				if title == "" {
-					return fmt.Errorf("--title is required")
+				payload, err := wikiWritePayload(ctx, false)
+				if err != nil {
+					return err
 				}
-				content := ctx.Arg("content")
-				payload := map[string]interface{}{
-					"owner":     ctx.Owner,
-					"repo":      ctx.Repo,
-					"projectId": ctx.Arg("project-id"),
-					"pageName":  ctx.Arg("page-name"),
-					"title":     title,
-					"message":   ctx.Arg("message"),
-				}
-				if content != "" {
-					payload["content_base64"] = base64.StdEncoding.EncodeToString([]byte(content))
-				}
-				env, err := ctx.CallAPI("PUT", "/wiki/open/updateWiki", payload)
+				env, err := ctx.CallAPI("PUT", "/wiki/updateWiki", payload)
 				if err != nil {
 					return err
 				}
@@ -170,28 +96,34 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "delete",
-			Description: tr.T("cmd.wiki.delete.short"),
-			Flags: []common.Flag{
-				{Name: "project-id", Usage: tr.T("flag.wiki.project_id"), Required: true},
-				{Name: "page-name", Short: "n", Usage: tr.T("flag.wiki.page_name"), Required: true},
-				gatewayFlag(tr),
-			},
+			Description: "Delete a wiki page",
+			Flags: append(wikiProjectFlags(),
+				common.Flag{Name: "page", Short: "p", Usage: "Wiki page name", Required: true},
+				common.Flag{Name: "dry-run", Usage: "Preview the delete request without changing wiki state", Bool: true, Default: "false"},
+			),
 			Run: func(ctx *common.RuntimeContext) error {
-				if ctx.Arg("gateway") == "true" {
-					if err := switchToGateway(ctx); err != nil {
-						return err
-					}
-				}
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				payload := map[string]interface{}{
-					"owner":     ctx.Owner,
-					"repo":      ctx.Repo,
-					"projectId": ctx.Arg("project-id"),
-					"pageName":  ctx.Arg("page-name"),
+				payload, err := wikiBasePayload(ctx)
+				if err != nil {
+					return err
 				}
-				env, err := ctx.CallAPI("DELETE", "/wiki/open/deleteWiki", payload)
+				page, err := ctx.RequireArg("page")
+				if err != nil {
+					return err
+				}
+				payload["pageName"] = page
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"dry_run": true,
+						"action":  "delete_wiki_page",
+						"method":  "DELETE",
+						"path":    "/wiki/deleteWiki",
+						"payload": payload,
+					})
+				}
+				env, err := ctx.CallAPI("DELETE", "/wiki/deleteWiki", payload)
 				if err != nil {
 					return err
 				}
@@ -201,9 +133,100 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	}
 }
 
-func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
-	if len(translators) > 0 && translators[0] != nil {
-		return translators[0]
+func wikiProjectFlags() []common.Flag {
+	return []common.Flag{
+		{Name: "project-id", Usage: "GitLink project ID", Required: true},
 	}
-	return i18n.Default()
+}
+
+func wikiWriteFlags(contentRequired bool) []common.Flag {
+	return append(wikiProjectFlags(),
+		common.Flag{Name: "page", Short: "p", Usage: "Wiki page name", Required: true},
+		common.Flag{Name: "title", Short: "t", Usage: "Wiki page title", Required: true},
+		common.Flag{Name: "message", Short: "m", Usage: "Commit message"},
+		common.Flag{Name: "content", Usage: "Wiki content; encoded to base64 before sending"},
+		common.Flag{Name: "content-base64", Usage: "Pre-encoded wiki content"},
+	)
+}
+
+func wikiProjectQuery(ctx *common.RuntimeContext) (url.Values, error) {
+	projectID, err := wikiProjectID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := url.Values{}
+	q.Set("owner", ctx.Owner)
+	q.Set("repo", ctx.Repo)
+	q.Set("projectId", strconv.Itoa(projectID))
+	return q, nil
+}
+
+func wikiWritePayload(ctx *common.RuntimeContext, contentRequired bool) (map[string]interface{}, error) {
+	payload, err := wikiBasePayload(ctx)
+	if err != nil {
+		return nil, err
+	}
+	page, err := ctx.RequireArg("page")
+	if err != nil {
+		return nil, err
+	}
+	title, err := ctx.RequireArg("title")
+	if err != nil {
+		return nil, err
+	}
+	content, ok, err := wikiContent(ctx, contentRequired)
+	if err != nil {
+		return nil, err
+	}
+	payload["pageName"] = page
+	payload["title"] = title
+	if message := ctx.Arg("message"); message != "" {
+		payload["message"] = message
+	}
+	if ok {
+		payload["content_base64"] = content
+	}
+	return payload, nil
+}
+
+func wikiBasePayload(ctx *common.RuntimeContext) (map[string]interface{}, error) {
+	projectID, err := wikiProjectID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"owner":     ctx.Owner,
+		"repo":      ctx.Repo,
+		"projectId": projectID,
+	}, nil
+}
+
+func wikiProjectID(ctx *common.RuntimeContext) (int, error) {
+	value, err := ctx.RequireArg("project-id")
+	if err != nil {
+		return 0, err
+	}
+	id, err := strconv.Atoi(value)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("--project-id must be a positive integer")
+	}
+	return id, nil
+}
+
+func wikiContent(ctx *common.RuntimeContext, required bool) (string, bool, error) {
+	content := ctx.Arg("content")
+	encoded := ctx.Arg("content-base64")
+	if content != "" && encoded != "" {
+		return "", false, fmt.Errorf("--content cannot be used with --content-base64")
+	}
+	if content != "" {
+		return base64.StdEncoding.EncodeToString([]byte(content)), true, nil
+	}
+	if encoded != "" {
+		return encoded, true, nil
+	}
+	if required {
+		return "", false, fmt.Errorf("required flag --content is missing (or use --content-base64)")
+	}
+	return "", false, nil
 }

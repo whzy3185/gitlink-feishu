@@ -96,6 +96,7 @@
 | 分类 | 能力 |
 |------|------|
 | 📦 仓库 | 列出、创建、Fork、删除仓库，查看仓库信息、洞察数据和互动状态 |
+| Wiki | 创建、更新、查看、列出和删除 Wiki 页面 |
 | 🐛 Issue | 创建、更新、关闭、批量关闭、评论 Issue |
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
@@ -105,9 +106,8 @@
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
-| 📚 模板目录 | 查询 GitLink 许可证和 .gitignore 模板，用于仓库初始化 |
 | 🔍 搜索 | 搜索仓库、用户 |
-| 👤 用户 | 查看资料、管理 Public Keys、查询用户统计 |
+| 👤 用户 | 查看用户资料和信息 |
 | 📋 项目管理 | Sprint 管理、看板、周报 |
 | 🤖 工作流 | AI 驱动的 Issue 分类、PR Review、Release Notes |
 
@@ -258,17 +258,21 @@ gitlink-cli repo +create -n my-project -d "项目描述"
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
 ```
 
-### 平台模板目录
+### Wiki 管理
 
 ```bash
-# 列出许可证模板
-gitlink-cli catalog +licenses
+# 列出和查看 Wiki 页面
+gitlink-cli wiki +pages --owner Gitlink --repo forgeplus --project-id 123
+gitlink-cli wiki +view --owner Gitlink --repo forgeplus --project-id 123 --page Home
 
-# 按名称筛选许可证模板
-gitlink-cli catalog +licenses --name MIT
+# 创建或更新 Wiki 页面
+gitlink-cli wiki +create --owner Gitlink --repo forgeplus \
+  --project-id 123 --page Home --title Home --content "Welcome to Wiki"
+gitlink-cli wiki +update --owner Gitlink --repo forgeplus \
+  --project-id 123 --page Home --title Home --content "Updated content"
 
-# 查询 .gitignore 模板
-gitlink-cli catalog +ignores --name Go
+# 预览删除 Wiki 页面
+gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 123 --page Home --dry-run
 ```
 
 ### Webhook 管理
@@ -308,16 +312,6 @@ gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role D
 
 # 生成邀请链接
 gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
-
-# 查看待处理的项目成员申请
-gitlink-cli member +applications --user Mengz --page 1 --per-page 20
-
-# 按 applied_projects[].id 接受或拒绝成员申请
-gitlink-cli member +accept-application --user Mengz --id 42 --dry-run
-gitlink-cli member +refuse-application --user Mengz --id 43 --dry-run
-
-# 通过申请码申请加入项目
-gitlink-cli member +apply --code <application_code> --role developer --dry-run
 ```
 
 ### Issue 管理
@@ -447,30 +441,6 @@ gitlink-cli release +update --owner Gitlink --repo forgeplus -i <version_id> -b 
 gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --dry-run
 ```
 
-### 附件上传与下载
-
-`attachment` 为大文件传输提供可脚本化的 CLI 通道（不必走网页端）。上传返回的附件 id 可直接用于 `release +create --attachment-ids`。
-
-```bash
-# 上传本地文件为平台附件（返回附件 id）
-gitlink-cli attachment +upload -f ./dist/app-v1.0.0.tar.gz -d "v1.0.0 发布产物"
-
-# 多文件并发上传（逗号分隔；-c 指定并发数，默认 3）
-gitlink-cli attachment +upload -f ./dist/app.tar.gz,./dist/app.sha256,./dist/CHANGELOG.md -c 3
-
-# 按 id 下载附件到本地文件
-gitlink-cli attachment +download -i <attachment_id> -o ./app-v1.0.0.tar.gz
-
-# 按 tag 一步下载发行版全部附件（对标 `gh release download`）
-gitlink-cli release +download -i v1.0.0 -o ./assets
-
-# 按 id 删除附件
-gitlink-cli attachment +delete -i <attachment_id>
-
-# 一步到位：上传本地文件并附加到新发行版
-gitlink-cli release +create -t v1.0.0 -n "v1.0.0" --attachment-files ./dist/app.tar.gz,./dist/app.sha256
-```
-
 ### 流水线管理
 
 ```bash
@@ -501,24 +471,6 @@ gitlink-cli search +repos -k "machine learning"
 
 # 搜索用户
 gitlink-cli search +users -k "zhangsan"
-```
-
-### 用户操作
-
-```bash
-# 当前登录用户和详细资料
-gitlink-cli user +me
-gitlink-cli user +current --format json
-
-# Public Key 管理
-gitlink-cli user +keys --page 1 --limit 20
-gitlink-cli user +key-create --title "work laptop" --key-file ~/.ssh/id_rsa.pub --dry-run
-gitlink-cli user +key-delete --id 7 --dry-run
-
-# 用户统计
-gitlink-cli user +activity --login zhangsan
-gitlink-cli user +headmap --login zhangsan --year 2026
-gitlink-cli user +develop --login zhangsan --start-time 1704067200 --end-time 1735689599
 ```
 
 ### Raw API
@@ -583,7 +535,7 @@ git push gitlink
 |-------|------|
 | `gitlink-shared` | 认证、全局参数、安全规则、API 注意事项 |
 | `gitlink-repo` | 仓库操作（创建、查看、删除、Fork、洞察数据等） |
-| `gitlink-catalog` | 许可证和 .gitignore 模板查询 |
+| `gitlink-wiki` | Wiki 操作（创建、更新、查看、列表、删除） |
 | `gitlink-issue` | Issue 操作（创建、更新、关闭、评论等） |
 | `gitlink-pr` | Pull Request 操作（创建、合并、Review 等） |
 | `gitlink-member` | 仓库成员与邀请链接管理 |
@@ -592,7 +544,7 @@ git push gitlink
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |
 | `gitlink-pipeline` | 流水线工作流操作（运行、日志、启停、删除等） |
 | `gitlink-search` | 搜索功能（仓库、用户等） |
-| `gitlink-user` | 用户管理（资料、Public Keys、统计等） |
+| `gitlink-user` | 用户管理（个人信息等） |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |
 | `gitlink-workflow` | AI 自动化工作流（Issue 分类、PR Review、Release Notes 等） |
 

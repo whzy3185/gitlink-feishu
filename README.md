@@ -96,6 +96,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | Category | Capabilities |
 |----------|-------------|
 | 📦 Repo | List, create, fork, delete repositories, view repo info, insights, and interactions |
+| Wiki | Create, update, view, list, and delete wiki pages |
 | 🐛 Issue | Create, update, close, batch close, comment on issues |
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
@@ -106,9 +107,8 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔧 CI | View builds, logs, CI/CD operations |
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
-| 📚 Catalog | List GitLink license and .gitignore templates for repository bootstrap |
 | 🔍 Search | Search repositories, users |
-| 👤 User | View profiles, manage public keys, inspect user statistics |
+| 👤 User | View user profiles and info |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
 | 🤖 Workflow | AI-powered issue triage, PR review, release notes |
 
@@ -247,17 +247,21 @@ gitlink-cli repo +create -n my-project -d "Project description"
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
 ```
 
-### Platform Catalogs
+### Wiki Management
 
 ```bash
-# List license templates
-gitlink-cli catalog +licenses
+# List and view wiki pages
+gitlink-cli wiki +pages --owner Gitlink --repo forgeplus --project-id 123
+gitlink-cli wiki +view --owner Gitlink --repo forgeplus --project-id 123 --page Home
 
-# Filter license templates by name
-gitlink-cli catalog +licenses --name MIT
+# Create or update wiki pages
+gitlink-cli wiki +create --owner Gitlink --repo forgeplus \
+  --project-id 123 --page Home --title Home --content "Welcome to Wiki"
+gitlink-cli wiki +update --owner Gitlink --repo forgeplus \
+  --project-id 123 --page Home --title Home --content "Updated content"
 
-# List .gitignore templates
-gitlink-cli catalog +ignores --name Go
+# Preview wiki page deletion
+gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 123 --page Home --dry-run
 ```
 
 ### Webhook Management
@@ -297,16 +301,6 @@ gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role D
 
 # Create an invite link
 gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
-
-# List pending project membership applications
-gitlink-cli member +applications --user Mengz --page 1 --per-page 20
-
-# Accept or refuse a membership application by applied_projects[].id
-gitlink-cli member +accept-application --user Mengz --id 42 --dry-run
-gitlink-cli member +refuse-application --user Mengz --id 43 --dry-run
-
-# Apply to join a project by application code
-gitlink-cli member +apply --code <application_code> --role developer --dry-run
 ```
 
 ### Issue Management
@@ -456,30 +450,6 @@ gitlink-cli release +update --owner Gitlink --repo forgeplus -i <version_id> -b 
 gitlink-cli release +delete --owner Gitlink --repo forgeplus -i <version_id> --dry-run
 ```
 
-### Attachment Upload & Download
-
-`attachment` gives a scriptable path for large-file transfer instead of the web UI. The uploaded attachment id can be fed to `release +create --attachment-ids`.
-
-```bash
-# Upload a local file as a platform attachment (returns the attachment id)
-gitlink-cli attachment +upload -f ./dist/app-v1.0.0.tar.gz -d "v1.0.0 release asset"
-
-# Upload several files concurrently (comma-separated; -c sets the worker count, default 3)
-gitlink-cli attachment +upload -f ./dist/app.tar.gz,./dist/app.sha256,./dist/CHANGELOG.md -c 3
-
-# Download an attachment by id to a local file
-gitlink-cli attachment +download -i <attachment_id> -o ./app-v1.0.0.tar.gz
-
-# Download all attachments of a release by tag (mirrors `gh release download`)
-gitlink-cli release +download -i v1.0.0 -o ./assets
-
-# Delete an attachment by id
-gitlink-cli attachment +delete -i <attachment_id>
-
-# Or do it in one step: upload local files and attach them to a new release
-gitlink-cli release +create -t v1.0.0 -n "v1.0.0" --attachment-files ./dist/app.tar.gz,./dist/app.sha256
-```
-
 ### CI/CD Operations
 
 ```bash
@@ -523,24 +493,6 @@ gitlink-cli search +repos -k "machine learning"
 
 # Search users
 gitlink-cli search +users -k "zhangsan"
-```
-
-### User Operations
-
-```bash
-# Current authenticated user and detailed profile
-gitlink-cli user +me
-gitlink-cli user +current --format json
-
-# Public key management
-gitlink-cli user +keys --page 1 --limit 20
-gitlink-cli user +key-create --title "work laptop" --key-file ~/.ssh/id_rsa.pub --dry-run
-gitlink-cli user +key-delete --id 7 --dry-run
-
-# User statistics
-gitlink-cli user +activity --login zhangsan
-gitlink-cli user +headmap --login zhangsan --year 2026
-gitlink-cli user +develop --login zhangsan --start-time 1704067200 --end-time 1735689599
 ```
 
 ### Workflow Agent Commands
@@ -704,7 +656,7 @@ See [skills/README.md](skills/README.md) for details.
 |-------|-------------|
 | `gitlink-shared` | Authentication, global parameters, safety rules, API notes |
 | `gitlink-repo` | Repository operations (create, view, delete, fork, insights, etc.) |
-| `gitlink-catalog` | License and .gitignore template lookup |
+| `gitlink-wiki` | Wiki operations (create, update, view, list, delete) |
 | `gitlink-issue` | Issue operations (create, update, close, comment, etc.) |
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
 | `gitlink-member` | Repository member and invite link management |
@@ -714,7 +666,7 @@ See [skills/README.md](skills/README.md) for details.
 | `gitlink-pipeline` | Pipeline workflow operations (runs, logs, enable, disable, delete, etc.) |
 | `gitlink-search` | Search (repositories, users, etc.) |
 | `gitlink-org` | Organization management (members, teams, etc.) |
-| `gitlink-user` | User management (profiles, public keys, statistics, etc.) |
+| `gitlink-user` | User management (profile info, etc.) |
 | `gitlink-pm` | Project management (sprints, kanban, weekly reports, etc.) |
 | `gitlink-workflow` | AI-powered workflows (issue triage, PR review, release notes, etc.) |
 | `gitlink-health` | Project health analysis (PR/Issue metrics aggregation, health reports) |
