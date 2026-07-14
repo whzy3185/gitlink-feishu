@@ -283,6 +283,16 @@ gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role D
 
 # Create an invite link
 gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
+
+# List pending project membership applications
+gitlink-cli member +applications --user Mengz --page 1 --per-page 20
+
+# Accept or refuse a membership application by applied_projects[].id
+gitlink-cli member +accept-application --user Mengz --id 42 --dry-run
+gitlink-cli member +refuse-application --user Mengz --id 43 --dry-run
+
+# Apply to join a project by application code
+gitlink-cli member +apply --code <application_code> --role developer --dry-run
 ```
 
 ### Issue Management

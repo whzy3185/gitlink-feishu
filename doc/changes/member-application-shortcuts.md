@@ -1,40 +1,33 @@
-# Member Application Shortcuts
+# Member application shortcuts
 
-## Background
+This change extends `gitlink-cli member` from direct collaborator and invite-link operations to the project membership application workflow.
 
-GitLink OpenAPI documents two repository membership lifecycle endpoints that were not exposed as high-level shortcuts:
+New shortcuts:
 
-- `POST /api/applied_projects.json` for applying to join a project with an invite code.
-- `POST /api/{owner}/{repo}/quit.json` for leaving a repository.
+- `member +applications` lists project membership applications for a user inbox with `--user`, `--page`, and `--per-page`.
+- `member +accept-application` accepts an application by `applied_projects[].id` and supports `--dry-run`.
+- `member +refuse-application` refuses an application by `applied_projects[].id` and supports `--dry-run`.
+- `member +apply` applies to join a project with an application code and requested role, also supporting `--dry-run`.
 
-These operations are useful for community onboarding/offboarding flows and Agent-assisted repository membership workflows.
+The implementation follows the documented GitLink OpenAPI endpoints:
 
-## What Changed
+- `GET /api/users/{owner}/applied_projects.json`
+- `POST /api/users/{owner}/applied_projects/{id}/accept.json`
+- `POST /api/users/{owner}/applied_projects/{id}/refuse.json`
+- `POST /api/applied_projects.json`
 
-Added two `member` shortcuts:
+Safety details:
 
-- `member +apply --code --role [--dry-run]`
-  - Builds the documented body shape: `{"applied_project":{"code":"...","role":"..."}}`.
-  - Validates role as `manager`, `developer`, or `reporter`.
-- `member +quit --owner --repo [--dry-run|--yes]`
-  - Previews the quit request with `--dry-run`.
-  - Requires explicit `--yes` before leaving the repository.
+- Application decisions validate positive integer IDs before calling the API.
+- Application role values are normalized to `manager`, `developer`, or `reporter`.
+- Dry-run output includes the method, path, and request body where applicable.
+- When `--user` is omitted, the shortcut uses `--owner` first and falls back to `GET /users/me`.
 
-## OpenAPI Coverage
+Verification:
 
-| Command | Method | Endpoint |
-|---|---|---|
-| `member +apply` | `POST` | `/api/applied_projects.json` |
-| `member +quit` | `POST` | `/api/{owner}/{repo}/quit.json` |
-
-## Validation
-
-```bash
-git diff --check
-GOPROXY=https://goproxy.cn,direct go test ./shortcuts/member ./shortcuts
-go vet ./shortcuts/member ./shortcuts
-go run . member +apply --help
-go run . member +quit --help
-GOPROXY=https://goproxy.cn,direct go test ./...
-go vet ./...
-```
+- `go test ./shortcuts/member`
+- `go test ./shortcuts`
+- `go test ./...`
+- `go build ./...`
+- `go run ./internal/i18n/cmd/check --scan-code`
+- `git diff --check`

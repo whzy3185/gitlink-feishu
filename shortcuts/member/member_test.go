@@ -188,28 +188,127 @@ func TestMemberAcceptInvite(t *testing.T) {
 	}
 }
 
+func TestMemberApplicationsUsesExplicitUserAndPagination(t *testing.T) {
+	server := newMemberTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/users/Mengz/applied_projects.json")
+		if r.URL.Query().Get("page") != "2" {
+			t.Fatalf("page query = %q, want 2", r.URL.Query().Get("page"))
+		}
+		if r.URL.Query().Get("per_page") != "50" {
+			t.Fatalf("per_page query = %q, want 50", r.URL.Query().Get("per_page"))
+		}
+		writeJSON(t, w, map[string]interface{}{"total_count": 1, "applied_projects": []interface{}{}})
+	})
+	defer server.Close()
+
+	err := runMemberShortcut(t, server, "applications", map[string]string{
+		"user":     "Mengz",
+		"page":     "2",
+		"per-page": "50",
+	})
+	if err != nil {
+		t.Fatalf("applications shortcut failed: %v", err)
+	}
+}
+
+func TestMemberApplicationsDefaultsToCurrentUserWhenOwnerMissing(t *testing.T) {
+	var paths []string
+	server := newMemberTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		switch r.URL.Path {
+		case "/users/me.json":
+			assertRequest(t, r, "GET", "/users/me.json")
+			writeJSON(t, w, map[string]interface{}{"login": "Mengz"})
+		case "/users/Mengz/applied_projects.json":
+			assertRequest(t, r, "GET", "/users/Mengz/applied_projects.json")
+			writeJSON(t, w, map[string]interface{}{"total_count": 0, "applied_projects": []interface{}{}})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	if err := runMemberShortcutWithOwner(t, server, "", "applications", nil); err != nil {
+		t.Fatalf("applications shortcut failed: %v", err)
+	}
+	want := []string{"/users/me.json", "/users/Mengz/applied_projects.json"}
+	if !reflect.DeepEqual(paths, want) {
+		t.Fatalf("request paths = %v, want %v", paths, want)
+	}
+}
+
+func TestMemberAcceptApplication(t *testing.T) {
+	server := newMemberTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/users/Mengz/applied_projects/42/accept.json")
+		writeJSON(t, w, map[string]interface{}{"id": 42, "status": "accepted"})
+	})
+	defer server.Close()
+
+	err := runMemberShortcut(t, server, "accept-application", map[string]string{
+		"user": "Mengz",
+		"id":   "42",
+	})
+	if err != nil {
+		t.Fatalf("accept-application shortcut failed: %v", err)
+	}
+}
+
+func TestMemberRefuseApplicationDryRunDoesNotCallAPI(t *testing.T) {
+	server := newMemberTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runMemberShortcut(t, server, "refuse-application", map[string]string{
+		"user":    "Mengz",
+		"id":      "43",
+		"dry-run": "true",
+	})
+	if err != nil {
+		t.Fatalf("refuse-application dry-run failed: %v", err)
+	}
+}
+
+func TestMemberApplicationRejectsInvalidIDBeforeAPI(t *testing.T) {
+	server := newMemberTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("invalid id should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runMemberShortcut(t, server, "accept-application", map[string]string{
+		"user": "Mengz",
+		"id":   "0",
+	})
+	if err == nil {
+		t.Fatal("expected invalid id to return an error")
+	}
+}
+
 func TestMemberApply(t *testing.T) {
 	var payload map[string]interface{}
 	server := newMemberTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		assertRequest(t, r, "POST", "/applied_projects.json")
 		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"id": 1, "status": "common", "role": "developer"})
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
 	})
 	defer server.Close()
 
-	err := runMemberShortcut(t, server, "apply", map[string]string{"code": "MPzQgH", "role": "developer"})
+	err := runMemberShortcut(t, server, "apply", map[string]string{
+		"code": "invite-code",
+		"role": "reporter",
+	})
 	if err != nil {
 		t.Fatalf("apply shortcut failed: %v", err)
 	}
-	applied, ok := payload["applied_project"].(map[string]interface{})
+	appliedProject, ok := payload["applied_project"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("applied_project = %T, want object", payload["applied_project"])
+		t.Fatalf("applied_project payload = %v, want object", payload["applied_project"])
 	}
-	if applied["code"] != "MPzQgH" {
-		t.Fatalf("code = %v, want MPzQgH", applied["code"])
+	if appliedProject["code"] != "invite-code" {
+		t.Fatalf("code = %v, want invite-code", appliedProject["code"])
 	}
-	if applied["role"] != "developer" {
-		t.Fatalf("role = %v, want developer", applied["role"])
+	if appliedProject["role"] != "reporter" {
+		t.Fatalf("role = %v, want reporter", appliedProject["role"])
 	}
 }
 
@@ -220,59 +319,27 @@ func TestMemberApplyDryRunDoesNotCallAPI(t *testing.T) {
 	defer server.Close()
 
 	err := runMemberShortcut(t, server, "apply", map[string]string{
-		"code": "MPzQgH", "role": "reporter", "dry-run": "true",
+		"code":    "invite-code",
+		"role":    "developer",
+		"dry-run": "true",
 	})
 	if err != nil {
 		t.Fatalf("apply dry-run failed: %v", err)
 	}
 }
 
-func TestMemberApplyRejectsInvalidRole(t *testing.T) {
+func TestMemberApplyRejectsInvalidRoleBeforeAPI(t *testing.T) {
 	server := newMemberTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("invalid role should not call API, got: %s %s", r.Method, r.URL.Path)
 	})
 	defer server.Close()
 
-	err := runMemberShortcut(t, server, "apply", map[string]string{"code": "MPzQgH", "role": "owner"})
+	err := runMemberShortcut(t, server, "apply", map[string]string{
+		"code": "invite-code",
+		"role": "owner",
+	})
 	if err == nil {
-		t.Fatal("expected invalid role error")
-	}
-}
-
-func TestMemberQuitRequiresConfirmation(t *testing.T) {
-	server := newMemberTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("quit without --yes should not call API, got: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	err := runMemberShortcut(t, server, "quit", nil)
-	if err == nil {
-		t.Fatal("expected confirmation error")
-	}
-}
-
-func TestMemberQuitDryRunDoesNotCallAPI(t *testing.T) {
-	server := newMemberTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	err := runMemberShortcut(t, server, "quit", map[string]string{"dry-run": "true"})
-	if err != nil {
-		t.Fatalf("quit dry-run failed: %v", err)
-	}
-}
-
-func TestMemberQuit(t *testing.T) {
-	server := newMemberTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "POST", "/owner/repo/quit.json")
-		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-	})
-	defer server.Close()
-
-	err := runMemberShortcut(t, server, "quit", map[string]string{"yes": "true"})
-	if err != nil {
-		t.Fatalf("quit shortcut failed: %v", err)
+		t.Fatal("expected invalid role to return an error")
 	}
 }
 
@@ -296,13 +363,18 @@ func TestNormalizeRoleRejectsInvalidRole(t *testing.T) {
 
 func runMemberShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
 	t.Helper()
+	return runMemberShortcutWithOwner(t, server, "owner", name, args)
+}
+
+func runMemberShortcutWithOwner(t *testing.T, server *httptest.Server, owner, name string, args map[string]string) error {
+	t.Helper()
 	shortcut := findMemberShortcut(t, name)
 	ctx := &common.RuntimeContext{
 		Client: &client.Client{
 			HTTP:    server.Client(),
 			BaseURL: server.URL,
 		},
-		Owner:  "owner",
+		Owner:  owner,
 		Repo:   "repo",
 		Format: "json",
 		Args:   args,

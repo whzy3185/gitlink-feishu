@@ -294,6 +294,16 @@ gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role D
 
 # 生成邀请链接
 gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
+
+# 查看待处理的项目成员申请
+gitlink-cli member +applications --user Mengz --page 1 --per-page 20
+
+# 按 applied_projects[].id 接受或拒绝成员申请
+gitlink-cli member +accept-application --user Mengz --id 42 --dry-run
+gitlink-cli member +refuse-application --user Mengz --id 43 --dry-run
+
+# 通过申请码申请加入项目
+gitlink-cli member +apply --code <application_code> --role developer --dry-run
 ```
 
 ### Issue 管理
