@@ -636,34 +636,28 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	}
 }
 
-func TestRepoBlameUsesBlameEndpoint(t *testing.T) {
+func TestRepoActivityForwardsFilters(t *testing.T) {
 	var query string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/blame.json" {
+		if r.Method != "GET" || r.URL.Path != "/owner/repo/activity.json" {
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		query = r.URL.RawQuery
-		writeJSON(t, w, map[string]interface{}{"file_name": "README.md", "blame_parts": []interface{}{}})
+		writeJSON(t, w, map[string]interface{}{"project_trends": []interface{}{}})
 	}))
 	defer server.Close()
 
-	err := runShortcut(t, server, "blame", map[string]string{"path": "README.md", "ref": "develop"})
-	if err != nil {
-		t.Fatalf("blame failed: %v", err)
+	args := map[string]string{"type": "Issue", "status": "create", "time": "30", "page": "1", "limit": "20"}
+	if err := runShortcut(t, server, "activity", args); err != nil {
+		t.Fatalf("activity failed: %v", err)
 	}
-	if !strings.Contains(query, "filepath=README.md") || !strings.Contains(query, "sha=develop") {
-		t.Fatalf("unexpected query: %q", query)
+	for _, want := range []string{"type=Issue", "status=create", "time=30"} {
+		if !strings.Contains(query, want) {
+			t.Fatalf("expected %q in query, got %q", want, query)
+		}
 	}
-}
 
-func TestRepoBlameRequiresPath(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "blame", map[string]string{})
-	if err == nil {
-		t.Fatal("expected error when --path missing")
+	if err := runShortcut(t, server, "activity", map[string]string{"time": "abc", "page": "1", "limit": "20"}); err == nil {
+		t.Fatal("expected error for non-integer --time")
 	}
 }
