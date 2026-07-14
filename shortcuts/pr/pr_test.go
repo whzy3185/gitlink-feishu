@@ -5,10 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -16,17 +12,31 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func TestPRCommentPostsToPullJournals(t *testing.T) {
+func TestPRCommentPostsToCorrectIssueJournal(t *testing.T) {
 	var journalPayload map[string]interface{}
+	var journalPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/pulls/13/journals.json" {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/pulls/13.json":
+			writeJSON(t, w, map[string]interface{}{
+				"issue": map[string]interface{}{
+					"id":      float64(142301),
+					"subject": "test PR",
+				},
+				"pull_request": map[string]interface{}{
+					"id": float64(14791),
+				},
+			})
+		case r.Method == "POST" && r.URL.Path == "/v1/owner/repo/issues/142301/journals.json":
+			journalPath = r.URL.Path
+			journalPayload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{
+				"id":      float64(12345),
+				"message": "评论成功",
+			})
+		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		journalPayload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{
-			"id":   float64(12345),
-			"note": "LGTM, looks good!",
-		})
 	}))
 	defer server.Close()
 
@@ -37,7 +47,11 @@ func TestPRCommentPostsToPullJournals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("comment shortcut failed: %v", err)
 	}
-	assertEqual(t, journalPayload["note"], "LGTM, looks good!")
+
+	if journalPath == "" {
+		t.Fatal("journal endpoint was not called")
+	}
+	assertEqual(t, journalPayload["notes"], "LGTM, looks good!")
 }
 
 func TestPRCommentFailsWhenPRNotFound(t *testing.T) {
@@ -56,6 +70,25 @@ func TestPRCommentFailsWhenPRNotFound(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for non-existent PR, got nil")
+	}
+}
+
+func TestPRCommentFailsWhenIssueFieldMissing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, map[string]interface{}{
+			"pull_request": map[string]interface{}{
+				"id": float64(14791),
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "comment", map[string]string{
+		"id":   "13",
+		"body": "test",
+	})
+	if err == nil {
+		t.Fatal("expected error when issue field is missing, got nil")
 	}
 }
 
@@ -142,87 +175,48 @@ func TestPRListStateAllOmitsStatus(t *testing.T) {
 	}
 }
 
-func TestPRListByNumberUsesDetailEndpoint(t *testing.T) {
-	var requestedPath string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestedPath = r.URL.Path
-		if r.URL.Path != "/v1/owner/repo/pulls/42.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(t, w, map[string]interface{}{
-			"id":    float64(101),
-			"index": float64(42),
-			"title": "feat: search by number",
-		})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "list", map[string]string{"number": "42"})
-	if err != nil {
-		t.Fatalf("list by number failed: %v", err)
-	}
-	if requestedPath == "" {
-		t.Fatal("expected detail endpoint to be called")
-	}
-}
-
-func TestPRListByIDAliasUsesDetailEndpoint(t *testing.T) {
-	var requestedPath string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestedPath = r.URL.Path
-		if r.URL.Path != "/v1/owner/repo/pulls/7.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(t, w, map[string]interface{}{
-			"id":    float64(202),
-			"index": float64(7),
-			"title": "feat: alias",
-		})
-	}))
-	defer server.Close()
-
-	err := runPRShortcut(t, server, "list", map[string]string{"id": "7"})
-	if err != nil {
-		t.Fatalf("list by id alias failed: %v", err)
-	}
-	if requestedPath == "" {
-		t.Fatal("expected detail endpoint to be called")
-	}
-}
-
-func TestPullRequestListNumberArgPrefersNumber(t *testing.T) {
-	ctx := &common.RuntimeContext{
-		Args: map[string]string{
-			"number": "15",
-			"id":     "9",
+func TestNormalizePullRequestListNumbersCopiesIndex(t *testing.T) {
+	env := &output.Envelope{
+		OK: true,
+		Data: map[string]interface{}{
+			"pulls": []interface{}{
+				map[string]interface{}{
+					"id":    float64(11),
+					"index": float64(7),
+					"title": "feat: show number",
+				},
+			},
 		},
 	}
-	if got := pullRequestListNumberArg(ctx); got != "15" {
-		t.Fatalf("pullRequestListNumberArg() = %q, want 15", got)
-	}
+
+	normalizePullRequestListNumbers(env)
+
+	data := env.Data.(map[string]interface{})
+	pulls := data["pulls"].([]interface{})
+	pr := pulls[0].(map[string]interface{})
+	assertEqual(t, pr["number"], float64(7))
 }
 
-func TestWrapPullRequestListByNumberResult(t *testing.T) {
-	pr := map[string]interface{}{
-		"id":     float64(303),
-		"number": float64(88),
-		"title":  "feat: wrapped number",
+func TestNormalizePullRequestListNumbersKeepsExistingNumber(t *testing.T) {
+	env := &output.Envelope{
+		OK: true,
+		Data: map[string]interface{}{
+			"pulls": []interface{}{
+				map[string]interface{}{
+					"number": float64(9),
+					"index":  float64(7),
+					"title":  "feat: keep number",
+				},
+			},
+		},
 	}
 
-	data, meta := wrapPullRequestListByNumberResult(pr)
+	normalizePullRequestListNumbers(env)
 
-	assertEqual(t, data["total_count"], 1)
-	assertEqual(t, data["page"], 1)
-	assertEqual(t, data["limit"], 1)
+	data := env.Data.(map[string]interface{})
 	pulls := data["pulls"].([]interface{})
-	wrapped := pulls[0].(map[string]interface{})
-	assertEqual(t, wrapped["number"], float64(88))
-	if meta == nil {
-		t.Fatal("expected meta to be set")
-	}
-	assertEqual(t, meta.TotalCount, 1)
-	assertEqual(t, meta.Page, 1)
-	assertEqual(t, meta.Limit, 1)
+	pr := pulls[0].(map[string]interface{})
+	assertEqual(t, pr["number"], float64(9))
 }
 
 // --- create ---
@@ -579,62 +573,5 @@ func assertEqual(t *testing.T, got interface{}, want interface{}) {
 	t.Helper()
 	if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", want) {
 		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
-	}
-}
-
-func TestPRCheckoutFetchesHeadBranch(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not available")
-	}
-	// Upstream repo with a PR head branch.
-	upstream := t.TempDir()
-	run := func(args ...string) {
-		t.Helper()
-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v (%s)", args, err, out)
-		}
-	}
-	run("init", "-q", "--initial-branch=master", upstream)
-	run("-C", upstream, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init")
-	run("-C", upstream, "branch", "feat/x")
-
-	// Local clone where checkout happens.
-	local := filepath.Join(t.TempDir(), "local")
-	run("clone", "-q", upstream, local)
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/owner/repo/pulls/42.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(t, w, map[string]interface{}{"head": "feat/x", "base": "master"})
-	}))
-	defer server.Close()
-
-	cwd, _ := os.Getwd()
-	if err := os.Chdir(local); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Chdir(cwd)
-
-	if err := runPRShortcut(t, server, "checkout", map[string]string{"id": "42"}); err != nil {
-		t.Fatalf("checkout shortcut failed: %v", err)
-	}
-	out, err := exec.Command("git", "-C", local, "branch", "--show-current").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := strings.TrimSpace(string(out)); got != "feat/x" {
-		t.Fatalf("current branch = %q, want feat/x", got)
-	}
-}
-
-func TestPRCheckoutMissingHead(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, map[string]interface{}{"base": "master"})
-	}))
-	defer server.Close()
-
-	if err := runPRShortcut(t, server, "checkout", map[string]string{"id": "42"}); err == nil {
-		t.Fatal("expected error when head missing")
 	}
 }

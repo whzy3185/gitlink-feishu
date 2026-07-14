@@ -38,8 +38,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Flags: []common.Flag{
 				{Name: "state", Short: "s", Usage: tr.T("flag.pr.state"), Default: "open"},
 				{Name: "keyword", Short: "k", Usage: tr.T("flag.search.keyword")},
-				{Name: "number", Short: "n", Usage: "PR number shown in the web URL"},
-				{Name: "id", Short: "i", Usage: "Compatibility alias for --number; this is not the database ID"},
 				{Name: "priority-id", Usage: tr.T("flag.pr.priority_id")},
 				{Name: "tag-id", Usage: tr.T("flag.pr.tag_id")},
 				{Name: "milestone-id", Usage: tr.T("flag.pr.milestone_id")},
@@ -53,9 +51,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
-				}
-				if number := pullRequestListNumberArg(ctx); number != "" {
-					return outputPullRequestListByNumber(ctx, number)
 				}
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
@@ -91,6 +86,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
+				normalizePullRequestListNumbers(env)
 				return ctx.Output(env)
 			},
 		},
@@ -475,30 +471,31 @@ func extractIssueID(env *output.Envelope) (int64, error) {
 	return int64(idFloat), nil
 }
 
-func pullRequestListNumberArg(ctx *common.RuntimeContext) string {
-	if number := strings.TrimSpace(ctx.Arg("number")); number != "" {
-		return number
-	}
-	return strings.TrimSpace(ctx.Arg("id"))
-}
-
-func outputPullRequestListByNumber(ctx *common.RuntimeContext, number string) error {
-	env, err := ctx.CallAPI("GET", prV1Path(ctx, number), nil)
-	if err != nil {
-		return err
+func normalizePullRequestListNumbers(env *output.Envelope) {
+	if env == nil {
+		return
 	}
 
-	pr, ok := env.Data.(map[string]interface{})
+	data, ok := env.Data.(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("unexpected PR response format")
+		return
 	}
 
-	if normalizedNumber := firstPullRequestNumber(pr); normalizedNumber != nil {
-		pr["number"] = normalizedNumber
+	pulls, ok := data["pulls"].([]interface{})
+	if !ok {
+		return
 	}
 
-	env.Data, env.Meta = wrapPullRequestListByNumberResult(pr)
-	return ctx.Output(env)
+	for i, item := range pulls {
+		pr, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if number := firstPullRequestNumber(pr); number != nil {
+			pr["number"] = number
+		}
+		pulls[i] = pr
+	}
 }
 
 func enrichPullRequestClosedAt(ctx *common.RuntimeContext, env *output.Envelope) error {
@@ -598,17 +595,4 @@ func firstPullRequestNumber(pr map[string]interface{}) interface{} {
 		}
 	}
 	return nil
-}
-
-func wrapPullRequestListByNumberResult(pr map[string]interface{}) (map[string]interface{}, *output.Meta) {
-	return map[string]interface{}{
-			"total_count": 1,
-			"page":        1,
-			"limit":       1,
-			"pulls":       []interface{}{pr},
-		}, &output.Meta{
-			TotalCount: 1,
-			Page:       1,
-			Limit:      1,
-		}
 }

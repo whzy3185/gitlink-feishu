@@ -198,7 +198,7 @@ func printMapTable(w io.Writer, m map[string]interface{}) error {
 func collectKeys(m map[string]interface{}) []string {
 	keys := make([]string, 0, len(m))
 	// Prefer common keys first
-	priority := []string{"id", "name", "login", "title", "status", "state", "created_at", "updated_at"}
+	priority := []string{"number", "id", "name", "login", "title", "status", "state", "created_at", "updated_at"}
 	seen := map[string]bool{}
 	for _, k := range priority {
 		if _, ok := m[k]; ok {
