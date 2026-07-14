@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -220,6 +222,183 @@ func TestIssueListStateAll(t *testing.T) {
 	err := runShortcut(t, server, "list", map[string]string{"state": "all", "page": "1", "limit": "20"})
 	if err != nil {
 		t.Fatalf("list all failed: %v", err)
+	}
+}
+
+// --- export ---
+
+func TestIssueExportCSVWithFiltersAndPagination(t *testing.T) {
+	var pages []string
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/owner/repo/issues.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		query := r.URL.Query()
+		assertEqual(t, query.Get("category"), "opened")
+		assertEqual(t, query.Get("keyword"), "release")
+		assertEqual(t, query.Get("participant_category"), "assignedme")
+		assertEqual(t, query.Get("author_id"), "10")
+		assertEqual(t, query.Get("assigner_id"), "11")
+		assertEqual(t, query.Get("milestone_id"), "12")
+		assertEqual(t, query.Get("status_id"), "1")
+		assertEqual(t, query.Get("issue_tag_ids"), "2,3")
+		assertEqual(t, query.Get("sort_by"), "issues.updated_on")
+		assertEqual(t, query.Get("sort_direction"), "desc")
+		assertEqual(t, query.Get("limit"), "2")
+		pages = append(pages, query.Get("page"))
+
+		switch query.Get("page") {
+		case "1":
+			writeJSON(t, w, map[string]interface{}{
+				"total_count": 3,
+				"issues": []interface{}{
+					map[string]interface{}{
+						"id":                   float64(101),
+						"project_issues_index": float64(1),
+						"subject":              "release blocker",
+						"status":               map[string]interface{}{"id": float64(1), "name": "New"},
+						"priority":             map[string]interface{}{"id": float64(2), "name": "Normal"},
+						"author":               map[string]interface{}{"login": "alice"},
+						"assigners": []interface{}{
+							map[string]interface{}{"login": "bob"},
+						},
+						"tags": []interface{}{
+							map[string]interface{}{"name": "bug"},
+						},
+						"updated_on": "2026-06-01",
+					},
+					map[string]interface{}{
+						"id":                   float64(102),
+						"project_issues_index": float64(2),
+						"subject":              "release notes",
+						"status":               map[string]interface{}{"id": float64(1), "name": "New"},
+						"priority":             map[string]interface{}{"id": float64(3), "name": "High"},
+						"author":               map[string]interface{}{"login": "carol"},
+						"updated_on":           "2026-06-02",
+					},
+				},
+			})
+		case "2":
+			writeJSON(t, w, map[string]interface{}{
+				"total_count": 3,
+				"issues": []interface{}{
+					map[string]interface{}{
+						"id":                   float64(103),
+						"project_issues_index": float64(3),
+						"subject":              "release checklist",
+						"status":               map[string]interface{}{"id": float64(5), "name": "Closed"},
+						"priority":             map[string]interface{}{"id": float64(2), "name": "Normal"},
+						"author":               map[string]interface{}{"login": "dave"},
+						"updated_on":           "2026-06-03",
+					},
+				},
+			})
+		default:
+			t.Fatalf("unexpected page %s", query.Get("page"))
+		}
+	})
+	defer server.Close()
+
+	outputPath := filepath.Join(t.TempDir(), "issues.csv")
+	err := runShortcut(t, server, "export", map[string]string{
+		"state":          "open",
+		"keyword":        "release",
+		"participant":    "assignedme",
+		"author-id":      "10",
+		"assignee-id":    "11",
+		"milestone-id":   "12",
+		"status-id":      "1",
+		"tag-ids":        "2,3",
+		"sort-by":        "issues.updated_on",
+		"sort-direction": "desc",
+		"limit":          "2",
+		"fields":         "number,title,status,priority,author,assignees,tags,updated_at,url",
+		"export-format":  "csv",
+		"output":         outputPath,
+	})
+	if err != nil {
+		t.Fatalf("export failed: %v", err)
+	}
+	assertEqual(t, strings.Join(pages, ","), "1,2")
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read export file: %v", err)
+	}
+	got := string(content)
+	if !strings.Contains(got, "number,title,status,priority,author,assignees,tags,updated_at,url") {
+		t.Fatalf("missing csv header: %s", got)
+	}
+	if !strings.Contains(got, "1,release blocker,New,Normal,alice,bob,bug,2026-06-01,https://www.gitlink.org.cn/owner/repo/issues/1") {
+		t.Fatalf("missing first issue row: %s", got)
+	}
+	if !strings.Contains(got, "3,release checklist,Closed,Normal,dave,,,2026-06-03,https://www.gitlink.org.cn/owner/repo/issues/3") {
+		t.Fatalf("missing second page issue row: %s", got)
+	}
+}
+
+func TestIssueExportMaxStopsWithinPage(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") != "1" {
+			t.Fatalf("unexpected page: %s", r.URL.Query().Get("page"))
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"total_count": 3,
+			"issues": []interface{}{
+				map[string]interface{}{"project_issues_index": float64(1), "subject": "one"},
+				map[string]interface{}{"project_issues_index": float64(2), "subject": "two"},
+			},
+		})
+	})
+	defer server.Close()
+
+	outputPath := filepath.Join(t.TempDir(), "issues.json")
+	err := runShortcut(t, server, "export", map[string]string{
+		"limit":         "2",
+		"max":           "1",
+		"fields":        "number,title",
+		"export-format": "json",
+		"output":        outputPath,
+	})
+	if err != nil {
+		t.Fatalf("export failed: %v", err)
+	}
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read export file: %v", err)
+	}
+	if strings.Contains(string(content), `"title": "two"`) {
+		t.Fatalf("expected max=1 to omit second issue: %s", content)
+	}
+	if !strings.Contains(string(content), `"title": "one"`) {
+		t.Fatalf("expected first issue in json export: %s", content)
+	}
+}
+
+func TestIssueExportMarkdownEscapesCells(t *testing.T) {
+	content := renderIssueExportMarkdown([]issueExportRecord{
+		{"number": "1", "title": "pipe | newline\ntext"},
+	}, []string{"number", "title"})
+	got := string(content)
+	if !strings.Contains(got, "pipe \\| newline text") {
+		t.Fatalf("markdown cell not escaped: %s", got)
+	}
+}
+
+func TestIssueExportRejectsInvalidOptions(t *testing.T) {
+	if _, err := parseIssueExportFields("number,unknown"); err == nil {
+		t.Fatal("expected invalid field error")
+	}
+	if _, err := normalizeIssueExportFormat("xml"); err == nil {
+		t.Fatal("expected invalid format error")
+	}
+	if _, err := boundedPositiveInt("0", 50, 100, "limit"); err == nil {
+		t.Fatal("expected invalid limit error")
+	}
+	if _, err := nonNegativeInt("-1", "max"); err == nil {
+		t.Fatal("expected invalid max error")
 	}
 }
 
