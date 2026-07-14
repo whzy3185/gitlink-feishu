@@ -96,7 +96,7 @@
 | 分类 | 能力 |
 |------|------|
 | 📦 仓库 | 列出、创建、Fork、删除仓库，查看仓库信息、洞察数据和互动状态 |
-| Wiki | 创建、更新、查看、列出和删除 Wiki 页面 |
+| ⭐ 互动 | 关注、取消关注、点赞、取消点赞，查看关注者和点赞者 |
 | 🐛 Issue | 创建、更新、关闭、批量关闭、评论 Issue |
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
@@ -258,21 +258,22 @@ gitlink-cli repo +create -n my-project -d "项目描述"
 gitlink-cli repo +fork --owner Gitlink --repo forgeplus
 ```
 
-### Wiki 管理
+### 仓库互动
 
 ```bash
-# 列出和查看 Wiki 页面
-gitlink-cli wiki +pages --owner Gitlink --repo forgeplus --project-id 123
-gitlink-cli wiki +view --owner Gitlink --repo forgeplus --project-id 123 --page Home
+# 列出仓库关注者
+gitlink-cli reaction +watchers --owner Gitlink --repo forgeplus
 
-# 创建或更新 Wiki 页面
-gitlink-cli wiki +create --owner Gitlink --repo forgeplus \
-  --project-id 123 --page Home --title Home --content "Welcome to Wiki"
-gitlink-cli wiki +update --owner Gitlink --repo forgeplus \
-  --project-id 123 --page Home --title Home --content "Updated content"
+# 列出仓库点赞者
+gitlink-cli reaction +stargazers --owner Gitlink --repo forgeplus
 
-# 预览删除 Wiki 页面
-gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 123 --page Home --dry-run
+# 关注或取消关注仓库
+gitlink-cli reaction +follow --owner Gitlink --repo forgeplus
+gitlink-cli reaction +unfollow --owner Gitlink --repo forgeplus
+
+# 点赞或取消点赞仓库
+gitlink-cli reaction +like --owner Gitlink --repo forgeplus
+gitlink-cli reaction +unlike --owner Gitlink --repo forgeplus
 ```
 
 ### Webhook 管理
@@ -535,7 +536,7 @@ git push gitlink
 |-------|------|
 | `gitlink-shared` | 认证、全局参数、安全规则、API 注意事项 |
 | `gitlink-repo` | 仓库操作（创建、查看、删除、Fork、洞察数据等） |
-| `gitlink-wiki` | Wiki 操作（创建、更新、查看、列表、删除） |
+| `gitlink-reaction` | 仓库互动（关注、点赞、关注者、点赞者） |
 | `gitlink-issue` | Issue 操作（创建、更新、关闭、评论等） |
 | `gitlink-pr` | Pull Request 操作（创建、合并、Review 等） |
 | `gitlink-member` | 仓库成员与邀请链接管理 |

@@ -73,6 +73,8 @@ skills/
 │   ├── REFERENCE.md                   # 仓库 API 参考
 │   └── examples/
 │       └── repo-workflow.md           # 仓库管理工作流
+├── gitlink-reaction/                  # 仓库互动
+│   └── SKILL.md                       # 关注、点赞和用户列表操作指南
 ├── gitlink-issue/                     # Issue 管理
 │   ├── SKILL.md                       # Issue 操作指南
 │   ├── REFERENCE.md                   # Issue API 参考
@@ -137,6 +139,7 @@ skills/
 |-------|------|----------|
 | **gitlink-shared** | 认证、全局参数、API 参考、安全规则、分支约定 | `auth login`, `auth status` |
 | **gitlink-repo** | 仓库管理与洞察 | `repo +list`, `repo +info`, `repo +languages`, `repo +contributors`, `repo +code-stats`, `repo +follow`, `repo +like` |
+| **gitlink-reaction** | 仓库互动 | `reaction +watchers`, `reaction +stargazers`, `reaction +follow`, `reaction +like` |
 | **gitlink-issue** | Issue 管理 | `issue +create`, `issue +list`, `issue +view`, `issue +close`, `issue +batch-close` |
 | **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +versions`, `pr +version-diff`, `pr +reviews`, `pr +review` |
 | **gitlink-member** | 仓库成员管理 | `member +list`, `member +add`, `member +batch-add`, `member +role`, `member +invite-link` |
