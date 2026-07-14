@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestWriteTriageTable(t *testing.T) {
@@ -607,46 +608,85 @@ func TestRenderHealthResultJSON(t *testing.T) {
 	}
 }
 
-func TestRenderReleaseNotesMarkdown(t *testing.T) {
-	result := AnalyzeReleaseNotes(sampleReleaseNotesInput(), "en")
-	rendered, err := RenderReleaseNotes(result, "markdown", "en")
-	if err != nil {
-		t.Fatalf("RenderReleaseNotes returned error: %v", err)
+func TestRenderStaleReportMarkdown(t *testing.T) {
+	report := StaleReport{
+		Repository:   "owner/repo",
+		Source:       "local-json",
+		State:        "open",
+		StaleDays:    30,
+		ScannedTotal: 3,
+		FlaggedTotal: 1,
+		ShownTotal:   1,
+		ByBucket: map[string]int{
+			staleBucketFresh:  2,
+			staleBucketWatch:  1,
+			staleBucketStale:  0,
+			staleBucketZombie: 0,
+		},
+		Items: []StaleItem{{
+			Kind:            staleKindIssue,
+			Number:          3,
+			Title:           "stale issue",
+			Bucket:          staleBucketWatch,
+			AgeDays:         45,
+			LastActivityAt:  time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+			SuggestedAction: "Follow up",
+		}},
+		Recommendations: []string{"Follow up"},
 	}
-	for _, want := range []string{"Release Notes", "Features", "Bug Fixes", "Contributors"} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("markdown output missing %q:\n%s", want, rendered)
-		}
+
+	var buf bytes.Buffer
+	if err := renderStaleReport(&buf, report, "markdown", "en"); err != nil {
+		t.Fatalf("renderStaleReport markdown error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Stale Queue Report") || !strings.Contains(out, "#3") {
+		t.Fatalf("unexpected markdown output: %s", out)
 	}
 }
 
-func TestRenderReleaseNotesJSON(t *testing.T) {
-	result := AnalyzeReleaseNotes(sampleReleaseNotesInput(), "en")
-	rendered, err := RenderReleaseNotes(result, "json", "en")
-	if err != nil {
-		t.Fatalf("RenderReleaseNotes returned error: %v", err)
+func TestRenderStaleReportTable(t *testing.T) {
+	report := StaleReport{
+		Items: []StaleItem{{
+			Kind:            staleKindPR,
+			Number:          9,
+			Title:           "old pr",
+			Bucket:          staleBucketZombie,
+			AgeDays:         120,
+			LastActivityAt:  time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+			SuggestedAction: "Close or refresh",
+		}},
 	}
-	var parsed ReleaseNotesResult
-	if err := json.Unmarshal([]byte(rendered), &parsed); err != nil {
-		t.Fatalf("json.Unmarshal returned error: %v\noutput=%s", err, rendered)
+
+	var buf bytes.Buffer
+	if err := renderStaleReport(&buf, report, "table", "en"); err != nil {
+		t.Fatalf("renderStaleReport table error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "TYPE") || !strings.Contains(buf.String(), "#9") {
+		t.Fatalf("unexpected table output: %s", buf.String())
 	}
 }
 
-func TestRenderReleaseNotesTable(t *testing.T) {
-	result := AnalyzeReleaseNotes(sampleReleaseNotesInput(), "en")
-	rendered, err := RenderReleaseNotes(result, "table", "en")
-	if err != nil {
-		t.Fatalf("RenderReleaseNotes returned error: %v", err)
+func TestRenderStaleReportJSON(t *testing.T) {
+	report := StaleReport{
+		Repository: "owner/repo",
+		Items: []StaleItem{{
+			Kind:   staleKindIssue,
+			Number: 1,
+			Title:  "issue",
+		}},
 	}
-	if !strings.Contains(rendered, "SECTION") || !strings.Contains(rendered, "COUNT") {
-		t.Fatalf("table output = %q, want headers", rendered)
-	}
-}
 
-func TestRenderReleaseNotesUnknownFormat(t *testing.T) {
-	_, err := RenderReleaseNotes(AnalyzeReleaseNotes(sampleReleaseNotesInput(), "en"), "xml", "en")
-	if err == nil {
-		t.Fatal("RenderReleaseNotes returned nil error for unknown format")
+	var buf bytes.Buffer
+	if err := renderStaleReport(&buf, report, "json", "en"); err != nil {
+		t.Fatalf("renderStaleReport json error: %v", err)
+	}
+	var parsed StaleReport
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		t.Fatalf("json.Unmarshal error: %v", err)
+	}
+	if parsed.Repository != "owner/repo" || len(parsed.Items) != 1 {
+		t.Fatalf("parsed = %+v", parsed)
 	}
 }
 

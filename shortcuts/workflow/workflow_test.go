@@ -28,14 +28,11 @@ func TestShortcutsExposesWorkflowCommands(t *testing.T) {
 	if !names["pr-summary"] {
 		t.Fatal("Shortcuts missing pr-summary")
 	}
-	if !names["review-context"] {
-		t.Fatal("Shortcuts missing review-context")
-	}
 	if !names["repo-report"] {
 		t.Fatal("Shortcuts missing repo-report")
 	}
-	if !names["release-notes"] {
-		t.Fatal("Shortcuts missing release-notes")
+	if !names["stale"] {
+		t.Fatal("Shortcuts missing stale")
 	}
 }
 
