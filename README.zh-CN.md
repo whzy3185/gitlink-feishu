@@ -238,6 +238,17 @@ gitlink-cli repo +readme --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
 gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
 
+# 搜索仓库文件并查看提交历史
+gitlink-cli repo +files --owner Gitlink --repo forgeplus --search README --ref master
+gitlink-cli repo +commits --owner Gitlink --repo forgeplus --ref master --limit 20
+gitlink-cli repo +commit-files --owner Gitlink --repo forgeplus --sha <commit_sha>
+gitlink-cli repo +commit-diff --owner Gitlink --repo forgeplus --sha <commit_sha>
+
+# 查看仓库标签
+gitlink-cli repo +tags --owner Gitlink --repo forgeplus --name v1 --only-name true
+gitlink-cli repo +tag --owner Gitlink --repo forgeplus --name v1.0.0
+gitlink-cli repo +delete-tag --owner Gitlink --repo forgeplus --name v1.0.0 --dry-run
+
 # 查看语言占比
 gitlink-cli repo +languages --owner Gitlink --repo forgeplus
 
@@ -260,6 +271,16 @@ gitlink-cli repo +follow --owner Gitlink --repo forgeplus
 gitlink-cli repo +unfollow --owner Gitlink --repo forgeplus --project-id 123
 gitlink-cli repo +like --owner Gitlink --repo forgeplus
 gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
+
+# 预览并执行多文件提交
+gitlink-cli repo +batch-commit --owner me --repo proj \
+  --branch master --message "docs: update guide" \
+  --files 'update:README.md:# Updated;create:docs/demo.md:# Demo' \
+  --dry-run
+gitlink-cli repo +batch-commit --owner me --repo proj \
+  --branch master --message "docs: update guide" \
+  --files 'update:README.md:# Updated;delete:old.md' \
+  --yes
 
 # 创建仓库
 gitlink-cli repo +create -n my-project -d "项目描述"
@@ -429,6 +450,9 @@ gitlink-cli pr +reopen --owner Gitlink --repo forgeplus -i 42
 
 # 查看 PR 变更文件
 gitlink-cli pr +files --owner Gitlink --repo forgeplus -i 42
+
+# 查看 PR 包含的提交
+gitlink-cli pr +commits --owner Gitlink --repo forgeplus -i 42
 
 # 查看 PR patchset/version 列表
 gitlink-cli pr +versions --owner Gitlink --repo forgeplus -i 42

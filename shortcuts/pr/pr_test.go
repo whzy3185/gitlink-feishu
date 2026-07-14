@@ -488,6 +488,31 @@ func TestPRDiff(t *testing.T) {
 	}
 }
 
+// --- commits ---
+
+func TestPRCommits(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/owner/repo/pulls/42/commits.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"commits_count": float64(1),
+			"commits": []interface{}{
+				map[string]interface{}{"sha": "abc123", "message": "feat: add shortcut"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "commits", map[string]string{"id": "42"})
+	if err != nil {
+		t.Fatalf("commits failed: %v", err)
+	}
+}
+
 // --- extractIssueID ---
 
 func TestExtractIssueID(t *testing.T) {

@@ -335,6 +335,27 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
+			Name:        "commits",
+			Description: tr.T("cmd.pr.commits.short"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s/commits", ctx.RepoPath(), url.PathEscape(id)), nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
 			Name:        "versions",
 			Description: tr.T("cmd.pr.versions.short"),
 			Flags: []common.Flag{
