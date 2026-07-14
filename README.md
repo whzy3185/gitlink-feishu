@@ -104,19 +104,20 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | Category | Capabilities |
 |----------|-------------|
 | 📦 Repo | List, create, fork, delete repositories, view repo info, insights, and interactions |
-| 🐛 Issue | Create, update, close, batch close, comment on issues |
+| 🐛 Issue | Create, update, close, batch close/update/delete, comment on issues |
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
 | 👥 Member | List, add, remove repository members, change roles, create and accept invite links |
-| 🌿 Branch | List, create, delete, restore, set default, protect, unprotect branches |
+| 🌿 Branch | Create, delete, list, protect, unprotect branches |
 | 🏷️ Release | Create, edit, update, view, delete releases |
 | 🏢 Org | Manage organizations, members, teams |
 | 🔧 CI | View builds, logs, CI/CD operations |
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
+| 🔔 Notification | List messages, mark read, delete messages, send @ mentions |
+| 📖 Wiki | List, view, create, update, and delete wiki pages |
 | 🔍 Search | Search repositories, users |
 | 📊 Dataset | Query research datasets by project |
-| 📄 File | View, search, create, update, and delete repository files without cloning |
 | 👤 User | View user profiles and info |
 | 📊 Profile | User ability, role, major, activity, and contribution statistics |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
@@ -274,6 +275,52 @@ gitlink-cli webhook +test --owner Gitlink --repo forgeplus --id 68
 gitlink-cli webhook +tasks --owner Gitlink --repo forgeplus --id 68
 ```
 
+### Notification Management
+
+```bash
+# List unread notifications for the authenticated user
+gitlink-cli notification +list --status unread --limit 20
+
+# List @ mention messages for a specific user
+gitlink-cli notification +list --user zhangsan --type atme --status unread
+
+# Preview and mark selected messages as read
+gitlink-cli notification +read --ids 740214,740213 --dry-run
+gitlink-cli notification +read --ids 740214,740213 --yes
+
+# Preview and mark all unread system notifications as read
+gitlink-cli notification +read --type notification --all-unread --dry-run
+
+# Preview and delete selected messages
+gitlink-cli notification +delete --ids 740214,740213 --dry-run
+
+# Send an @ mention message for an Issue, PR, or Journal target
+gitlink-cli notification +send-atme --receivers alice,bob \
+  --atmeable-type Issue --atmeable-id 123 --dry-run
+```
+
+### Wiki Management
+
+```bash
+# List wiki pages (table of contents)
+gitlink-cli wiki +list --owner Gitlink --repo forgeplus --project-id 12345
+
+# View a wiki page by page name
+gitlink-cli wiki +view --owner Gitlink --repo forgeplus --project-id 12345 -n home
+
+# Create a wiki page
+gitlink-cli wiki +create --owner Gitlink --repo forgeplus --project-id 12345 \
+  -n getting-started -t "Getting Started" -c "# Getting Started Guide"
+
+# Update a wiki page title and/or content
+gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n home -t "New Title"
+gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n home -c "# Updated content"
+gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n home -t "New Title" -c "New content"
+
+# Delete a wiki page
+gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 12345 -n old-page
+```
+
 ### Member Management
 
 ```bash
@@ -323,12 +370,16 @@ gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 123,12
 # Batch close issues from a CSV file
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --from issues.csv
 
+# Preview batch metadata update by API issue IDs
+# Note: --ids uses API issue IDs, not web URL issue numbers.
+gitlink-cli issue +batch-update --owner Gitlink --repo forgeplus --ids 101,102 --status-id 3 --priority-id 2 --dry-run
+
+# Destructive batch delete requires both dry-run first and --yes for real execution
+gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --dry-run
+gitlink-cli issue +batch-delete --owner Gitlink --repo forgeplus --ids 101,102 --yes
+
 # Add a comment
 gitlink-cli issue +comment --owner Gitlink --repo forgeplus -i 123 -b "Fixed"
-
-# List issue journals or comment activity
-gitlink-cli issue +journals --owner Gitlink --repo forgeplus --number 123 --page 1 --limit 50
-gitlink-cli issue +activity --owner Gitlink --repo forgeplus --number 123 --category comment
 
 # List issue assigners
 gitlink-cli issue +assigners --owner Gitlink --repo forgeplus
@@ -394,14 +445,6 @@ gitlink-cli pr +reopen --owner Gitlink --repo forgeplus -i 42
 # View changed files
 gitlink-cli pr +files --owner Gitlink --repo forgeplus -i 42
 
-# List commits of a pull request
-gitlink-cli pr +commits --owner Gitlink --repo forgeplus -i 42
-
-# Pre-flight: can a merge request be created between two branches?
-gitlink-cli pr +check-merge --owner Gitlink --repo forgeplus --head develop --base master
-# Cross-fork variant
-gitlink-cli pr +check-merge --owner Gitlink --repo forgeplus --head feat/x --base master --fork-project-id 12345
-
 # List PR patchset versions
 gitlink-cli pr +versions --owner Gitlink --repo forgeplus -i 42
 
@@ -419,24 +462,14 @@ gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved 
 ### Branch Management
 
 ```bash
-# List branches, including deleted branches when needed
-gitlink-cli branch +list --owner Gitlink --repo forgeplus --keyword feature
-gitlink-cli branch +list --owner Gitlink --repo forgeplus --state deleted
+# List branches
+gitlink-cli branch +list --owner Gitlink --repo forgeplus
 
-# List all branches without pagination
-gitlink-cli branch +all --owner Gitlink --repo forgeplus
+# Create a branch
+gitlink-cli branch +create --name feature/new-feature
 
-# Create a branch, with dry-run preview
-gitlink-cli branch +create --owner Gitlink --repo forgeplus --name feature/new-feature --from master --dry-run
-
-# Delete a branch, with dry-run preview
-gitlink-cli branch +delete --owner Gitlink --repo forgeplus --name feature/old-feature --dry-run
-
-# Set default branch
-gitlink-cli branch +set-default --owner Gitlink --repo forgeplus --name develop --dry-run
-
-# Restore a deleted branch
-gitlink-cli branch +restore --owner Gitlink --repo forgeplus --branch-id 7 --name feature/old-feature --dry-run
+# Delete a branch
+gitlink-cli branch +delete --name feature/old-feature
 
 # Protect a branch
 gitlink-cli branch +protect --name main
@@ -476,30 +509,6 @@ gitlink-cli ci +log --owner Gitlink --repo forgeplus -i <build_id>
 
 # Restart a build
 gitlink-cli ci +restart --owner Gitlink --repo forgeplus -i <build_id>
-```
-
-### Gitea Actions
-
-```bash
-# List workflow files (.gitea/workflows)
-gitlink-cli action +list --owner Gitlink --repo forgeplus
-
-# List runs of a workflow
-gitlink-cli action +runs --owner Gitlink --repo forgeplus -w ci.yml
-
-# Trigger a workflow run on a branch
-gitlink-cli action +run --owner Gitlink --repo forgeplus -w ci.yml -r master
-
-# Rerun a whole run, or a single job
-gitlink-cli action +rerun --owner Gitlink --repo forgeplus -i 6
-gitlink-cli action +job-rerun --owner Gitlink --repo forgeplus -i 6 -j build
-
-# Raw logs of a workflow job
-gitlink-cli action +logs --owner Gitlink --repo forgeplus -i 6 -j 0
-
-# Enable or disable a workflow
-gitlink-cli action +disable --owner Gitlink --repo forgeplus -w ci.yml
-gitlink-cli action +enable --owner Gitlink --repo forgeplus -w ci.yml
 ```
 
 ### Pipeline Operations
@@ -565,24 +574,6 @@ gitlink-cli profile +activity
 
 # Contribution heatmap for a given year
 gitlink-cli profile +contribution --user zhangsan --year 2025
-```
-
-### User Account
-
-```bash
-# Show current authenticated user
-gitlink-cli user +me
-
-# List SSH public keys
-gitlink-cli user +keys
-
-# Add an SSH public key from inline content or a file
-gitlink-cli user +add-key --title laptop --key "ssh-ed25519 AAAA..."
-gitlink-cli user +add-key --title laptop --from ~/.ssh/id_ed25519.pub
-gitlink-cli user +add-key --from ~/.ssh/id_rsa.pub
-
-# Delete an SSH public key
-gitlink-cli user +delete-key --id 123
 ```
 
 ### Workflow Agent Commands
@@ -710,36 +701,6 @@ gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --ye
 > published OpenAPI contract but are not yet deployed on production (they return
 > 404 there); they will work once the platform enables them.
 
-### File Operations
-
-`file` reads and writes repository file contents without cloning — ideal for
-AI agents that need to read or patch a single file. For directory listings and
-README viewing, see `repo +tree` and `repo +readme`.
-
-```bash
-# View a file (--raw prints only the decoded content, for piping)
-gitlink-cli file +view --owner Gitlink --repo forgeplus --path README.md
-gitlink-cli file +view --owner Gitlink --repo forgeplus --path README.md --raw > README.md
-
-# Search files by name
-gitlink-cli file +search --owner Gitlink --repo forgeplus --keyword controller
-
-# Create / update a file (content inline or from a local file)
-gitlink-cli file +create --owner me --repo proj --path docs/note.md -c "# Note" -b master -m "add note"
-gitlink-cli file +update --owner me --repo proj --path docs/note.md --content-file note.md -b master
-
-# Commit to a new branch created from --branch
-gitlink-cli file +update --owner me --repo proj --path docs/note.md -c "..." -b master --new-branch feature/docs
-
-# Delete a file
-gitlink-cli file +delete --owner me --repo proj --path docs/note.md -b master -m "remove note"
-
-# Multiple file operations in a single commit (JSON spec)
-# spec.json: [{"action_type":"create","file_path":"a.txt","content":"A"},
-#             {"action_type":"delete","file_path":"old.txt"}]
-gitlink-cli file +batch --owner me --repo proj -s spec.json -b master -m "batch ops"
-```
-
 ### Raw API
 
 For endpoints not covered by shortcuts, use the Raw API directly:
@@ -802,7 +763,7 @@ See [skills/README.md](./skills/README.md) for details.
 |-------|-------------|
 | `gitlink-shared` | Authentication, global parameters, safety rules, API notes |
 | `gitlink-repo` | Repository operations (create, view, delete, fork, insights, etc.) |
-| `gitlink-issue` | Issue operations (create, update, close, comment, etc.) |
+| `gitlink-issue` | Issue operations (create, update, close, batch update/delete, comment, etc.) |
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
 | `gitlink-member` | Repository member and invite link management |
 | `gitlink-branch` | Branch management (create, delete, list, protect, unprotect) |
@@ -811,7 +772,7 @@ See [skills/README.md](./skills/README.md) for details.
 | `gitlink-pipeline` | Pipeline workflow operations (runs, logs, enable, disable, delete, etc.) |
 | `gitlink-search` | Search (repositories, users, etc.) |
 | `gitlink-org` | Organization management (members, teams, etc.) |
-| `gitlink-user` | User management (profile info, SSH keys, etc.) |
+| `gitlink-user` | User management (profile info, etc.) |
 | `gitlink-pm` | Project management (sprints, kanban, weekly reports, etc.) |
 | `gitlink-workflow` | AI-powered workflows (issue triage, PR review, release notes, etc.) |
 | `gitlink-health` | Project health analysis (PR/Issue metrics aggregation, health reports) |

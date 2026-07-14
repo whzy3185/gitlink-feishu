@@ -12,7 +12,7 @@ func TestRegisterAll(t *testing.T) {
 
 	expectedGroups := []string{
 		"repo", "issue", "label", "license", "pr", "profile", "release", "branch",
-		"org", "user", "search", "ci", "workflow",
+		"org", "user", "notification", "search", "ci", "workflow",
 		"compare", "member", "milestone", "pipeline", "webhook",
 		"dataset", "file", "health", "ignore", "wiki",
 	}

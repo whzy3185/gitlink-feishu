@@ -33,17 +33,9 @@ metadata:
 
 ## ⚠️ 关键注意事项
 
-### CLI 路径处理 Bug
+### CLI Shortcut 优先
 
-**`gitlink-cli api` 的路径参数不要以 `/` 开头**，否则会被错误解析为本地文件路径。
-
-```bash
-# ❌ 错误 — 路径以 / 开头会被解析为 D:/Applications/Git/...
-gitlink-cli api GET /users/me
-
-# ✅ 正确 — 去掉前导 /
-gitlink-cli api GET "users/{owner}/messages.json"
-```
+通知摘要优先使用 `notification` shortcut，不再直接拼接 Raw API 路径。只有 shortcut 未覆盖的新接口才回退到 `gitlink-cli api`。
 
 ### 术语对照
 
@@ -55,33 +47,33 @@ GitLink 平台用「**消息**」（messages）而不是「通知」（notificat
 
 ### Step 1：获取通知列表
 
-使用 Raw API 调用 `/api/users/{owner}/messages.json`：
+使用 `notification +list` 获取消息列表：
 
 ```bash
 # 获取未读通知（status=1 表示未读，2 表示已读）
-gitlink-cli api GET "users/{owner}/messages.json" --query "status=1&limit=20" --format json
+gitlink-cli notification +list --status unread --limit 20 --format json
 
 # 获取全部通知（含已读）
-gitlink-cli api GET "users/{owner}/messages.json" --query "limit=20" --format json
+gitlink-cli notification +list --limit 20 --format json
 
 # 分页获取
-gitlink-cli api GET "users/{owner}/messages.json" --query "status=1&page=2&limit=20" --format json
+gitlink-cli notification +list --status unread --page 2 --limit 20 --format json
 
 # 按类型过滤
 # type=notification  系统消息（仓库动态、PR、Issue 等）
 # type=atme          @我消息
-gitlink-cli api GET "users/{owner}/messages.json" --query "type=atme&status=1&limit=20" --format json
+gitlink-cli notification +list --type atme --status unread --limit 20 --format json
 ```
 
 **参数说明：**
 
 | 参数 | 位置 | 说明 |
 |------|------|------|
-| `{owner}` | Path | 当前用户名（从 `gitlink-cli auth status` 获取） |
-| `status` | Query | 1=未读，2=已读，不传=全部 |
-| `type` | Query | `notification`=系统消息，`atme`=@我消息，不传=全部 |
-| `page` | Query | 页码（默认 1） |
-| `limit` | Query | 每页条数（默认 20） |
+| `--user` | Flag | 目标用户登录名，不传时自动使用当前认证用户 |
+| `--status` | Flag | `unread`/`1`=未读，`read`/`2`=已读，不传=全部 |
+| `--type` | Flag | `notification`=系统消息，`atme`=@我消息，不传=全部 |
+| `--page` | Flag | 页码（默认 1） |
+| `--limit` | Flag | 每页条数（默认 20） |
 
 **响应结构：**
 
@@ -194,17 +186,18 @@ gitlink-cli api GET "users/{owner}/messages.json" --query "type=atme&status=1&li
 ### Step 4：标记已读（可选，需确认）
 
 ```bash
-# 标记单条已读
-gitlink-cli api POST "users/{owner}/messages/{id}/read" --format json
+# 预览标记指定消息为已读
+gitlink-cli notification +read --ids <id1>,<id2>,<id3> --dry-run --format json
 
-# 批量标记已读 — 逐条调用，GitLink 暂无批量已读 API
-for id in <id1> <id2> <id3>; do
-  gitlink-cli api POST "users/{owner}/messages/$id/read" --format json
-done
+# 确认执行
+gitlink-cli notification +read --ids <id1>,<id2>,<id3> --yes --format json
+
+# 预览将全部未读系统通知标记为已读
+gitlink-cli notification +read --type notification --all-unread --dry-run --format json
 ```
 
 > ⚠️ **执行前必须确认用户意图** — 标记已读为写操作。
-> ⚠️ **GitLink 没有批量已读 API**，需要逐条标记。
+> ⚠️ **必须先 dry-run，再由用户确认后加 `--yes` 执行。**
 
 ---
 
@@ -284,7 +277,7 @@ done
 - 需要回复/处理：{{need_action_count}} 条 P0/P1 通知
 
 如需标记 P3 通知为已读，我可以逐条执行：
-`gitlink-cli api POST "users/{owner}/messages/{id}/read"`
+`gitlink-cli notification +read --ids <ids> --dry-run`
 ```
 
 ---
@@ -295,9 +288,8 @@ done
 |------|----------|
 | 无未读通知 | 输出"🎉 所有通知已处理完毕" |
 | 通知数量 > 50 | 分页获取（page 1/2/3），优先分析最近 50 条 |
-| API 返回 HTML 而非 JSON | 路径可能以 `/` 开头导致解析错误，去掉前导 `/` 重试 |
-| `unread_notification` > messages 数组长度 | 存在多页数据，追加 `--query "page=2"` 获取 |
-| 用户名不确定 | 先执行 `gitlink-cli auth status` 获取当前登录用户 |
+| `unread_notification` > messages 数组长度 | 存在多页数据，追加 `--page 2` 获取 |
+| 用户名不确定 | `notification +list` 会自动读取当前认证用户；失败时先执行 `gitlink-cli auth status` |
 
 ---
 
@@ -306,7 +298,6 @@ done
 - ✅ **所有命令使用 `--format json`**，确保可解析
 - ✅ **标记已读为写操作**，执行前必须确认用户意图
 - ✅ **本 Skill 默认只读分析**，仅在用户明确要求时标记已读
-- ⚠️ **`gitlink-cli api` 路径不要以 `/` 开头**（CLI Bug）
 - ⚠️ **GitLink 用「消息（messages）」而非「通知（notifications）」**
 - ⚠️ **`source` 字段 `PullReuqestAtme` 是官方拼写错误**，实际使用注意匹配
-- ⚠️ **通知可能分页**，数量 >20 时需追加 `--query "page=2"`
+- ⚠️ **通知可能分页**，数量 >20 时需追加 `--page 2`
