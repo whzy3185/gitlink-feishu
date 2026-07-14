@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -83,41 +82,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 		{
-			Name:        "units",
-			Description: tr.T("cmd.repo.units.short"),
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("GET", repoUnitsPath(ctx), nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "set-units",
-			Description: tr.T("cmd.repo.set_units.short"),
-			Flags: []common.Flag{
-				{Name: "units", Short: "u", Usage: tr.T("flag.repo.units"), Required: true},
-			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				units, err := parseRepoUnits(ctx.Arg("units"))
-				if err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("POST", repoUnitsPath(ctx), map[string]interface{}{"unit_types": units})
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
 			Name:        "tree",
 			Description: tr.T("cmd.repo.tree.short"),
 			Flags: []common.Flag{
@@ -151,12 +115,8 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		},
 		{
 			Name:        "contributors",
-			Description: tr.T("cmd.repo.contributors.short"),
-			Flags: []common.Flag{
-				{Name: "chart", Short: "c", Usage: tr.T("flag.contributors.chart"), Default: ""},
-				{Name: "limit", Short: "l", Usage: tr.T("flag.contributors.limit"), Default: "10"},
-			},
-			Run: runContributors,
+			Description: "List repository contributors",
+			Run:         runContributors,
 		},
 		{
 			Name:        "contributor-stats",
@@ -293,6 +253,274 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		// --- Repository Settings Shortcuts ---
+		{
+			Name:        "detail",
+			Description: "Show repository full details",
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/detail", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "simple",
+			Description: "Show repository simple details",
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/simple", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "settings",
+			Description: "Show repository settings",
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/edit", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "units",
+			Description: "Show repository navigation units",
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/project_units", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "units-update",
+			Description: "Update repository navigation units",
+			Flags: []common.Flag{
+				{Name: "units", Usage: "Comma-separated list of unit types (code,issues,pulls,wiki,devops,versions,services)", Required: true},
+				{Name: "dry-run", Usage: "Preview the action without changing repository state", Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				unitsRaw, err := ctx.RequireArg("units")
+				if err != nil {
+					return err
+				}
+				unitTypes := parseCommaSeparatedList(unitsRaw)
+				if len(unitTypes) == 0 {
+					return fmt.Errorf("--units must contain at least one unit type")
+				}
+				validUnits := map[string]bool{
+					"code": true, "issues": true, "pulls": true, "wiki": true,
+					"devops": true, "versions": true, "services": true,
+				}
+				for _, u := range unitTypes {
+					if !validUnits[u] {
+						return fmt.Errorf("invalid unit type %q: must be one of code, issues, pulls, wiki, devops, versions, services", u)
+					}
+				}
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"dry_run":    true,
+						"action":     "units-update",
+						"repository": fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+						"unit_types": unitTypes,
+					})
+				}
+				body := map[string]interface{}{
+					"unit_types": unitTypes,
+				}
+				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/project_units", body)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "topics",
+			Description: "List project topics",
+			Flags: []common.Flag{
+				{Name: "keyword", Short: "k", Usage: "Filter topics by keyword"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				q := url.Values{}
+				if keyword := ctx.Arg("keyword"); keyword != "" {
+					q.Set("keyword", keyword)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", "/v1/project_topics", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "topic-add",
+			Description: "Add a topic to the repository",
+			Flags: []common.Flag{
+				{Name: "name", Short: "n", Usage: "Topic name", Required: true},
+				{Name: "dry-run", Usage: "Preview the action without changing repository state", Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				name, err := ctx.RequireArg("name")
+				if err != nil {
+					return err
+				}
+				projectID, err := resolveRepoProjectID(ctx)
+				if err != nil {
+					return err
+				}
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"dry_run":    true,
+						"action":     "topic-add",
+						"repository": fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+						"project_id": projectID,
+						"name":       name,
+					})
+				}
+				body := map[string]interface{}{
+					"name":       name,
+					"project_id": projectID,
+				}
+				env, err := ctx.CallAPI("POST", "/v1/project_topics", body)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "topic-delete",
+			Description: "Delete a topic from the repository",
+			Flags: []common.Flag{
+				{Name: "id", Usage: "Topic ID", Required: true},
+				{Name: "dry-run", Usage: "Preview the action without changing repository state", Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				topicID, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				projectID, err := resolveRepoProjectID(ctx)
+				if err != nil {
+					return err
+				}
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"dry_run":    true,
+						"action":     "topic-delete",
+						"repository": fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+						"project_id": projectID,
+						"topic_id":   topicID,
+					})
+				}
+				q := url.Values{}
+				q.Set("project_id", projectID)
+				env, err := ctx.CallAPIWithQuery("DELETE", fmt.Sprintf("/v1/project_topics/%s", topicID), q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "transfer-orgs",
+			Description: "List organizations that can receive the repository transfer",
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/applied_transfer_projects/organizations", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "transfer",
+			Description: "Transfer repository to another owner",
+			Flags: []common.Flag{
+				{Name: "owner", Short: "o", Usage: "Target owner name (user or organization)", Required: true},
+				{Name: "dry-run", Usage: "Preview the action without changing repository state", Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				ownerName, err := ctx.RequireArg("owner")
+				if err != nil {
+					return err
+				}
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"dry_run":      true,
+						"action":       "transfer",
+						"repository":   fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+						"target_owner": ownerName,
+					})
+				}
+				body := map[string]interface{}{
+					"owner_name": ownerName,
+				}
+				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/applied_transfer_projects", body)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "transfer-cancel",
+			Description: "Cancel pending repository transfer",
+			Flags: []common.Flag{
+				{Name: "dry-run", Usage: "Preview the action without changing repository state", Bool: true, Default: "false"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				if ctx.Arg("dry-run") == "true" {
+					return ctx.OutputData(map[string]interface{}{
+						"dry_run":    true,
+						"action":     "transfer-cancel",
+						"repository": fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+					})
+				}
+				env, err := ctx.CallAPI("POST", ctx.RepoPath()+"/applied_transfer_projects/cancel", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
 	}
 }
 
@@ -322,64 +550,7 @@ func runContributors(ctx *common.RuntimeContext) error {
 	if err != nil {
 		return err
 	}
-
-	// Check if chart mode is requested
-	chartType := ctx.Arg("chart")
-	if chartType == "" {
-		// Default: output as JSON/table
-		return ctx.Output(env)
-	}
-
-	// Parse the response into ContributorsResponse
-	// env.Data contains the API response
-	dataBytes, err := json.Marshal(env.Data)
-	if err != nil {
-		return fmt.Errorf("failed to marshal response data: %w", err)
-	}
-
-	var resp ContributorsResponse
-	if err := json.Unmarshal(dataBytes, &resp); err != nil {
-		return fmt.Errorf("failed to parse contributors response: %w", err)
-	}
-
-	// Parse limit
-	limit := 10
-	if l := ctx.Arg("limit"); l != "" {
-		if val, err := strconv.Atoi(l); err == nil && val > 0 {
-			limit = val
-		}
-	}
-
-	// Render chart based on type
-	config := ChartConfig{
-		Width:    80,
-		MaxItems: limit,
-	}
-
-	// Apply limit to list for pie and table charts
-	limitedList := resp.List
-	if limit > 0 && len(limitedList) > limit {
-		limitedList = limitedList[:limit]
-	}
-
-	var output string
-	switch strings.ToLower(chartType) {
-	case "bar":
-		output = RenderContributorsChart(&resp, config, ctx.Tr)
-	case "pie":
-		output = RenderPieChart(limitedList, config.Width, ctx.Tr)
-	case "table":
-		output = RenderContributorsTable(limitedList, ctx.Tr)
-	case "all":
-		output = RenderContributorsChart(&resp, config, ctx.Tr) + "\n\n" +
-			RenderPieChart(limitedList, config.Width, ctx.Tr) + "\n\n" +
-			RenderContributorsTable(limitedList, ctx.Tr)
-	default:
-		return fmt.Errorf("unsupported chart type: %s (use: bar, pie, table, or all)", chartType)
-	}
-
-	fmt.Println(output)
-	return nil
+	return ctx.Output(env)
 }
 
 func runContributorStats(ctx *common.RuntimeContext) error {
@@ -598,40 +769,14 @@ func parseRepoPositiveInt(value, name string) (int, error) {
 	return parsed, nil
 }
 
-func repoUnitsPath(ctx *common.RuntimeContext) string {
-	return ctx.RepoPath() + "/project_units"
-}
-
-func parseRepoUnits(raw string) ([]string, error) {
-	allowed := map[string]bool{
-		"code":      true,
-		"issues":    true,
-		"pulls":     true,
-		"devops":    true,
-		"versions":  true,
-		"wiki":      true,
-		"services":  true,
-		"resources": true,
-	}
-
-	seen := map[string]bool{}
-	units := []string{}
-	for _, part := range strings.Split(raw, ",") {
-		unit := strings.ToLower(strings.TrimSpace(part))
-		if unit == "" {
-			continue
+func parseCommaSeparatedList(s string) []string {
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
 		}
-		if !allowed[unit] {
-			return nil, fmt.Errorf("invalid repository unit %q; allowed values: code,issues,pulls,devops,versions,wiki,services,resources", unit)
-		}
-		if seen[unit] {
-			continue
-		}
-		seen[unit] = true
-		units = append(units, unit)
 	}
-	if len(units) == 0 {
-		return nil, fmt.Errorf("at least one repository unit is required")
-	}
-	return units, nil
+	return result
 }
