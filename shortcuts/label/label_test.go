@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
@@ -255,6 +256,179 @@ func TestLabelIDString(t *testing.T) {
 	assertEqual(t, labelIDString("9"), "9")
 	assertEqual(t, labelIDString(json.Number("11")), "11")
 	assertEqual(t, labelIDString(nil), "")
+}
+
+func TestLabelCloneSkipsExistingCreatesNew(t *testing.T) {
+	var posted []map[string]interface{}
+	patched := false
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/src-owner/src-repo/issue_tags.json":
+			writeJSON(t, w, map[string]interface{}{
+				"total_count": 2,
+				"issue_tags": []interface{}{
+					map[string]interface{}{"id": float64(1), "name": "bug", "description": "b", "color": "#FF0000"},
+					map[string]interface{}{"id": float64(2), "name": "feature", "description": "f", "color": "#00FF00"},
+				},
+			})
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issue_tags.json":
+			writeJSON(t, w, map[string]interface{}{
+				"total_count": 1,
+				"issue_tags": []interface{}{
+					map[string]interface{}{"id": float64(9), "name": "bug", "description": "existing", "color": "#123456"},
+				},
+			})
+		case r.Method == "POST" && r.URL.Path == "/v1/owner/repo/issue_tags.json":
+			posted = append(posted, decodeJSON(t, r))
+			writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+		case r.Method == "PATCH":
+			patched = true
+			t.Fatalf("unexpected PATCH without --force: %s", r.URL.Path)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	if err := runLabelShortcut(t, server, "clone", map[string]string{"source": "src-owner/src-repo"}); err != nil {
+		t.Fatalf("clone shortcut failed: %v", err)
+	}
+	if patched {
+		t.Fatal("expected no PATCH without --force")
+	}
+	if len(posted) != 1 {
+		t.Fatalf("expected 1 created label, got %d", len(posted))
+	}
+	// The colliding "bug" is skipped by name; only "feature" is created, with
+	// the source's own color carried over.
+	assertEqual(t, posted[0]["name"], "feature")
+	assertEqual(t, posted[0]["color"], "#00FF00")
+}
+
+func TestLabelCloneForceUpdatesExisting(t *testing.T) {
+	var patchPath string
+	var patchPayload map[string]interface{}
+	posted := false
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/src-owner/src-repo/issue_tags.json":
+			writeJSON(t, w, map[string]interface{}{
+				"total_count": 1,
+				"issue_tags": []interface{}{
+					map[string]interface{}{"id": float64(1), "name": "bug", "description": "from source", "color": "#FF0000"},
+				},
+			})
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issue_tags.json":
+			writeJSON(t, w, map[string]interface{}{
+				"total_count": 1,
+				"issue_tags": []interface{}{
+					map[string]interface{}{"id": float64(9), "name": "bug", "description": "old", "color": "#000000"},
+				},
+			})
+		case r.Method == "PATCH":
+			patchPath = r.URL.Path
+			patchPayload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+		case r.Method == "POST":
+			posted = true
+			t.Fatalf("unexpected POST for an existing label under --force")
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	if err := runLabelShortcut(t, server, "clone", map[string]string{"source": "src-owner/src-repo", "force": "true"}); err != nil {
+		t.Fatalf("clone shortcut failed: %v", err)
+	}
+	if posted {
+		t.Fatal("expected no POST for an existing label under --force")
+	}
+	// --force PATCHes the existing label id in place so issue associations
+	// survive, and overwrites its fields from the source.
+	assertEqual(t, patchPath, "/v1/owner/repo/issue_tags/9.json")
+	assertEqual(t, patchPayload["name"], "bug")
+	assertEqual(t, patchPayload["description"], "from source")
+	assertEqual(t, patchPayload["color"], "#FF0000")
+}
+
+func TestFetchLabelsForRepoPaginates(t *testing.T) {
+	pagesSeen := map[string]bool{}
+	server := newLabelTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "GET", "/v1/owner/repo/issue_tags.json")
+		page := r.URL.Query().Get("page")
+		pagesSeen[page] = true
+		if got := r.URL.Query().Get("limit"); got != strconv.Itoa(labelPageSize) {
+			t.Fatalf("got limit %q, want %d", got, labelPageSize)
+		}
+		var tags []interface{}
+		switch page {
+		case "1":
+			tags = make([]interface{}, labelPageSize)
+			for i := range tags {
+				tags[i] = map[string]interface{}{"id": float64(i + 1), "name": fmt.Sprintf("l%d", i+1)}
+			}
+		case "2":
+			tags = []interface{}{
+				map[string]interface{}{"id": float64(101), "name": "l101"},
+				map[string]interface{}{"id": float64(102), "name": "l102"},
+				map[string]interface{}{"id": float64(103), "name": "l103"},
+			}
+		default:
+			t.Fatalf("unexpected page %q", page)
+		}
+		writeJSON(t, w, map[string]interface{}{"total_count": labelPageSize + 3, "issue_tags": tags})
+	})
+	defer server.Close()
+
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+		Owner:  "owner",
+		Repo:   "repo",
+		Format: "json",
+		Args:   map[string]string{},
+	}
+	labels, err := fetchLabelsForRepo(ctx, "owner", "repo")
+	if err != nil {
+		t.Fatalf("fetchLabelsForRepo error: %v", err)
+	}
+	if len(labels) != labelPageSize+3 {
+		t.Fatalf("got %d labels, want %d", len(labels), labelPageSize+3)
+	}
+	if !pagesSeen["1"] || !pagesSeen["2"] {
+		t.Fatalf("expected pages 1 and 2 to be walked, saw %v", pagesSeen)
+	}
+}
+
+func TestSplitOwnerRepo(t *testing.T) {
+	cases := []struct {
+		in        string
+		wantOwner string
+		wantRepo  string
+		wantErr   bool
+	}{
+		{"owner/repo", "owner", "repo", false},
+		{"/owner/repo/", "owner", "repo", false},
+		{" owner/repo ", "owner", "repo", false},
+		{"owner/repo/sub", "owner", "repo", false},
+		{"owner", "", "", true},
+		{"", "", "", true},
+		{"/", "", "", true},
+	}
+	for _, tc := range cases {
+		owner, repo, err := splitOwnerRepo(tc.in)
+		if tc.wantErr {
+			if err == nil {
+				t.Fatalf("splitOwnerRepo(%q) expected error", tc.in)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("splitOwnerRepo(%q) unexpected error: %v", tc.in, err)
+		}
+		assertEqual(t, owner, tc.wantOwner)
+		assertEqual(t, repo, tc.wantRepo)
+	}
 }
 
 func runLabelShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
