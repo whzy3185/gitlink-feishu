@@ -1,96 +1,128 @@
 package attachment
 
 import (
+	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func TestAttachmentUploadSendsMultipartForm(t *testing.T) {
-	tempDir := t.TempDir()
-	filePath := filepath.Join(tempDir, "sample.txt")
-	if err := os.WriteFile(filePath, []byte("hello attachment"), 0o644); err != nil {
-		t.Fatalf("write temp file: %v", err)
+func TestAttachmentUploadDryRunDoesNotCallAPI(t *testing.T) {
+	server := newAttachmentTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runAttachmentShortcut(t, server, "upload", map[string]string{
+		"file":           filepath.Join(t.TempDir(), "missing.txt"),
+		"description":    "design screenshot",
+		"container-id":   "123",
+		"container-type": "Issue",
+		"dry-run":        "true",
+	})
+	if err != nil {
+		t.Fatalf("upload dry-run failed: %v", err)
+	}
+}
+
+func TestAttachmentUploadMultipartPayload(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "note.txt")
+	if err := os.WriteFile(filePath, []byte("hello attachment"), 0600); err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
 	}
 
-	called := false
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" || r.URL.Path != "/attachments.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	server := newAttachmentTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertAttachmentRequest(t, r, "POST", "/attachments.json")
+		if got := r.Header.Get("Content-Type"); !strings.HasPrefix(got, "multipart/form-data;") {
+			t.Fatalf("got content-type %q, want multipart/form-data", got)
 		}
-		called = true
 		if err := r.ParseMultipartForm(1 << 20); err != nil {
-			t.Fatalf("parse multipart: %v", err)
+			t.Fatalf("failed to parse multipart form: %v", err)
 		}
-		if got := r.FormValue("description"); got != "release asset" {
-			t.Fatalf("description = %q, want %q", got, "release asset")
-		}
-		if got := r.FormValue("container_id"); got != "42" {
-			t.Fatalf("container_id = %q, want %q", got, "42")
-		}
-		if got := r.FormValue("container_type"); got != "VersionRelease" {
-			t.Fatalf("container_type = %q, want %q", got, "VersionRelease")
-		}
+		assertFormValue(t, r.MultipartForm, "description", "design screenshot")
+		assertFormValue(t, r.MultipartForm, "container_id", "123")
+		assertFormValue(t, r.MultipartForm, "container_type", "Issue")
 		file, header, err := r.FormFile("file")
 		if err != nil {
-			t.Fatalf("read form file: %v", err)
+			t.Fatalf("file field missing: %v", err)
 		}
 		defer file.Close()
-		if header.Filename != "sample.txt" {
-			t.Fatalf("filename = %q, want %q", header.Filename, "sample.txt")
+		if header.Filename != "note.txt" {
+			t.Fatalf("got filename %q, want note.txt", header.Filename)
 		}
-		content, err := io.ReadAll(file)
+		data, err := io.ReadAll(file)
 		if err != nil {
-			t.Fatalf("read uploaded file: %v", err)
+			t.Fatalf("failed to read uploaded file: %v", err)
 		}
-		if string(content) != "hello attachment" {
-			t.Fatalf("content = %q, want %q", string(content), "hello attachment")
+		if string(data) != "hello attachment" {
+			t.Fatalf("got file content %q", string(data))
 		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"att-1","title":"sample.txt","url":"https://example.com/a/att-1"}`))
-	}))
+		writeAttachmentJSON(t, w, map[string]interface{}{
+			"id":           "uuid-1",
+			"title":        "note.txt",
+			"filesize":     "16 Bytes",
+			"is_pdf":       false,
+			"url":          "/api/attachments/uuid-1",
+			"content_type": "text/plain",
+		})
+	})
 	defer server.Close()
 
 	err := runAttachmentShortcut(t, server, "upload", map[string]string{
 		"file":           filePath,
-		"description":    "release asset",
-		"container-id":   "42",
-		"container-type": "VersionRelease",
+		"description":    "design screenshot",
+		"container-id":   "123",
+		"container-type": "Issue",
 	})
 	if err != nil {
 		t.Fatalf("upload shortcut failed: %v", err)
 	}
-	if !called {
-		t.Fatal("upload endpoint was not called")
+}
+
+func TestAttachmentUploadMissingFile(t *testing.T) {
+	server := newAttachmentTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("missing file should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	err := runAttachmentShortcut(t, server, "upload", map[string]string{"file": filepath.Join(t.TempDir(), "missing.txt")})
+	if err == nil {
+		t.Fatal("expected missing file to return an error")
+	}
+	if !strings.Contains(err.Error(), "open attachment file") {
+		t.Fatalf("got error %q, want open attachment file", err.Error())
 	}
 }
 
-func TestAttachmentDeleteCallsAPI(t *testing.T) {
-	called := false
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" || r.URL.Path != "/attachments/att-1.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		called = true
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":0,"message":"deleted"}`))
-	}))
+func TestAttachmentDelete(t *testing.T) {
+	server := newAttachmentTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertAttachmentRequest(t, r, "DELETE", "/attachments/uuid-1.json")
+		writeAttachmentJSON(t, w, map[string]interface{}{"status": 0, "message": "删除成功"})
+	})
 	defer server.Close()
 
-	err := runAttachmentShortcut(t, server, "delete", map[string]string{
-		"id": "att-1",
-	})
-	if err != nil {
+	if err := runAttachmentShortcut(t, server, "delete", map[string]string{"uuid": "uuid-1"}); err != nil {
 		t.Fatalf("delete shortcut failed: %v", err)
 	}
-	if !called {
-		t.Fatal("delete endpoint was not called")
+}
+
+func TestAttachmentDeleteDryRunDoesNotCallAPI(t *testing.T) {
+	server := newAttachmentTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	if err := runAttachmentShortcut(t, server, "delete", map[string]string{"uuid": "uuid-1", "dry-run": "true"}); err != nil {
+		t.Fatalf("delete dry-run failed: %v", err)
 	}
 }
 
@@ -105,6 +137,9 @@ func runAttachmentShortcut(t *testing.T, server *httptest.Server, name string, a
 		Format: "json",
 		Args:   args,
 	}
+	if ctx.Args == nil {
+		ctx.Args = map[string]string{}
+	}
 	return shortcut.Run(ctx)
 }
 
@@ -117,4 +152,32 @@ func findAttachmentShortcut(t *testing.T, name string) *common.Shortcut {
 	}
 	t.Fatalf("shortcut %q not found", name)
 	return nil
+}
+
+func newAttachmentTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(handler)
+}
+
+func assertAttachmentRequest(t *testing.T, r *http.Request, method, path string) {
+	t.Helper()
+	if r.Method != method || r.URL.Path != path {
+		t.Fatalf("got request %s %s, want %s %s", r.Method, r.URL.Path, method, path)
+	}
+}
+
+func assertFormValue(t *testing.T, form *multipart.Form, key, want string) {
+	t.Helper()
+	values := form.Value[key]
+	if len(values) != 1 || values[0] != want {
+		t.Fatalf("got form field %s=%v, want %q", key, values, want)
+	}
+}
+
+func writeAttachmentJSON(t *testing.T, w http.ResponseWriter, payload interface{}) {
+	t.Helper()
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		t.Fatalf("failed to write response: %v", err)
+	}
 }
