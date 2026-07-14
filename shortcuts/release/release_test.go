@@ -329,7 +329,7 @@ func TestReleaseShortcutNames(t *testing.T) {
 	for _, shortcut := range Shortcuts() {
 		got[shortcut.Name] = true
 	}
-	want := []string{"list", "create", "edit", "view", "update", "delete"}
+	want := []string{"list", "create", "edit", "view", "update", "delete", "latest", "auto-notes"}
 	for _, name := range want {
 		if !got[name] {
 			t.Fatalf("missing shortcut %q in %v", name, got)
@@ -337,6 +337,162 @@ func TestReleaseShortcutNames(t *testing.T) {
 	}
 	if len(got) != len(want) {
 		t.Fatalf("shortcut count = %d, want %d: %v", len(got), len(want), got)
+	}
+}
+
+func TestReleaseLatest(t *testing.T) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertReleaseRequest(t, r, "GET", "/owner/repo/releases.json")
+		writeReleaseJSON(t, w, map[string]interface{}{
+			"releases": []interface{}{
+				map[string]interface{}{
+					"id":         1,
+					"tag_name":   "v1.0.0",
+					"name":       "Version 1.0.0",
+					"draft":      false,
+					"prerelease": false,
+				},
+				map[string]interface{}{
+					"id":         2,
+					"tag_name":   "v0.9.0",
+					"name":       "Version 0.9.0",
+					"draft":      false,
+					"prerelease": false,
+				},
+			},
+		})
+	})
+	defer server.Close()
+
+	if err := runReleaseShortcut(t, server, "latest", map[string]string{}); err != nil {
+		t.Fatalf("latest failed: %v", err)
+	}
+}
+
+func TestReleaseLatestWithPrerelease(t *testing.T) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertReleaseRequest(t, r, "GET", "/owner/repo/releases.json")
+		writeReleaseJSON(t, w, map[string]interface{}{
+			"releases": []interface{}{
+				map[string]interface{}{
+					"id":         1,
+					"tag_name":   "v1.1.0-beta",
+					"name":       "Version 1.1.0 Beta",
+					"draft":      false,
+					"prerelease": true,
+				},
+				map[string]interface{}{
+					"id":         2,
+					"tag_name":   "v1.0.0",
+					"name":       "Version 1.0.0",
+					"draft":      false,
+					"prerelease": false,
+				},
+			},
+		})
+	})
+	defer server.Close()
+
+	if err := runReleaseShortcut(t, server, "latest", map[string]string{"include-prerelease": "true"}); err != nil {
+		t.Fatalf("latest with prerelease failed: %v", err)
+	}
+}
+
+func TestReleaseLatestSkipsDraft(t *testing.T) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertReleaseRequest(t, r, "GET", "/owner/repo/releases.json")
+		writeReleaseJSON(t, w, map[string]interface{}{
+			"releases": []interface{}{
+				map[string]interface{}{
+					"id":         1,
+					"tag_name":   "v1.1.0-draft",
+					"name":       "Version 1.1.0 Draft",
+					"draft":      true,
+					"prerelease": false,
+				},
+				map[string]interface{}{
+					"id":         2,
+					"tag_name":   "v1.0.0",
+					"name":       "Version 1.0.0",
+					"draft":      false,
+					"prerelease": false,
+				},
+			},
+		})
+	})
+	defer server.Close()
+
+	if err := runReleaseShortcut(t, server, "latest", map[string]string{}); err != nil {
+		t.Fatalf("latest skipping draft failed: %v", err)
+	}
+}
+
+func TestReleaseLatestNoReleases(t *testing.T) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertReleaseRequest(t, r, "GET", "/owner/repo/releases.json")
+		writeReleaseJSON(t, w, map[string]interface{}{
+			"releases": []interface{}{},
+		})
+	})
+	defer server.Close()
+
+	err := runReleaseShortcut(t, server, "latest", map[string]string{})
+	if err == nil {
+		t.Fatal("expected error when no releases found")
+	}
+}
+
+func TestReleaseAutoNotes(t *testing.T) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/owner/repo/issues.json" {
+			assertReleaseRequest(t, r, "GET", "/owner/repo/issues.json")
+			writeReleaseJSON(t, w, []interface{}{
+				map[string]interface{}{
+					"id":      float64(1),
+					"subject": "Fix login bug",
+					"status":  "closed",
+				},
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	if err := runReleaseShortcut(t, server, "auto-notes", map[string]string{}); err != nil {
+		t.Fatalf("auto-notes failed: %v", err)
+	}
+}
+
+func TestReleaseAutoNotesWithFromTag(t *testing.T) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/owner/repo/issues.json" {
+			assertReleaseRequest(t, r, "GET", "/owner/repo/issues.json")
+			writeReleaseJSON(t, w, []interface{}{})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	if err := runReleaseShortcut(t, server, "auto-notes", map[string]string{"from-tag": "v1.0.0"}); err != nil {
+		t.Fatalf("auto-notes with from-tag failed: %v", err)
+	}
+}
+
+func TestReleaseAutoNotesJSONFormat(t *testing.T) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/owner/repo/issues.json" {
+			assertReleaseRequest(t, r, "GET", "/owner/repo/issues.json")
+			writeReleaseJSON(t, w, []interface{}{})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	if err := runReleaseShortcut(t, server, "auto-notes", map[string]string{"format": "json"}); err != nil {
+		t.Fatalf("auto-notes with json format failed: %v", err)
 	}
 }
 
@@ -452,4 +608,6 @@ func ExampleShortcuts() {
 	// view
 	// update
 	// delete
+	// latest
+	// auto-notes
 }

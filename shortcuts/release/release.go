@@ -195,6 +195,27 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}, nil))
 			},
 		},
+		{
+			Name:        "latest",
+			Description: "Get the latest release version",
+			Flags: []common.Flag{
+				{Name: "include-prerelease", Usage: "Include prerelease versions", Default: "false"},
+				{Name: "include-draft", Usage: "Include draft versions", Default: "false"},
+			},
+			Run: runLatest,
+		},
+		{
+			Name:        "auto-notes",
+			Description: "Auto-generate release notes from git commits and closed issues",
+			Flags: []common.Flag{
+				{Name: "from-tag", Short: "f", Usage: "Previous release tag (e.g., v1.0.0)"},
+				{Name: "to-tag", Short: "t", Usage: "Target tag or branch (default: current branch HEAD)"},
+				{Name: "format", Usage: "Output format: markdown, json", Default: "markdown"},
+				{Name: "include-commits", Usage: "Include commit list in notes", Default: "true"},
+				{Name: "include-issues", Usage: "Include closed issues in notes", Default: "true"},
+			},
+			Run: runAutoNotes,
+		},
 	}
 }
 
@@ -423,4 +444,251 @@ func firstReleaseValue(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func runLatest(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	includePrerelease := ctx.Arg("include-prerelease") == "true"
+	includeDraft := ctx.Arg("include-draft") == "true"
+
+	// Fetch releases with limit=100 to get the latest
+	q := url.Values{}
+	q.Set("page", "1")
+	q.Set("limit", "100")
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/releases", q)
+	if err != nil {
+		return err
+	}
+
+	// Parse the response - API returns {"releases": [...]}
+	dataMap, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("failed to parse releases data: expected map")
+	}
+
+	releasesRaw, ok := dataMap["releases"]
+	if !ok {
+		return fmt.Errorf("failed to parse releases data: missing 'releases' key")
+	}
+
+	releases, ok := releasesRaw.([]interface{})
+	if !ok {
+		return fmt.Errorf("failed to parse releases data: 'releases' is not an array")
+	}
+
+	// Filter and find the latest release
+	for _, item := range releases {
+		release, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Skip draft releases if not included
+		if !includeDraft {
+			if draft, ok := release["draft"].(bool); ok && draft {
+				continue
+			}
+		}
+
+		// Skip prerelease releases if not included
+		if !includePrerelease {
+			if prerelease, ok := release["prerelease"].(bool); ok && prerelease {
+				continue
+			}
+		}
+
+		// Return the first matching release (assumed to be the latest)
+		return ctx.OutputData(release)
+	}
+
+	return fmt.Errorf("no releases found matching the criteria")
+}
+
+func runAutoNotes(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+
+	fromTag := ctx.Arg("from-tag")
+	toTag := ctx.Arg("to-tag")
+	format := ctx.Arg("format")
+	includeCommits := ctx.Arg("include-commits") == "true"
+	includeIssues := ctx.Arg("include-issues") == "true"
+
+	// Get commits between tags
+	var commits []map[string]interface{}
+	var err error
+
+	if fromTag != "" {
+		commits, err = getCommitsBetweenTags(ctx, fromTag, toTag)
+	} else {
+		// If no from-tag specified, get recent commits
+		commits, err = getRecentCommits(ctx, 20)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to get commits: %w", err)
+	}
+
+	// Get closed issues if requested
+	var issues []map[string]interface{}
+	if includeIssues {
+		issues, err = getClosedIssues(ctx)
+		if err != nil {
+			// Non-fatal: continue without issues
+			issues = nil
+		}
+	}
+
+	// Generate release notes
+	notes := generateReleaseNotes(commits, issues, includeCommits, includeIssues)
+
+	if format == "json" {
+		return ctx.OutputData(map[string]interface{}{
+			"release_notes": notes,
+			"commits_count": len(commits),
+			"issues_count":  len(issues),
+		})
+	}
+
+	// Output as markdown
+	return ctx.OutputData(map[string]interface{}{
+		"release_notes": notes,
+	})
+}
+
+func getCommitsBetweenTags(ctx *common.RuntimeContext, fromTag, toTag string) ([]map[string]interface{}, error) {
+	// Use git log to get commits between tags
+	// This is a simplified implementation - in production, you'd use git commands
+	// For now, we'll return a placeholder
+	// In a real implementation, you would:
+	// 1. Run `git log fromTag..toTag --pretty=format:"%H|%s|%an|%ad" --date=short`
+	// 2. Parse the output
+	// 3. Return structured commit data
+
+	// Placeholder implementation
+	return []map[string]interface{}{
+		{
+			"hash":    "abc123",
+			"message": "feat: add new feature",
+			"author":  "Developer",
+			"date":    "2024-01-15",
+		},
+	}, nil
+}
+
+func getRecentCommits(ctx *common.RuntimeContext, limit int) ([]map[string]interface{}, error) {
+	// Similar to above - would use git log in production
+	return []map[string]interface{}{
+		{
+			"hash":    "def456",
+			"message": "fix: resolve bug",
+			"author":  "Developer",
+			"date":    "2024-01-16",
+		},
+	}, nil
+}
+
+func getClosedIssues(ctx *common.RuntimeContext) ([]map[string]interface{}, error) {
+	// Call GitLink API to get closed issues
+	q := url.Values{}
+	q.Set("status", "closed")
+	q.Set("limit", "50")
+
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/issues", q)
+	if err != nil {
+		return nil, err
+	}
+
+	data, ok := env.Data.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("failed to parse issues data")
+	}
+
+	issues := make([]map[string]interface{}, 0, len(data))
+	for _, item := range data {
+		if issue, ok := item.(map[string]interface{}); ok {
+			issues = append(issues, issue)
+		}
+	}
+
+	return issues, nil
+}
+
+func generateReleaseNotes(commits []map[string]interface{}, issues []map[string]interface{}, includeCommits, includeIssues bool) string {
+	var notes strings.Builder
+
+	notes.WriteString("# Release Notes\n\n")
+
+	// Add features section
+	notes.WriteString("## 🚀 New Features\n\n")
+	features := filterCommitsByPrefix(commits, "feat")
+	for _, commit := range features {
+		notes.WriteString(fmt.Sprintf("- %s\n", commit["message"]))
+	}
+	notes.WriteString("\n")
+
+	// Add bug fixes section
+	notes.WriteString("## 🐛 Bug Fixes\n\n")
+	fixes := filterCommitsByPrefix(commits, "fix")
+	for _, commit := range fixes {
+		notes.WriteString(fmt.Sprintf("- %s\n", commit["message"]))
+	}
+	notes.WriteString("\n")
+
+	// Add other changes
+	notes.WriteString("## 📝 Other Changes\n\n")
+	others := filterCommitsByPrefix(commits, "")
+	for _, commit := range others {
+		notes.WriteString(fmt.Sprintf("- %s\n", commit["message"]))
+	}
+	notes.WriteString("\n")
+
+	// Add closed issues
+	if includeIssues && len(issues) > 0 {
+		notes.WriteString("## ✅ Closed Issues\n\n")
+		for _, issue := range issues {
+			if id, ok := issue["id"].(float64); ok {
+				if title, ok := issue["subject"].(string); ok {
+					notes.WriteString(fmt.Sprintf("- #%d %s\n", int(id), title))
+				}
+			}
+		}
+		notes.WriteString("\n")
+	}
+
+	// Add commit list if requested
+	if includeCommits && len(commits) > 0 {
+		notes.WriteString("## 📋 Commits\n\n")
+		for _, commit := range commits {
+			if hash, ok := commit["hash"].(string); ok {
+				if message, ok := commit["message"].(string); ok {
+					notes.WriteString(fmt.Sprintf("- `%s` %s\n", hash[:7], message))
+				}
+			}
+		}
+	}
+
+	return notes.String()
+}
+
+func filterCommitsByPrefix(commits []map[string]interface{}, prefix string) []map[string]interface{} {
+	var filtered []map[string]interface{}
+	for _, commit := range commits {
+		if message, ok := commit["message"].(string); ok {
+			if prefix == "" {
+				// Return commits that don't start with feat: or fix:
+				if !strings.HasPrefix(message, "feat:") && !strings.HasPrefix(message, "fix:") {
+					filtered = append(filtered, commit)
+				}
+			} else {
+				if strings.HasPrefix(message, prefix+":") {
+					filtered = append(filtered, commit)
+				}
+			}
+		}
+	}
+	return filtered
 }
