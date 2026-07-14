@@ -5,7 +5,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue.svg)](https://golang.org)
 [![npm version](https://img.shields.io/npm/v/@gitlink-ai/cli.svg)](https://www.npmjs.com/package/@gitlink-ai/cli)
 
-The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans and AI Agents. Supports **macOS, Linux, and Windows**. Covers repository management, issue tracking, pull requests, webhooks, member collaboration, CI/CD, and AI-powered workflows, with 40+ commands and AI Agent [Skills](./skills/).
+The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans and AI Agents. Supports **macOS, Linux, and Windows**. Covers repository management, issue tracking, pull requests, webhooks, member collaboration, CI/CD, and AI-powered workflows, with 40+ commands and AI Agent [Skills](./skills/README.md).
 
 **[中文文档](./README.zh-CN.md)**
 
@@ -78,11 +78,19 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
   <a href="https://www.gitlink.org.cn/jiangtx" title="jiangtx"><img src="https://www.gitlink.org.cn/system/lets/letter_avatars/2/J/67_157_94/120.png" width="40" height="40" alt="jiangtx" style="border-radius: 50%;"></a>
   <br><sub><a href="https://www.gitlink.org.cn/jiangtx">jiangtx</a></sub>
 </div>
+<div align="center">
+  <a href="https://www.gitlink.org.cn/luwanzhou" title="luwanzhou"><img src="https://www.gitlink.org.cn/system/lets/letter_avatars/2/L/165_135_246/120.png" width="40" height="40" alt="luwanzhou" style="border-radius: 50%;"></a>
+  <br><sub><a href="https://www.gitlink.org.cn/luwanzhou">luwanzhou</a></sub>
+</div>
+<div align="center">
+  <a href="https://www.gitlink.org.cn/whale_hihihi" title="whale_hihihi"><img src="https://www.gitlink.org.cn/images/avatars/User/137722?t=1778575729" width="40" height="40" alt="whale_hihihi" style="border-radius: 50%;"></a>
+  <br><sub><a href="https://www.gitlink.org.cn/whale_hihihi">whale_hihihi</a></sub>
+</div>
 </div>
 
 ## Why gitlink-cli?
 
-- **Agent-Native Design** — Structured [Skills](./skills/) out of the box, compatible with Claude Code, OpenClaw, and other AI platforms — Agents can operate GitLink with zero extra setup
+- **Agent-Native Design** — Structured [Skills](./skills/README.md) out of the box, compatible with Claude Code, OpenClaw, and other AI platforms — Agents can operate GitLink with zero extra setup
 - **Wide Coverage** — Repository, Issue, PR, Webhook, Member, Branch, Release, CI, Pipeline, Org, Search, and User workflows are covered by high-level commands
 - **AI-Friendly & Optimized** — Every command is tested with real Agents, featuring concise parameters, smart defaults, and structured output
 - **Cross-Platform** — Runs on macOS, Linux, and Windows (x64/arm64), install via `npm install -g @gitlink-ai/cli` in one command, binary auto-downloaded
@@ -100,18 +108,18 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 | 🔖 Label | Create, list, update, delete issue labels |
 | 🔀 PR | Create, merge, review pull requests, view changed files |
 | 👥 Member | List, add, remove repository members, change roles, create and accept invite links |
-| 🌿 Branch | Create, delete, list, protect, unprotect branches |
-| 🏷️ Release | Create, edit, update, view, delete releases, and manage release assets |
+| 🌿 Branch | List, create, delete, restore, set default, protect, unprotect branches |
+| 🏷️ Release | Create, edit, update, view, delete releases |
 | 🏢 Org | Manage organizations, members, teams |
 | 🔧 CI | View builds, logs, CI/CD operations |
 | ⚙️ Pipeline | Run, inspect, enable, disable, delete pipeline workflows and logs |
 | 🔔 Webhook | Manage repo webhooks and test deliveries |
 | 🔍 Search | Search repositories, users |
+| 📊 Dataset | Query research datasets by project |
 | 👤 User | View user profiles and info |
+| 📊 Profile | User ability, role, major, activity, and contribution statistics |
 | 📋 PM | Sprint management, kanban boards, weekly reports |
 | 🤖 Workflow | AI-powered issue triage, PR review, release notes |
-
-The `message` shortcut group adds inbox automation for listing messages, checking unread counters, marking messages as read, and deleting older notifications.
 
 ## Installation & Quick Start
 
@@ -287,22 +295,6 @@ gitlink-cli member +role --owner Gitlink --repo forgeplus --user-id 101 --role D
 gitlink-cli member +invite-link --owner Gitlink --repo forgeplus --role developer --apply true
 ```
 
-### Message Center Management
-
-```bash
-# List the latest notifications with unread filtering
-gitlink-cli message +list --login Mengz --type notification --status unread --limit 10
-
-# Show unread counters for notifications and @mentions
-gitlink-cli message +stats --login Mengz
-
-# Preview marking all notifications as read
-gitlink-cli message +read --login Mengz --type notification --all --dry-run
-
-# Delete selected @mention messages
-gitlink-cli message +delete --login Mengz --type atme --ids 101,102
-```
-
 ### Issue Management
 
 ```bash
@@ -414,14 +406,24 @@ gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved 
 ### Branch Management
 
 ```bash
-# List branches
-gitlink-cli branch +list --owner Gitlink --repo forgeplus
+# List branches, including deleted branches when needed
+gitlink-cli branch +list --owner Gitlink --repo forgeplus --keyword feature
+gitlink-cli branch +list --owner Gitlink --repo forgeplus --state deleted
 
-# Create a branch
-gitlink-cli branch +create --name feature/new-feature
+# List all branches without pagination
+gitlink-cli branch +all --owner Gitlink --repo forgeplus
 
-# Delete a branch
-gitlink-cli branch +delete --name feature/old-feature
+# Create a branch, with dry-run preview
+gitlink-cli branch +create --owner Gitlink --repo forgeplus --name feature/new-feature --from master --dry-run
+
+# Delete a branch, with dry-run preview
+gitlink-cli branch +delete --owner Gitlink --repo forgeplus --name feature/old-feature --dry-run
+
+# Set default branch
+gitlink-cli branch +set-default --owner Gitlink --repo forgeplus --name develop --dry-run
+
+# Restore a deleted branch
+gitlink-cli branch +restore --owner Gitlink --repo forgeplus --branch-id 7 --name feature/old-feature --dry-run
 
 # Protect a branch
 gitlink-cli branch +protect --name main
@@ -441,16 +443,6 @@ gitlink-cli release +create --owner Gitlink --repo forgeplus -t v1.0.0 -n "v1.0.
 
 # View a release
 gitlink-cli release +view --owner Gitlink --repo forgeplus -i <version_id>
-
-# List assets attached to a release
-gitlink-cli release +assets --owner Gitlink --repo forgeplus -i <version_id>
-
-# Attach or detach existing asset IDs while preserving release metadata
-gitlink-cli release +attach --owner Gitlink --repo forgeplus -i <version_id> --attachment-ids 12,34 --dry-run
-gitlink-cli release +detach --owner Gitlink --repo forgeplus -i <version_id> --attachment-ids 34 --dry-run
-
-# Upload a local file and attach it to the release in one step
-gitlink-cli release +upload --owner Gitlink --repo forgeplus -i <version_id> --file dist/gitlink-cli_linux_amd64.tar.gz --asset-name gitlink-cli-linux-amd64.tar.gz --description "Linux binary" --dry-run
 
 # Get edit data and update while preserving unspecified fields
 gitlink-cli release +edit --owner Gitlink --repo forgeplus -i <version_id>
@@ -495,6 +487,16 @@ gitlink-cli pipeline +disable --owner Gitlink --repo forgeplus --id 7 --workflow
 gitlink-cli pipeline +delete --owner Gitlink --repo forgeplus --id 7 --dry-run
 ```
 
+### Ignore File Templates
+
+```bash
+# List all available .gitignore templates
+gitlink-cli ignore +list
+
+# Filter templates by name
+gitlink-cli ignore +list --name Go
+```
+
 ### Search
 
 ```bash
@@ -505,17 +507,27 @@ gitlink-cli search +repos -k "machine learning"
 gitlink-cli search +users -k "zhangsan"
 ```
 
-### Feedback
+### User Profile
+
+`profile` surfaces GitLink's native user statistics (ability, role, major, activity,
+contribution). When `--user` is omitted it defaults to the authenticated user.
 
 ```bash
-# Preview a feedback submission without calling the API
-gitlink-cli feedback +create --content "The CLI install guide needs a Windows note." --category docs --dry-run
+# Development ability scores + language breakdown
+gitlink-cli profile +ability --user zhangsan
 
-# Submit longer feedback from a file and attach contact/repository context
-gitlink-cli feedback +create --from feedback.md --category cli --contact mengz@example.com --repo-ref Gitlink/gitlink-cli
+# Role positioning / major (discipline) categories
+gitlink-cli profile +role --user zhangsan
+gitlink-cli profile +major --user zhangsan
 
-# Pipe feedback from another command
-Get-Content feedback.md | gitlink-cli feedback +create --stdin --category feature
+# Ability within a time window (Unix timestamps)
+gitlink-cli profile +ability --user zhangsan --start-time 1704067200 --end-time 1735689600
+
+# Recent activity (issues / PRs / commits per day) for the current user
+gitlink-cli profile +activity
+
+# Contribution heatmap for a given year
+gitlink-cli profile +contribution --user zhangsan --year 2025
 ```
 
 ### Workflow Agent Commands
@@ -617,6 +629,32 @@ Safety:
 - `workflow +pr-summary` does not comment, approve, reject, or merge pull requests.
 - `workflow +repo-report` aggregates health, issue triage, and PR review summary signals without remote writes.
 
+### Dataset
+
+`dataset` manages and queries GitLink research datasets (title, description,
+paper content, license, owning project).
+
+```bash
+# List datasets for one or more projects (by numeric project ID)
+gitlink-cli dataset +list --ids 5988
+
+# View a repository's dataset and attachments
+gitlink-cli dataset +view --owner Gitlink --repo forgeplus
+
+# Create / update a repository's dataset (preview first with --dry-run)
+gitlink-cli dataset +create --owner me --repo proj -t "My dataset" -d "..." --license-id 359 --dry-run
+gitlink-cli dataset +update --owner me --repo proj -t "My dataset" -d "updated"
+
+# Delete a dataset attachment (destructive: preview, then confirm with --yes)
+gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --dry-run
+gitlink-cli dataset +delete-attachment --owner me --repo proj --uuid <uuid> --yes
+```
+
+> Note: `dataset +list` (platform dataset query) is verified on production
+> gitlink.org.cn. The per-repo `+view`/`+create`/`+update` routes follow the
+> published OpenAPI contract but are not yet deployed on production (they return
+> 404 there); they will work once the platform enables them.
+
 ### Raw API
 
 For endpoints not covered by shortcuts, use the Raw API directly:
@@ -673,7 +711,7 @@ git push gitlink
 
 The `skills/` directory contains Agent Skill files for AI-automated GitLink operations.
 
-See [skills/README.md](skills/README.md) for details.
+See [skills/README.md](./skills/README.md) for details.
 
 | Skill | Description |
 |-------|-------------|
@@ -743,7 +781,7 @@ gitlink-cli/
 
 ## Documentation
 
-- [Skills Guide](skills/README.md) — AI Agent Skills detailed documentation
+- [Skills Guide](./skills/README.md) — AI Agent Skills detailed documentation
 - [Design Document](doc/design.md) — Architecture design and development plan
 
 ## FAQ
@@ -808,7 +846,7 @@ gitlink-cli uses Windows Credential Manager for secure token storage. If Credent
 
 ### Q: Where can I find the full API reference?
 
-See [skills/gitlink-shared/REFERENCE.md](skills/gitlink-shared/REFERENCE.md).
+See [skills/gitlink-shared/references/api-reference.md](./skills/gitlink-shared/references/api-reference.md).
 
 ## License
 

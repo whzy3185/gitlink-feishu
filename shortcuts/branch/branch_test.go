@@ -20,13 +20,15 @@ func runShortcut(t *testing.T, server *httptest.Server, name string, args map[st
 		Format: "json",
 		Args:   args,
 	}
+	if ctx.Args == nil {
+		ctx.Args = map[string]string{}
+	}
 	return shortcut.Run(ctx)
 }
 
 func findShortcut(t *testing.T, name string) *common.Shortcut {
 	t.Helper()
-	shortcuts := Shortcuts()
-	for _, s := range shortcuts {
+	for _, s := range Shortcuts() {
 		if s.Name == name {
 			return s
 		}
@@ -35,154 +37,205 @@ func findShortcut(t *testing.T, name string) *common.Shortcut {
 	return nil
 }
 
-func writeJSON(w http.ResponseWriter, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+func newBranchTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(handler)
 }
 
-// --- list ---
-
-func TestBranchList(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/owner/repo/branches.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(w, []interface{}{
-			map[string]interface{}{"name": "master"},
-			map[string]interface{}{"name": "develop"},
-		})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "list", map[string]string{"page": "1", "limit": "20"})
-	if err != nil {
-		t.Fatalf("list failed: %v", err)
+func assertBranchRequest(t *testing.T, r *http.Request, method, path string) {
+	t.Helper()
+	if r.Method != method || r.URL.Path != path {
+		t.Fatalf("got request %s %s, want %s %s", r.Method, r.URL.Path, method, path)
 	}
 }
 
-func TestBranchListFilters(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/owner/repo/branches.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		if got := r.URL.Query().Get("keyword"); got != "feature" {
-			t.Fatalf("keyword = %q, want feature", got)
-		}
-		if got := r.URL.Query().Get("state"); got != "deleted" {
-			t.Fatalf("state = %q, want deleted", got)
-		}
-		writeJSON(w, map[string]interface{}{"total_count": 0, "branches": []interface{}{}})
-	}))
+func decodeBranchJSON(t *testing.T, r *http.Request) map[string]interface{} {
+	t.Helper()
+	var payload map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode request body: %v", err)
+	}
+	return payload
+}
+
+func writeBranchJSON(t *testing.T, w http.ResponseWriter, payload interface{}) {
+	t.Helper()
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		t.Fatalf("failed to write response: %v", err)
+	}
+}
+
+func writeBranchText(t *testing.T, w http.ResponseWriter, code int, text string) {
+	t.Helper()
+	w.WriteHeader(code)
+	if _, err := w.Write([]byte(text)); err != nil {
+		t.Fatalf("failed to write response: %v", err)
+	}
+}
+
+func assertBranchEqual(t *testing.T, got interface{}, want interface{}) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
+	}
+}
+
+func TestBranchListBuildsQuery(t *testing.T) {
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertBranchRequest(t, r, "GET", "/v1/owner/repo/branches.json")
+		query := r.URL.Query()
+		assertBranchEqual(t, query.Get("keyword"), "feature")
+		assertBranchEqual(t, query.Get("state"), "deleted")
+		assertBranchEqual(t, query.Get("page"), "2")
+		assertBranchEqual(t, query.Get("limit"), "5")
+		writeBranchJSON(t, w, map[string]interface{}{"total_count": 0, "branches": []interface{}{}})
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "list", map[string]string{
-		"page": "1", "limit": "20", "keyword": "feature", "state": "deleted",
+		"keyword": "feature",
+		"state":   "deleted",
+		"page":    "2",
+		"limit":   "5",
 	})
 	if err != nil {
-		t.Fatalf("list with filters failed: %v", err)
+		t.Fatalf("list shortcut failed: %v", err)
 	}
 }
 
-func TestBranchListRejectsInvalidState(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("invalid state should not call API, got %s %s", r.Method, r.URL.Path)
-	}))
+func TestBranchAllUsesAllEndpoint(t *testing.T) {
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertBranchRequest(t, r, "GET", "/v1/owner/repo/branches/all.json")
+		writeBranchJSON(t, w, []map[string]interface{}{{"name": "master"}})
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "list", map[string]string{"page": "1", "limit": "20", "state": "open"})
-	if err == nil {
-		t.Fatal("expected validation error")
+	if err := runShortcut(t, server, "all", nil); err != nil {
+		t.Fatalf("all shortcut failed: %v", err)
 	}
 }
 
-func TestBranchAll(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/branches/all.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		writeJSON(w, []interface{}{map[string]interface{}{"name": "master"}})
-	}))
+func TestBranchCreatePayload(t *testing.T) {
+	var payload map[string]interface{}
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertBranchRequest(t, r, "POST", "/v1/owner/repo/branches.json")
+		payload = decodeBranchJSON(t, r)
+		writeBranchJSON(t, w, map[string]interface{}{"name": "feature/a"})
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "all", nil)
+	err := runShortcut(t, server, "create", map[string]string{
+		"name": "feature/a",
+		"from": "master",
+	})
 	if err != nil {
-		t.Fatalf("all failed: %v", err)
+		t.Fatalf("create shortcut failed: %v", err)
 	}
-}
-
-// --- create ---
-
-func TestBranchCreate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Fatalf("expected POST, got %s", r.Method)
-		}
-		if r.URL.Path != "/v1/owner/repo/branches.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(w, map[string]interface{}{"name": "feature-x"})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "create", map[string]string{"name": "feature-x", "from": "master"})
-	if err != nil {
-		t.Fatalf("create failed: %v", err)
-	}
+	assertBranchEqual(t, payload["new_branch_name"], "feature/a")
+	assertBranchEqual(t, payload["old_branch_name"], "master")
 }
 
 func TestBranchCreateDefaultFrom(t *testing.T) {
-	// When 'from' is not set, it falls back to the repository default branch.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/owner/repo.json":
-			writeJSON(w, map[string]interface{}{"default_branch": "main"})
-		case "/v1/owner/repo/branches.json":
-			var payload map[string]interface{}
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-				t.Fatalf("decode payload: %v", err)
-			}
-			if payload["old_branch_name"] != "main" {
-				t.Fatalf("expected old_branch_name to be default branch main, got %v", payload["old_branch_name"])
-			}
-			writeJSON(w, map[string]interface{}{"name": "feature-y"})
-		default:
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-	}))
+	var payload map[string]interface{}
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertBranchRequest(t, r, "POST", "/v1/owner/repo/branches.json")
+		payload = decodeBranchJSON(t, r)
+		writeBranchJSON(t, w, map[string]interface{}{"name": "feature-y"})
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "create", map[string]string{"name": "feature-y"})
 	if err != nil {
 		t.Fatalf("create failed: %v", err)
 	}
+	assertBranchEqual(t, payload["old_branch_name"], "master")
 }
 
-// --- delete ---
-
-func TestBranchDelete(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/owner/repo/branches/delete.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(w, map[string]interface{}{"message": "deleted"})
-	}))
+func TestBranchCreateDryRunDoesNotCallAPI(t *testing.T) {
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run should not call API, got: %s %s", r.Method, r.URL.Path)
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "delete", map[string]string{"name": "old-branch"})
+	err := runShortcut(t, server, "create", map[string]string{
+		"name":    "feature/a",
+		"from":    "master",
+		"dry-run": "true",
+	})
 	if err != nil {
-		t.Fatalf("delete failed: %v", err)
+		t.Fatalf("create dry-run failed: %v", err)
 	}
 }
 
-// --- protect ---
+func TestBranchDeleteUsesV1EndpointAndEscapesName(t *testing.T) {
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "DELETE" || r.URL.EscapedPath() != "/v1/owner/repo/branches/feature%2Fold.json" {
+			t.Fatalf("got request %s %s, want DELETE /v1/owner/repo/branches/feature%%2Fold.json", r.Method, r.URL.EscapedPath())
+		}
+		writeBranchJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "delete", map[string]string{"name": "feature/old"})
+	if err != nil {
+		t.Fatalf("delete shortcut failed: %v", err)
+	}
+}
+
+func TestBranchSetDefaultUsesQueryName(t *testing.T) {
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertBranchRequest(t, r, "PATCH", "/v1/owner/repo/branches/update_default_branch.json")
+		assertBranchEqual(t, r.URL.Query().Get("name"), "develop")
+		writeBranchJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "set-default", map[string]string{"name": "develop"})
+	if err != nil {
+		t.Fatalf("set-default shortcut failed: %v", err)
+	}
+}
+
+func TestBranchRestorePayload(t *testing.T) {
+	var payload map[string]interface{}
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertBranchRequest(t, r, "POST", "/v1/owner/repo/branches/restore.json")
+		payload = decodeBranchJSON(t, r)
+		writeBranchJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "restore", map[string]string{
+		"branch-id": "7",
+		"name":      "feature/deleted",
+	})
+	if err != nil {
+		t.Fatalf("restore shortcut failed: %v", err)
+	}
+	assertBranchEqual(t, payload["branch_id"], float64(7))
+	assertBranchEqual(t, payload["branch_name"], "feature/deleted")
+}
+
+func TestBranchRejectsInvalidInputs(t *testing.T) {
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("server should not be called for invalid input: %s %s", r.Method, r.URL.Path)
+	})
+	defer server.Close()
+
+	if err := runShortcut(t, server, "list", map[string]string{"state": "open"}); err == nil {
+		t.Fatal("expected invalid state to fail")
+	}
+	if err := runShortcut(t, server, "restore", map[string]string{"branch-id": "abc", "name": "deleted"}); err == nil {
+		t.Fatal("expected invalid branch-id to fail")
+	}
+}
 
 func TestBranchProtect(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/owner/repo/protected_branches.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(w, map[string]interface{}{"message": "protected"})
-	}))
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertBranchRequest(t, r, "POST", "/owner/repo/protected_branches.json")
+		writeBranchJSON(t, w, map[string]interface{}{"message": "protected"})
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "protect", map[string]string{"name": "master"})
@@ -191,18 +244,11 @@ func TestBranchProtect(t *testing.T) {
 	}
 }
 
-// --- unprotect ---
-
 func TestBranchUnprotect(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" {
-			t.Fatalf("expected DELETE, got %s", r.Method)
-		}
-		if r.URL.Path != "/owner/repo/protected_branches/master.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(w, map[string]interface{}{"message": "unprotected"})
-	}))
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertBranchRequest(t, r, "DELETE", "/owner/repo/protected_branches/master.json")
+		writeBranchJSON(t, w, map[string]interface{}{"message": "unprotected"})
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "unprotect", map[string]string{"name": "master"})
@@ -211,76 +257,10 @@ func TestBranchUnprotect(t *testing.T) {
 	}
 }
 
-func TestBranchSetDefault(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/branches/update_default_branch.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		if got := r.URL.Query().Get("name"); got != "main" {
-			t.Fatalf("name query = %q, want main", got)
-		}
-		writeJSON(w, map[string]interface{}{"status": 0, "message": "success"})
-	}))
-	defer server.Close()
-
-	if err := runShortcut(t, server, "set-default", map[string]string{"name": "main"}); err != nil {
-		t.Fatalf("set-default failed: %v", err)
-	}
-}
-
-func TestBranchSetDefaultDryRunDoesNotCallAPI(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	if err := runShortcut(t, server, "set-default", map[string]string{"name": "main", "dry-run": "true"}); err != nil {
-		t.Fatalf("set-default dry-run failed: %v", err)
-	}
-}
-
-func TestBranchRestore(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/branches/restore.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode body: %v", err)
-		}
-		writeJSON(w, map[string]interface{}{"status": 0, "message": "success"})
-	}))
-	defer server.Close()
-
-	if err := runShortcut(t, server, "restore", map[string]string{"id": "7", "name": "feature/deleted"}); err != nil {
-		t.Fatalf("restore failed: %v", err)
-	}
-	if payload["branch_id"] != float64(7) {
-		t.Fatalf("branch_id = %v, want 7", payload["branch_id"])
-	}
-	if payload["branch_name"] != "feature/deleted" {
-		t.Fatalf("branch_name = %v, want feature/deleted", payload["branch_name"])
-	}
-}
-
-func TestBranchRestoreValidation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("invalid restore should not call API, got %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	if err := runShortcut(t, server, "restore", map[string]string{"id": "0", "name": "feature/deleted"}); err == nil {
-		t.Fatal("expected invalid id error")
-	}
-}
-
-// --- HTTP error paths ---
-
 func TestBranchListHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeBranchText(t, w, http.StatusInternalServerError, "server error")
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "list", map[string]string{"page": "1", "limit": "20"})
@@ -290,10 +270,9 @@ func TestBranchListHTTPError(t *testing.T) {
 }
 
 func TestBranchCreateHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeBranchText(t, w, http.StatusInternalServerError, "server error")
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "create", map[string]string{"name": "feature-x"})
@@ -303,10 +282,9 @@ func TestBranchCreateHTTPError(t *testing.T) {
 }
 
 func TestBranchDeleteHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeBranchText(t, w, http.StatusInternalServerError, "server error")
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "delete", map[string]string{"name": "old-branch"})
@@ -316,10 +294,9 @@ func TestBranchDeleteHTTPError(t *testing.T) {
 }
 
 func TestBranchProtectHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeBranchText(t, w, http.StatusInternalServerError, "server error")
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "protect", map[string]string{"name": "master"})
@@ -329,49 +306,13 @@ func TestBranchProtectHTTPError(t *testing.T) {
 }
 
 func TestBranchUnprotectHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
+	server := newBranchTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeBranchText(t, w, http.StatusInternalServerError, "server error")
+	})
 	defer server.Close()
 
 	err := runShortcut(t, server, "unprotect", map[string]string{"name": "master"})
 	if err == nil {
 		t.Fatal("expected error for HTTP 500")
-	}
-}
-
-func TestBranchAllUsesAllEndpoint(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/branches/all.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		writeJSON(w, []interface{}{map[string]interface{}{"name": "master"}})
-	}))
-	defer server.Close()
-
-	if err := runShortcut(t, server, "all", nil); err != nil {
-		t.Fatalf("all failed: %v", err)
-	}
-}
-
-func TestBranchSetDefaultPatchesName(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/branches/update_default_branch.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode payload: %v", err)
-		}
-		writeJSON(w, map[string]interface{}{"status": float64(0), "message": "success"})
-	}))
-	defer server.Close()
-
-	if err := runShortcut(t, server, "set-default", map[string]string{"name": "develop"}); err != nil {
-		t.Fatalf("set-default failed: %v", err)
-	}
-	if payload["name"] != "develop" {
-		t.Fatalf("expected name=develop, got %v", payload["name"])
 	}
 }

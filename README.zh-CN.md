@@ -100,7 +100,7 @@
 | 🔖 标签 | 创建、列出、更新、删除 Issue 标签 |
 | 🔀 PR | 创建、合并、Review Pull Request，查看变更文件 |
 | 👥 成员 | 列出、添加、移除仓库成员，调整角色，生成和接受邀请链接 |
-| 🌿 分支 | 创建、删除、保护分支 |
+| 🌿 分支 | 列出、创建、删除、恢复、设置默认分支、保护分支 |
 | 🏷️ 发布 | 创建、编辑、更新、查看、删除 Release |
 | 🏢 组织 | 管理组织、成员、团队 |
 | 🔧 CI | 查看构建、日志、CI/CD 操作 |
@@ -401,6 +401,34 @@ gitlink-cli pr +reviews --owner Gitlink --repo forgeplus -i 42
 # 创建 PR 审查（支持 dry-run 预览）
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM" --dry-run
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
+```
+
+
+### 分支管理
+
+```bash
+# 列出分支，支持关键字和已删除分支过滤
+gitlink-cli branch +list --owner Gitlink --repo forgeplus --keyword feature
+gitlink-cli branch +list --owner Gitlink --repo forgeplus --state deleted
+
+# 列出全部分支（无分页）
+gitlink-cli branch +all --owner Gitlink --repo forgeplus
+
+# 创建分支，先 dry-run 预览
+gitlink-cli branch +create --owner Gitlink --repo forgeplus --name feature/new-feature --from master --dry-run
+
+# 删除分支，先 dry-run 预览
+gitlink-cli branch +delete --owner Gitlink --repo forgeplus --name feature/old-feature --dry-run
+
+# 设置默认分支
+gitlink-cli branch +set-default --owner Gitlink --repo forgeplus --name develop --dry-run
+
+# 恢复已删除分支
+gitlink-cli branch +restore --owner Gitlink --repo forgeplus --branch-id 7 --name feature/old-feature --dry-run
+
+# 保护/取消保护分支
+gitlink-cli branch +protect --owner Gitlink --repo forgeplus --name main
+gitlink-cli branch +unprotect --owner Gitlink --repo forgeplus --name main
 ```
 
 ### 发布管理
