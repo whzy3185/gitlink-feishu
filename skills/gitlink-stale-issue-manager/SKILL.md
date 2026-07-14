@@ -123,22 +123,17 @@ gitlink-cli api GET /v1/:owner/:repo/issues/:number/journals?category=comment&pa
 
 ```bash
 # Step 1：获取仓库现有标签列表
-gitlink-cli api GET /v1/:owner/:repo/issue_tags --format json
+gitlink-cli label +list --owner <owner> --repo <repo> --format json
 
 # Step 2：检查目标标签是否已存在（AI 在返回结果中查找）
-# 如果目标标签不存在，则创建：
-
-# 创建"迟缓"标签（30-59天）
-gitlink-cli api POST /v1/:owner/:repo/issue_tags --body '{"name":"迟缓","description":"近期活动频率明显下降，需关注但尚未停滞","color":"#fbca04"}' --format json
-
-# 创建"不活跃"标签（60-89天）
-gitlink-cli api POST /v1/:owner/:repo/issue_tags --body '{"name":"不活跃","description":"长期无更新或互动，可能已失去推进动力","color":"#d93f0b"}' --format json
-
-# 创建"过期"标签（≥90天）
-gitlink-cli api POST /v1/:owner/:repo/issue_tags --body '{"name":"过期","description":"已超出合理响应周期，建议关闭或重新评估","color":"#b60205"}' --format json
+# 如果目标标签不存在，则批量创建。先 dry-run，再在用户确认后 --yes：
+gitlink-cli label +batch-create --owner <owner> --repo <repo> \
+  --labels '迟缓:#fbca04:近期活动频率明显下降，需关注但尚未停滞;不活跃:#d93f0b:长期无更新或互动，可能已失去推进动力;过期:#b60205:已超出合理响应周期，建议关闭或重新评估' --dry-run
+gitlink-cli label +batch-create --owner <owner> --repo <repo> \
+  --labels '迟缓:#fbca04:近期活动频率明显下降，需关注但尚未停滞;不活跃:#d93f0b:长期无更新或互动，可能已失去推进动力;过期:#b60205:已超出合理响应周期，建议关闭或重新评估' --yes
 
 # Step 3：重新获取标签列表，确认标签 ID
-gitlink-cli api GET /v1/:owner/:repo/issue_tags --format json
+gitlink-cli label +list --owner <owner> --repo <repo> --format json
 ```
 
 **标签与过期等级对应关系**：
@@ -428,11 +423,12 @@ gitlink-cli api GET /v1/:owner/:repo/issues/:number/journals --format json
 
 # Step 5（执行 — 用户确认后）：
 #   a. 预创建标签（确保标签存在）
-gitlink-cli api GET /v1/:owner/:repo/issue_tags --format json
+gitlink-cli label +list --owner <owner> --repo <repo> --format json
 # 检查迟缓/不活跃/过期标签是否存在，不存在则创建：
-gitlink-cli api POST /v1/:owner/:repo/issue_tags --body '{"name":"迟缓","description":"近期活动频率明显下降，需关注但尚未停滞","color":"#fbca04"}' --format json
-gitlink-cli api POST /v1/:owner/:repo/issue_tags --body '{"name":"不活跃","description":"长期无更新或互动，可能已失去推进动力","color":"#d93f0b"}' --format json
-gitlink-cli api POST /v1/:owner/:repo/issue_tags --body '{"name":"过期","description":"已超出合理响应周期，建议关闭或重新评估","color":"#b60205"}' --format json
+gitlink-cli label +batch-create --owner <owner> --repo <repo> \
+  --labels '迟缓:#fbca04:近期活动频率明显下降，需关注但尚未停滞;不活跃:#d93f0b:长期无更新或互动，可能已失去推进动力;过期:#b60205:已超出合理响应周期，建议关闭或重新评估' --dry-run
+gitlink-cli label +batch-create --owner <owner> --repo <repo> \
+  --labels '迟缓:#fbca04:近期活动频率明显下降，需关注但尚未停滞;不活跃:#d93f0b:长期无更新或互动，可能已失去推进动力;过期:#b60205:已超出合理响应周期，建议关闭或重新评估' --yes
 
 #   b. 对 30-59 天 Issue：打"迟缓"标签 + 发提醒评论
 gitlink-cli api PATCH /v1/:owner/:repo/issues/:id --body '{"issue_tag_ids":[<tag_id>]}' --format json
@@ -559,4 +555,4 @@ AI 应解析为：
 - ✅ **关闭操作不可逆**：虽然维护者可以重新打开，但评论通知已发出，应谨慎
 - ✅ **建议定期执行**：推荐每周执行一次，保持 Issue 列表健康
 - ⚠️ **标签操作**：打标签通过 `gitlink-cli api PATCH /v1/:owner/:repo/issues/:id --body '{"issue_tag_ids":[<tag_id>]}'` 完成，`issue_tag_ids` 为完整替换，需包含已有标签 ID
-- ⚠️ **标签预创建**：打标签前必须先查询标签列表，确认目标标签存在，不存在则先通过 `POST /v1/:owner/:repo/issue_tags` 创建
+- ⚠️ **标签预创建**：打标签前必须先用 `gitlink-cli label +list` 查询标签列表，确认目标标签存在；不存在则先用 `gitlink-cli label +batch-create --dry-run` 预览并在确认后 `--yes` 创建

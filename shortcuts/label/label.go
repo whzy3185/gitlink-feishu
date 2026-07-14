@@ -14,10 +14,6 @@ import (
 // defaultLabelColor is used when the caller does not provide a color.
 const defaultLabelColor = "#1E90FF"
 
-// labelListPageSize is the page size fetchLabel requests while paging the list
-// endpoint. A short page that returns fewer rows than this marks the last page.
-const labelListPageSize = 50
-
 // hexColorPattern matches #RGB and #RRGGBB hex color values.
 var hexColorPattern = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
 
@@ -79,105 +75,58 @@ func Shortcuts() []*common.Shortcut {
 			Description: "Delete an issue label",
 			Flags: []common.Flag{
 				{Name: "id", Short: "i", Usage: "Label ID", Required: true},
+				{Name: "dry-run", Usage: "Preview the delete request without removing the label", Bool: true, Default: "false"},
+				{Name: "yes", Usage: "Confirm label deletion", Bool: true, Default: "false"},
 			},
-			Run: func(ctx *common.RuntimeContext) error {
-				if err := ctx.ResolveOwnerRepo(); err != nil {
-					return err
-				}
-				id, err := ctx.RequireArg("id")
-				if err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("DELETE", labelItemPath(ctx, id), nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
+			Run: runDelete,
 		},
 		{
-			Name:        "clone",
-			Description: "Clone all issue labels from a source repository into the current one",
+			Name:        "batch-create",
+			Description: "Batch create issue labels from semicolon-separated specs",
 			Flags: []common.Flag{
-				{Name: "source", Short: "s", Usage: "Source repository as owner/repo", Required: true},
-				{Name: "force", Short: "f", Usage: "Overwrite labels that already exist in the target", Bool: true},
+				{Name: "labels", Usage: "Semicolon-separated label specs: name:color:description", Required: true},
+				{Name: "dry-run", Usage: "Preview labels without creating them", Bool: true, Default: "false"},
+				{Name: "yes", Usage: "Confirm real batch label creation", Bool: true, Default: "false"},
 			},
-			Run: runClone,
+			Run: runBatchCreate,
+		},
+		{
+			Name:        "batch-delete",
+			Description: "Batch delete issue labels by IDs",
+			Flags: []common.Flag{
+				{Name: "ids", Usage: "Comma-separated label IDs", Required: true},
+				{Name: "dry-run", Usage: "Preview labels without deleting them", Bool: true, Default: "false"},
+				{Name: "yes", Usage: "Confirm real batch label deletion", Bool: true, Default: "false"},
+			},
+			Run: runBatchDelete,
 		},
 	}
 }
 
-// runClone copies every label from a source repository into the current one.
-//
-// It is a pure composition of the existing list and create/update endpoints:
-// the target labels are listed first so that name collisions follow gh's
-// semantics — skipped by default, and overwritten (updated in place, which
-// preserves the label id and its issue associations) only under --force.
-func runClone(ctx *common.RuntimeContext) error {
-	if err := ctx.ResolveOwnerRepo(); err != nil {
-		return err
-	}
-	source, err := ctx.RequireArg("source")
-	if err != nil {
-		return err
-	}
-	srcOwner, srcRepo, err := splitOwnerRepo(source)
-	if err != nil {
-		return err
-	}
-	force := ctx.Arg("force") == "true"
+type labelSpec struct {
+	Name        string `json:"name" yaml:"name"`
+	Description string `json:"description" yaml:"description"`
+	Color       string `json:"color" yaml:"color"`
+}
 
-	srcLabels, err := fetchLabelsForRepo(ctx, srcOwner, srcRepo)
-	if err != nil {
-		return err
-	}
-	dstLabels, err := fetchLabelsForRepo(ctx, ctx.Owner, ctx.Repo)
-	if err != nil {
-		return err
-	}
-	existing := make(map[string]map[string]interface{}, len(dstLabels))
-	for _, tag := range dstLabels {
-		existing[stringFromMap(tag, "name")] = tag
-	}
+type labelBatchRequest struct {
+	Method string                 `json:"method" yaml:"method"`
+	Path   string                 `json:"path" yaml:"path"`
+	Body   map[string]interface{} `json:"body,omitempty" yaml:"body,omitempty"`
+}
 
-	created := []string{}
-	updated := []string{}
-	skipped := []string{}
-	for _, tag := range srcLabels {
-		name := stringFromMap(tag, "name")
-		if name == "" {
-			continue
-		}
-		payload := map[string]interface{}{
-			"name":        name,
-			"description": stringFromMap(tag, "description"),
-			"color":       firstNonEmpty(stringFromMap(tag, "color"), defaultLabelColor),
-		}
-		if dst, ok := existing[name]; ok {
-			if !force {
-				skipped = append(skipped, name)
-				continue
-			}
-			id := labelIDString(dst["id"])
-			if _, err := ctx.CallAPI("PATCH", repoLabelItemPath(ctx.Owner, ctx.Repo, id), payload); err != nil {
-				return err
-			}
-			updated = append(updated, name)
-			continue
-		}
-		if _, err := ctx.CallAPI("POST", labelPath(ctx), payload); err != nil {
-			return err
-		}
-		created = append(created, name)
-	}
+type labelBatchPreview struct {
+	Repository string              `json:"repository" yaml:"repository"`
+	DryRun     bool                `json:"dry_run" yaml:"dry_run"`
+	Action     string              `json:"action" yaml:"action"`
+	Requests   []labelBatchRequest `json:"requests" yaml:"requests"`
+}
 
-	return ctx.OutputData(map[string]interface{}{
-		"source":  fmt.Sprintf("%s/%s", srcOwner, srcRepo),
-		"target":  fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
-		"created": created,
-		"updated": updated,
-		"skipped": skipped,
-	})
+type labelBatchResult struct {
+	Request labelBatchRequest `json:"request" yaml:"request"`
+	OK      bool              `json:"ok" yaml:"ok"`
+	Data    interface{}       `json:"data,omitempty" yaml:"data,omitempty"`
+	Error   string            `json:"error,omitempty" yaml:"error,omitempty"`
 }
 
 func runCreate(ctx *common.RuntimeContext) error {
@@ -228,7 +177,7 @@ func runUpdate(ctx *common.RuntimeContext) error {
 	if name == "" {
 		return fmt.Errorf("could not resolve label name for id %s; pass --name explicitly", id)
 	}
-	color := firstNonEmpty(ctx.Arg("color"), stringFromMap(current, "color"))
+	color := firstNonEmpty(ctx.Arg("color"), stringFromMap(current, "color"), defaultLabelColor)
 	if err := validateColor(color); err != nil {
 		return err
 	}
@@ -249,123 +198,237 @@ func runUpdate(ctx *common.RuntimeContext) error {
 	return ctx.Output(env)
 }
 
-// fetchLabel looks up a single label by id from the list endpoint. GitLink does
-// not expose a single-label GET, so we page through the list and match by id. A
-// label beyond the first page must still be found, otherwise update would PATCH
-// the server's real name/description/color away with defaults, so an id that is
-// absent after the whole list is exhausted is reported as an error.
-func fetchLabel(ctx *common.RuntimeContext, id string) (map[string]interface{}, error) {
-	for page := 1; ; page++ {
-		q := url.Values{}
-		q.Set("page", strconv.Itoa(page))
-		q.Set("limit", strconv.Itoa(labelListPageSize))
-		env, err := ctx.CallAPIWithQuery("GET", labelPath(ctx), q)
-		if err != nil {
-			return nil, err
-		}
-		data, ok := env.Data.(map[string]interface{})
-		if !ok {
-			break
-		}
-		rawTags, ok := data["issue_tags"].([]interface{})
-		if !ok {
-			break
-		}
-		for _, raw := range rawTags {
-			tag, ok := raw.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			if labelIDString(tag["id"]) == id {
-				return tag, nil
-			}
-		}
-		if len(rawTags) < labelListPageSize {
-			break
-		}
+func runDelete(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
 	}
-	return nil, fmt.Errorf("label id %s not found in this repository's issue labels", id)
+	id, err := ctx.RequireArg("id")
+	if err != nil {
+		return err
+	}
+	path := labelItemPath(ctx, id)
+	if ctx.Arg("dry-run") == "true" {
+		return ctx.OutputData(labelBatchPreview{
+			Repository: repositoryName(ctx),
+			DryRun:     true,
+			Action:     "delete_label",
+			Requests: []labelBatchRequest{{
+				Method: "DELETE",
+				Path:   path,
+			}},
+		})
+	}
+	if ctx.Arg("yes") != "true" {
+		return fmt.Errorf("label delete is destructive; run with --dry-run first, then pass --yes to confirm")
+	}
+	env, err := ctx.CallAPI("DELETE", path, nil)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
 }
 
-// labelPageSize bounds each page of the issue_tags list walk. It mirrors the
-// workflow fetchers so a repo with many labels is still copied in full.
-const labelPageSize = 100
+func runBatchCreate(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	specs, err := parseLabelSpecs(ctx.Arg("labels"))
+	if err != nil {
+		return err
+	}
+	requests := make([]labelBatchRequest, 0, len(specs))
+	for _, spec := range specs {
+		requests = append(requests, labelBatchRequest{
+			Method: "POST",
+			Path:   labelPath(ctx),
+			Body: map[string]interface{}{
+				"name":        spec.Name,
+				"description": spec.Description,
+				"color":       spec.Color,
+			},
+		})
+	}
+	if ctx.Arg("dry-run") == "true" || ctx.Arg("yes") != "true" {
+		return ctx.OutputData(labelBatchPreview{
+			Repository: repositoryName(ctx),
+			DryRun:     true,
+			Action:     "batch_create_labels",
+			Requests:   requests,
+		})
+	}
+	return runLabelBatchRequests(ctx, "batch_create_labels", requests)
+}
 
-// fetchLabelsForRepo returns every label of an arbitrary owner/repo, walking the
-// paginated issue_tags list so a source or target with more than one page of
-// labels is still mirrored completely. A page without an issue_tags array ends
-// the walk rather than erroring, so an empty or unrecognized repo reads as "no
-// labels".
-func fetchLabelsForRepo(ctx *common.RuntimeContext, owner, repo string) ([]map[string]interface{}, error) {
-	path := repoLabelPath(owner, repo)
-	labels := []map[string]interface{}{}
-	// Track ids across pages so the walk terminates even if the endpoint were
-	// to ignore the page/limit params and re-serve the full list every time.
-	seen := map[string]bool{}
-	for page := 1; ; page++ {
-		q := url.Values{}
-		q.Set("page", strconv.Itoa(page))
-		q.Set("limit", strconv.Itoa(labelPageSize))
-		env, err := ctx.CallAPIWithQuery("GET", path, q)
+func runBatchDelete(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	ids, err := parseLabelIDList(ctx.Arg("ids"))
+	if err != nil {
+		return err
+	}
+	requests := make([]labelBatchRequest, 0, len(ids))
+	for _, id := range ids {
+		requests = append(requests, labelBatchRequest{
+			Method: "DELETE",
+			Path:   labelItemPath(ctx, id),
+		})
+	}
+	if ctx.Arg("dry-run") == "true" || ctx.Arg("yes") != "true" {
+		return ctx.OutputData(labelBatchPreview{
+			Repository: repositoryName(ctx),
+			DryRun:     true,
+			Action:     "batch_delete_labels",
+			Requests:   requests,
+		})
+	}
+	return runLabelBatchRequests(ctx, "batch_delete_labels", requests)
+}
+
+func runLabelBatchRequests(ctx *common.RuntimeContext, action string, requests []labelBatchRequest) error {
+	results := make([]labelBatchResult, 0, len(requests))
+	succeeded := 0
+	failed := 0
+	for _, request := range requests {
+		env, err := ctx.CallAPI(request.Method, request.Path, request.Body)
+		result := labelBatchResult{Request: request}
 		if err != nil {
-			return nil, err
+			result.OK = false
+			result.Error = err.Error()
+			failed++
+		} else {
+			result.OK = env.OK
+			result.Data = env.Data
+			if env.OK {
+				succeeded++
+			} else {
+				failed++
+			}
 		}
-		data, ok := env.Data.(map[string]interface{})
+		results = append(results, result)
+	}
+	if err := ctx.OutputData(map[string]interface{}{
+		"repository": repositoryName(ctx),
+		"action":     action,
+		"count":      len(requests),
+		"succeeded":  succeeded,
+		"failed":     failed,
+		"results":    results,
+	}); err != nil {
+		return err
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d of %d label request(s) failed", failed, len(requests))
+	}
+	return nil
+}
+
+// fetchLabel looks up a single label by id from the list endpoint. GitLink does
+// not expose a single-label GET, so we page through the list and match by id.
+// A nil result (label not found) is not an error: the caller falls back to the
+// flags it was given.
+func fetchLabel(ctx *common.RuntimeContext, id string) (map[string]interface{}, error) {
+	env, err := ctx.CallAPI("GET", labelPath(ctx), nil)
+	if err != nil {
+		return nil, err
+	}
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return nil, nil
+	}
+	rawTags, ok := data["issue_tags"].([]interface{})
+	if !ok {
+		return nil, nil
+	}
+	for _, raw := range rawTags {
+		tag, ok := raw.(map[string]interface{})
 		if !ok {
-			break
+			continue
 		}
-		rawTags, ok := data["issue_tags"].([]interface{})
-		if !ok {
-			break
-		}
-		added := 0
-		for _, raw := range rawTags {
-			tag, ok := raw.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			id := labelIDString(tag["id"])
-			if id != "" && seen[id] {
-				continue
-			}
-			if id != "" {
-				seen[id] = true
-			}
-			labels = append(labels, tag)
-			added++
-		}
-		if added < labelPageSize {
-			break
+		if labelIDString(tag["id"]) == id {
+			return tag, nil
 		}
 	}
-	return labels, nil
+	return nil, nil
 }
 
 func labelPath(ctx *common.RuntimeContext) string {
-	return repoLabelPath(ctx.Owner, ctx.Repo)
+	return fmt.Sprintf("/v1/%s/%s/issue_tags", ctx.Owner, ctx.Repo)
 }
 
 func labelItemPath(ctx *common.RuntimeContext, id string) string {
-	return repoLabelItemPath(ctx.Owner, ctx.Repo, id)
+	return fmt.Sprintf("%s/%s", labelPath(ctx), url.PathEscape(id))
 }
 
-func repoLabelPath(owner, repo string) string {
-	return fmt.Sprintf("/v1/%s/%s/issue_tags", owner, repo)
-}
-
-func repoLabelItemPath(owner, repo, id string) string {
-	return fmt.Sprintf("%s/%s", repoLabelPath(owner, repo), url.PathEscape(id))
-}
-
-// splitOwnerRepo parses an "owner/repo" reference, tolerating a leading slash
-// and an extra trailing path so that a full repo URL path still resolves.
-func splitOwnerRepo(source string) (string, string, error) {
-	trimmed := strings.Trim(strings.TrimSpace(source), "/")
-	parts := strings.SplitN(trimmed, "/", 3)
-	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("invalid --source %q: expected owner/repo", source)
+func parseLabelSpecs(raw string) ([]labelSpec, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, fmt.Errorf("--labels is required")
 	}
-	return parts[0], parts[1], nil
+	parts := strings.Split(raw, ";")
+	specs := make([]labelSpec, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		fields := strings.SplitN(part, ":", 3)
+		name := strings.TrimSpace(fields[0])
+		if name == "" {
+			return nil, fmt.Errorf("invalid label spec %q: name is required", part)
+		}
+		color := defaultLabelColor
+		if len(fields) > 1 && strings.TrimSpace(fields[1]) != "" {
+			color = strings.TrimSpace(fields[1])
+		}
+		if err := validateColor(color); err != nil {
+			return nil, err
+		}
+		description := ""
+		if len(fields) > 2 {
+			description = strings.TrimSpace(fields[2])
+		}
+		specs = append(specs, labelSpec{
+			Name:        name,
+			Description: description,
+			Color:       color,
+		})
+	}
+	if len(specs) == 0 {
+		return nil, fmt.Errorf("--labels must contain at least one label spec")
+	}
+	return specs, nil
+}
+
+func parseLabelIDList(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, fmt.Errorf("--ids is required")
+	}
+	parts := strings.Split(raw, ",")
+	ids := make([]string, 0, len(parts))
+	seen := map[string]bool{}
+	for _, part := range parts {
+		id := strings.TrimSpace(part)
+		if id == "" {
+			continue
+		}
+		n, err := strconv.Atoi(id)
+		if err != nil || n <= 0 {
+			return nil, fmt.Errorf("invalid label id %q: use positive integer IDs", id)
+		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("--ids must contain at least one label ID")
+	}
+	return ids, nil
+}
+
+func repositoryName(ctx *common.RuntimeContext) string {
+	return fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo)
 }
 
 func validateColor(color string) error {
