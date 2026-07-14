@@ -417,6 +417,117 @@ func TestIssueCloseFetchFails(t *testing.T) {
 	}
 }
 
+// --- reopen ---
+
+func TestIssueReopen(t *testing.T) {
+	var patchPayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
+				"id":          float64(42),
+				"subject":     "Existing title",
+				"description": "Existing description",
+				"status":      map[string]interface{}{"id": 5},
+			})
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			patchPayload = decodeJSON(t, r)
+			writeJSON(t, w, patchPayload)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "reopen", map[string]string{"number": "42"})
+	if err != nil {
+		t.Fatalf("reopen failed: %v", err)
+	}
+	assertEqual(t, patchPayload["subject"], "Existing title")
+	assertEqual(t, patchPayload["description"], "Existing description")
+	assertEqual(t, patchPayload["status_id"], float64(1))
+}
+
+func TestIssueReopenPreservesCurrentMetadata(t *testing.T) {
+	var patchPayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
+				"subject":  "Existing title",
+				"status":   map[string]interface{}{"id": 5},
+				"priority": map[string]interface{}{"id": 3},
+				"tags": []map[string]interface{}{
+					{"id": 4},
+				},
+				"assigners": []map[string]interface{}{
+					{"id": 7},
+				},
+				"branch_name": "feature/x",
+				"start_date":  "2026-01-01",
+				"due_date":    "2026-02-01",
+			})
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			patchPayload = decodeJSON(t, r)
+			writeJSON(t, w, patchPayload)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "reopen", map[string]string{"number": "42"})
+	if err != nil {
+		t.Fatalf("reopen shortcut failed: %v", err)
+	}
+	assertEqual(t, patchPayload["subject"], "Existing title")
+	assertEqual(t, patchPayload["status_id"], float64(1))
+	assertEqual(t, patchPayload["priority_id"], float64(3))
+	assertNumberSlice(t, patchPayload["issue_tag_ids"], []float64{4})
+	assertNumberSlice(t, patchPayload["assigner_ids"], []float64{7})
+	assertEqual(t, patchPayload["branch_name"], "feature/x")
+	assertEqual(t, patchPayload["start_date"], "2026-01-01")
+	assertEqual(t, patchPayload["due_date"], "2026-02-01")
+}
+
+func TestIssueReopenAcceptsIDAlias(t *testing.T) {
+	var patchPayload map[string]interface{}
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			writeJSON(t, w, map[string]interface{}{
+				"subject":     "Existing title",
+				"description": "Existing description",
+			})
+		case r.Method == "PATCH" && r.URL.Path == "/v1/owner/repo/issues/42.json":
+			patchPayload = decodeJSON(t, r)
+			writeJSON(t, w, patchPayload)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "reopen", map[string]string{"id": "42"})
+	if err != nil {
+		t.Fatalf("reopen shortcut failed: %v", err)
+	}
+	assertEqual(t, patchPayload["status_id"], float64(1))
+}
+
+func TestIssueReopenFetchFails(t *testing.T) {
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		writeJSON(t, w, map[string]interface{}{"error": "not found"})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "reopen", map[string]string{"number": "999"})
+	if err == nil {
+		t.Fatal("expected error when issue not found")
+	}
+}
+
 // --- update ---
 
 func TestIssueUpdateTitle(t *testing.T) {
@@ -741,6 +852,7 @@ func TestIssueNumberOrIDIsRequired(t *testing.T) {
 	}{
 		{name: "view", args: map[string]string{}},
 		{name: "close", args: map[string]string{}},
+		{name: "reopen", args: map[string]string{}},
 		{name: "update", args: map[string]string{"title": "New title"}},
 		{name: "comment", args: map[string]string{"body": "Fixed"}},
 	}

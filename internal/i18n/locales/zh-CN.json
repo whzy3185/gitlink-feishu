@@ -46,6 +46,7 @@
   "cmd.issue.comment.short": "给议题添加评论",
   "cmd.issue.create.short": "创建新议题",
   "cmd.issue.list.short": "列出议题",
+  "cmd.issue.reopen.short": "重新打开已关闭的议题",
   "cmd.issue.short": "议题操作",
   "cmd.issue.update.short": "更新议题",
   "cmd.issue.view.short": "查看议题详情",
