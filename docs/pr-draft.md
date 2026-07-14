@@ -91,7 +91,6 @@ Coverage includes:
 
 ## Known Limitations
 
-- `workflow +release-notes` is not implemented.
 - `workflow +stale` is not implemented.
 - Real GitLink API shapes may require follow-up normalization.
 
@@ -102,4 +101,5 @@ gitlink-cli workflow +triage --from shortcuts/workflow/testdata/issue_bug.json -
 gitlink-cli workflow +health --from shortcuts/workflow/testdata/health_good.json --format markdown
 gitlink-cli workflow +pr-summary --from shortcuts/workflow/testdata/pr_summary.json --format markdown
 gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format markdown
+gitlink-cli workflow +release-notes --from shortcuts/workflow/testdata/release_notes.json --format markdown
 ```

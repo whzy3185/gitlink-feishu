@@ -78,6 +78,27 @@ func RenderRepoReport(result RepoReportResult, format string, lang string) (stri
 	return buf.String(), nil
 }
 
+func RenderReleaseNotes(result ReleaseNotesResult, format string, lang string) (string, error) {
+	var buf bytes.Buffer
+	switch normalizeFormat(format) {
+	case "json":
+		if err := writeJSON(&buf, result); err != nil {
+			return "", err
+		}
+	case "markdown":
+		if err := writeReleaseNotesMarkdown(&buf, result, lang); err != nil {
+			return "", err
+		}
+	case "table":
+		if err := writeReleaseNotesTable(&buf, result, lang); err != nil {
+			return "", err
+		}
+	default:
+		return "", fmt.Errorf("unsupported workflow output format %q", format)
+	}
+	return buf.String(), nil
+}
+
 func normalizeFormat(format string) string {
 	format = strings.ToLower(strings.TrimSpace(format))
 	if format == "" {
@@ -183,6 +204,19 @@ func writeRepoReportTable(w io.Writer, result RepoReportResult, lang string) err
 	return tw.Flush()
 }
 
+func writeReleaseNotesTable(w io.Writer, result ReleaseNotesResult, lang string) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(tw, "SECTION\tCOUNT"); err != nil {
+		return err
+	}
+	for _, section := range result.Sections {
+		if _, err := fmt.Fprintf(tw, "%s\t%d\n", releaseNotesSectionTitle(lang, section.Key), len(section.Items)); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
 func writeTriageMarkdown(w io.Writer, report TriageReport) error {
 	if _, err := fmt.Fprintf(w, "# Issue Triage Report\n\nRepository: `%s`\n\n", report.Repository); err != nil {
 		return err
@@ -284,6 +318,108 @@ func writeRepoReportMarkdown(w io.Writer, result RepoReportResult, lang string) 
 		return err
 	}
 	return writeRepoReportMarkdownList(w, repoReportText(lang, "reasoning"), result.Reasoning, repoReportText(lang, "not_available"))
+}
+
+func writeReleaseNotesMarkdown(w io.Writer, result ReleaseNotesResult, lang string) error {
+	lang = normalizeLang(lang)
+	if _, err := fmt.Fprintf(w, "# %s: %s\n\n", releaseNotesRenderText(lang, "title"), result.Version); err != nil {
+		return err
+	}
+	lines := []string{
+		fmt.Sprintf("- Repository: `%s`", result.Repository),
+		fmt.Sprintf("- Range: `%s...%s`", result.FromRef, result.ToRef),
+		fmt.Sprintf("- Commits: `%d`", result.CommitsCount),
+		fmt.Sprintf("- Pull requests: `%d`", result.PullRequestsCount),
+		fmt.Sprintf("- Source: `%s`", result.Source),
+	}
+	for _, line := range lines {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintf(w, "\n## %s\n\n- %s\n", releaseNotesRenderText(lang, "highlights"), result.Summary); err != nil {
+		return err
+	}
+	for _, section := range result.Sections {
+		if len(section.Items) == 0 {
+			continue
+		}
+		if _, err := fmt.Fprintf(w, "\n## %s\n\n", releaseNotesSectionTitle(lang, section.Key)); err != nil {
+			return err
+		}
+		for _, item := range section.Items {
+			if _, err := fmt.Fprintf(w, "- %s\n", formatReleaseNotesMarkdownItem(item)); err != nil {
+				return err
+			}
+		}
+	}
+	if err := writeReleaseNotesMarkdownList(w, releaseNotesRenderText(lang, "contributors"), result.Contributors, releaseNotesRenderText(lang, "none")); err != nil {
+		return err
+	}
+	return writeReleaseNotesMarkdownList(w, releaseNotesRenderText(lang, "reasoning"), result.Reasoning, releaseNotesRenderText(lang, "none"))
+}
+
+func formatReleaseNotesMarkdownItem(item ReleaseNotesItem) string {
+	parts := []string{item.Title}
+	if item.PRNumber > 0 {
+		parts = append(parts, fmt.Sprintf("(#%d)", item.PRNumber))
+	}
+	if item.SHA != "" {
+		parts = append(parts, fmt.Sprintf("(`%s`)", item.SHA))
+	}
+	if item.Author != "" {
+		parts = append(parts, "by @"+strings.TrimPrefix(item.Author, "@"))
+	}
+	return strings.Join(parts, " ")
+}
+
+func writeReleaseNotesMarkdownList(w io.Writer, title string, values []string, fallback string) error {
+	if _, err := fmt.Fprintf(w, "\n## %s\n\n", title); err != nil {
+		return err
+	}
+	if len(values) == 0 {
+		_, err := fmt.Fprintf(w, "- %s\n", fallback)
+		return err
+	}
+	for _, value := range values {
+		if _, err := fmt.Fprintf(w, "- %s\n", value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func releaseNotesRenderText(lang, key string) string {
+	zh := normalizeLang(lang) == langZH
+	switch key {
+	case "title":
+		if zh {
+			return "版本说明"
+		}
+		return "Release Notes"
+	case "highlights":
+		if zh {
+			return "亮点"
+		}
+		return "Highlights"
+	case "contributors":
+		if zh {
+			return "贡献者"
+		}
+		return "Contributors"
+	case "reasoning":
+		if zh {
+			return "判断依据"
+		}
+		return "Reasoning"
+	case "none":
+		if zh {
+			return "无"
+		}
+		return "None"
+	default:
+		return key
+	}
 }
 
 func writeCountMapMarkdown(w io.Writer, title string, values map[string]int) error {

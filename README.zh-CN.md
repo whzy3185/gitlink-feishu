@@ -680,6 +680,49 @@ gitlink-cli profile +activity
 gitlink-cli profile +contribution --user zhangsan --year 2025
 ```
 
+### Workflow Agent 命令
+
+`workflow` 提供面向维护者和 AI Agent 的规则化仓库分析能力，目前支持：
+
+- `workflow +triage`
+- `workflow +health`
+- `workflow +pr-summary`
+- `workflow +repo-report`
+- `workflow +release-notes`
+
+`workflow +pr-summary` 在未指定 `--format` 时默认输出 `table`。
+`workflow +repo-report` 和 `workflow +release-notes` 在未指定 `--format` 时默认输出 `markdown`。
+
+示例：
+
+```bash
+# Issue 分诊
+gitlink-cli workflow +triage --title "安装失败" --body "运行 go install 时报错" --format table
+
+# 仓库健康度
+gitlink-cli workflow +health --owner Gitlink --repo gitlink-cli --stale-days 30 --format table
+
+# PR 审阅摘要
+gitlink-cli workflow +pr-summary --owner Gitlink --repo gitlink-cli --number 1 --format markdown
+
+# 仓库工作流报告
+gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
+
+# 基于只读 compare fetch 生成 Release Notes
+gitlink-cli workflow +release-notes --owner Gitlink --repo gitlink-cli --from-ref v0.1.0 --to-ref master --version v0.2.0 --format markdown
+
+# 从本地 JSON 生成 Release Notes
+gitlink-cli workflow +release-notes --from shortcuts/workflow/testdata/release_notes.json --format json
+```
+
+安全边界：
+
+- 当前 workflow 命令默认只读，可读取 GitLink 数据或本地 JSON。
+- 不依赖 LLM API。
+- `workflow +pr-summary` 不评论、不 approve/reject、不合并 PR。
+- `workflow +repo-report` 聚合健康度、Issue 分诊和 PR 摘要信号，不写远端。
+- `workflow +release-notes` 只读取 compare 数据并渲染版本说明，不创建 Release 或评论。
+
 ### 数据集
 
 `dataset` 管理并查询 GitLink 科研数据集（标题、描述、论文内容、许可证、所属项目）。

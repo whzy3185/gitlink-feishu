@@ -25,7 +25,7 @@ func Shortcuts() []*common.Shortcut {
 		newHealthShortcut(),
 		newPRSummaryShortcut(),
 		newRepoReportShortcut(),
-		newReviewContextShortcut(),
+		newReleaseNotesShortcut(),
 	}
 }
 
@@ -361,6 +361,13 @@ func parseCSV(value string) []string {
 func parseBoolArg(value string) bool {
 	parsed, err := strconv.ParseBool(strings.TrimSpace(value))
 	return err == nil && parsed
+}
+
+func parseBoolArgDefault(value string, defaultValue bool) bool {
+	if strings.TrimSpace(value) == "" {
+		return defaultValue
+	}
+	return parseBoolArg(value)
 }
 
 func parseIntArg(value string, defaultValue int, name string) (int, error) {

@@ -26,7 +26,7 @@ First PR:
 Additional workflow commands:
 - `workflow +pr-summary`: done
 - `workflow +repo-report`: done
-- `workflow +release-notes`: planned
+- `workflow +release-notes`: done
 - `workflow +stale`: planned
 
 Current implementation status:
@@ -38,6 +38,8 @@ Current implementation status:
 - PR summary command: done with local JSON input, read-only fetch, rules, renderers, and tests
 - Repo report command: done with local JSON input, partial read-only fetch aggregation,
   scoring, renderers, and tests
+- Release notes command: done with local JSON input, read-only compare fetch,
+  deterministic section classification, renderers, and tests
 
 ## Current Repository Findings
 
@@ -437,22 +439,40 @@ Safety:
 
 Inputs:
 - `--from`
-- `--to`
-- optional `--tag`
+- `--from-ref`
+- `--to-ref`
+- optional `--version`
+- optional `--max-commits`
+- optional `--include-prs`
 - optional `--lang`
 
 Data:
 - PR titles
 - commit messages
+- changed file paths when present in compare data
 
 Markdown categories:
+- Breaking Changes
 - Features
 - Bug Fixes
 - Documentation
 - Tests
 - Refactoring
 - Chores
-- Breaking Changes
+
+Examples:
+
+```bash
+gitlink-cli workflow +release-notes --from shortcuts/workflow/testdata/release_notes.json --format markdown
+gitlink-cli workflow +release-notes --owner Gitlink --repo gitlink-cli --from-ref v0.1.0 --to-ref master --version v0.2.0 --format json
+```
+
+Behavior:
+- Use local JSON input when `--from` is set.
+- In remote mode, read `GET /v1/:owner/:repo/compare?from=<from-ref>&to=<to-ref>`.
+- Classify commits and PRs with deterministic rules.
+- Render `json`, `table`, or `markdown`; default output is `markdown`.
+- Do not create releases, comments, labels, reviews, or merges.
 
 ### `workflow +stale`
 
@@ -487,7 +507,7 @@ Planned fetch-layer extension:
 - `triage_fetch.go` and `health_fetch.go` remain the normalization boundary for remote mode.
 - `pr_fetch.go` now reuses the same stable DTO and message patterns for read-only PR metadata, changed files, and commits.
 - `repo_report_fetch.go` composes the existing fetch helpers and records partial failures instead of failing the whole report.
-- Future `release-notes` should reuse the same normalization and renderer patterns.
+- `release_notes_fetch.go` reuses the same normalization and renderer patterns for read-only compare data.
 - Unknown or missing fields should stay explicit in JSON output so Agents can decide how to proceed.
 
 ## Implementation Order
