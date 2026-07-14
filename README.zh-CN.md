@@ -117,6 +117,7 @@
 | ⚙️ Pipeline | 运行、查看、启停、删除流水线工作流并查询日志 |
 | 🔔 消息通知设置 | 查看并更新个人消息通知投递偏好 |
 | 📖 Wiki | 列出、查看、创建、更新、删除 Wiki 页面 |
+| 🔔 通知 | 列出、已读、删除用户消息 |
 | 🔍 搜索 | 搜索仓库、用户 |
 | 📊 数据集 | 按项目查询科研数据集 |
 | 👤 用户 | 查看用户资料、贡献热力图、活跃度与能力统计 |
@@ -347,6 +348,29 @@ gitlink-cli message-settings +update \
 gitlink-cli message-settings +preset --name notification-only --all
 ```
 
+### 消息通知设置
+
+```bash
+# 列出可用的消息通知设置分组和键
+gitlink-cli message-settings +catalog
+
+# 查看当前用户生效中的消息通知设置
+gitlink-cli message-settings +view
+
+# 只看另一个用户的仓库管理类消息设置
+gitlink-cli message-settings +view --login Mengz --group ManageProject
+
+# 预览关闭指定设置键的站内通知，不发送请求
+gitlink-cli message-settings +update \
+  --channel notification \
+  --state off \
+  --keys Normal::Permission,ManageProject::Issue \
+  --dry-run
+
+# 将预设应用到所有已知设置
+gitlink-cli message-settings +preset --name notification-only --all
+```
+
 ### Webhook 管理
 
 ```bash
@@ -387,6 +411,25 @@ gitlink-cli wiki +update --owner Gitlink --repo forgeplus --project-id 12345 -n 
 
 # 删除 Wiki 页面
 gitlink-cli wiki +delete --owner Gitlink --repo forgeplus --project-id 12345 -n old-page
+```
+
+### 通知管理
+
+```bash
+# 列出当前用户未读系统消息
+gitlink-cli notification +list --type notification --status unread
+
+# 列出指定用户的 @我消息
+gitlink-cli notification +list --user Mengz --type atme
+
+# 标记消息为已读
+gitlink-cli notification +read --type atme --ids 101,102
+
+# 将全部未读系统消息标记为已读
+gitlink-cli notification +read --type notification --ids -1
+
+# 删除消息
+gitlink-cli notification +delete --type notification --ids 101,102
 ```
 
 ### 成员管理
@@ -932,6 +975,7 @@ git push gitlink
 | `gitlink-org` | 组织管理（成员、团队等） |
 | `gitlink-ci` | CI/CD 操作（构建、日志等） |
 | `gitlink-pipeline` | 流水线工作流操作（运行、日志、启停、删除等） |
+| `gitlink-notification` | 用户消息（列表、标记已读、删除） |
 | `gitlink-search` | 搜索功能（仓库、用户等） |
 | `gitlink-user` | 用户管理（个人信息等） |
 | `gitlink-pm` | 项目管理（Sprint、看板、周报等） |

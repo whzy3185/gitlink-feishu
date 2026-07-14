@@ -1,17 +1,25 @@
-# Notification shortcut
+# Notification Shortcut
 
-新增 `notification` Shortcut 组，封装 GitLink 通知相关 OpenAPI：
+## Summary
 
-- `notification +list` — 列出通知（`--all` 含已读、`--participating` 仅参与的，支持分页）
-- `notification +read` — 标记单条通知为已读（`-i/--id`）
-- `notification +read-all` — 标记所有通知为已读
-- `notification +watch` — 关注 / 取消关注仓库通知（`-o/--owner`、`-r/--repo`，`--unwatch` 取消）
+Adds a `notification` shortcut group for GitLink user messages. The group supports listing messages, marking messages as read, and deleting messages without requiring raw API calls.
 
-实现要点：
+## Commands
 
-- `+list` 为 GET `/notifications`，带 `page`/`limit`/`all`/`participating` 查询参数。
-- `+read` 为 PUT `/notifications/{id}`；`+read-all` 为 PUT `/notifications`。
-- `+watch` 为 POST `/watchers/{owner}/{repo}.json`，`--unwatch` 时改用 DELETE。
-- 全部统一 `owner/repo` 自动解析与 `--format json|table|yaml` 输出。
+| Command | Purpose |
+|---------|---------|
+| `gitlink-cli notification +list` | List messages for the current or specified user |
+| `gitlink-cli notification +read` | Mark specific messages, or all unread messages, as read |
+| `gitlink-cli notification +delete` | Delete specific messages |
 
-背景：通知管理此前只能在 Web 端手工进行，无法脚本化或被 Agent 调用。`notification` 组补齐命令行入口，便于 CI/Agent 做通知聚合、定期已读、仓库关注等自动化。含单元测试覆盖各命令的 HTTP 方法、路径与查询参数。
+## Behavior
+
+- `+list` supports `--type notification|atme|all`, `--status unread|read|all`, and pagination.
+- `+read` and `+delete` require `--type notification|atme`.
+- `+read --ids -1` marks all unread messages of the selected type as read.
+- `+delete` rejects `--ids -1` to avoid accidental bulk deletion.
+- When `--user` is omitted, the shortcut resolves the current authenticated user via `/users/me`.
+
+## Tests
+
+The unit tests verify current-user resolution, explicit-user paths, query parameters, read/delete payloads, duplicate ID removal, all-unread handling, and validation failures.

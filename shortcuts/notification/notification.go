@@ -3,95 +3,237 @@ package notification
 import (
 	"fmt"
 	"net/url"
+	"strconv"
+	"strings"
 
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func Shortcuts() []*common.Shortcut {
+var messageTypes = map[string]string{
+	"notification": "notification",
+	"atme":         "atme",
+}
+
+var listStatuses = map[string]string{
+	"unread": "1",
+	"read":   "2",
+}
+
+func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
+	tr := i18n.Default()
+	if len(translators) > 0 && translators[0] != nil {
+		tr = translators[0]
+	}
 	return []*common.Shortcut{
 		{
 			Name:        "list",
-			Description: "列出通知",
+			Description: tr.T("cmd.notification.list.short"),
 			Flags: []common.Flag{
-				{Name: "all", Usage: "显示所有通知（含已读）", Bool: true, Default: "false"},
-				{Name: "participating", Usage: "仅显示参与的通知", Bool: true, Default: "false"},
-				{Name: "page", Short: "p", Usage: "页码", Default: "1"},
-				{Name: "limit", Short: "l", Usage: "每页数量", Default: "20"},
+				{Name: "user", Short: "u", Usage: tr.T("flag.notification.user")},
+				{Name: "type", Short: "t", Usage: tr.T("flag.notification.type_all"), Default: "all"},
+				{Name: "status", Short: "s", Usage: tr.T("flag.notification.status"), Default: "all"},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
-			Run: func(ctx *common.RuntimeContext) error {
-				q := url.Values{}
-				q.Set("page", ctx.Arg("page"))
-				q.Set("limit", ctx.Arg("limit"))
-				if ctx.Arg("all") == "true" {
-					q.Set("all", "true")
-				}
-				if ctx.Arg("participating") == "true" {
-					q.Set("participating", "true")
-				}
-				env, err := ctx.CallAPIWithQuery("GET", "/notifications", q)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
+			Run: runList,
 		},
 		{
 			Name:        "read",
-			Description: "标记单条通知为已读",
+			Description: tr.T("cmd.notification.read.short"),
 			Flags: []common.Flag{
-				{Name: "id", Short: "i", Usage: "通知 ID", Required: true},
+				{Name: "user", Short: "u", Usage: tr.T("flag.notification.user")},
+				{Name: "type", Short: "t", Usage: tr.T("flag.notification.type"), Required: true},
+				{Name: "ids", Short: "i", Usage: tr.T("flag.notification.ids_read"), Required: true},
 			},
-			Run: func(ctx *common.RuntimeContext) error {
-				id, err := ctx.RequireArg("id")
-				if err != nil {
-					return err
-				}
-				env, err := ctx.CallAPI("PUT", fmt.Sprintf("/notifications/%s", id), nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
+			Run: runRead,
 		},
 		{
-			Name:        "read-all",
-			Description: "标记所有通知为已读",
-			Run: func(ctx *common.RuntimeContext) error {
-				env, err := ctx.CallAPI("PUT", "/notifications", nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
-		},
-		{
-			Name:        "watch",
-			Description: "关注或取消关注仓库的通知",
+			Name:        "delete",
+			Description: tr.T("cmd.notification.delete.short"),
 			Flags: []common.Flag{
-				{Name: "owner", Short: "o", Usage: "仓库所有者", Required: true},
-				{Name: "repo", Short: "r", Usage: "仓库名称", Required: true},
-				{Name: "unwatch", Usage: "取消关注（默认为关注）", Bool: true, Default: "false"},
+				{Name: "user", Short: "u", Usage: tr.T("flag.notification.user")},
+				{Name: "type", Short: "t", Usage: tr.T("flag.notification.type"), Required: true},
+				{Name: "ids", Short: "i", Usage: tr.T("flag.notification.ids"), Required: true},
 			},
-			Run: func(ctx *common.RuntimeContext) error {
-				owner, err := ctx.RequireArg("owner")
-				if err != nil {
-					return err
-				}
-				repo, err := ctx.RequireArg("repo")
-				if err != nil {
-					return err
-				}
-				path := fmt.Sprintf("/watchers/%s/%s.json", owner, repo)
-				method := "POST"
-				if ctx.Arg("unwatch") == "true" {
-					method = "DELETE"
-				}
-				env, err := ctx.CallAPI(method, path, nil)
-				if err != nil {
-					return err
-				}
-				return ctx.Output(env)
-			},
+			Run: runDelete,
 		},
 	}
+}
+
+func runList(ctx *common.RuntimeContext) error {
+	user, err := resolveUserLogin(ctx)
+	if err != nil {
+		return err
+	}
+	query, err := listQuery(ctx)
+	if err != nil {
+		return err
+	}
+	env, err := ctx.CallAPIWithQuery("GET", messagesPath(user), query)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runRead(ctx *common.RuntimeContext) error {
+	user, payload, err := messagePayload(ctx, true)
+	if err != nil {
+		return err
+	}
+	env, err := ctx.CallAPI("POST", messagesPath(user)+"/read", payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runDelete(ctx *common.RuntimeContext) error {
+	user, payload, err := messagePayload(ctx, false)
+	if err != nil {
+		return err
+	}
+	env, err := ctx.CallAPI("DELETE", messagesPath(user), payload)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func messagesPath(user string) string {
+	return fmt.Sprintf("/users/%s/messages", url.PathEscape(user))
+}
+
+func listQuery(ctx *common.RuntimeContext) (url.Values, error) {
+	page, err := positiveInt(defaultString(ctx.Arg("page"), "1"), "page")
+	if err != nil {
+		return nil, err
+	}
+	limit, err := positiveInt(defaultString(ctx.Arg("limit"), "20"), "limit")
+	if err != nil {
+		return nil, err
+	}
+	query := url.Values{}
+	query.Set("page", strconv.Itoa(page))
+	query.Set("limit", strconv.Itoa(limit))
+	if typ, err := normalizeOptionalType(ctx.Arg("type")); err != nil {
+		return nil, err
+	} else if typ != "" {
+		query.Set("type", typ)
+	}
+	if status, err := normalizeStatus(ctx.Arg("status")); err != nil {
+		return nil, err
+	} else if status != "" {
+		query.Set("status", status)
+	}
+	return query, nil
+}
+
+func messagePayload(ctx *common.RuntimeContext, allowAllUnread bool) (string, map[string]interface{}, error) {
+	user, err := resolveUserLogin(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	typ, err := normalizeRequiredType(ctx.Arg("type"))
+	if err != nil {
+		return "", nil, err
+	}
+	ids, err := parseIDs(ctx.Arg("ids"), allowAllUnread)
+	if err != nil {
+		return "", nil, err
+	}
+	return user, map[string]interface{}{
+		"type": typ,
+		"ids":  ids,
+	}, nil
+}
+
+func resolveUserLogin(ctx *common.RuntimeContext) (string, error) {
+	if user := strings.TrimSpace(ctx.Arg("user")); user != "" {
+		return user, nil
+	}
+	env, err := ctx.CallAPI("GET", "/users/me", nil)
+	if err != nil {
+		return "", fmt.Errorf("resolve current user: %w", err)
+	}
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("resolve current user: unexpected response")
+	}
+	login, _ := data["login"].(string)
+	if strings.TrimSpace(login) == "" {
+		return "", fmt.Errorf("resolve current user: login is missing")
+	}
+	return strings.TrimSpace(login), nil
+}
+
+func normalizeOptionalType(value string) (string, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" || value == "all" {
+		return "", nil
+	}
+	return normalizeRequiredType(value)
+}
+
+func normalizeRequiredType(value string) (string, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if typ, ok := messageTypes[value]; ok {
+		return typ, nil
+	}
+	return "", fmt.Errorf("invalid --type %q: use notification or atme", value)
+}
+
+func normalizeStatus(value string) (string, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" || value == "all" {
+		return "", nil
+	}
+	if status, ok := listStatuses[value]; ok {
+		return status, nil
+	}
+	return "", fmt.Errorf("invalid --status %q: use unread, read, or all", value)
+}
+
+func parseIDs(value string, allowAllUnread bool) ([]int, error) {
+	parts := strings.Split(value, ",")
+	ids := make([]int, 0, len(parts))
+	seen := map[int]bool{}
+	for _, part := range parts {
+		raw := strings.TrimSpace(part)
+		if raw == "" {
+			continue
+		}
+		id, err := strconv.Atoi(raw)
+		if err != nil || id == 0 || id < -1 {
+			return nil, fmt.Errorf("invalid --ids value %q: use positive integer IDs", raw)
+		}
+		if id == -1 && !allowAllUnread {
+			return nil, fmt.Errorf("invalid --ids value -1: delete requires explicit message IDs")
+		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("required flag --ids is empty")
+	}
+	return ids, nil
+}
+
+func positiveInt(value, name string) (int, error) {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || parsed <= 0 {
+		return 0, fmt.Errorf("invalid --%s %q: use a positive integer", name, value)
+	}
+	return parsed, nil
+}
+
+func defaultString(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }
