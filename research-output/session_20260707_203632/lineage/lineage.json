@@ -1,0 +1,58 @@
+{
+  "scenario": "S1_repository_research_insight",
+  "repo": "caoweiqiong/zwf",
+  "default_branch": "master",
+  "commit_timeline": [
+    {
+      "date": "2026-05-09",
+      "count": 7
+    },
+    {
+      "date": "2026-05-10",
+      "count": 8
+    },
+    {
+      "date": "2026-06-11",
+      "count": 1
+    },
+    {
+      "date": "2026-06-23",
+      "count": 2
+    },
+    {
+      "date": "2026-07-03",
+      "count": 6
+    },
+    {
+      "date": "2026-07-04",
+      "count": 4
+    },
+    {
+      "date": "2026-07-06",
+      "count": 2
+    }
+  ],
+  "branch_map": [
+    {
+      "name": "master",
+      "commits": 30,
+      "last_active": "2026-07-06",
+      "is_default": true
+    }
+  ],
+  "pr_merge_patterns": [],
+  "doc_evolution": [
+    {
+      "file": "superpowers",
+      "last_date": ""
+    }
+  ],
+  "experiment_files": [],
+  "innovation_points": [],
+  "meta": {
+    "commit_count": 30,
+    "merged_pr_count": 0,
+    "doc_count": 1,
+    "experiment_file_count": 0
+  }
+}

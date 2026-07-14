@@ -6,20 +6,38 @@ metadata:
   requires:
     bins: ["gitlink-cli"]
   cliHelp: "gitlink-cli repo --help"
+  scenario: "S3"
 ---
 
-# gitlink-compliance（开源合规检查）
+# gitlink-compliance（开源合规与复现性检查）
 
 **CRITICAL — 开始前必须先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)，其中包含认证、权限处理和 API 注意事项。**
 **CRITICAL — GitLink 操作只能用 `gitlink-cli`。禁止用 `gh`（GitHub CLI）操作 GitLink 资源。`gh` 仅适用于 GitHub 平台。**
 
 > **前置条件：** 先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md) 了解认证和全局参数。
 
+子赛题四「应用 GitLink 辅助科研」· 场景 **S3 科研项目合规与复现性检查** 的自动化算法由
+`scripts/research/repro.py`（Go 出数据 + Python 做算法）实现，见 **工作流 4**。
+
+---
+
+## 何时使用
+
+- 科研项目准备开源发布前，做一次全面的合规与复现性审查。
+- 想知道「这个仓库别人能不能复现」：CI、lockfile、README 复现说明、版本 tag、容器环境是否齐备。
+- 想发现仓库里的合规风险与敏感信息泄露：缺 LICENSE / 版权头、数据目录入库、`.env` 泄露、硬编码密钥。
+
+## 前置条件
+
+1. 已 `gitlink-cli auth login`（Token 7 天有效）。
+2. 目标仓库存在且可读取文件树（`repo +info` / `file +get` / `repo +tree`）。
+3. 复现性自动化检查（工作流 4）只用 Python 标准库，无需第三方依赖。
+
 ---
 
 ## 工作流概览
 
-本 Skill 提供开源项目的合规性自动化检查能力，帮助 Maintainer 在发布前发现并修复合规问题。
+本 Skill 提供开源项目的合规性与复现性自动化检查能力，帮助 Maintainer 在发布前发现并修复合规问题。
 
 | 检查类型 | 覆盖范围 | 严重程度 |
 |----------|---------|:--------:|
@@ -28,6 +46,8 @@ metadata:
 | 依赖合规 | 第三方依赖许可证兼容性 | 🔴 |
 | 安全策略 | SECURITY.md、安全披露流程 | 🟡 |
 | 贡献者协议 | CLA / DCO 要求 | 🔵 |
+| 复现性 | CI / lockfile / README 复现说明 / 版本 tag / 容器环境 | 🟡 |
+| 数据隐私 | data/ 入库、.env 泄露、密钥硬编码 | 🔴 |
 
 ---
 
@@ -203,6 +223,78 @@ gitlink-cli repo +raw --owner <owner> --repo <repo> --path src/main.py --ref mas
 | 年份过时 | 版权年份未更新到当前年份 |
 | 许可证不匹配 | 声明的许可证与实际 LICENSE 文件不一致 |
 | 组织名称错误 | 版权声明的组织名称与项目所属不一致 |
+
+---
+
+## 工作流 4：合规与复现性自动化检查（repro.py）
+
+**场景**：子赛题四·S3 科研项目合规与复现性检查 —— 对一个科研仓库同时给出「合规分」与「复现分」，并产出检查清单、风险项与中文报告。
+
+本工作流的算法由 `scripts/research/repro.py` 实现，数据全部经 gitlink-cli 获取（Go 出数据 + Python 做算法）。
+
+### 数据采集
+
+`repro.py` 内部调用以下 gitlink-cli 命令（已封装在 `collect.py` 中）：
+
+```bash
+# 仓库信息（默认分支、版本 tag）
+gitlink-cli --owner <owner> --repo <repo> repo +info --format json
+
+# 关键文件文本（LICENSE / README / go.mod / requirements.txt / package.json / .gitignore / SECURITY.md / ...）
+gitlink-cli --owner <owner> --repo <repo> file +get --path LICENSE --ref master
+
+# 根文件树（扫 data/、.env、config、.gitea/.github workflows 等是否存在）
+gitlink-cli --owner <owner> --repo <repo> repo +tree --ref master
+
+# 语言占比（仅作为元信息记录）
+gitlink-cli --owner <owner> --repo <repo> repo +languages --format json
+```
+
+### 算法（纯函数，可单测）
+
+| 函数 | 作用 |
+|------|------|
+| `identify_license(text)` | 关键词匹配 MulanPSL / Apache / MIT / GPL / LGPL / BSD / ISC / MPL / 无 |
+| `scan_secrets(text, file)` | 正则找 private key / AWS token / API key / Slack / GitHub token / JWT / 邮箱 / 手机号 → `[{level,category,file,line,detail}]`（脱敏） |
+| `repro_checks(file_texts, tree, repo_info)` | CI 配置、lockfile、README 复现说明、版本 tag、容器化，每项 `{name,pass,score(0-2),evidence}` |
+| `compliance_items(license_info, file_texts, tree)` | LICENSE 声明、SECURITY.md、版权头、依赖合规、CONTRIBUTING.md |
+| `data_privacy(tree, gitignore_text)` | data/ 入库、.env 入库、.gitignore 是否忽略 .env |
+
+打分：`repro_score` / `compliance_score` 均为 0-10（各项 0-2 分聚合归一）。
+
+### 命令
+
+```bash
+# 默认输出到 stdout（JSON）
+python scripts/research/repro.py --owner mindspore-Ecosystem --repo mindspore
+
+# 输出两件产物到目录（repro.json + compliance_report.md）
+python scripts/research/repro.py --owner <OWNER> --repo <REPO> --out ./out
+
+# 可复现脚本（封装了上述流程）
+bash skills/gitlink-compliance/examples/compliance-repro-workflow.sh <OWNER> <REPO> [OUT_DIR]
+```
+
+### 输出结构（repro.json）
+
+```json
+{
+  "scenario": "S3_compliance_reproducibility",
+  "repo": "owner/repo",
+  "default_branch": "master",
+  "license": "MIT",
+  "repro_items": [{"name": "CI 配置", "pass": true, "score": 2, "evidence": "..."}],
+  "compliance_items": [{"name": "LICENSE 文件", "pass": true, "score": 2, "evidence": "..."}],
+  "privacy_items": [{"name": ".env 入库", "pass": true, "score": 2, "evidence": "..."}],
+  "secrets": [{"level": "critical", "category": "private_key", "file": "config.env", "line": 5, "detail": "..."}],
+  "risks": [{"area": "secret", "name": "private_key", "file": "...", "level": "critical", "evidence": "..."}],
+  "repro_score": 8.0,
+  "compliance_score": 6.0,
+  "meta": {"key_files_found": ["LICENSE", "README.md"], "tree_size": 42, "languages": {"Python": "99%"}}
+}
+```
+
+`compliance_report.md` 包含：复现性检查清单表、合规性检查清单表、数据隐私检查表、风险项表（按严重程度排序）与打分。
 
 ---
 

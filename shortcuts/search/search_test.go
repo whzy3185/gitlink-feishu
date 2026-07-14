@@ -1,143 +1,107 @@
 package search
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
-	"github.com/gitlink-org/gitlink-cli/internal/client"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func runShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
-	t.Helper()
-	shortcut := findShortcut(t, name)
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
-		Owner:  "owner",
-		Repo:   "repo",
-		Format: "json",
-		Args:   args,
-	}
-	return shortcut.Run(ctx)
-}
-
-func findShortcut(t *testing.T, name string) *common.Shortcut {
-	t.Helper()
-	for _, s := range Shortcuts() {
-		if s.Name == name {
-			return s
-		}
-	}
-	t.Fatalf("shortcut %q not found", name)
-	return nil
-}
-
-func writeJSON(w http.ResponseWriter, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
-}
-
-// --- repos ---
-
-func TestSearchRepos(t *testing.T) {
+func TestSearchIssuesWithKeyword(t *testing.T) {
+	var requestQuery string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/projects.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		if r.URL.Query().Get("search") != "golang" {
-			t.Fatalf("expected search=golang, got %s", r.URL.Query().Get("search"))
-		}
-		writeJSON(w, []interface{}{
-			map[string]interface{}{"name": "golang-project"},
+		requestQuery = r.URL.RawQuery
+		common.WriteJSON(t, w, map[string]interface{}{
+			"total_count":  float64(2),
+			"opened_count": float64(1),
+			"closed_count": float64(1),
+			"issues": []interface{}{
+				map[string]interface{}{
+					"id":                   float64(1),
+					"subject":              "Fix login bug",
+					"project_issues_index": float64(10),
+					"status_name":          "新增",
+				},
+				map[string]interface{}{
+					"id":                   float64(2),
+					"subject":              "Update login page",
+					"project_issues_index": float64(11),
+					"status_name":          "关闭",
+				},
+			},
 		})
 	}))
 	defer server.Close()
 
-	err := runShortcut(t, server, "repos", map[string]string{"keyword": "golang", "page": "1", "limit": "20"})
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{
+		"keyword": "login",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "issues", ctx)
 	if err != nil {
-		t.Fatalf("repos failed: %v", err)
+		t.Fatalf("search issues failed: %v", err)
+	}
+
+	if !strings.Contains(requestQuery, "keyword=login") {
+		t.Errorf("expected keyword param, got: %s", requestQuery)
 	}
 }
 
-// --- users ---
-
-func TestSearchUsers(t *testing.T) {
+func TestSearchIssuesWithAllFilters(t *testing.T) {
+	var requestQuery string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/users/list.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		if r.URL.Query().Get("search") != "alice" {
-			t.Fatalf("expected search=alice, got %s", r.URL.Query().Get("search"))
-		}
-		writeJSON(w, []interface{}{
-			map[string]interface{}{"login": "alice"},
+		requestQuery = r.URL.RawQuery
+		common.WriteJSON(t, w, map[string]interface{}{
+			"total_count":  float64(1),
+			"opened_count": float64(1),
+			"closed_count": float64(0),
+			"issues":       []interface{}{},
 		})
 	}))
 	defer server.Close()
 
-	err := runShortcut(t, server, "users", map[string]string{"keyword": "alice", "page": "1", "limit": "20"})
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{
+		"keyword":   "bug",
+		"category":  "opened",
+		"assignee":  "42",
+		"author":    "10",
+		"milestone": "5",
+		"tag":       "1,2",
+		"sort-by":   "created_on",
+		"sort-dir":  "asc",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "issues", ctx)
 	if err != nil {
-		t.Fatalf("users failed: %v", err)
+		t.Fatalf("search issues with filters failed: %v", err)
 	}
-}
 
-// --- recommend ---
-
-func TestSearchRecommend(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/projects/recommend.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+	checks := []string{
+		"keyword=bug",
+		"category=opened",
+		"assigner_id=42",
+		"author_id=10",
+		"milestone_id=5",
+		"issue_tag_ids=1%2C2",
+		"sort_by=issues.created_on",
+		"sort_direction=asc",
+	}
+	for _, want := range checks {
+		if !strings.Contains(requestQuery, want) {
+			t.Errorf("missing query param %q in: %s", want, requestQuery)
 		}
-		// bare JSON array (matches the real endpoint shape)
-		writeJSON(w, []interface{}{
-			map[string]interface{}{"identifier": "forgeplus", "name": "确实开源", "visits": float64(48497)},
-		})
-	}))
-	defer server.Close()
-
-	if err := runShortcut(t, server, "recommend", nil); err != nil {
-		t.Fatalf("recommend failed: %v", err)
 	}
 }
 
-func TestSearchRecommendHTTPError(t *testing.T) {
+func TestSearchIssuesRequiresKeyword(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
+		t.Fatal("no request should be made without keyword")
 	}))
 	defer server.Close()
 
-	if err := runShortcut(t, server, "recommend", nil); err == nil {
-		t.Fatal("expected error for HTTP 500")
-	}
-}
-
-// --- HTTP error paths ---
-
-func TestSearchReposHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "repos", map[string]string{"keyword": "test", "page": "1", "limit": "20"})
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{})
+	err := common.RunShortcut(t, Shortcuts(), "issues", ctx)
 	if err == nil {
-		t.Fatal("expected error for HTTP 500")
-	}
-}
-
-func TestSearchUsersHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "users", map[string]string{"keyword": "test", "page": "1", "limit": "20"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
+		t.Fatal("expected error when keyword is missing, got nil")
 	}
 }

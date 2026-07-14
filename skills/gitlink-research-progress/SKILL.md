@@ -1,261 +1,72 @@
 ---
 name: gitlink-research-progress
 version: 1.0.0
-description: "科研进度智能跟踪与预警：监控科研仓库的提交节奏、Issue 解决进度、里程碑完成度、PR 吞吐与贡献者活跃度，自动生成《科研进度周报 + 风险预警》，用红/黄/绿灯标记停滞与风险。当课题组/PI/导师需要掌握科研项目进展、识别延期与停滞风险、生成阶段汇报时触发。"
+description: "科研进度智能跟踪与预警（子赛题四·S5）：统计科研仓库本周/上周的提交、Issue、PR 活跃度，结合里程碑进度，用阈值规则产出风险预警（stale issue / stale PR / 逾期里程碑 / 低活跃 / bus factor），生成科研进度周报。当用户要做项目周报、进度跟踪、风险预警、里程碑监控时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
-  cliHelp: "gitlink-cli repo --help"
+  cliHelp: "python scripts/research/report.py --help"
+  scenario: "S5"
 ---
 
-# gitlink-research-progress（科研进度智能跟踪与预警）
+# gitlink-research-progress — 科研进度智能跟踪与预警
 
-**CRITICAL — 开始前必须先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)，其中包含认证、权限处理和 API 注意事项。**
-**CRITICAL — GitLink 操作只能用 `gitlink-cli`。禁止用 `gh`（GitHub CLI）操作 GitLink 资源。**
-**CRITICAL — 本技能为只读分析型；如需把预警落成 Issue/评论，须先确认用户意图。**
+> 子赛题四「应用 GitLink 辅助科研」· 场景 **S5 科研进度智能跟踪与预警**
 
-> **前置条件：** 先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md) 了解认证和全局参数。
+## 何时使用
 
-## 功能概述
+- 课题组负责人想每周自动生成「科研项目进度周报」。
+- 想及时发现项目停滞（低活跃）、Issue/PR 堆积、里程碑逾期、单点依赖（bus factor）。
+- 为科研项目做里程碑监控与风险预警。
 
-本技能面向**课题组负责人（PI）、导师与科研团队**，回答：**「这个（些）科研项目现在进展如何？哪里有延期或停滞风险？」**
+## 前置条件
 
-它把科研仓库的协作数据转化为**进度与风险信号**，自动产出一份可直接用于组会/阶段汇报的**《科研进度周报 + 风险预警》**。
+1. 已 `gitlink-cli auth login`。
+2. 本场景为纯标准库实现，无需额外 pip 依赖（`scripts/research/report.py`）。
 
-### 五维进度信号
+## 工作流
 
-| 信号 | 衡量 | 风险方向 |
-|------|------|----------|
-| 1. 提交节奏（Velocity） | 近 N 周提交频率与趋势 | 提交骤降 = 停滞 |
-| 2. Issue 进度（Issue Burndown） | 开/闭 Issue 数、解决速度、陈旧 Issue | 开口持续扩大 = 失控 |
-| 3. 里程碑完成度（Milestone） | 里程碑到期/完成比例 | 临期未完成 = 延期 |
-| 4. PR 吞吐（Throughput） | 开放/合并 PR、停留时长 | PR 长期挂起 = 阻塞 |
-| 5. 团队活跃与 Bus Factor | 活跃贡献者数、贡献集中度 | 单点依赖 = 高风险 |
+算法由 `scripts/research/report.py` 实现（Go 出数据 + Python 做统计/预警）：
 
----
+1. **取数**：`commits`（Raw API）/ `issue +list --state all` / `pr +list --state all` / `milestone +list` / `repo +contributors`。
+2. **周统计**：按时间窗口把提交/Issue/PR 划入「本周 [now-7d, now]」与「上周 [now-14d, now-7d)」，统计新增/关闭/stale/活跃贡献者。
+3. **里程碑进度**：按 `milestone_name` 归集 Issue 的 open/closed，算完成率与逾期。
+4. **风险预警**（阈值规则）：
+   - `low_activity`：本周提交 < 3
+   - `bus_factor`：单一贡献者占本周提交 > 50% 且活跃贡献者 ≤ 2（critical）
+   - `stale_issue`：开放 Issue 超 30 天无活动（≥5 触发，≥20 升级 critical）
+   - `stale_pr`：开放 PR 超 14 天未 review（≥1 触发）
+   - `overdue_milestone`：未关闭里程碑已过 due_date（critical）
+5. **趋势**：本周 vs 上周 commit 环比，给出 increasing/stable/decreasing。
+6. **产物**：`report.json`（结构化）+ `weekly_report.md`（中文周报：活动对比表 + 里程碑表 + 风险预警表）。
 
-## 一、确定监控范围与采集元数据
-
-### 1.1 单仓库或多仓库
+## 命令
 
 ```bash
-# 单个科研仓库
-gitlink-cli repo +info --owner <owner> --repo <repo> --format json
+python scripts/research/report.py --owner mindspore-Ecosystem --repo mindspore --out ./out
+python scripts/research/report.py --owner O --repo R            # 仅打印 JSON
 
-# 课题组/组织名下多个仓库（逐个跟踪后汇总）
-gitlink-cli repo +list --user <login> --format json
-gitlink-cli repo +list --category manage --format json
+# 可复现脚本
+bash skills/gitlink-research-progress/examples/progress-report-workflow.sh <OWNER> <REPO> [OUT_DIR]
 ```
 
-记录 `created_at`、`updated_at`、`default_branch`、`open_issues_count`（若有）。
+## 输出结构（report.json）
 
----
-
-## 二、五维信号采集
-
-### 2.1 信号一 · 提交节奏（Velocity）
-
-```bash
-# 取提交列表（按时间），用于统计近 N 周提交分布
-gitlink-cli api GET "/:owner/:repo/commits?page=1&limit=50" --format json
+```json
+{
+  "scenario": "S5_progress_tracking", "repo": "owner/repo",
+  "week_stats": {"this_week": {...}, "last_week": {...}, "window": {...}},
+  "trend": {"commit_delta_pct": 12.5, "activity_level": "increasing"},
+  "milestones": [{"name":"v1.0","open":2,"closed":1,"completion_pct":33.3,"overdue":true}],
+  "risk_warnings": [{"level":"critical","type":"bus_factor","message":"...","suggestion":"..."}]
+}
 ```
 
-统计：
-- 近 4 周 / 8 周每周提交数 → 画 ASCII 趋势条
-- 与上一周期环比（↑/↓/持平）
-- 最近一次提交距今天数（`days_since_last_commit`）
+## 验证
 
-**风险规则：**
-```
-🔴 最近一次提交 > 30 天   或   近 2 周提交为 0
-🟡 周提交量环比下降 > 50%
-🟢 提交稳定或上升
-```
+已在真实科研仓库 **`mindspore-Ecosystem/mindspore`** 上验证取数与统计口径；
+11 个纯单元测试覆盖时间解析、周分桶、stale 判定、bus factor、里程碑逾期、趋势计算。
 
-### 2.2 信号二 · Issue 进度（Burndown）
+## 兼容性
 
-```bash
-gitlink-cli issue +list --owner <owner> --repo <repo> --state open   --format json
-gitlink-cli issue +list --owner <owner> --repo <repo> --state closed --format json
-```
-
-统计：
-- 开放 / 已关闭 Issue 数；近 4 周新增 vs 关闭（净增 = 新增 − 关闭）
-- 陈旧 Issue：开放且 `updated_at` 超过 30/60 天
-- 平均解决时长（closed 的 created→closed 估算）
-
-**风险规则：**
-```
-🔴 近 4 周净增 Issue 持续为正且 > 5   或   陈旧 Issue 占比 > 50%
-🟡 净增为正但可控
-🟢 净增 ≤ 0（在收敛）
-```
-
-### 2.3 信号三 · 里程碑完成度（Milestone）
-
-```bash
-gitlink-cli milestone +list --owner <owner> --repo <repo> --format json
-```
-
-统计每个里程碑：`due_date`、开放/关闭 Issue 数、完成率 = 已关闭 / 总数。
-
-**风险规则：**
-```
-🔴 里程碑已过期（today > due_date）且完成率 < 80%
-🟡 距到期 < 14 天且完成率 < 60%
-🟢 按期推进
-```
-
-### 2.4 信号四 · PR 吞吐（Throughput）
-
-```bash
-gitlink-cli pr +list --owner <owner> --repo <repo> --state open   --format json
-gitlink-cli pr +list --owner <owner> --repo <repo> --state merged --format json
-```
-
-统计：开放 PR 数、近 4 周合并 PR 数、开放 PR 平均停留天数、是否有 PR 挂起 > 14 天。
-
-**风险规则：**
-```
-🔴 存在开放 PR 停留 > 30 天   或   近 4 周 0 合并但有活跃开发
-🟡 PR 平均停留 14–30 天
-🟢 PR 流转顺畅
-```
-
-### 2.5 信号五 · 团队活跃与 Bus Factor
-
-```bash
-# 主数据源：直接返回每人的 contribution_perc（贡献占比），是 Bus Factor 的可靠依据
-gitlink-cli repo +contributors      --owner <owner> --repo <repo> --format json
-
-# 可选补充（按代码行）：部分仓库后端会返回 [-1] 失败，属正常，失败则忽略、以上面为准
-gitlink-cli repo +contributor-stats --owner <owner> --repo <repo> --format json
-```
-
-统计：
-- 活跃贡献者数（结合提交记录判断近 90 天是否活跃）
-- 贡献集中度：取 `repo +contributors` 返回的 Top1 `contribution_perc` → **Bus Factor 估计**（占比越高，单点风险越大）
-
-**风险规则：**
-```
-🔴 Bus Factor = 1（Top1 占比 > 80%）   或   活跃贡献者 = 1
-🟡 Top1 占比 60–80%
-🟢 贡献相对分散
-```
-
----
-
-## 三、进度健康度评级
-
-### 3.1 综合灯
-
-将五个信号的红/黄/绿汇总为**项目总灯**：
-
-```
-🔴 红灯（高风险）：任一信号为 🔴，或 ≥3 个 🟡
-🟡 黄灯（需关注）：1–2 个 🟡，无 🔴
-🟢 绿灯（健康）：全部 🟢
-```
-
-### 3.2 提交节奏 ASCII 趋势
-
-```
-近 8 周周提交量：
-W-7 ████████        12
-W-6 ██████          9
-W-5 █████████       14
-W-4 ███             4
-W-3 ██              3
-W-2 █               1
-W-1 ▏               0    ← 🔴 提交骤降
-W-0 ▏               0
-```
-
----
-
-## 四、《科研进度周报 + 风险预警》报告模板
-
-```markdown
-## 📈 科研进度周报与风险预警
-
-**项目：** <owner>/<repo>
-**统计周期：** 2026-06-09 ~ 2026-06-15（近 8 周趋势）
-**生成时间：** 2026-06-15
-**项目总灯：** 🟡 黄灯（需关注）
-
----
-
-### 一、一句话结论
-
-> 核心算法仓库提交节奏明显放缓（近 2 周仅 1 次提交），里程碑 M2 距到期 10 天但完成率 55%，建议本周组会重点对齐。
-
-### 二、五维信号面板
-
-| 信号 | 指标 | 灯 |
-|------|------|----|
-| 提交节奏 | 近 2 周 1 次提交，环比 ↓78% | 🔴 |
-| Issue 进度 | 开放 14 / 已闭 36，近 4 周净增 +3 | 🟡 |
-| 里程碑 | M2 完成率 55%，距到期 10 天 | 🟡 |
-| PR 吞吐 | 开放 2（最久 9 天），近 4 周合并 5 | 🟢 |
-| 团队 / Bus Factor | 活跃 3 人，Top1 占比 64% | 🟡 |
-
-### 三、提交节奏趋势
-
-（插入第 3.2 节 ASCII 趋势图）
-
-### 四、风险预警清单
-
-| 等级 | 风险 | 证据 | 建议 |
-|------|------|------|------|
-| 🔴 | 主仓库近 2 周近乎停滞 | 最近提交 11 天前 | 组会确认是否受阻/缺人 |
-| 🟡 | M2 里程碑有延期苗头 | 完成率 55%，10 天到期 | 砍范围或顺延，更新 due_date |
-| 🟡 | 存在单点依赖 | Top1 提交占比 64% | 安排第二人熟悉核心模块 |
-| 🟡 | 陈旧 Issue 累积 | 5 个 Issue >30 天未动 | 分诊：关闭/重排期 |
-
-### 五、本周建议动作（Top 3）
-
-1. 排查主仓库停滞原因（环境/卡点/人力），必要时拆任务。
-2. 重新评估 M2 范围与到期日，更新里程碑。
-3. 指定核心模块第二负责人，降低 Bus Factor。
-```
-
----
-
-## 五、执行步骤总览
-
-```bash
-# Step 1：确定范围
-gitlink-cli repo +info --owner <owner> --repo <repo> --format json
-
-# Step 2：提交节奏
-gitlink-cli api GET "/:owner/:repo/commits?page=1&limit=50" --format json
-
-# Step 3：Issue 进度
-gitlink-cli issue +list --owner <owner> --repo <repo> --state open   --format json
-gitlink-cli issue +list --owner <owner> --repo <repo> --state closed --format json
-
-# Step 4：里程碑
-gitlink-cli milestone +list --owner <owner> --repo <repo> --format json
-
-# Step 5：PR 吞吐
-gitlink-cli pr +list --owner <owner> --repo <repo> --state open   --format json
-gitlink-cli pr +list --owner <owner> --repo <repo> --state merged --format json
-
-# Step 6：团队活跃 / Bus Factor（以 +contributors 为主，其 contribution_perc 即 Bus Factor 依据）
-gitlink-cli repo +contributors      --owner <owner> --repo <repo> --format json
-gitlink-cli repo +contributor-stats --owner <owner> --repo <repo> --format json   # 可选，失败可忽略
-
-# Step 7：AI 按第二节规则打灯、第四节模板出周报
-```
-
----
-
-## 注意事项
-
-- ✅ **纯只读**：默认不写任何内容；落成 Issue/评论需用户明确同意。
-- ✅ **多仓库汇总**：课题组多仓库时，逐仓采集后再出一张"组级总览表"（每行一个仓库 + 总灯）。
-- ⚠️ **时间字段**：以 `created_at` / `updated_at` / commit date 估算周期；注意时区与"X 天前"等相对时间需换算。
-- ⚠️ **分页**：Issue/PR/commit 可能分页，统计趋势时关注 `meta.total_count` 并按需翻页（趋势可只取近若干页近似）。
-- ⚠️ **里程碑可选**：部分科研仓库不用里程碑，则该信号标"不适用"，不计入总灯。
-- ⚠️ **contributor-stats 容错**：`repo +contributor-stats`（按代码行）在部分仓库会返回 `[-1]` 失败，属正常；Bus Factor 以 `repo +contributors` 的 `contribution_perc` 为准即可。
-- ✅ **可定期运行**：建议每周固定时间运行，形成可对比的趋势序列；最终产出为 Markdown 周报。
+兼容 Claude Code 等 AI Agent：本 SKILL.md 为编排依据，Agent 调上述命令并把周报读回做解读与跟进建议。

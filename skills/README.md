@@ -73,8 +73,6 @@ skills/
 │   ├── REFERENCE.md                   # 仓库 API 参考
 │   └── examples/
 │       └── repo-workflow.md           # 仓库管理工作流
-├── gitlink-reaction/                  # 仓库互动
-│   └── SKILL.md                       # 关注、点赞和用户列表操作指南
 ├── gitlink-issue/                     # Issue 管理
 │   ├── SKILL.md                       # Issue 操作指南
 │   ├── REFERENCE.md                   # Issue API 参考
@@ -100,8 +98,6 @@ skills/
 │   ├── SKILL.md                       # 搜索操作指南
 │   └── examples/
 │       └── search-workflow.md         # 搜索工作流
-├── gitlink-catalog/                   # 平台模板目录
-│   └── SKILL.md                       # 许可证与 .gitignore 模板查询
 ├── gitlink-user/                      # 用户管理
 │   └── SKILL.md                       # 用户操作指南
 ├── gitlink-org/                       # 组织管理
@@ -139,19 +135,21 @@ skills/
 |-------|------|----------|
 | **gitlink-shared** | 认证、全局参数、API 参考、安全规则、分支约定 | `auth login`, `auth status` |
 | **gitlink-repo** | 仓库管理与洞察 | `repo +list`, `repo +info`, `repo +languages`, `repo +contributors`, `repo +code-stats`, `repo +follow`, `repo +like` |
-| **gitlink-reaction** | 仓库互动 | `reaction +watchers`, `reaction +stargazers`, `reaction +follow`, `reaction +like` |
 | **gitlink-issue** | Issue 管理 | `issue +create`, `issue +list`, `issue +view`, `issue +close`, `issue +batch-close` |
-| **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +versions`, `pr +version-diff`, `pr +reviews`, `pr +review` |
-| **gitlink-member** | 仓库成员管理 | `member +list`, `member +add`, `member +batch-add`, `member +role`, `member +invite-link` |
+| **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +reviews`, `pr +review` |
 | **gitlink-branch** | 分支管理 | `branch +list`, `branch +create`, `branch +delete`, `branch +protect` |
 | **gitlink-release** | 版本发布 | `release +list`, `release +create`, `release +edit`, `release +update`, `release +view` |
+| **gitlink-milestone** | 里程碑管理 | `milestone +list`, `milestone +create`, `milestone +view`, `milestone +close` |
+| **gitlink-label** | 标签管理 | `label +list`, `label +create`, `label +delete` |
+| **gitlink-file** | 仓库文件操作 | `file +browse`, `file +get`, `file +create`, `file +update`, `file +delete` |
+| **gitlink-webhook** | Webhook 管理 | `webhook +list`, `webhook +create`, `webhook +delete` |
+| **gitlink-member** | 项目成员管理 | `member +list`, `member +add`, `member +remove` |
 
 ### 辅助 Skills
 
 | Skill | 说明 | 常用命令 |
 |-------|------|----------|
 | **gitlink-search** | 搜索功能 | `search +repos`, `search +users` |
-| **gitlink-catalog** | 平台模板目录 | `catalog +licenses`, `catalog +ignores` |
 | **gitlink-user** | 用户管理 | `user +me`, `user +info` |
 | **gitlink-org** | 组织管理 | `org +list`, `org +info`, `org +members` |
 | **gitlink-ci** | CI/CD | `ci +builds`, `ci +logs` |
@@ -159,6 +157,37 @@ skills/
 | **gitlink-pm** | 项目管理 | 通过 Raw API 访问 |
 | **gitlink-workflow** | AI 工作流 | Issue 分类、PR Review、Release Notes |
 | **gitlink-health** | 开源项目健康度 | 详情见SKILL.md |
+| **gitlink-snippet** | 本地代码片段管理 | `snippet +create`, `snippet +search`, `snippet +list` |
+
+### 智能化与工作流 Skills（AI 编排，串联多步）
+
+| Skill | 说明 | 常用命令 / 能力 |
+|-------|------|----------|
+| **gitlink-onboarding** | 新人引导 | 搜 good-first-issue、5 维度友好度评估、生成引导评论 |
+| **gitlink-digest** | 项目简报 | 跨源聚合 Issue/PR/CI/通知成日报 |
+| **gitlink-todo** | 我的待办 | 汇总 @我 / 分配我 / 待 review，按紧急度排序 |
+| **gitlink-pr-guard** | 代码质量看门人 | PR→Review→CI→质量判定→合并（端到端门禁） |
+
+> 以上 5 个为本次新增的 AI 工作流 Skill，均兼容 Claude Code 等 Agent，详见各 `SKILL.md`。
+
+### 科研辅助 Skills（子赛题四「应用 GitLink 辅助科研」）
+
+采用「Go 出数据 + Python 做算法」：数据复用现有 gitlink-cli 域，科研算法在 `scripts/research/*.py`（networkx/plotly），每个场景配可复现脚本与 Skill 规范，并可通过 `gitlink-cli server` 网页终端演示。详见 [../doc/科研场景使用指南.md](../doc/科研场景使用指南.md)。
+
+| Skill | 场景 | 说明 | 命令 |
+|-------|------|------|------|
+| **gitlink-research-insight** | S1 | 仓库级科研项目洞悉：演进谱系 + 创新点 | `python scripts/research/lineage.py` |
+| **gitlink-research-graph** | S2 | 科研知识图谱（networkx 节点/边）+ 热点追踪 | `python scripts/research/graph_build.py` |
+| **gitlink-compliance** | S3 | 合规与复现性检查（license/密钥/复现） | `python scripts/research/repro.py` |
+| **gitlink-collab-match** | S4 | 科研协作智能匹配（缺口×画像） | `python scripts/research/match.py` |
+| **gitlink-research-progress** | S5 | 进度智能跟踪与预警（周报+风险） | `python scripts/research/report.py` |
+| **gitlink-research-visual** | S6 | 科研成果可视化（plotly 交互图表） | `python scripts/research/visual.py` |
+| gitlink-research-tracker | S2/S5 | 技术调研与热点追踪（含真机 Agent 日志） | 见 SKILL.md |
+| gitlink-license-compliance | S3 | 许可证深度合规扫描 | 见 SKILL.md |
+| gitlink-scholar-profile | S4/S6 | 学者/团队科研画像 | 见 SKILL.md |
+| gitlink-research-fork-impact | S1/S6 | Fork 影响力与想法传播分析 | 见 SKILL.md |
+
+> 6 个场景均已在真实科研仓库 `mindspore-Ecosystem/mindspore` 上验证；技术实现详见 [../doc/科研场景技术实现报告.md](../doc/科研场景技术实现报告.md)。
 
 ---
 
@@ -259,7 +288,6 @@ gitlink-cli org +info -i Gitlink
 - [gitlink-release/SKILL.md](gitlink-release/SKILL.md) - Release 命令
 - [gitlink-pipeline/SKILL.md](gitlink-pipeline/SKILL.md) - Pipeline 命令
 - [gitlink-search/SKILL.md](gitlink-search/SKILL.md) - 搜索命令
-- [gitlink-catalog/SKILL.md](gitlink-catalog/SKILL.md) - 平台模板目录命令
 
 **组织和用户**:
 - [gitlink-org/SKILL.md](gitlink-org/SKILL.md) - 组织命令

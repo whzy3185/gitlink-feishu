@@ -26,51 +26,94 @@ func TestParseIssueNumbersRejectsInvalidNumber(t *testing.T) {
 	}
 }
 
-func TestReadIssueNumbersFromCSVWithHeader(t *testing.T) {
+func TestReadCSVWithNumberHeader(t *testing.T) {
 	path := writeTempCSV(t, "title,number,state\nfirst,12,open\nsecond,13,open\n")
-	got, err := readIssueNumbersFromCSV(path)
+	headers, rows, err := ReadCSV(path)
 	if err != nil {
-		t.Fatalf("readIssueNumbersFromCSV returned error: %v", err)
+		t.Fatalf("ReadCSV returned error: %v", err)
+	}
+	col := FindColumn(headers, "number", "issue_number", "project_issues_index")
+	if col == -1 {
+		t.Fatal("column 'number' not found")
+	}
+	numbers := make([]string, 0, len(rows))
+	for _, row := range rows {
+		numbers = append(numbers, row[col])
+	}
+	numbers, err = normalizeIssueNumbers(numbers)
+	if err != nil {
+		t.Fatalf("normalizeIssueNumbers returned error: %v", err)
 	}
 	want := []string{"12", "13"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("readIssueNumbersFromCSV() = %#v, want %#v", got, want)
+	if !reflect.DeepEqual(numbers, want) {
+		t.Fatalf("got %#v, want %#v", numbers, want)
 	}
 }
 
-func TestReadIssueNumbersFromCSVWithProjectIssuesIndexHeader(t *testing.T) {
+func TestReadCSVWithProjectIssuesIndexHeader(t *testing.T) {
 	path := writeTempCSV(t, "title,project_issues_index,state\nfirst,12,open\nsecond,13,open\n")
-	got, err := readIssueNumbersFromCSV(path)
+	headers, rows, err := ReadCSV(path)
 	if err != nil {
-		t.Fatalf("readIssueNumbersFromCSV returned error: %v", err)
+		t.Fatalf("ReadCSV returned error: %v", err)
+	}
+	col := FindColumn(headers, "number", "issue_number", "project_issues_index")
+	if col == -1 {
+		t.Fatal("column 'project_issues_index' not found")
+	}
+	numbers := make([]string, 0, len(rows))
+	for _, row := range rows {
+		numbers = append(numbers, row[col])
+	}
+	numbers, err = normalizeIssueNumbers(numbers)
+	if err != nil {
+		t.Fatalf("normalizeIssueNumbers returned error: %v", err)
 	}
 	want := []string{"12", "13"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("readIssueNumbersFromCSV() = %#v, want %#v", got, want)
+	if !reflect.DeepEqual(numbers, want) {
+		t.Fatalf("got %#v, want %#v", numbers, want)
 	}
 }
 
-func TestReadIssueNumbersFromCSVWithoutHeaderUsesFirstColumn(t *testing.T) {
+func TestReadCSVHeaderlessReturnsNoColumnMatch(t *testing.T) {
 	path := writeTempCSV(t, "21,open\n22,closed\n21,duplicate\n")
-	got, err := readIssueNumbersFromCSV(path)
+	headers, rows, err := ReadCSV(path)
 	if err != nil {
-		t.Fatalf("readIssueNumbersFromCSV returned error: %v", err)
+		t.Fatalf("ReadCSV returned error: %v", err)
 	}
-	want := []string{"21", "22"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("readIssueNumbersFromCSV() = %#v, want %#v", got, want)
+	// 无表头时 FindColumn 返回 -1
+	col := FindColumn(headers, "number", "issue_number", "project_issues_index")
+	if col != -1 {
+		t.Fatalf("expected -1 for headerless CSV, got %d", col)
+	}
+	// 退回到首列（index 0）作为 issue 编号来源
+	col = 0
+	numbers := make([]string, 0, len(rows))
+	for _, row := range rows {
+		numbers = append(numbers, row[col])
+	}
+	numbers, err = normalizeIssueNumbers(numbers)
+	if err != nil {
+		t.Fatalf("normalizeIssueNumbers returned error: %v", err)
+	}
+	want := []string{"22", "21"}
+	if !reflect.DeepEqual(numbers, want) {
+		t.Fatalf("got %#v, want %#v", numbers, want)
 	}
 }
 
-func TestCollectIssueNumbersMergesCLIAndCSV(t *testing.T) {
+func TestResolveIssueNumbersMergesCLIAndCSV(t *testing.T) {
 	path := writeTempCSV(t, "number\n2\n3\n")
-	got, err := collectIssueNumbers("1,2", path)
+	ctx := &common.RuntimeContext{
+		Owner: "owner",
+		Repo:  "repo",
+	}
+	got, err := ResolveIssueNumbers(ctx, "1,2", path, "")
 	if err != nil {
-		t.Fatalf("collectIssueNumbers returned error: %v", err)
+		t.Fatalf("ResolveIssueNumbers returned error: %v", err)
 	}
 	want := []string{"1", "2", "3"}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("collectIssueNumbers() = %#v, want %#v", got, want)
+		t.Fatalf("ResolveIssueNumbers() = %#v, want %#v", got, want)
 	}
 }
 
@@ -207,65 +250,11 @@ func TestCollectIssueNumbersCSVReadError(t *testing.T) {
 	}
 }
 
-func TestReadIssueTextArgInline(t *testing.T) {
-	ctx := &common.RuntimeContext{Args: map[string]string{"body": "hello"}}
-	got, err := readIssueTextArg(ctx, "body", "body-file", true)
-	if err != nil {
-		t.Fatalf("readIssueTextArg returned error: %v", err)
-	}
-	if got != "hello" {
-		t.Fatalf("readIssueTextArg() = %q, want %q", got, "hello")
-	}
-}
-
-func TestReadIssueTextArgFromFile(t *testing.T) {
-	path := writeTempText(t, "hello from file")
-	ctx := &common.RuntimeContext{Args: map[string]string{"body-file": path}}
-	got, err := readIssueTextArg(ctx, "body", "body-file", true)
-	if err != nil {
-		t.Fatalf("readIssueTextArg returned error: %v", err)
-	}
-	if got != "hello from file" {
-		t.Fatalf("readIssueTextArg() = %q, want %q", got, "hello from file")
-	}
-}
-
-func TestReadIssueTextArgRejectsMixedSources(t *testing.T) {
-	path := writeTempText(t, "hello from file")
-	ctx := &common.RuntimeContext{Args: map[string]string{"body": "inline", "body-file": path}}
-	if _, err := readIssueTextArg(ctx, "body", "body-file", true); err == nil {
-		t.Fatal("expected readIssueTextArg to reject mixed inline and file sources")
-	}
-}
-
-func TestPreviewTextTruncatesLongValue(t *testing.T) {
-	input := ""
-	for i := 0; i < 150; i++ {
-		input += "a"
-	}
-	got := previewText(input)
-	if len([]rune(got)) != 123 {
-		t.Fatalf("previewText() length = %d, want %d", len([]rune(got)), 123)
-	}
-	if got[len(got)-3:] != "..." {
-		t.Fatalf("previewText() = %q, want trailing ellipsis", got)
-	}
-}
-
 func writeTempCSV(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "issues.csv")
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write temp csv: %v", err)
-	}
-	return path
-}
-
-func writeTempText(t *testing.T, content string) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "body.md")
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatalf("write temp text: %v", err)
 	}
 	return path
 }

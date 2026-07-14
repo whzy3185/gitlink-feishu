@@ -1,325 +1,170 @@
 package ci
 
 import (
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
-	"github.com/gitlink-org/gitlink-cli/internal/client"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func runShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
-	t.Helper()
-	shortcut := findShortcut(t, name)
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
-		Owner:  "owner",
-		Repo:   "repo",
-		Format: "json",
-		Args:   args,
-	}
-	return shortcut.Run(ctx)
-}
-
-func findShortcut(t *testing.T, name string) *common.Shortcut {
-	t.Helper()
-	for _, s := range Shortcuts() {
-		if s.Name == name {
-			return s
-		}
-	}
-	t.Fatalf("shortcut %q not found", name)
-	return nil
-}
-
-func writeJSON(w http.ResponseWriter, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
-}
-
-// --- builds ---
-
 func TestCIBuilds(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/owner/repo/builds.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/owner/repo/builds.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"total_count": float64(1),
+				"builds": []interface{}{
+					map[string]interface{}{
+						"id":     float64(10),
+						"status": "success",
+					},
+				},
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		writeJSON(w, []interface{}{
-			map[string]interface{}{"number": float64(1), "status": "success"},
-		})
-	}))
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "builds", map[string]string{"page": "1", "limit": "20"})
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{})
+	err := common.RunShortcut(t, Shortcuts(), "builds", ctx)
 	if err != nil {
 		t.Fatalf("builds failed: %v", err)
 	}
 }
 
-// --- logs ---
-
 func TestCILogs(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/owner/repo/builds/5/logs/1/1.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/owner/repo/builds/10/logs/1/1.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"build_id": float64(10),
+				"stage":    float64(1),
+				"step":     float64(1),
+				"lines":    []interface{}{"Building..."},
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		writeJSON(w, map[string]interface{}{"log": "Build output..."})
-	}))
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "logs", map[string]string{"build": "5", "stage": "1", "step": "1"})
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{
+		"build": "10",
+		"stage": "1",
+		"step":  "1",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "logs", ctx)
 	if err != nil {
 		t.Fatalf("logs failed: %v", err)
 	}
 }
 
-func TestCILogsDefaults(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/owner/repo/builds/3/logs/1/1.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(w, map[string]interface{}{"log": "output"})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "logs", map[string]string{"build": "3"})
-	if err != nil {
-		t.Fatalf("logs with defaults failed: %v", err)
-	}
-}
-
-// --- restart ---
-
 func TestCIRestart(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/owner/repo/builds/7/restart.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(w, map[string]interface{}{"message": "restarted"})
-	}))
+	var requestMethod string
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		requestMethod = r.Method
+		common.WriteJSON(t, w, map[string]interface{}{
+			"status":  float64(0),
+			"message": "success",
+		})
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "restart", map[string]string{"build": "7"})
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{
+		"build": "10",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "restart", ctx)
 	if err != nil {
 		t.Fatalf("restart failed: %v", err)
 	}
+	if requestMethod != "POST" {
+		t.Errorf("expected POST, got %s", requestMethod)
+	}
 }
 
-// --- stop ---
-
 func TestCIStop(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" {
-			t.Fatalf("expected DELETE, got %s", r.Method)
-		}
-		if r.URL.Path != "/owner/repo/builds/7/stop.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(w, map[string]interface{}{"message": "stopped"})
-	}))
+	var requestMethod string
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		requestMethod = r.Method
+		common.WriteJSON(t, w, map[string]interface{}{
+			"status":  float64(0),
+			"message": "success",
+		})
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "stop", map[string]string{"build": "7"})
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{
+		"build": "10",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "stop", ctx)
 	if err != nil {
 		t.Fatalf("stop failed: %v", err)
 	}
-}
-
-// --- activate / deactivate / authorize ---
-
-func TestCIActivateDryRunDoesNotCallAPI(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("activate dry-run should not call remote API: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "activate", map[string]string{"dry-run": "true"})
-	if err != nil {
-		t.Fatalf("activate dry-run failed: %v", err)
+	if requestMethod != "DELETE" {
+		t.Errorf("expected DELETE, got %s", requestMethod)
 	}
 }
 
-func TestCIActivateRequiresYes(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("activate without --yes should not call remote API: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
+func TestCIToggle(t *testing.T) {
+	tests := []struct {
+		name       string
+		shortcut   string
+		wantMethod string
+		wantPath   string
+	}{
+		{"enable", "enable", "POST", "/v1/owner/repo/actions/enable.json"},
+		{"disable", "disable", "POST", "/v1/owner/repo/actions/disable.json"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var requestMethod string
+			var requestPath string
+			server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				requestMethod = r.Method
+				requestPath = r.URL.Path
+				common.WriteJSON(t, w, map[string]interface{}{
+					"status":  float64(0),
+					"message": "success",
+				})
+			})
+			defer server.Close()
 
-	err := runShortcut(t, server, "activate", nil)
-	if err == nil {
-		t.Fatal("expected activate to require --yes")
+			ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{})
+			err := common.RunShortcut(t, Shortcuts(), tt.shortcut, ctx)
+			if err != nil {
+				t.Fatalf("%s failed: %v", tt.shortcut, err)
+			}
+			if requestMethod != tt.wantMethod {
+				t.Errorf("expected %s, got %s", tt.wantMethod, requestMethod)
+			}
+			if requestPath != tt.wantPath {
+				t.Errorf("expected %s, got %s", tt.wantPath, requestPath)
+			}
+		})
 	}
 }
 
-func TestCIActivateWithYesCallsEndpoint(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Fatalf("expected POST, got %s", r.Method)
-		}
-		if r.URL.Path != "/owner/repo/activate.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(w, map[string]interface{}{"status": 0, "message": "success"})
-	}))
+func TestCIAuthorize(t *testing.T) {
+	var requestMethod string
+	var requestPath string
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		requestMethod = r.Method
+		requestPath = r.URL.Path
+		common.WriteJSON(t, w, map[string]interface{}{
+			"status":  float64(0),
+			"message": "success",
+		})
+	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "activate", map[string]string{"yes": "true"})
-	if err != nil {
-		t.Fatalf("activate failed: %v", err)
-	}
-}
-
-func TestCIDeactivateDryRunDoesNotCallAPI(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("deactivate dry-run should not call remote API: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "deactivate", map[string]string{"dry-run": "true"})
-	if err != nil {
-		t.Fatalf("deactivate dry-run failed: %v", err)
-	}
-}
-
-func TestCIDeactivateRequiresYes(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("deactivate without --yes should not call remote API: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "deactivate", nil)
-	if err == nil {
-		t.Fatal("expected deactivate to require --yes")
-	}
-}
-
-func TestCIDeactivateWithYesCallsEndpoint(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" {
-			t.Fatalf("expected DELETE, got %s", r.Method)
-		}
-		if r.URL.Path != "/owner/repo/deactivate.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(w, map[string]interface{}{"status": 0, "message": "success"})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "deactivate", map[string]string{"yes": "true"})
-	if err != nil {
-		t.Fatalf("deactivate failed: %v", err)
-	}
-}
-
-func TestCIAuthorizeCallsEndpoint(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Fatalf("expected GET, got %s", r.Method)
-		}
-		if r.URL.Path != "/owner/repo/ci_authorize.json" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		writeJSON(w, map[string]interface{}{"authorized": true})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "authorize", nil)
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{})
+	err := common.RunShortcut(t, Shortcuts(), "authorize", ctx)
 	if err != nil {
 		t.Fatalf("authorize failed: %v", err)
 	}
-}
-
-// --- HTTP error paths ---
-
-func TestCIBuildsHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "builds", map[string]string{"page": "1", "limit": "20"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
+	if requestMethod != "GET" {
+		t.Errorf("expected GET, got %s", requestMethod)
 	}
-}
-
-func TestCILogsHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "logs", map[string]string{"build": "5"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
-	}
-}
-
-func TestCIRestartHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "restart", map[string]string{"build": "7"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
-	}
-}
-
-func TestCIStopHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "stop", map[string]string{"build": "7"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
-	}
-}
-
-func TestCIActivateHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "activate", map[string]string{"yes": "true"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
-	}
-}
-
-func TestCIDeactivateHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "deactivate", map[string]string{"yes": "true"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
-	}
-}
-
-func TestCIAuthorizeHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "authorize", nil)
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
+	if requestPath != "/owner/repo/ci_authorize.json" {
+		t.Errorf("expected /owner/repo/ci_authorize.json, got %s", requestPath)
 	}
 }

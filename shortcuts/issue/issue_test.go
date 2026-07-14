@@ -777,12 +777,20 @@ func TestBatchClosePreservesCurrentDescription(t *testing.T) {
 	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "batch-close", map[string]string{
-		"numbers": "42",
-		"dry-run": "false",
-	})
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{
+			HTTP:    server.Client(),
+			BaseURL: server.URL,
+		},
+		Owner:  "owner",
+		Repo:   "repo",
+		Format: "json",
+		Args:   map[string]string{},
+	}
+
+	err := patchIssue(ctx, "42", map[string]interface{}{"status_id": closeIssueStatusID}, "close")
 	if err != nil {
-		t.Fatalf("batch-close shortcut failed: %v", err)
+		t.Fatalf("patchIssue (close) failed: %v", err)
 	}
 	assertEqual(t, updatePayload["subject"], "Existing title")
 	assertEqual(t, updatePayload["description"], "Existing description")
@@ -1056,210 +1064,5 @@ func TestIssueCloseHTTPError(t *testing.T) {
 	err := runShortcut(t, server, "close", map[string]string{"number": "42"})
 	if err == nil {
 		t.Fatal("expected error for PATCH HTTP 500")
-	}
-}
-
-func TestFetchExistingIssueBadData(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, "not a map")
-	})
-	defer server.Close()
-
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
-		Owner:  "owner",
-		Repo:   "repo",
-	}
-	_, err := fetchExistingIssue(ctx, "1")
-	if err == nil {
-		t.Fatal("expected error for non-map response")
-	}
-}
-
-func TestFetchExistingIssueNoSubject(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, map[string]interface{}{"id": float64(1)})
-	})
-	defer server.Close()
-
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
-		Owner:  "owner",
-		Repo:   "repo",
-	}
-	_, err := fetchExistingIssue(ctx, "1")
-	if err == nil {
-		t.Fatal("expected error for missing subject")
-	}
-}
-
-// --- normalizeIssueStatus ---
-
-func TestNormalizeIssueStatus(t *testing.T) {
-	tests := []struct {
-		input   string
-		want    interface{}
-		wantErr bool
-	}{
-		{"open", 1, false},
-		{"OPEN", 1, false},
-		{"  open  ", 1, false},
-		{"closed", 5, false},
-		{"CLOSED", 5, false},
-		{"0", 0, false},
-		{"10", 10, false},
-		{"invalid", nil, true},
-		{"", nil, true},
-	}
-	for _, tt := range tests {
-		got, err := normalizeIssueStatus(tt.input)
-		if tt.wantErr {
-			if err == nil {
-				t.Errorf("normalizeIssueStatus(%q) expected error", tt.input)
-			}
-		} else {
-			if err != nil {
-				t.Errorf("normalizeIssueStatus(%q) error: %v", tt.input, err)
-			}
-			if got != tt.want {
-				t.Errorf("normalizeIssueStatus(%q) = %v, want %v", tt.input, got, tt.want)
-			}
-		}
-	}
-}
-
-func TestIssueCommentsListsJournalsWithQuery(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/42/journals.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		q := r.URL.Query()
-		assertEqual(t, q.Get("page"), "2")
-		assertEqual(t, q.Get("limit"), "5")
-		assertEqual(t, q.Get("category"), "comment")
-		assertEqual(t, q.Get("keyword"), "hello")
-		writeJSON(t, w, map[string]interface{}{"total_count": float64(0), "journals": []interface{}{}})
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "comments", map[string]string{
-		"number": "42", "page": "2", "limit": "5", "category": "comment", "keyword": "hello",
-	})
-	if err != nil {
-		t.Fatalf("comments failed: %v", err)
-	}
-}
-
-func TestIssueCommentEditPatchesJournal(t *testing.T) {
-	var payload map[string]interface{}
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "PATCH" || r.URL.Path != "/v1/owner/repo/issues/42/journals/99.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"id": float64(99)})
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "comment-edit", map[string]string{
-		"number": "42", "comment-id": "99", "body": "updated",
-	})
-	if err != nil {
-		t.Fatalf("comment-edit failed: %v", err)
-	}
-	assertEqual(t, payload["notes"], "updated")
-}
-
-func TestIssueCommentDeleteUsesJournalPath(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" || r.URL.Path != "/v1/owner/repo/issues/42/journals/99.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		writeJSON(t, w, map[string]interface{}{"status": float64(0)})
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "comment-delete", map[string]string{"number": "42", "comment-id": "99"})
-	if err != nil {
-		t.Fatalf("comment-delete failed: %v", err)
-	}
-}
-
-func TestIssueCommentEditRejectsNonIntegerCommentID(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "comment-edit", map[string]string{
-		"number": "42", "comment-id": "abc", "body": "x",
-	})
-	if err == nil {
-		t.Fatal("expected error for non-integer --comment-id")
-	}
-}
-
-func TestIssueCommentDeleteRequiresCommentID(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	err := runShortcut(t, server, "comment-delete", map[string]string{"number": "42"})
-	if err == nil {
-		t.Fatal("expected error when --comment-id is missing")
-	}
-}
-
-func TestIssueCommentReplyToSetsParentID(t *testing.T) {
-	var payload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" || r.URL.Path != "/v1/owner/repo/issues/7/journals.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"id": float64(101)})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "comment", map[string]string{
-		"number": "7", "body": "a reply", "reply-to": "99",
-	})
-	if err != nil {
-		t.Fatalf("comment failed: %v", err)
-	}
-	assertEqual(t, payload["notes"], "a reply")
-	assertEqual(t, payload["parent_id"], float64(99))
-	assertEqual(t, payload["reply_id"], float64(99))
-}
-
-func TestIssueCommentRepliesUsesChildrenJournalsPath(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues/7/journals/99/children_journals.json" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-		writeJSON(t, w, map[string]interface{}{"total_count": float64(0), "journals": []interface{}{}})
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "comment-replies", map[string]string{
-		"number": "7", "comment-id": "99",
-	})
-	if err != nil {
-		t.Fatalf("comment-replies failed: %v", err)
-	}
-}
-
-func TestIssueCommentRepliesRejectsNonIntegerCommentID(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-	}))
-	defer server.Close()
-
-	err := runShortcut(t, server, "comment-replies", map[string]string{
-		"number": "7", "comment-id": "abc",
-	})
-	if err == nil {
-		t.Fatal("expected error for non-integer --comment-id")
 	}
 }

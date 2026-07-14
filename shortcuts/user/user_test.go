@@ -1,329 +1,212 @@
 package user
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"reflect"
 	"testing"
 
-	"github.com/gitlink-org/gitlink-cli/internal/client"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
 func TestUserMe(t *testing.T) {
-	server := newUserTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertUserRequest(t, r, "GET", "/users/me.json")
-		writeUserJSON(t, w, map[string]interface{}{
-			"login": "currentuser",
-			"name":  "Current User",
-			"id":    float64(1),
-		})
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/users/me.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"login":   "alice",
+				"user_id": float64(42),
+				"name":    "Alice",
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	})
 	defer server.Close()
 
-	if err := runUserShortcut(t, server, "me", nil); err != nil {
-		t.Fatalf("me shortcut failed: %v", err)
-	}
-}
-
-func TestUserCurrent(t *testing.T) {
-	server := newUserTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertUserRequest(t, r, "GET", "/users/get_user_info.json")
-		writeUserJSON(t, w, map[string]interface{}{"login": "alice"})
-	})
-	defer server.Close()
-
-	if err := runUserShortcut(t, server, "current", nil); err != nil {
-		t.Fatalf("current shortcut failed: %v", err)
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{})
+	err := common.RunShortcut(t, Shortcuts(), "me", ctx)
+	if err != nil {
+		t.Fatalf("me failed: %v", err)
 	}
 }
 
 func TestUserInfo(t *testing.T) {
-	server := newUserTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertUserRequest(t, r, "GET", "/users/alice.json")
-		writeUserJSON(t, w, map[string]interface{}{
-			"login": "alice",
-			"name":  "Alice",
-		})
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/users/bob.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"login":   "bob",
+				"user_id": float64(7),
+				"name":    "Bob",
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	})
 	defer server.Close()
 
-	if err := runUserShortcut(t, server, "info", map[string]string{"login": "alice"}); err != nil {
-		t.Fatalf("info shortcut failed: %v", err)
-	}
-}
-
-func TestUserKeys(t *testing.T) {
-	server := newUserTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertUserRequest(t, r, "GET", "/public_keys.json")
-		assertUserQuery(t, r, "page", "2")
-		assertUserQuery(t, r, "limit", "50")
-		writeUserJSON(t, w, map[string]interface{}{"total_count": 0, "public_keys": []interface{}{}})
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{
+		"login": "bob",
 	})
-	defer server.Close()
-
-	err := runUserShortcut(t, server, "keys", map[string]string{
-		"page":  "2",
-		"limit": "50",
-	})
+	err := common.RunShortcut(t, Shortcuts(), "info", ctx)
 	if err != nil {
-		t.Fatalf("keys shortcut failed: %v", err)
+		t.Fatalf("info failed: %v", err)
 	}
 }
 
-func TestUserKeyCreatePayload(t *testing.T) {
-	var payload map[string]interface{}
-	server := newUserTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertUserRequest(t, r, "POST", "/public_keys.json")
-		payload = decodeUserJSON(t, r)
-		writeUserJSON(t, w, map[string]interface{}{"id": 1})
-	})
-	defer server.Close()
-
-	err := runUserShortcut(t, server, "key-create", map[string]string{
-		"title": "work laptop",
-		"key":   "ssh-rsa AAAA test@example.com",
-	})
-	if err != nil {
-		t.Fatalf("key-create shortcut failed: %v", err)
-	}
-
-	assertUserEqual(t, payload["title"], "work laptop")
-	assertUserEqual(t, payload["key"], "ssh-rsa AAAA test@example.com")
-}
-
-func TestUserKeyDelete(t *testing.T) {
-	server := newUserTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertUserRequest(t, r, "DELETE", "/public_keys/7.json")
-		writeUserJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-	})
-	defer server.Close()
-
-	if err := runUserShortcut(t, server, "key-delete", map[string]string{"id": "7"}); err != nil {
-		t.Fatalf("key-delete shortcut failed: %v", err)
-	}
-}
-
-func TestUserKeyDryRunDoesNotCallAPI(t *testing.T) {
-	dryRunCases := []struct {
-		name string
-		args map[string]string
-	}{
-		{name: "key-create", args: map[string]string{"title": "work laptop", "key": "ssh-rsa AAAA", "dry-run": "true"}},
-		{name: "key-delete", args: map[string]string{"id": "7", "dry-run": "true"}},
-	}
-
-	for _, tc := range dryRunCases {
-		t.Run(tc.name, func(t *testing.T) {
-			server := newUserTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-				t.Fatalf("dry-run should not call API, got %s %s", r.Method, r.URL.Path)
+func TestUserShortcutsMissingLogin(t *testing.T) {
+	tests := []string{"info", "headmaps", "trends"}
+	for _, name := range tests {
+		t.Run(name, func(t *testing.T) {
+			server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				t.Fatalf("no request should be made: %s %s", r.Method, r.URL.Path)
 			})
 			defer server.Close()
 
-			if err := runUserShortcut(t, server, tc.name, tc.args); err != nil {
-				t.Fatalf("%s dry-run failed: %v", tc.name, err)
+			ctx := common.NewTestContext(t, server, "", "", map[string]string{})
+			err := common.RunShortcut(t, Shortcuts(), name, ctx)
+			if err == nil {
+				t.Fatal("expected error for missing --login")
 			}
 		})
 	}
 }
 
-func TestUserStatsShortcuts(t *testing.T) {
+func TestUserHeadmaps(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/users/alice/headmaps.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"headmaps": []interface{}{
+					map[string]interface{}{"date": "2025-01-01", "count": float64(5)},
+				},
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{
+		"login": "alice",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "headmaps", ctx)
+	if err != nil {
+		t.Fatalf("headmaps failed: %v", err)
+	}
+}
+
+func TestUserStatsEndpoints(t *testing.T) {
 	tests := []struct {
-		name        string
-		args        map[string]string
-		path        string
-		queryKey    string
-		queryValue  string
-		queryKey2   string
-		queryValue2 string
+		name     string
+		shortcut string
+		wantPath string
+		respData map[string]interface{}
 	}{
-		{name: "activity", args: map[string]string{"login": "alice"}, path: "/users/alice/statistics/activity.json"},
-		{name: "headmap", args: map[string]string{"login": "alice", "year": "2026"}, path: "/users/alice/headmaps.json", queryKey: "year", queryValue: "2026"},
-		{name: "develop", args: map[string]string{"login": "alice", "start-time": "100", "end-time": "200"}, path: "/users/alice/statistics/develop.json", queryKey: "start_time", queryValue: "100", queryKey2: "end_time", queryValue2: "200"},
-		{name: "role", args: map[string]string{"login": "alice", "start-time": "100", "end-time": "200"}, path: "/users/alice/statistics/role.json", queryKey: "start_time", queryValue: "100", queryKey2: "end_time", queryValue2: "200"},
-		{name: "major", args: map[string]string{"login": "alice", "start-time": "100", "end-time": "200"}, path: "/users/alice/statistics/major.json", queryKey: "start_time", queryValue: "100", queryKey2: "end_time", queryValue2: "200"},
+		{
+			name: "activity", shortcut: "stats-activity",
+			wantPath: "/users/alice/statistics/activity.json",
+			respData: map[string]interface{}{"dates": []string{"2025-01-01"}, "commits_count": []float64{3}},
+		},
+		{
+			name: "develop", shortcut: "stats-develop",
+			wantPath: "/users/alice/statistics/develop.json",
+			respData: map[string]interface{}{"score": float64(80)},
+		},
+		{
+			name: "role", shortcut: "stats-role",
+			wantPath: "/users/alice/statistics/role.json",
+			respData: map[string]interface{}{"role": "developer"},
+		},
+		{
+			name: "major", shortcut: "stats-major",
+			wantPath: "/users/alice/statistics/major.json",
+			respData: map[string]interface{}{"major": "backend"},
+		},
 	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			server := newUserTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-				assertUserRequest(t, r, "GET", tc.path)
-				if tc.queryKey != "" {
-					assertUserQuery(t, r, tc.queryKey, tc.queryValue)
+	for _, tt := range tests {
+		// 功能测试
+		t.Run(tt.name, func(t *testing.T) {
+			server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "GET" && r.URL.Path == tt.wantPath {
+					common.WriteJSON(t, w, tt.respData)
+				} else {
+					t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 				}
-				if tc.queryKey2 != "" {
-					assertUserQuery(t, r, tc.queryKey2, tc.queryValue2)
-				}
-				writeUserJSON(t, w, map[string]interface{}{"status": 0})
 			})
 			defer server.Close()
 
-			if err := runUserShortcut(t, server, tc.name, tc.args); err != nil {
-				t.Fatalf("%s shortcut failed: %v", tc.name, err)
+			ctx := common.NewTestContext(t, server, "", "", map[string]string{"login": "alice"})
+			err := common.RunShortcut(t, Shortcuts(), tt.shortcut, ctx)
+			if err != nil {
+				t.Fatalf("%s failed: %v", tt.shortcut, err)
+			}
+		})
+
+		// MissingLogin 测试
+		t.Run(tt.name+"_missing_login", func(t *testing.T) {
+			server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				t.Fatalf("no request should be made: %s %s", r.Method, r.URL.Path)
+			})
+			defer server.Close()
+
+			ctx := common.NewTestContext(t, server, "", "", map[string]string{})
+			err := common.RunShortcut(t, Shortcuts(), tt.shortcut, ctx)
+			if err == nil {
+				t.Fatal("expected error for missing --login")
 			}
 		})
 	}
 }
 
-func TestUserInfoMissingLogin(t *testing.T) {
-	server := newUserTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("missing login should not call API")
-	})
-	defer server.Close()
-
-	err := runUserShortcut(t, server, "info", map[string]string{})
-	if err == nil {
-		t.Fatal("expected error for missing login")
-	}
-}
-
-func TestUserKeyCreateRejectsMissingKey(t *testing.T) {
-	server := newUserTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("missing key should not call API, got %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	err := runUserShortcut(t, server, "key-create", map[string]string{"title": "work laptop"})
-	if err == nil {
-		t.Fatal("expected missing key to return an error")
-	}
-}
-
-func TestUserMeHTTPError(t *testing.T) {
-	server := newUserTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		if _, err := w.Write([]byte("server error")); err != nil {
-			t.Fatalf("write response: %v", err)
+func TestUserTrends(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/users/alice/project_trends.json" {
+			// 验证分页参数
+			if r.URL.Query().Get("page") != "1" {
+				t.Fatalf("expected page=1, got %s", r.URL.Query().Get("page"))
+			}
+			if r.URL.Query().Get("limit") != "20" {
+				t.Fatalf("expected limit=20, got %s", r.URL.Query().Get("limit"))
+			}
+			common.WriteJSON(t, w, map[string]interface{}{
+				"total_count": float64(69),
+				"project_trends": []interface{}{
+					map[string]interface{}{"id": float64(1), "name": "trend1"},
+				},
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 	})
 	defer server.Close()
 
-	err := runUserShortcut(t, server, "me", nil)
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{
+		"login": "alice",
+		"page":  "1",
+		"limit": "20",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "trends", ctx)
+	if err != nil {
+		t.Fatalf("trends failed: %v", err)
 	}
 }
 
-func TestUserInfoHTTPError(t *testing.T) {
-	server := newUserTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		if _, err := w.Write([]byte("server error")); err != nil {
-			t.Fatalf("write response: %v", err)
+func TestUserTrendsDefaultPagination(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/users/alice/project_trends.json" {
+			// 不传 page/limit 时，Arg 返回空字符串，url.Values.Set 设置空值
+			common.WriteJSON(t, w, map[string]interface{}{
+				"total_count":    float64(69),
+				"project_trends": []interface{}{},
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 	})
 	defer server.Close()
 
-	err := runUserShortcut(t, server, "info", map[string]string{"login": "alice"})
-	if err == nil {
-		t.Fatal("expected error for HTTP 500")
+	ctx := common.NewTestContext(t, server, "", "", map[string]string{
+		"login": "alice",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "trends", ctx)
+	if err != nil {
+		t.Fatalf("trends failed: %v", err)
 	}
-}
-
-func TestUserShortcutNames(t *testing.T) {
-	got := map[string]bool{}
-	for _, shortcut := range Shortcuts() {
-		got[shortcut.Name] = true
-	}
-	want := []string{"me", "current", "info", "keys", "key-create", "key-delete", "activity", "headmap", "develop", "role", "major"}
-	for _, name := range want {
-		if !got[name] {
-			t.Fatalf("missing shortcut %q in %v", name, got)
-		}
-	}
-	if len(got) != len(want) {
-		t.Fatalf("shortcut count = %d, want %d: %v", len(got), len(want), got)
-	}
-}
-
-func runUserShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
-	t.Helper()
-	shortcut := findUserShortcut(t, name)
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{
-			HTTP:    server.Client(),
-			BaseURL: server.URL,
-		},
-		Owner:  "owner",
-		Repo:   "repo",
-		Format: "json",
-		Args:   args,
-	}
-	if ctx.Args == nil {
-		ctx.Args = map[string]string{}
-	}
-	return shortcut.Run(ctx)
-}
-
-func findUserShortcut(t *testing.T, name string) *common.Shortcut {
-	t.Helper()
-	for _, shortcut := range Shortcuts() {
-		if shortcut.Name == name {
-			return shortcut
-		}
-	}
-	t.Fatalf("shortcut %q not found", name)
-	return nil
-}
-
-func newUserTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
-	t.Helper()
-	return httptest.NewServer(handler)
-}
-
-func assertUserRequest(t *testing.T, r *http.Request, method, path string) {
-	t.Helper()
-	if r.Method != method || r.URL.Path != path {
-		t.Fatalf("got request %s %s, want %s %s", r.Method, r.URL.Path, method, path)
-	}
-}
-
-func assertUserQuery(t *testing.T, r *http.Request, key, want string) {
-	t.Helper()
-	if got := r.URL.Query().Get(key); got != want {
-		t.Fatalf("query %s = %q, want %q", key, got, want)
-	}
-}
-
-func decodeUserJSON(t *testing.T, r *http.Request) map[string]interface{} {
-	t.Helper()
-	var payload map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		t.Fatalf("failed to decode request body: %v", err)
-	}
-	return payload
-}
-
-func writeUserJSON(t *testing.T, w http.ResponseWriter, payload interface{}) {
-	t.Helper()
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		t.Fatalf("failed to write response: %v", err)
-	}
-}
-
-func assertUserEqual(t *testing.T, got interface{}, want interface{}) {
-	t.Helper()
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v (%T), want %v (%T)", got, got, want, want)
-	}
-}
-
-func ExampleShortcuts() {
-	for _, shortcut := range Shortcuts() {
-		fmt.Println(shortcut.Name)
-	}
-	// Output:
-	// me
-	// current
-	// info
-	// keys
-	// key-create
-	// key-delete
-	// activity
-	// headmap
-	// develop
-	// role
-	// major
 }

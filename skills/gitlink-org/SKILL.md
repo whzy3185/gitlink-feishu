@@ -1,7 +1,7 @@
 ---
 name: gitlink-org
 version: 1.0.0
-description: "组织管理：查看组织列表、详情、成员、团队，创建组织。当用户需要操作 GitLink 组织时触发。"
+description: "组织管理：查看组织列表、详情、成员，创建组织。当用户需要操作 GitLink 组织时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -18,13 +18,15 @@ metadata:
 
 ## Shortcuts
 
-| Shortcut | 说明 |
-|----------|------|
-| `org +list` | 组织列表 |
-| `org +info` | 组织详情 |
-| `org +members` | 成员列表 |
-| `org +teams` | 团队列表 |
-| `org +create` | 创建组织 |
+| Shortcut | 说明 | 需要认证 |
+|----------|------|----------|
+| `org +list` | 组织列表 | 否 |
+| `org +info` | 组织详情 | 否 |
+| `org +members` | 成员列表 | 否 |
+| `org +create` | 创建组织 | 是 |
+| `org +teams` | 团队列表 | 否 |
+| `org +create-team` | 创建团队 | 是 |
+| `org +remove-member` | 移除成员 | 是 |
 
 ## 使用示例
 
@@ -32,16 +34,15 @@ metadata:
 gitlink-cli org +list
 gitlink-cli org +info --id Gitlink
 gitlink-cli org +members --id Gitlink
-gitlink-cli org +teams --id Gitlink --page 1 --limit 20
 gitlink-cli org +create --name my-org --description "我的组织"
+
+# 管理团队
+gitlink-cli org +teams --id 12345
+gitlink-cli org +create-team --id 12345 --name dev-team
+gitlink-cli org +remove-member --id 12345 --uid 67890
 ```
 
-## Raw API 补充
+## 注意事项
 
-```bash
-# 创建组织团队
-gitlink-cli api POST /organizations/:id/teams --body '{"name":"dev-team"}'
-
-# 移除成员
-gitlink-cli api DELETE /organizations/:id/organization_users/:uid
-```
+- `org +create` 创建的组织默认为公开
+- 团队管理和成员移除需组织 owner 权限

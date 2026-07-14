@@ -1,4 +1,7 @@
-
-gitlink-cli.exe
-/gitlink-cli
+docs/
+doc/
+# Python & demo artifacts
 __pycache__/
+*.pyc
+demo/bin/
+data/

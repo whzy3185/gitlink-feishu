@@ -74,6 +74,11 @@ func printTable(w io.Writer, envelope *Envelope) error {
 		return nil
 	}
 
+	// Detect and render diff data in git-diff style
+	if isDiffData(envelope.Data) {
+		return printDiffTable(w, envelope)
+	}
+
 	// Try to render as table if data is a slice of maps
 	switch data := envelope.Data.(type) {
 	case []interface{}:
@@ -238,4 +243,100 @@ func formatValue(v interface{}) string {
 	default:
 		return fmt.Sprintf("%v", v)
 	}
+}
+
+// isDiffData checks whether the envelope data is a PR diff response with sections.
+// Distinguishes from the simpler files listing by checking for sections in files.
+func isDiffData(data interface{}) bool {
+	m, ok := data.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	files, hasFiles := m["files"].([]interface{})
+	if !hasFiles || len(files) == 0 {
+		return false
+	}
+	// Diff data has files with "sections"; simple file listing does not.
+	firstFile, ok := files[0].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	_, hasSections := firstFile["sections"]
+	return hasSections
+}
+
+// printDiffTable renders diff data in git-diff style text output.
+func printDiffTable(w io.Writer, envelope *Envelope) error {
+	data, ok := envelope.Data.(map[string]interface{})
+	if !ok {
+		return printJSON(w, envelope)
+	}
+
+	files, ok := data["files"].([]interface{})
+	if !ok {
+		return printJSON(w, envelope)
+	}
+
+	// Summary header
+	fileNums, _ := data["file_nums"].(float64)
+	totalAdd, _ := data["total_addition"].(float64)
+	totalDel, _ := data["total_deletion"].(float64)
+	fmt.Fprintf(w, " %d files changed, %d insertions(+), %d deletions(-)\n\n",
+		int(fileNums), int(totalAdd), int(totalDel))
+
+	for _, f := range files {
+		fm, ok := f.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, _ := fm["name"].(string)
+		addition, _ := fm["addition"].(float64)
+		deletion, _ := fm["deletion"].(float64)
+
+		// File header
+		fmt.Fprintf(w, "diff --git a/%s b/%s\n", name, name)
+
+		if isCreated, _ := fm["is_created"].(bool); isCreated {
+			fmt.Fprintf(w, "new file\n")
+		}
+		if isDeleted, _ := fm["is_deleted"].(bool); isDeleted {
+			fmt.Fprintf(w, "deleted file\n")
+		}
+
+		fmt.Fprintf(w, "--- a/%s\n", name)
+		fmt.Fprintf(w, "+++ b/%s\n", name)
+		fmt.Fprintf(w, "@@ +%d -%d @@\n", int(addition), int(deletion))
+
+		// Render each line
+		sections, _ := fm["sections"].([]interface{})
+		for _, sec := range sections {
+			secMap, ok := sec.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			lines, _ := secMap["lines"].([]interface{})
+			for _, l := range lines {
+				lineMap, ok := l.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				content, _ := lineMap["content"].(string)
+				lineType, _ := lineMap["type"].(float64)
+
+				switch int(lineType) {
+				case 4: // diff hunk header
+					fmt.Fprintf(w, "%s\n", content)
+				case 2: // addition
+					fmt.Fprintf(w, "%s\n", content)
+				case 3: // deletion
+					fmt.Fprintf(w, "%s\n", content)
+				default: // context line
+					fmt.Fprintf(w, "%s\n", content)
+				}
+			}
+		}
+		fmt.Fprintln(w)
+	}
+	return nil
 }

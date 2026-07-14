@@ -77,10 +77,10 @@ func TestReleaseCreateWithBody(t *testing.T) {
 }
 
 func TestReleaseEdit(t *testing.T) {
-	server := newReleaseTestServer(t, withVersionResolution(func(w http.ResponseWriter, r *http.Request) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		assertReleaseRequest(t, r, "GET", "/owner/repo/releases/7/edit.json")
 		writeReleaseJSON(t, w, releaseEditFixture())
-	}))
+	})
 	defer server.Close()
 
 	if err := runReleaseShortcut(t, server, "edit", map[string]string{"id": "7"}); err != nil {
@@ -90,18 +90,8 @@ func TestReleaseEdit(t *testing.T) {
 
 func TestReleaseView(t *testing.T) {
 	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/owner/repo/releases.json":
-			writeReleaseJSON(t, w, map[string]interface{}{
-				"releases": []map[string]interface{}{
-					{"tag_name": "v1.0", "id": "900001", "version_id": 7},
-				},
-			})
-		case "/owner/repo/releases/7.json":
-			writeReleaseJSON(t, w, map[string]interface{}{"tag_name": "v1.0", "name": "Version 1.0"})
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
+		assertReleaseRequest(t, r, "GET", "/owner/repo/releases/v1.0.json")
+		writeReleaseJSON(t, w, map[string]interface{}{"tag_name": "v1.0", "name": "Version 1.0"})
 	})
 	defer server.Close()
 
@@ -112,7 +102,7 @@ func TestReleaseView(t *testing.T) {
 
 func TestReleaseUpdatePreservesExistingFields(t *testing.T) {
 	var payload map[string]interface{}
-	server := newReleaseTestServer(t, withVersionResolution(func(w http.ResponseWriter, r *http.Request) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/owner/repo/releases/7/edit.json":
 			writeReleaseJSON(t, w, releaseEditFixture())
@@ -122,7 +112,7 @@ func TestReleaseUpdatePreservesExistingFields(t *testing.T) {
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-	}))
+	})
 	defer server.Close()
 
 	err := runReleaseShortcut(t, server, "update", map[string]string{
@@ -145,7 +135,7 @@ func TestReleaseUpdatePreservesExistingFields(t *testing.T) {
 
 func TestReleaseUpdateOverridesAttachmentIDs(t *testing.T) {
 	var payload map[string]interface{}
-	server := newReleaseTestServer(t, withVersionResolution(func(w http.ResponseWriter, r *http.Request) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/owner/repo/releases/7/edit.json":
 			writeReleaseJSON(t, w, releaseEditFixture())
@@ -155,7 +145,7 @@ func TestReleaseUpdateOverridesAttachmentIDs(t *testing.T) {
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-	}))
+	})
 	defer server.Close()
 
 	err := runReleaseShortcut(t, server, "update", map[string]string{
@@ -172,13 +162,13 @@ func TestReleaseUpdateOverridesAttachmentIDs(t *testing.T) {
 }
 
 func TestReleaseUpdateDryRunDoesNotWrite(t *testing.T) {
-	server := newReleaseTestServer(t, withVersionResolution(func(w http.ResponseWriter, r *http.Request) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "PUT" {
 			t.Fatalf("dry-run should not update release, got %s %s", r.Method, r.URL.Path)
 		}
 		assertReleaseRequest(t, r, "GET", "/owner/repo/releases/7/edit.json")
 		writeReleaseJSON(t, w, releaseEditFixture())
-	}))
+	})
 	defer server.Close()
 
 	err := runReleaseShortcut(t, server, "update", map[string]string{
@@ -192,10 +182,10 @@ func TestReleaseUpdateDryRunDoesNotWrite(t *testing.T) {
 }
 
 func TestReleaseDeleteSuccess(t *testing.T) {
-	server := newReleaseTestServer(t, withVersionResolution(func(w http.ResponseWriter, r *http.Request) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		assertReleaseRequest(t, r, "DELETE", "/owner/repo/releases/1.json")
 		writeReleaseJSON(t, w, map[string]interface{}{"message": "deleted"})
-	}))
+	})
 	defer server.Close()
 
 	if err := runReleaseShortcut(t, server, "delete", map[string]string{"id": "1"}); err != nil {
@@ -204,9 +194,9 @@ func TestReleaseDeleteSuccess(t *testing.T) {
 }
 
 func TestReleaseDeleteDryRunDoesNotCallAPI(t *testing.T) {
-	server := newReleaseTestServer(t, withVersionResolution(func(w http.ResponseWriter, r *http.Request) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("delete dry-run should not call API, got %s %s", r.Method, r.URL.Path)
-	}))
+	})
 	defer server.Close()
 
 	err := runReleaseShortcut(t, server, "delete", map[string]string{
@@ -219,7 +209,7 @@ func TestReleaseDeleteDryRunDoesNotCallAPI(t *testing.T) {
 }
 
 func TestReleaseDeleteBugWorkaround(t *testing.T) {
-	server := newReleaseTestServer(t, withVersionResolution(func(w http.ResponseWriter, r *http.Request) {
+	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "DELETE":
 			w.WriteHeader(http.StatusInternalServerError)
@@ -230,7 +220,7 @@ func TestReleaseDeleteBugWorkaround(t *testing.T) {
 		default:
 			t.Fatalf("unexpected method: %s", r.Method)
 		}
-	}))
+	})
 	defer server.Close()
 
 	if err := runReleaseShortcut(t, server, "delete", map[string]string{"id": "1"}); err != nil {
@@ -336,12 +326,82 @@ func TestReleaseUpdateRejectsInvalidBoolBeforeFetch(t *testing.T) {
 	}
 }
 
+func TestReleaseDownload(t *testing.T) {
+	tmpDir := t.TempDir()
+	assetContent := "binary-payload-here"
+
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/releases/1.json":
+			common.WriteJSON(t, w, map[string]interface{}{
+				"id":       float64(1),
+				"tag_name": "v1.0",
+				"name":     "First release",
+				"assets": []interface{}{
+					map[string]interface{}{
+						"url":      "/assets/app.tar.gz",
+						"filename": "app.tar.gz",
+					},
+				},
+			})
+		case r.Method == "GET" && r.URL.Path == "/assets/app.tar.gz":
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Write([]byte(assetContent))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{
+		"id":     "1",
+		"output": tmpDir,
+	})
+	err := common.RunShortcut(t, Shortcuts(), "download", ctx)
+	if err != nil {
+		t.Fatalf("download failed: %v", err)
+	}
+
+	// Verify file was written
+	data, err := os.ReadFile(filepath.Join(tmpDir, "app.tar.gz"))
+	if err != nil {
+		t.Fatalf("failed to read downloaded file: %v", err)
+	}
+	if string(data) != assetContent {
+		t.Errorf("file content mismatch: got %q, want %q", string(data), assetContent)
+	}
+}
+
+func TestReleaseDownloadNoAssets(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/owner/repo/releases/2.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"id":       float64(2),
+				"tag_name": "v2.0",
+				"name":     "Empty release",
+				"assets":   []interface{}{},
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{
+		"id": "2",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "download", ctx)
+	if err != nil {
+		t.Fatalf("download with no assets failed: %v", err)
+	}
+}
+
 func TestReleaseShortcutNames(t *testing.T) {
 	got := map[string]bool{}
 	for _, shortcut := range Shortcuts() {
 		got[shortcut.Name] = true
 	}
-	want := []string{"list", "create", "edit", "view", "download", "update", "delete"}
+	want := []string{"list", "create", "edit", "view", "update", "delete", "download"}
 	for _, name := range want {
 		if !got[name] {
 			t.Fatalf("missing shortcut %q in %v", name, got)
@@ -462,151 +522,7 @@ func ExampleShortcuts() {
 	// create
 	// edit
 	// view
-	// download
 	// update
 	// delete
-}
-
-func TestReleaseCreateWithAttachmentFiles(t *testing.T) {
-	dir := t.TempDir()
-	asset := filepath.Join(dir, "asset.bin")
-	if err := os.WriteFile(asset, []byte("release asset data"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	var payload map[string]interface{}
-	var uploads int
-	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/attachments" || r.URL.Path == "/attachments.json" {
-			uploads++
-			if err := r.ParseMultipartForm(1 << 20); err != nil {
-				t.Fatalf("parse multipart: %v", err)
-			}
-			writeReleaseJSON(t, w, map[string]interface{}{"id": "uuid-from-upload", "title": "asset.bin"})
-			return
-		}
-		assertReleaseRequest(t, r, "POST", "/owner/repo/releases.json")
-		payload = decodeReleaseJSON(t, r)
-		writeReleaseJSON(t, w, map[string]interface{}{"status": 0, "message": "created"})
-	})
-	defer server.Close()
-
-	err := runReleaseShortcut(t, server, "create", map[string]string{
-		"tag":              "v1.0.0",
-		"name":             "v1.0.0",
-		"attachment-ids":   "12",
-		"attachment-files": asset,
-	})
-	if err != nil {
-		t.Fatalf("create shortcut failed: %v", err)
-	}
-	if uploads != 1 {
-		t.Fatalf("uploads = %d, want 1", uploads)
-	}
-	assertReleaseStringSlice(t, payload["attachment_ids"], []string{"12", "uuid-from-upload"})
-}
-
-func TestReleaseCreateAttachmentFilesMissing(t *testing.T) {
-	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
-	})
-	defer server.Close()
-
-	err := runReleaseShortcut(t, server, "create", map[string]string{
-		"tag":              "v1.0.0",
-		"name":             "v1.0.0",
-		"attachment-files": "/nonexistent/path.bin",
-	})
-	if err == nil {
-		t.Fatal("expected error for missing attachment file")
-	}
-}
-
-func TestReleaseDownloadAllAttachments(t *testing.T) {
-	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/owner/repo/releases.json":
-			if r.URL.Query().Get("page") != "1" {
-				writeReleaseJSON(t, w, map[string]interface{}{"releases": []interface{}{}})
-				return
-			}
-			writeReleaseJSON(t, w, map[string]interface{}{
-				"releases": []map[string]interface{}{
-					{"tag_name": "v1.0.0", "id": "900001", "version_id": 7},
-				},
-			})
-		case "/owner/repo/releases/7.json":
-			writeReleaseJSON(t, w, map[string]interface{}{
-				"tag_name": "v1.0.0",
-				"attachments": []map[string]interface{}{
-					{"id": 12, "title": "a.bin"},
-					{"id": "uuid-34", "title": "b.txt"},
-				},
-			})
-		case "/attachments/12", "/attachments/12.json":
-			fmt.Fprint(w, "content-a")
-		case "/attachments/uuid-34", "/attachments/uuid-34.json":
-			fmt.Fprint(w, "content-b")
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-	})
-	defer server.Close()
-
-	outDir := t.TempDir()
-	if err := runReleaseShortcut(t, server, "download", map[string]string{
-		"id":         "v1.0.0",
-		"output-dir": outDir,
-	}); err != nil {
-		t.Fatalf("release download failed: %v", err)
-	}
-	for name, want := range map[string]string{"a.bin": "content-a", "b.txt": "content-b"} {
-		got, err := os.ReadFile(filepath.Join(outDir, name))
-		if err != nil {
-			t.Fatalf("read %s: %v", name, err)
-		}
-		if string(got) != want {
-			t.Fatalf("%s content = %q, want %q", name, got, want)
-		}
-	}
-}
-
-func TestReleaseDownloadNoAttachments(t *testing.T) {
-	server := newReleaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/owner/repo/releases.json" {
-			if r.URL.Query().Get("page") != "1" {
-				writeReleaseJSON(t, w, map[string]interface{}{"releases": []interface{}{}})
-				return
-			}
-			writeReleaseJSON(t, w, map[string]interface{}{
-				"releases": []map[string]interface{}{
-					{"tag_name": "v1.0.0", "id": "900001", "version_id": 7},
-				},
-			})
-			return
-		}
-		writeReleaseJSON(t, w, map[string]interface{}{"tag_name": "v1.0.0"})
-	})
-	defer server.Close()
-
-	if err := runReleaseShortcut(t, server, "download", map[string]string{"id": "v1.0.0"}); err == nil {
-		t.Fatal("expected error when release has no attachments")
-	}
-}
-
-// withVersionResolution serves the release list endpoint that
-// resolveVersionID pages through, then delegates everything else.
-func withVersionResolution(h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" && r.URL.Path == "/owner/repo/releases.json" {
-			w.Header().Set("Content-Type", "application/json")
-			if r.URL.Query().Get("page") != "1" {
-				fmt.Fprint(w, `{"releases":[]}`)
-				return
-			}
-			fmt.Fprint(w, `{"releases":[{"tag_name":"v1.0.0","id":"900001","version_id":7},{"tag_name":"v0.9.0","id":"900002","version_id":1}]}`)
-			return
-		}
-		h(w, r)
-	}
+	// download
 }

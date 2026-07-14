@@ -130,6 +130,10 @@ gitlink-cli completion powershell > gitlink-cli.ps1
 | Update File 需要 SHA | `PUT /:owner/:repo/update_file` 需要 `sha` 参数，通过 `sub_entries` 接口获取 | 见下方文件操作说明 |
 | PR 合并需要 `do` 参数 | `pr +merge` 需传 `do` 字段指定合并方式（merge/rebase/squash） | `pr +merge` 已内置处理 |
 | PR 创建需要代码差异 | 分支内容必须与目标分支不同，否则拒绝创建 | 需要先在分支上有实际提交 |
+| **PR 列表可能返回空** | 部分仓库（如 fork、权限受限）`pr +list` 返回 `pulls:[]`，但 `repo +info` 的 `pull_requests_count` 非零 | 平台 quirk；用 `pull_requests_count`（总数）+ `git log --merges`（本地合并历史）兜底 |
+| **repo +contributor-stats 报错** | `repo +contributor-stats` 可能返回「获取贡献者(代码行)失败」 | API 不稳；改用 `repo +contributors`（含行数，但口径含纯邮箱提交者） |
+| **commits/tags/releases 无 JSON API** | 这些列表端点返回 SPA HTML（非 JSON），故**无 `repo +commits`/`+tags`/`+raw` 命令** | 平台未开放；提交/标签历史用 `git clone`+`git log`/`git tag` 本地获取；读文件内容用 `file +get` 替代 `repo +raw` |
+| **贡献者口径不一致** | `repo +info` 的 `contributor_users_count` 只数 GitLink 注册用户；`repo +contributors` 返回含纯邮箱提交者（数量更多） | 巴士因子/协作分析用 `repo +contributors` 列表；「注册贡献者数」用 `contributor_users_count` |
 
 ## 文件操作 API
 

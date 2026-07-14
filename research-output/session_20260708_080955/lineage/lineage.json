@@ -1,0 +1,281 @@
+{
+  "scenario": "S1_repository_research_insight",
+  "repo": "whale_hihihi/gitlink-cli",
+  "default_branch": "master",
+  "commit_timeline": [
+    {
+      "date": "2026-06-23",
+      "count": 2
+    },
+    {
+      "date": "2026-06-24",
+      "count": 2
+    },
+    {
+      "date": "2026-06-29",
+      "count": 2
+    },
+    {
+      "date": "2026-07-02",
+      "count": 5
+    },
+    {
+      "date": "2026-07-04",
+      "count": 1
+    },
+    {
+      "date": "2026-07-05",
+      "count": 7
+    },
+    {
+      "date": "2026-07-06",
+      "count": 8
+    },
+    {
+      "date": "2026-07-07",
+      "count": 23
+    }
+  ],
+  "branch_map": [
+    {
+      "name": "master",
+      "commits": 50,
+      "last_active": "2026-07-07",
+      "is_default": true
+    }
+  ],
+  "pr_merge_patterns": [
+    {
+      "number": 2,
+      "title": "本次实现：search +issues — 搜索 Issue 功能",
+      "status": "merged",
+      "merged_time": "2026-05-25",
+      "changed_files": 4
+    },
+    {
+      "number": 3,
+      "title": "创建 webhook 领域 + 实现 `+update`",
+      "status": "merged",
+      "merged_time": "2026-05-28",
+      "changed_files": 2
+    },
+    {
+      "number": 5,
+      "title": "release download 功能（新增）  在 release.go 的 Shortcuts() 中新增第 5 个快捷命令 download：  参数：-",
+      "status": "merged",
+      "merged_time": "2026-05-29",
+      "changed_files": 7
+    },
+    {
+      "number": 4,
+      "title": "label 领域原来只有 3 个命令（list/create/delete），现在新增了 update 命令。",
+      "status": "merged",
+      "merged_time": "2026-05-29",
+      "changed_files": 3
+    },
+    {
+      "number": 6,
+      "title": "release download 命令 新增 download 快捷命令、错误消息统一化",
+      "status": "merged",
+      "merged_time": "2026-05-30",
+      "changed_files": 8
+    },
+    {
+      "number": 12,
+      "title": "feat: 实现 batch issue 批量操作命令",
+      "status": "merged",
+      "merged_time": "2026-06-01",
+      "changed_files": 14
+    },
+    {
+      "number": 8,
+      "title": "文件描述符泄漏等修改",
+      "status": "merged",
+      "merged_time": "2026-06-01",
+      "changed_files": 5
+    },
+    {
+      "number": 7,
+      "title": "代码片段管理功能",
+      "status": "merged",
+      "merged_time": "2026-06-01",
+      "changed_files": 5
+    },
+    {
+      "number": 14,
+      "title": "feat: 补全 21 个 Shortcut + 修正批量操作 + 文档/代码全面清理",
+      "status": "merged",
+      "merged_time": "2026-06-03",
+      "changed_files": 31
+    },
+    {
+      "number": 15,
+      "title": "修改编译",
+      "status": "merged",
+      "merged_time": "2026-06-04",
+      "changed_files": 9
+    },
+    {
+      "number": 16,
+      "title": "新增skills",
+      "status": "merged",
+      "merged_time": "2026-06-12",
+      "changed_files": 26
+    },
+    {
+      "number": 18,
+      "title": "feat: 合并 upstream/master 并对齐风格 — 行为修复 + i18n 化",
+      "status": "merged",
+      "merged_time": "2026-06-15",
+      "changed_files": 151
+    },
+    {
+      "number": 19,
+      "title": "新增skills",
+      "status": "merged",
+      "merged_time": "2026-06-23",
+      "changed_files": 7
+    },
+    {
+      "number": 20,
+      "title": "注册重编激活 25 域、新增 6 个 Skill、补全索引与示例、产出任务三/四的端到端工作流",
+      "status": "merged",
+      "merged_time": "2026-06-24",
+      "changed_files": 5
+    },
+    {
+      "number": 21,
+      "title": "验证部分内容，作出相关修改",
+      "status": "merged",
+      "merged_time": "2026-06-29",
+      "changed_files": 1
+    },
+    {
+      "number": 22,
+      "title": "修改了两个skills的命令使用",
+      "status": "merged",
+      "merged_time": "2026-07-02",
+      "changed_files": 2
+    },
+    {
+      "number": 24,
+      "title": "新增demo",
+      "status": "merged",
+      "merged_time": "2026-07-06",
+      "changed_files": 19
+    },
+    {
+      "number": 31,
+      "title": "修改知识图谱构建方法",
+      "status": "merged",
+      "merged_time": "2026-07-07",
+      "changed_files": 111
+    },
+    {
+      "number": 30,
+      "title": "fix(sweep): wiki 发布链路修复 + 端到端验证",
+      "status": "merged",
+      "merged_time": "2026-07-07",
+      "changed_files": 7
+    },
+    {
+      "number": 29,
+      "title": "feat: 统一全链路科研分析页面 + Dockerfile 修复",
+      "status": "merged",
+      "merged_time": "2026-07-07",
+      "changed_files": 13
+    },
+    {
+      "number": 28,
+      "title": "feat(demo): 调整 demo 前端展示（合并 surponess_br 第二批）",
+      "status": "merged",
+      "merged_time": "2026-07-07",
+      "changed_files": 2
+    },
+    {
+      "number": 27,
+      "title": "feat(demo): 优化 demo 前端展示（合并 surponess_br）",
+      "status": "merged",
+      "merged_time": "2026-07-07",
+      "changed_files": 3
+    },
+    {
+      "number": 26,
+      "title": "chore: move community-ops-sweep workflow to project root workflows/",
+      "status": "merged",
+      "merged_time": "2026-07-07",
+      "changed_files": 8
+    }
+  ],
+  "doc_evolution": [
+    {
+      "file": "i18n.md",
+      "last_date": ""
+    },
+    {
+      "file": "pr-draft.md",
+      "last_date": ""
+    },
+    {
+      "file": "workflow-agent-design.md",
+      "last_date": ""
+    },
+    {
+      "file": "workflow-agent-test-report.md",
+      "last_date": ""
+    }
+  ],
+  "experiment_files": [
+    "docs/workflow-agent-test-report.md",
+    "main_test.go",
+    "pr-test-file.txt"
+  ],
+  "innovation_points": [
+    {
+      "description": "feat: 合并 upstream/master 并对齐风格 — 行为修复 + i18n 化",
+      "evidence": "PR #18 「feat: 合并 upstream/master 并对齐风格 — 行为修复 + i18n 化」 改动 151 文件，合并于 2026-06-15",
+      "category": "大规模重构/新特性"
+    },
+    {
+      "description": "修改知识图谱构建方法",
+      "evidence": "PR #31 「修改知识图谱构建方法」 改动 111 文件，合并于 2026-07-07",
+      "category": "大规模重构/新特性"
+    },
+    {
+      "description": "feat: 补全 21 个 Shortcut + 修正批量操作 + 文档/代码全面清理",
+      "evidence": "PR #14 「feat: 补全 21 个 Shortcut + 修正批量操作 + 文档/代码全面清理」 改动 31 文件，合并于 2026-06-03",
+      "category": "大规模重构/新特性"
+    },
+    {
+      "description": "新增skills",
+      "evidence": "PR #16 「新增skills」 改动 26 文件，合并于 2026-06-12",
+      "category": "大规模重构/新特性"
+    },
+    {
+      "description": "新增demo",
+      "evidence": "PR #24 「新增demo」 改动 19 文件，合并于 2026-07-06",
+      "category": "大规模重构/新特性"
+    },
+    {
+      "description": "feat: 实现 batch issue 批量操作命令",
+      "evidence": "PR #12 「feat: 实现 batch issue 批量操作命令」 改动 14 文件，合并于 2026-06-01",
+      "category": "大规模重构/新特性"
+    },
+    {
+      "description": "feat: 统一全链路科研分析页面 + Dockerfile 修复",
+      "evidence": "PR #29 「feat: 统一全链路科研分析页面 + Dockerfile 修复」 改动 13 文件，合并于 2026-07-07",
+      "category": "大规模重构/新特性"
+    },
+    {
+      "description": "release download 命令 新增 download 快捷命令、错误消息统一化",
+      "evidence": "PR #6 「release download 命令 新增 download 快捷命令、错误消息统一化」 改动 8 文件，合并于 2026-05-30",
+      "category": "特性引入"
+    }
+  ],
+  "meta": {
+    "commit_count": 50,
+    "merged_pr_count": 23,
+    "doc_count": 4,
+    "experiment_file_count": 3
+  }
+}

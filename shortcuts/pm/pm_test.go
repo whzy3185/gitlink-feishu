@@ -1,133 +1,200 @@
 package pm
 
 import (
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
-	"github.com/gitlink-org/gitlink-cli/internal/client"
-	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-func runShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
-	t.Helper()
-	shortcut := findShortcut(t, name)
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
-		Format: "json",
-		Args:   args,
-		Tr:     i18n.Default(),
-	}
-	return shortcut.Run(ctx)
-}
-
-func findShortcut(t *testing.T, name string) *common.Shortcut {
-	t.Helper()
-	for _, shortcut := range Shortcuts() {
-		if shortcut.Name == name {
-			return shortcut
-		}
-	}
-	t.Fatalf("shortcut %q not found", name)
-	return nil
-}
-
-func writeJSON(t *testing.T, w http.ResponseWriter, v interface{}) {
-	t.Helper()
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		t.Fatalf("write JSON: %v", err)
-	}
-}
-
-func TestPMReadShortcuts(t *testing.T) {
-	tests := []struct {
-		name string
-		path string
+func TestFetchProjectID(t *testing.T) {
+	cases := []struct {
+		name     string
+		response map[string]interface{}
+		wantID   int
 	}{
-		{name: "dashboards", path: "/pm/dashboards.json"},
-		{name: "sprint-issues", path: "/pm/sprint_issues.json"},
-		{name: "weekly-issues", path: "/pm/weekly_issues.json"},
-		{name: "issue-tags", path: "/pm/issue_tags.json"},
-		{name: "pipelines", path: "/pm/pipelines.json"},
-		{name: "action-runs", path: "/pm/action_runs.json"},
+		{"repo_id", map[string]interface{}{"repo_id": float64(100)}, 100},
+		{"project_id", map[string]interface{}{"project_id": float64(200)}, 200},
+		{"id", map[string]interface{}{"id": float64(300)}, 300},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodGet {
-					t.Fatalf("method = %s, want GET", r.Method)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := tc.response
+			server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "GET" && r.URL.Path == "/owner/repo.json" {
+					common.WriteJSON(t, w, resp)
+					return
 				}
-				if r.URL.Path != tt.path {
-					t.Fatalf("path = %s, want %s", r.URL.Path, tt.path)
-				}
-				if got := r.URL.Query().Get("project_id"); got != "123" {
-					t.Fatalf("project_id = %q, want 123", got)
-				}
-				if got := r.URL.Query().Get("page"); got != "2" {
-					t.Fatalf("page = %q, want 2", got)
-				}
-				if got := r.URL.Query().Get("limit"); got != "50" {
-					t.Fatalf("limit = %q, want 50", got)
-				}
-				writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
-			}))
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			})
 			defer server.Close()
 
-			err := runShortcut(t, server, tt.name, map[string]string{
-				"project-id": "123",
-				"page":       "2",
-				"limit":      "50",
-			})
+			ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{})
+			id, err := fetchProjectID(ctx)
 			if err != nil {
-				t.Fatalf("%s failed: %v", tt.name, err)
+				t.Fatalf("fetchProjectID failed: %v", err)
+			}
+			if id != tc.wantID {
+				t.Fatalf("got %d, want %d", id, tc.wantID)
 			}
 		})
 	}
 }
 
-func TestPMReadShortcutsDefaultPagination(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/pm/dashboards.json" {
-			t.Fatalf("path = %s, want /pm/dashboards.json", r.URL.Path)
-		}
-		if got := r.URL.Query().Get("page"); got != "1" {
-			t.Fatalf("page = %q, want 1", got)
-		}
-		if got := r.URL.Query().Get("limit"); got != "20" {
-			t.Fatalf("limit = %q, want 20", got)
-		}
-		writeJSON(t, w, map[string]interface{}{"status": 0})
-	}))
+func TestFetchProjectIDNotFound(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		common.WriteJSON(t, w, map[string]interface{}{"name": "repo"})
+	})
 	defer server.Close()
 
-	if err := runShortcut(t, server, "dashboards", map[string]string{"project-id": "123"}); err != nil {
-		t.Fatalf("dashboards failed: %v", err)
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{})
+	_, err := fetchProjectID(ctx)
+	if err == nil {
+		t.Fatal("expected error for missing project ID")
 	}
 }
 
-func TestPMReadShortcutRequiresProjectID(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("missing project-id should fail before remote API: %s %s", r.Method, r.URL.Path)
-	}))
+func TestPMBoards(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			common.WriteJSON(t, w, map[string]interface{}{"id": float64(123)})
+		case r.Method == "GET" && r.URL.Path == "/pm/dashboards":
+			common.WriteJSON(t, w, map[string]interface{}{
+				"boards": []interface{}{
+					map[string]interface{}{"id": 1, "name": "Sprint 1"},
+					map[string]interface{}{"id": 2, "name": "Sprint 2"},
+				},
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
 	defer server.Close()
 
-	if err := runShortcut(t, server, "dashboards", nil); err == nil {
-		t.Fatal("expected missing project-id error")
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{})
+	err := common.RunShortcut(t, Shortcuts(), "boards", ctx)
+	if err != nil {
+		t.Fatalf("boards failed: %v", err)
 	}
 }
 
-func TestPMReadShortcutHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte("server error"))
-	}))
+func TestPMSprints(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			common.WriteJSON(t, w, map[string]interface{}{"id": float64(123)})
+		case r.Method == "GET" && r.URL.Path == "/pm/sprint_issues":
+			common.WriteJSON(t, w, map[string]interface{}{
+				"issues": []interface{}{
+					map[string]interface{}{"id": 10, "subject": "Task A"},
+				},
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
 	defer server.Close()
 
-	if err := runShortcut(t, server, "dashboards", map[string]string{"project-id": "123"}); err == nil {
-		t.Fatal("expected error for HTTP 500")
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{})
+	err := common.RunShortcut(t, Shortcuts(), "sprints", ctx)
+	if err != nil {
+		t.Fatalf("sprints failed: %v", err)
+	}
+}
+
+func TestPMWeekly(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			common.WriteJSON(t, w, map[string]interface{}{"id": float64(123)})
+		case r.Method == "GET" && r.URL.Path == "/pm/weekly_issues":
+			common.WriteJSON(t, w, map[string]interface{}{
+				"reports": []interface{}{
+					map[string]interface{}{"id": 1, "title": "Week 21"},
+				},
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{})
+	err := common.RunShortcut(t, Shortcuts(), "weekly", ctx)
+	if err != nil {
+		t.Fatalf("weekly failed: %v", err)
+	}
+}
+
+func TestPMTags(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			common.WriteJSON(t, w, map[string]interface{}{"id": float64(123)})
+		case r.Method == "GET" && r.URL.Path == "/pm/issue_tags":
+			common.WriteJSON(t, w, map[string]interface{}{
+				"tags": []interface{}{
+					map[string]interface{}{"id": 1, "name": "bug"},
+				},
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{})
+	err := common.RunShortcut(t, Shortcuts(), "tags", ctx)
+	if err != nil {
+		t.Fatalf("tags failed: %v", err)
+	}
+}
+
+func TestPMPipelines(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			common.WriteJSON(t, w, map[string]interface{}{"id": float64(123)})
+		case r.Method == "GET" && r.URL.Path == "/pm/pipelines":
+			common.WriteJSON(t, w, map[string]interface{}{
+				"pipelines": []interface{}{
+					map[string]interface{}{"id": 1, "name": "CI"},
+				},
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{})
+	err := common.RunShortcut(t, Shortcuts(), "pipelines", ctx)
+	if err != nil {
+		t.Fatalf("pipelines failed: %v", err)
+	}
+}
+
+func TestPMActions(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			common.WriteJSON(t, w, map[string]interface{}{"id": float64(123)})
+		case r.Method == "GET" && r.URL.Path == "/pm/action_runs":
+			common.WriteJSON(t, w, map[string]interface{}{
+				"runs": []interface{}{
+					map[string]interface{}{"id": 1, "status": "success"},
+				},
+			})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{})
+	err := common.RunShortcut(t, Shortcuts(), "actions", ctx)
+	if err != nil {
+		t.Fatalf("actions failed: %v", err)
 	}
 }

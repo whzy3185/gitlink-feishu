@@ -1,71 +1,122 @@
-// Package pm implements GitLink project management shortcuts.
 package pm
 
 import (
+	"fmt"
 	"net/url"
-	"strings"
+	"strconv"
 
-	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-// Shortcuts returns project management read shortcuts.
-func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
-	tr := shortcutTranslator(translators...)
+func Shortcuts() []*common.Shortcut {
 	return []*common.Shortcut{
-		pmListShortcut(tr, "dashboards", tr.T("cmd.pm.dashboards.short"), "/pm/dashboards"),
-		pmListShortcut(tr, "sprint-issues", tr.T("cmd.pm.sprint_issues.short"), "/pm/sprint_issues"),
-		pmListShortcut(tr, "weekly-issues", tr.T("cmd.pm.weekly_issues.short"), "/pm/weekly_issues"),
-		pmListShortcut(tr, "issue-tags", tr.T("cmd.pm.issue_tags.short"), "/pm/issue_tags"),
-		pmListShortcut(tr, "pipelines", tr.T("cmd.pm.pipelines.short"), "/pm/pipelines"),
-		pmListShortcut(tr, "action-runs", tr.T("cmd.pm.action_runs.short"), "/pm/action_runs"),
+		{
+			Name:        "boards",
+			Description: "List kanban boards",
+			Flags: []common.Flag{
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				return listPM(ctx, "/pm/dashboards")
+			},
+		},
+		{
+			Name:        "sprints",
+			Description: "List sprint issues",
+			Flags: []common.Flag{
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				return listPM(ctx, "/pm/sprint_issues")
+			},
+		},
+		{
+			Name:        "weekly",
+			Description: "List weekly reports",
+			Flags: []common.Flag{
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				return listPM(ctx, "/pm/weekly_issues")
+			},
+		},
+		{
+			Name:        "tags",
+			Description: "List PM issue tags",
+			Flags: []common.Flag{
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				return listPM(ctx, "/pm/issue_tags")
+			},
+		},
+		{
+			Name:        "pipelines",
+			Description: "List PM pipelines",
+			Flags: []common.Flag{
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				return listPM(ctx, "/pm/pipelines")
+			},
+		},
+		{
+			Name:        "actions",
+			Description: "List action run records",
+			Flags: []common.Flag{
+				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
+				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				return listPM(ctx, "/pm/action_runs")
+			},
+		},
 	}
 }
 
-func pmListShortcut(tr *i18n.Translator, name, description, path string) *common.Shortcut {
-	return &common.Shortcut{
-		Name:        name,
-		Description: description,
-		Flags: []common.Flag{
-			{Name: "project-id", Short: "P", Usage: tr.T("flag.pm.project_id"), Required: true},
-			{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
-			{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
-		},
-		Run: func(ctx *common.RuntimeContext) error {
-			projectID, err := ctx.RequireArg("project-id")
-			if err != nil {
-				return err
-			}
-			q := pmQuery(ctx, projectID)
-			env, err := ctx.CallAPIWithQuery("GET", path, q)
-			if err != nil {
-				return err
-			}
-			return ctx.Output(env)
-		},
+func listPM(ctx *common.RuntimeContext, endpoint string) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
 	}
-}
-
-func pmQuery(ctx *common.RuntimeContext, projectID string) url.Values {
+	projectID, err := fetchProjectID(ctx)
+	if err != nil {
+		return err
+	}
 	q := url.Values{}
-	q.Set("project_id", strings.TrimSpace(projectID))
-	q.Set("page", firstNonEmpty(ctx.Arg("page"), "1"))
-	q.Set("limit", firstNonEmpty(ctx.Arg("limit"), "20"))
-	return q
+	q.Set("project_id", strconv.Itoa(projectID))
+	q.Set("owner", ctx.Owner)
+	q.Set("repo", ctx.Repo)
+	q.Set("page", ctx.Arg("page"))
+	q.Set("limit", ctx.Arg("limit"))
+	env, err := ctx.CallAPIRawWithQuery("GET", endpoint, q)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
+func fetchProjectID(ctx *common.RuntimeContext) (int, error) {
+	env, err := ctx.CallAPI("GET", ctx.RepoPath(), nil)
+	if err != nil {
+		return 0, fmt.Errorf("获取项目信息失败: %w", err)
 	}
-	return ""
-}
-
-func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {
-	if len(translators) > 0 && translators[0] != nil {
-		return translators[0]
+	data, ok := env.Data.(map[string]interface{})
+	if !ok {
+		return 0, fmt.Errorf("无法解析项目信息")
 	}
-	return i18n.Default()
+	if idFloat, ok := data["repo_id"].(float64); ok {
+		return int(idFloat), nil
+	}
+	if idFloat, ok := data["project_id"].(float64); ok {
+		return int(idFloat), nil
+	}
+	if idFloat, ok := data["id"].(float64); ok {
+		return int(idFloat), nil
+	}
+	return 0, fmt.Errorf("项目 ID 未找到，请确认仓库是否存在")
 }

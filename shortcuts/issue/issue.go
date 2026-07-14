@@ -11,9 +11,28 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
-// v1RepoPath returns the v1 API path prefix: /v1/{owner}/{repo}
+// v1RepoPath 返回 v1 API 路径前缀：/v1/{owner}/{repo}。
+// issue 相关端点都走 v1 前缀，与其它资源（如 label、pr）的 /v0 路径不同。
 func v1RepoPath(ctx *common.RuntimeContext) string {
 	return fmt.Sprintf("/v1/%s/%s", ctx.Owner, ctx.Repo)
+}
+
+// IssueData 记录从 issue 接口读出的全部字段。
+// batch 流程使用 Subject、Description、LabelIDs；close/update 命令使用全部字段
+// 来构造保留现有 metadata 的 PATCH body。
+// StatusID/PriorityID 为 interface{} 以兼容 API 返回的嵌套对象 id（如 status.id）。
+type IssueData struct {
+	Subject        string
+	Description    string
+	StatusID       interface{}
+	AssignedToID   int
+	FixedVersionID int
+	PriorityID     interface{}
+	LabelIDs       []int
+	AssignerIDs    []interface{}
+	BranchName     string
+	StartDate      string
+	DueDate        string
 }
 
 func normalizeIssueListState(state string) string {
@@ -29,24 +48,16 @@ func normalizeIssueListState(state string) string {
 	}
 }
 
-type existingIssue struct {
-	Subject     string
-	Description string
-	StatusID    interface{}
-	PriorityID  interface{}
-	TagIDs      []interface{}
-	AssignerIDs []interface{}
-	BranchName  string
-	StartDate   string
-	DueDate     string
-}
-
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
-		newBatchCloseShortcut(),
-		newBatchUpdateShortcut(),
-		newBatchDeleteShortcut(),
+		newBatchCreateShortcut(tr),
+		newBatchCloseShortcut(tr),
+		newBatchOpenShortcut(tr),
+		newBatchAssignShortcut(tr),
+		newBatchLabelShortcut(tr),
+		newBatchUpdateShortcut(tr),
+		newBatchDeleteShortcut(tr),
 		{
 			Name:        "list",
 			Description: tr.T("cmd.issue.list.short"),
@@ -189,7 +200,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err != nil {
 					return err
 				}
-				current, err := fetchExistingIssue(ctx, number)
+				current, err := fetchIssueData(ctx, number)
 				if err != nil {
 					return err
 				}
@@ -236,7 +247,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					return fmt.Errorf("at least one update field is required")
 				}
 
-				current, err := fetchExistingIssue(ctx, number)
+				current, err := fetchIssueData(ctx, number)
 				if err != nil {
 					return err
 				}
@@ -614,42 +625,116 @@ func normalizeIssueListIDs(env *output.Envelope) {
 	}
 }
 
-func fetchExistingIssue(ctx *common.RuntimeContext, number string) (*existingIssue, error) {
+// fetchIssueData 从 API 读取指定 issue 的完整数据。
+// JSON 反序列化得到的 float64 / []interface{} 会被规范化为 int / []int。
+func fetchIssueData(ctx *common.RuntimeContext, number string) (*IssueData, error) {
 	getEnv, err := ctx.CallAPI("GET", fmt.Sprintf("%s/issues/%s", v1RepoPath(ctx), number), nil)
 	if err != nil {
 		return nil, err
 	}
-	issueData, ok := getEnv.Data.(map[string]interface{})
+	issueMap, ok := getEnv.Data.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("failed to parse issue data")
 	}
-	subject, _ := issueData["subject"].(string)
+	subject, _ := issueMap["subject"].(string)
 	if subject == "" {
 		return nil, fmt.Errorf("failed to parse issue subject")
 	}
-	description, _ := issueData["description"].(string)
-	return &existingIssue{
-		Subject:     subject,
-		Description: description,
-		StatusID:    nestedIssueID(issueData, "status"),
-		PriorityID:  nestedIssueID(issueData, "priority"),
-		TagIDs:      issueObjectIDs(issueData, "tags", "issue_tags"),
-		AssignerIDs: issueObjectIDs(issueData, "assigners"),
-		BranchName:  stringField(issueData, "branch_name"),
-		StartDate:   stringField(issueData, "start_date"),
-		DueDate:     stringField(issueData, "due_date"),
-	}, nil
+
+	data := &IssueData{
+		Subject:        subject,
+		Description:    getMapString(issueMap, "description"),
+		StatusID:       nestedIssueID(issueMap, "status"),
+		AssignedToID:   getMapInt(issueMap, "assigned_to_id"),
+		FixedVersionID: getNestedMapInt(issueMap, "milestone", "id"),
+		PriorityID:     nestedIssueID(issueMap, "priority"),
+		LabelIDs:       getTagIDs(issueMap, "tags"),
+		AssignerIDs:    issueObjectIDs(issueMap, "assigners"),
+		BranchName:     getMapString(issueMap, "branch_name"),
+		StartDate:      getMapString(issueMap, "start_date"),
+		DueDate:        getMapString(issueMap, "due_date"),
+	}
+	return data, nil
 }
 
-func preserveIssueMetadata(body map[string]interface{}, issue *existingIssue) {
+// getMapString 从 map 中安全提取 string 值，类型不匹配时返回空串。
+func getMapString(m map[string]interface{}, key string) string {
+	s, _ := m[key].(string)
+	return s
+}
+
+// getMapInt 从 map 中提取 int 值，兼容 JSON 反序列化得到的 float64。
+// 类型不匹配或缺失时返回 0。
+func getMapInt(m map[string]interface{}, key string) int {
+	switch v := m[key].(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	}
+	return 0
+}
+
+// getNestedMapInt 从 map 的嵌套对象字段中提取 int 类型的值。
+// 例如 issueMap["milestone"] 是 {id: 2764, name: "v1.0"}，
+// getNestedMapInt(issueMap, "milestone", "id") 返回 2764。
+// 字段缺失或类型不匹配时返回 0。
+func getNestedMapInt(m map[string]interface{}, outerKey, innerKey string) int {
+	outer, ok := m[outerKey].(map[string]interface{})
+	if !ok {
+		return 0
+	}
+	return getMapInt(outer, innerKey)
+}
+
+// getMapIntSlice 从 map 中提取 []int，元素类型兼容 float64（JSON 数字）。
+// 类型不匹配或缺失时返回 nil。
+func getMapIntSlice(m map[string]interface{}, key string) []int {
+	raw, ok := m[key].([]interface{})
+	if !ok {
+		return nil
+	}
+	ids := make([]int, 0, len(raw))
+	for _, item := range raw {
+		switch v := item.(type) {
+		case float64:
+			ids = append(ids, int(v))
+		case int:
+			ids = append(ids, v)
+		}
+	}
+	return ids
+}
+
+// getTagIDs 从 map 中提取 tag 对象数组中每个对象的 id 字段。
+// API 返回 tags: [{id: 1, name: "bug"}, ...]，需要遍历对象提取 id。
+// 类型不匹配或缺失时返回 nil。
+func getTagIDs(m map[string]interface{}, key string) []int {
+	raw, ok := m[key].([]interface{})
+	if !ok {
+		return nil
+	}
+	ids := make([]int, 0, len(raw))
+	for _, item := range raw {
+		if tag, ok := item.(map[string]interface{}); ok {
+			id := getMapInt(tag, "id")
+			if id > 0 {
+				ids = append(ids, id)
+			}
+		}
+	}
+	return ids
+}
+
+func preserveIssueMetadata(body map[string]interface{}, issue *IssueData) {
 	if issue.StatusID != nil {
 		body["status_id"] = issue.StatusID
 	}
 	if issue.PriorityID != nil {
 		body["priority_id"] = issue.PriorityID
 	}
-	if len(issue.TagIDs) > 0 {
-		body["issue_tag_ids"] = issue.TagIDs
+	if len(issue.LabelIDs) > 0 {
+		body["issue_tag_ids"] = issue.LabelIDs
 	}
 	if len(issue.AssignerIDs) > 0 {
 		body["assigner_ids"] = issue.AssignerIDs
@@ -711,7 +796,7 @@ func normalizeIssueStatus(state string) (interface{}, error) {
 		if id, err := strconv.Atoi(state); err == nil {
 			return id, nil
 		}
-		return nil, fmt.Errorf("invalid --state %q: use open, closed, or a numeric status_id", state)
+		return nil, fmt.Errorf("无效的 --state %q：请使用 open、closed 或数字 status_id", state)
 	}
 }
 

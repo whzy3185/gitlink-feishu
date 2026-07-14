@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitLink Research Atlas · 科研代码图谱智能体</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Noto+Serif+SC:wght@600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+:root{
+  --bg:#F7F9FC; --card:#FFFFFF; --ink:#1E2A44; --ink2:#475569; --mute:#94A3B8;
+  --line:#E6EBF2; --indigo:#4F6BED; --coral:#F26B5E; --mint:#2EC4B6;
+  --t-blue:#E8EEFF; --t-coral:#FFEDEA; --t-mint:#E6F7F4; --t-amber:#FEF3C7;
+  --serif:"Cormorant Garamond","Noto Serif SC",Georgia,serif;
+  --sans:"Inter","Noto Sans SC",-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --shadow:0 1px 2px rgba(30,42,68,.04),0 6px 18px rgba(30,42,68,.06);
+  --shadow-sm:0 1px 2px rgba(30,42,68,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{font-family:var(--sans);color:var(--ink);background:var(--bg);
+  background-image:radial-gradient(1200px 480px at 80% -8%,#EAF0FF 0%,rgba(234,240,255,0) 60%),
+                   radial-gradient(900px 420px at 0% 0%,#FFF1EE 0%,rgba(255,241,238,0) 55%);
+  -webkit-font-smoothing:antialiased}
+
+/* ===== PAGE WRAPPER ===== */
+.wrap{max-width:1120px;margin:0 auto;padding:32px 36px 72px}
+
+/* ===== HERO CARD ===== */
+.hero-card{
+  background:var(--card);border:1px solid var(--line);
+  border-radius:18px;box-shadow:var(--shadow);padding:36px 40px;margin-bottom:28px
+}
+.hero-card h1{font-family:var(--serif);font-weight:700;font-size:28px;line-height:1.2;text-align:center}
+.hero-card .hero-sub{text-align:center;font-size:13px;color:var(--mute);margin-top:6px}
+
+/* Search row */
+.search-row{display:flex;gap:12px;align-items:center;margin-top:24px}
+.search-box{flex:1;display:flex;align-items:center;gap:10px;background:#F8FAFD;
+  border:1.5px solid var(--line);border-radius:14px;padding:14px 18px;transition:.2s}
+.search-box:focus-within{border-color:var(--indigo);background:#fff;box-shadow:0 0 0 4px rgba(79,107,237,.10)}
+.search-box span.ic{font-size:18px}
+.search-box input{border:0;outline:0;font-family:var(--mono);font-size:15px;width:100%;background:transparent;color:var(--ink)}
+.search-box input::placeholder{color:var(--mute)}
+
+/* Source mode toggle */
+.src-toggle{display:flex;border:1px solid var(--line);border-radius:11px;overflow:hidden;flex-shrink:0}
+.src-toggle button{font-size:12px;font-weight:600;padding:10px 16px;border:0;background:#fff;color:var(--ink2);cursor:pointer;transition:.15s}
+.src-toggle button.active{background:var(--indigo);color:#fff}
+.src-toggle button:not(:last-child){border-right:1px solid var(--line)}
+
+/* Example chips */
+.ex-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.ex-row .lbl{font-size:11px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+.ex-chip{font-size:12px;color:var(--ink2);background:#F1F5F9;border:1px solid var(--line);
+  padding:5px 12px;border-radius:999px;cursor:pointer;transition:.15s}
+.ex-chip:hover{background:var(--t-blue);border-color:#C7D2FE;color:var(--indigo)}
+
+/* Category select (hidden by default) */
+.cat-select{display:none;margin-top:12px}
+.cat-select select{font-family:var(--mono);font-size:14px;padding:10px 14px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);width:100%}
+
+/* ===== DIMENSION SELECTOR ===== */
+.dim-section{margin-top:26px}
+.dim-section .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);margin-bottom:10px}
+.dim-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.dim-chip{display:flex;align-items:flex-start;gap:11px;padding:13px 15px;border:1.5px solid var(--line);
+  border-radius:13px;background:#fff;cursor:pointer;transition:.18s;user-select:none}
+.dim-chip:hover{border-color:#C7D2FE;transform:translateY(-1px)}
+.dim-chip.checked{border-color:var(--indigo);background:linear-gradient(180deg,#F5F8FF,#FBFCFE)}
+.dim-chip .dim-ico{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-size:16px;flex-shrink:0;
+  background:var(--t-blue);transition:.15s}
+.dim-chip.checked .dim-ico{background:var(--indigo);color:#fff}
+.dim-chip .dim-info{min-width:0}
+.dim-chip .dim-name{font-size:13px;font-weight:700;color:var(--ink)}
+.dim-chip .dim-desc{font-size:11px;color:var(--mute);margin-top:2px;line-height:1.35}
+/* Repo-dependent section — dimmed when no repo */
+.dim-section.needs-repo .dim-chip:not(.checked){opacity:.55}
+.dim-section.needs-repo .dim-chip.checked{opacity:1}
+.dim-section.needs-repo .eyebrow::after{content:"（需先填写仓库）";font-size:11px;color:var(--coral);margin-left:6px;font-weight:400;letter-spacing:0}
+
+/* ===== REPO SELECTOR ===== */
+.repo-section{margin-top:20px}
+.repo-section .eyebrow{margin-bottom:8px}
+.repo-row{display:flex;gap:8px;align-items:center}
+.repo-row input.owner{width:140px}
+.repo-row input.repo-name{flex:1}
+.repo-row input{padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-family:var(--mono);font-size:13px;color:var(--ink);outline:0}
+.repo-row input:focus{border-color:var(--indigo)}
+.repo-row .slash{font-size:16px;color:var(--mute);font-weight:700}
+.repo-pills{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.repo-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-family:var(--mono);
+  padding:5px 11px;border-radius:8px;background:var(--t-blue);color:var(--indigo);
+  border:1px solid #C7D2FE}
+.repo-pill .rmv{cursor:pointer;opacity:.55;font-weight:700}
+.repo-pill .rmv:hover{opacity:1}
+
+/* ===== RUN BUTTON ===== */
+.run-section{display:flex;align-items:center;gap:16px;margin-top:26px}
+.btn-run{font-size:15px;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--indigo),#7C8CF5);
+  border:0;border-radius:13px;padding:15px 36px;cursor:pointer;box-shadow:var(--shadow);transition:.18s;white-space:nowrap}
+.btn-run:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.btn-run:disabled{opacity:.45;cursor:not-allowed;transform:none;filter:none}
+.run-hint{font-size:12px;color:var(--mute);line-height:1.4}
+
+/* ===== PROGRESS ===== */
+.progress-wrap{margin-top:18px;display:none}
+.progress-wrap.active{display:block}
+.progress-bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.progress-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--indigo),#7C8CF5);border-radius:4px;transition:.4s}
+.progress-text{font-family:var(--mono);font-size:11px;color:var(--mute);margin-top:6px;display:flex;justify-content:space-between}
+.spin{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid var(--t-blue);border-top-color:var(--indigo);animation:rot .8s linear infinite;vertical-align:middle}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ===== RESULTS ===== */
+.results-section{display:none}
+.results-section.active{display:block}
+
+/* Tab bar */
+.tab-bar{display:flex;gap:2px;border-bottom:2px solid var(--line);overflow-x:auto;margin-bottom:0}
+.tab-btn{font-size:13px;font-weight:600;padding:11px 20px;border:0;background:transparent;
+  color:var(--mute);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;
+  white-space:nowrap;transition:.15s;display:inline-flex;align-items:center;gap:6px}
+.tab-btn:hover{color:var(--ink)}
+.tab-btn.active{color:var(--indigo);border-bottom-color:var(--indigo)}
+.tab-btn .tab-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.tab-btn .tab-dot.ok{background:var(--mint)}
+.tab-btn .tab-dot.err{background:var(--coral)}
+
+/* Tab panel */
+.tab-panel{background:var(--card);border:1px solid var(--line);border-top:0;
+  border-radius:0 0 14px 14px;box-shadow:var(--shadow);padding:28px 32px;display:none}
+.tab-panel.active{display:block}
+
+/* ===== ACADEMIC STYLES ===== */
+.abstract{background:#F8FAFD;border-left:3px solid var(--indigo);border-radius:0 10px 10px 0;padding:16px 20px;margin-bottom:22px}
+.abstract h4{font-family:var(--serif);font-size:15px;font-weight:700;margin-bottom:8px;color:var(--ink)}
+.abstract p{font-size:12px;color:var(--ink2);line-height:1.65;margin:0}
+.abstract .method-note{font-size:11px;color:var(--mute);margin-top:6px;font-family:var(--mono)}
+.disclaimer{font-size:11px;color:var(--mute);padding:10px 0;border-top:1px solid var(--line);margin-top:18px;
+  display:flex;align-items:center;gap:6px}
+
+/* Section card */
+.sec-card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  box-shadow:var(--shadow-sm);padding:20px 24px;margin-bottom:16px}
+.sec-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.sec-head h3{font-family:var(--serif);font-size:18px;font-weight:700}
+.sec-head .eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
+.sec-head .badge{font-family:var(--mono);font-size:11px;color:var(--indigo);background:var(--t-blue);
+  padding:3px 10px;border-radius:999px;margin-left:auto}
+
+/* Summary tiles */
+.sum-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:18px}
+.sum-tile{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#FCFDFE}
+.sum-tile .sl{font-size:11px;color:var(--mute);font-weight:600;letter-spacing:.02em}
+.sum-tile .sv{font-family:var(--mono);font-weight:700;font-size:24px;line-height:1.1;margin-top:4px;color:var(--ink)}
+.sum-tile .ss{font-size:11px;color:var(--mute);margin-top:2px}
+
+/* Trend table */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;font-size:11px;color:var(--mute);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.04em}
+.tbl td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl tr:hover td{background:#F8FAFD}
+.tbl .repo{font-family:var(--mono);font-weight:600;color:var(--indigo)}
+.tbl .num{font-family:var(--mono);font-weight:700;text-align:right}
+.lang-pill{font-size:11px;padding:2px 8px;border-radius:6px;background:var(--t-blue);color:var(--indigo)}
+.scorebar{height:6px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:4px;min-width:60px}
+.scorebar i{display:block;height:100%;background:linear-gradient(90deg,var(--coral),#FF9B8F)}
+.kw-chip{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;background:var(--t-amber);color:#92400E;margin-right:3px}
+
+/* Topic bars */
+.tlist{display:flex;flex-direction:column;gap:10px}
+.trow{display:flex;align-items:center;gap:12px}
+.trow .tname{width:180px;font-size:13px;font-weight:500;font-family:var(--mono);color:var(--ink)}
+.trow .tbar{flex:1;height:22px;background:#F1F5F9;border-radius:7px;overflow:hidden}
+.trow .tbar i{display:block;height:100%;background:linear-gradient(90deg,#06B6D4,#22D3EE);border-radius:7px}
+.trow .tval{font-family:var(--mono);font-weight:700;font-size:13px;width:48px;text-align:right}
+
+/* Discussion items */
+.disc-list{display:flex;flex-direction:column;gap:9px}
+.disc-item{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--line);border-radius:11px;background:#FCFDFE}
+.disc-item .badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.05em;flex-shrink:0}
+.badge.issue{background:var(--t-blue);color:var(--indigo)} .badge.pr{background:var(--t-mint);color:#0E7E72}
+.disc-item .main{flex:1;min-width:0}
+.disc-item .ttl{font-size:13px;font-weight:500;line-height:1.4}
+.disc-item .meta{font-size:11px;color:var(--mute);margin-top:3px;font-family:var(--mono)}
+.disc-item .cmt{font-family:var(--mono);font-weight:700;color:#B45309;font-size:13px;flex-shrink:0}
+
+/* Scholar grid */
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.scard{border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#FCFDFE}
+.scard .nm{font-family:var(--mono);font-weight:600;color:var(--ink);font-size:13px}
+.scard .ct{font-size:12px;color:var(--mute);margin-top:3px}
+.scard.org{border-left:3px solid var(--indigo)}
+
+/* Score circle */
+.score-circles{display:flex;gap:24px;justify-content:center;flex-wrap:wrap}
+.score-circle{width:120px;height:120px;border-radius:50%;border:8px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.score-circle.pass{border-color:var(--mint)}
+.score-circle.fail{border-color:var(--coral)}
+.score-circle .sc{font-family:var(--mono);font-weight:700;font-size:32px;color:var(--ink)}
+.score-circle .sl{font-size:10px;color:var(--mute);text-align:center;margin-top:2px}
+
+/* Findings */
+.findings{display:flex;flex-direction:column;gap:9px;margin-top:16px}
+.find{border-left:3px solid var(--indigo);padding:9px 12px;background:#F8FAFF;border-radius:0 9px 9px 0}
+.find.critical{border-color:var(--coral);background:#FFF5F3}
+.find.warning{border-color:#F59E0B;background:#FFFBEB}
+.find.success{border-color:var(--mint);background:#F0FBF9}
+.find .ft{font-size:11px;font-weight:700;color:var(--ink2);display:flex;justify-content:space-between;gap:8px}
+.find .fb{font-size:12px;color:var(--ink);margin-top:3px;line-height:1.45}
+.find .fs{font-size:11px;color:var(--mute);margin-top:3px}
+
+/* Placeholder / empty */
+.empty{padding:50px 20px;text-align:center;color:var(--mute);font-size:14px}
+.empty-plain{padding:60px 20px;text-align:center;color:var(--mute);
+  border:1.5px dashed var(--line);border-radius:14px;font-size:14px}
+.empty-plain b{color:var(--ink2)}
+
+/* ===== FOOTER ===== */
+footer.drawer{display:flex;align-items:center;gap:14px;padding:0 22px;background:#111A2E;color:#CBD5E1;
+  font-family:var(--mono);font-size:12px;min-height:50px;margin-top:40px}
+.drawer .prompt{color:var(--mint)}
+.drawer .cmd{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#E2E8F0}
+.drawer .st{color:var(--mute);font-size:11px;white-space:nowrap}
+
+@media(max-width:760px){
+  .wrap{padding:16px}
+  .hero-card{padding:20px 18px}
+  .dim-grid{grid-template-columns:1fr}
+  .search-row{flex-direction:column}
+  .src-toggle{align-self:flex-start}
+  .sum-row{grid-template-columns:1fr 1fr}
+  .sgrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- MAIN CONTENT -->
+  <div class="wrap">
+
+    <!-- HERO: Unified Control Panel -->
+    <div class="hero-card">
+      <h1>🔬 全链路科研分析</h1>
+      <div class="hero-sub">输入研究关键词或选择分类领域，勾选分析维度，一站式获取科研情报全景</div>
+
+      <!-- Search row -->
+      <div class="search-row">
+        <div class="search-box" id="searchWrap">
+          <span class="ic">🔍</span>
+          <input id="keyword" placeholder="输入研究方向、领域或关键词（如 "深度学习, 计算机视觉"）" autofocus>
+        </div>
+        <div class="src-toggle" id="srcToggle">
+          <button class="active" data-src="keyword">关键词</button>
+          <button data-src="category">分类精选</button>
+        </div>
+      </div>
+
+      <!-- Category dropdown (hidden by default) -->
+      <div class="cat-select" id="catWrap">
+        <select id="category">
+          <option value="深度学习">深度学习</option>
+          <option value="人工智能">人工智能</option>
+          <option value="自然语言处理">自然语言处理</option>
+          <option value="大数据">大数据</option>
+          <option value="计算机体系结构">计算机体系结构</option>
+          <option value="自动驾驶">自动驾驶</option>
+          <option value="智慧医疗">智慧医疗</option>
+          <option value="量子计算">量子计算</option>
+          <option value="生物医药健康">生物医药健康</option>
+          <option value="程序开发">程序开发</option>
+          <option value="DevOps/运维/网管">DevOps/运维</option>
+          <option value="数据库">数据库</option>
+        </select>
+      </div>
+
+      <!-- Example chips -->
+      <div class="ex-row">
+        <span class="lbl">示例</span>
+        <span class="ex-chip">深度学习</span><span class="ex-chip">computer vision</span>
+        <span class="ex-chip">自然语言处理</span><span class="ex-chip">强化学习</span>
+        <span class="ex-chip">knowledge graph</span><span class="ex-chip">联邦学习</span>
+        <span class="ex-chip">LLM agent</span><span class="ex-chip">自动驾驶</span>
+      </div>
+
+      <!-- 搜索驱动维度（依赖关键词/分类） -->
+      <div class="dim-section">
+        <div class="eyebrow">搜索驱动维度 · 基于关键词或分类发现仓库</div>
+        <div class="dim-grid" id="searchDimGrid"></div>
+      </div>
+
+      <!-- Repo selector -->
+      <div class="repo-section">
+        <div class="eyebrow">目标仓库 · 填写后下方仓库维度才能执行定向分析</div>
+        <div class="repo-row">
+          <input class="owner" id="repoOwner" placeholder="owner">
+          <span class="slash">/</span>
+          <input class="repo-name" id="repoName" placeholder="repo">
+          <button class="btn-run" style="padding:10px 18px;font-size:13px" id="addRepoBtn">+ 添加</button>
+        </div>
+        <div class="repo-pills" id="repoPills"></div>
+      </div>
+
+      <!-- 仓库驱动维度（依赖 owner/repo） -->
+      <div class="dim-section">
+        <div class="eyebrow">仓库驱动维度 · 对指定仓库做深度分析（需先填写仓库）</div>
+        <div class="dim-grid" id="repoDimGrid"></div>
+      </div>
+
+      <!-- Run button -->
+      <div class="run-section">
+        <button class="btn-run" id="runBtn" style="font-size:16px;padding:16px 40px">
+          ▶ 启动全链路分析
+        </button>
+        <span class="run-hint" id="runHint">至少选择一个分析维度</span>
+      </div>
+
+      <!-- Progress -->
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar"><span id="progressBar" style="width:0%"></span></div>
+        <div class="progress-text">
+          <span id="progressLabel">就绪</span>
+          <span id="progressPct">0/0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESULTS -->
+    <div class="results-section" id="resultsSection">
+      <div class="tab-bar" id="tabBar"></div>
+      <div id="tabPanels"></div>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="drawer">
+    <span class="prompt">atlas ➤</span>
+    <span class="cmd" id="cmd">选择分析维度，点击"启动全链路分析"</span>
+    <span class="st" id="cmdStatus">ready</span>
+  </footer>
+</div>
+
+<script>
+mermaid.initialize({startOnLoad:false, theme:"base", securityLevel:"loose",
+  themeVariables:{primaryColor:"#E8EEFF",primaryTextColor:"#1E2A44",primaryBorderColor:"#4F6BED",lineColor:"#9DB4F0",fontSize:"12px"}});
+
+/* ========== STATE ========== */
+let DIMENSIONS=[], SELECTED=new Set(), REPOS=[], SOURCE="keyword", RESULTS={}, ACTIVE_TAB=null;
+
+/* ========== UTILS ========== */
+function esc(s){return String(s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function token(){return localStorage.getItem("demo_token")||"";}
+function el(id){return document.getElementById(id);}
+
+/* 维度分组: search 组依赖关键词/分类, repo 组依赖 owner/repo */
+const SEARCH_DIMS=new Set(["hotspot"]);
+function isSearchDim(d){return SEARCH_DIMS.has(d.key);}
+function isRepoDim(d){return !SEARCH_DIMS.has(d.key);}
+
+/* ========== DIMENSION LOADING ========== */
+async function loadDimensions(){
+  try{
+    const r=await fetch("/api/dimensions",{headers:{"X-Demo-Token":token()}});
+    const j=await r.json();
+    DIMENSIONS=(j.dimensions||[]).filter(d=>d.key!=="chain");
+    if(j.dimensions) renderAllDimensions();
+    // dimCount element removed
+  }catch(e){
+    // fallback: hardcoded dimensions
+    DIMENSIONS=[
+      {key:"hotspot",label:"科研热点分析",icon:"🔥",desc:"飙升项目+活跃讨论+主题热度+核心学者",needs:["keyword_or_category"]},
+      {key:"profile",label:"主体画像",icon:"🪪",desc:"项目/学者画像：主题向量/语言/研究维度评分",needs:["owner_repo_or_category"]},
+      {key:"inspire",label:"创新启发",icon:"💡",desc:"缺口挖掘+合作者匹配+LLM研究方向建议",needs:["owner_repo_or_category"]},
+      {key:"lineage",label:"演进谱系",icon:"🌳",desc:"创新点识别+项目演化分支+贡献者参与分析",needs:["owner","repo"]},
+      {key:"repro",label:"合规复现",icon:"✅",desc:"许可证/依赖锁定/容器化/密钥泄漏/复现性评分",needs:["owner","repo"]},
+      {key:"report",label:"进度报告",icon:"📋",desc:"周报+里程碑追踪+风险预警（交通灯系统）",needs:["owner","repo"]},
+      {key:"visual",label:"成果可视化",icon:"📊",desc:"交互式Plotly图表：时间线/热力图/语言饼图/Gantt",needs:["owner","repo"]}
+    ];
+    renderAllDimensions();
+    el("dimCount").textContent=DIMENSIONS.length+" 个维度";
+  }
+}
+
+function renderDimGrid(containerId, dims){
+  const grid=el(containerId);
+  if(!grid) return;
+  grid.innerHTML=dims.map(d=>`
+    <div class="dim-chip${SELECTED.has(d.key)?' checked':''}" data-key="${d.key}">
+      <div class="dim-ico">${d.icon||'📌'}</div>
+      <div class="dim-info">
+        <div class="dim-name">${esc(d.label)}</div>
+        <div class="dim-desc">${esc(d.desc)}</div>
+      </div>
+    </div>`).join("");
+  grid.querySelectorAll(".dim-chip").forEach(c=>c.onclick=()=>toggleDim(c.dataset.key));
+}
+
+function updateRepoDimStyle(){
+  // 仓库维度区域：无仓库时 dimmed
+  const sec=el("repoDimGrid")?el("repoDimGrid").closest(".dim-section"):null;
+  if(sec) sec.classList.toggle("needs-repo", REPOS.length===0);
+}
+
+function renderAllDimensions(){
+  renderDimGrid("searchDimGrid", DIMENSIONS.filter(isSearchDim));
+  renderDimGrid("repoDimGrid", DIMENSIONS.filter(isRepoDim));
+  updateRepoDimStyle();
+  updateRunButton();
+}
+
+function toggleDim(key){
+  if(SELECTED.has(key)) SELECTED.delete(key); else SELECTED.add(key);
+  document.querySelectorAll(".dim-chip").forEach(c=>{
+    c.classList.toggle("checked",SELECTED.has(c.dataset.key));
+  });
+  updateRunButton();
+}
+
+/* ========== REPO MANAGEMENT ========== */
+function addRepo(){
+  const o=el("repoOwner").value.trim(), r=el("repoName").value.trim();
+  if(!o||!r) return;
+  const full=o+"/"+r;
+  if(REPOS.find(rp=>rp.full===full)) return;
+  REPOS.push({owner:o,repo:r,full});
+  el("repoOwner").value=""; el("repoName").value="";
+  renderRepoPills();
+  updateRepoDimStyle();
+  updateRunButton();
+}
+function removeRepo(i){REPOS.splice(i,1);renderRepoPills();updateRepoDimStyle();updateRunButton();}
+function renderRepoPills(){
+  el("repoPills").innerHTML=REPOS.map((r,i)=>`<span class="repo-pill">${esc(r.full)} <span class="rmv" data-i="${i}">✕</span></span>`).join("");
+  el("repoPills").querySelectorAll(".rmv").forEach(rm=>rm.onclick=()=>removeRepo(parseInt(rm.dataset.i)));
+}
+
+/* ========== SOURCE TOGGLE ========== */
+function toggleSource(){
+  el("searchWrap").style.display=SOURCE==="keyword"?"":"none";
+  el("catWrap").style.display=SOURCE==="category"?"":"none";
+  updateRunButton();
+}
+el("srcToggle").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+  SOURCE=b.dataset.src;
+  el("srcToggle").querySelectorAll("button").forEach(bb=>bb.classList.toggle("active",bb===b));
+  toggleSource();
+});
+
+/* ========== RUN BUTTON ========== */
+function updateRunButton(){
+  const btn=el("runBtn"), hint=el("runHint");
+  const hasKeyword=el("keyword").value.trim(), hasCategory=SOURCE==="category";
+  const hasRepo=REPOS.length>0;
+
+  if(SELECTED.size===0){
+    hint.textContent="请勾选至少一个分析维度";
+    btn.disabled=true; return;
+  }
+
+  // 检查选了仓库维度但没填仓库
+  let repoDims=[...SELECTED].filter(k=>DIMENSIONS.find(d=>d.key===k&&isRepoDim(d)));
+  let searchDims=[...SELECTED].filter(k=>DIMENSIONS.find(d=>d.key===k&&isSearchDim(d)));
+
+  if(repoDims.length>0&&!hasRepo){
+    hint.textContent=`已选 ${repoDims.length} 个仓库维度，请先填写 owner/repo（格式: owner/repo）`;
+    btn.disabled=true; return;
+  }
+
+  if(searchDims.length>0&&!hasKeyword&&!hasCategory){
+    hint.textContent="已选搜索维度，请输入关键词或切换到分类精选";
+    btn.disabled=true; return;
+  }
+
+  if(searchDims.length===0&&repoDims.length>0&&hasRepo){
+    hint.textContent=`将对 ${REPOS[0].full} 执行 ${repoDims.length} 个仓库维度分析`;
+  }else if(searchDims.length>0&&repoDims.length===0){
+    hint.textContent=SOURCE==="category"?"分类精选模式 · "+searchDims.length+" 个搜索维度":"关键词搜索 · "+searchDims.length+" 个搜索维度";
+  }else if(searchDims.length>0&&repoDims.length>0){
+    hint.textContent=`搜索维度 ${searchDims.length} + 仓库维度 ${repoDims.length}（${REPOS[0].full}）`;
+  }
+
+  btn.disabled=false;
+}
+
+/* ========== RUN ========== */
+async function runChain(){
+  const dims=[...SELECTED];
+  if(!dims.length) return;
+  // 分类模式下用分类名作为关键词回退（知识图谱等需要 keyword 的维度也能跑）
+  const kw=el("keyword").value.trim() || (SOURCE==="category"?el("category").value:"");
+  const cat=el("category").value;
+
+  const btn=el("runBtn"); btn.disabled=true;
+  const pw=el("progressWrap"); pw.classList.add("active");
+  el("progressBar").style.width="0%";
+  el("progressLabel").textContent="启动中…";
+  el("progressPct").textContent="0/"+dims.length;
+  el("cmd").textContent="POST /api/chain → "+dims.length+" 维度";
+  el("cmdStatus").textContent="running…";
+  document.getElementById("resultsSection").classList.remove("active");
+
+  const body={dimensions:dims, keyword:kw};
+  if(REPOS.length>0){body.owner=REPOS[0].owner;body.repo=REPOS[0].repo;}
+  // category mode: use selected category as keyword too
+  if(SOURCE==="category"&&cat) body.category=cat;
+
+  try{
+    const r=await fetch("/api/chain",{method:"POST",headers:{"Content-Type":"application/json","X-Demo-Token":token()},body:JSON.stringify(body)});
+    const j=await r.json();
+    if(!j.ok){
+      el("progressLabel").textContent="✗ 失败";
+      el("cmdStatus").textContent="failed";
+      el("progressBar").style.background="linear-gradient(90deg,var(--coral),#FF9B8F)";
+      btn.disabled=false; return;
+    }
+    RESULTS=j.results||{};
+    el("cmdStatus").textContent="✓ done · "+(j.duration||"");
+    el("cmd").textContent="session: "+(j.session_id||"");
+    renderResults(dims);
+  }catch(e){
+    el("progressLabel").textContent="✗ 请求失败: "+esc(e.message||e);
+    el("cmdStatus").textContent="error";
+    btn.disabled=false;
+  }finally{
+    pw.classList.remove("active");
+    btn.disabled=false;
+  }
+}
+
+/* ========== RENDER RESULTS ========== */
+function renderResults(dims){
+  const section=document.getElementById("resultsSection");
+  section.classList.add("active");
+
+  // Build tabs
+  const bar=el("tabBar");
+  bar.innerHTML=dims.map(dk=>{
+    const dr=RESULTS[dk];
+    const ok=dr&&dr.ok;
+    return `<button class="tab-btn" data-tab="${dk}">
+      <span class="tab-dot ${ok?'ok':'err'}"></span>${esc(dr?dr.label:dk)}
+    </button>`;
+  }).join("");
+
+  // Build panels
+  const panels=el("tabPanels");
+  panels.innerHTML=dims.map(dk=>`<div class="tab-panel" data-tab="${dk}" id="panel_${dk}"></div>`).join("");
+
+  // Wire tabs
+  bar.querySelectorAll(".tab-btn").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+
+  // Render each panel
+  for(const dk of dims){
+    const dr=RESULTS[dk];
+    const panel=el("panel_"+dk);
+    if(!dr||!dr.ok){
+      panel.innerHTML=`<div class="empty">分析失败：${esc(dr?dr.error:"未知错误")}<br><pre style="font-family:var(--mono);font-size:11px;margin-top:8px;color:var(--mute)">${esc(dr?dr.stdout:"").slice(-500)}</pre></div>`;
+      continue;
+    }
+    panel.innerHTML=renderDimension(dk, dr);
+  }
+
+  // Activate first tab
+  if(dims.length>0) switchTab(dims[0]);
+  // Reveal progress as complete
+  el("progressBar").style.width="100%";
+  el("progressLabel").textContent="✓ 分析完成";
+  el("progressPct").textContent=dims.length+"/"+dims.length;
+
+  // Render mermaid in panels
+  setTimeout(()=>mermaid.run({querySelector:".mermaid"}).catch(()=>{}),50);
+}
+
+function switchTab(key){
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active",b.dataset.tab===key));
+  document.querySelectorAll(".tab-panel").forEach(p=>p.classList.toggle("active",p.dataset.tab===key));
+  ACTIVE_TAB=key;
+  // Re-run mermaid for newly visible panel
+  setTimeout(()=>mermaid.run({querySelector:"#panel_"+key+" .mermaid"}).catch(()=>{}),50);
+}
+
+/* ========== PARSE RESULT ========== */
+function parseJSON(dr){
+  if(!dr||!dr.artifacts||!dr.artifacts.json) return null;
+  try{return JSON.parse(dr.artifacts.json);}catch(e){return null;}
+}
+
+/* ========== DIMENSION RENDERERS ========== */
+function renderDimension(key, dr){
+  const obj=parseJSON(dr);
+  if(!obj) return noData(dr);
+
+  switch(key){
+    case "hotspot": return renderHotspot(obj,dr);
+    case "profile": return renderProfile(obj,dr);
+    case "inspire": return renderInspire(obj,dr);
+    case "lineage": return renderLineage(obj,dr);
+    case "repro": return renderRepro(obj,dr);
+    case "report": return renderReport(obj,dr);
+    case "visual": return renderVisual(obj,dr);
+    default: return noData(dr);
+  }
+}
+
+function noData(dr){
+  return `<div class="empty">暂无结构化数据<br>
+    <pre style="font-family:var(--mono);font-size:11px;margin-top:8px;color:var(--mute);max-height:300px;overflow:auto">${esc((dr.stdout||"").slice(-600))}</pre>
+    </div>`;
+}
+
+function abstractHTML(dr,method,findings){
+  const now=new Date().toLocaleString("zh-CN",{hour12:false});
+  return `<div class="abstract">
+    <h4>📋 结构化摘要</h4>
+    <p><b>背景：</b>基于 GitLink 平台的 ${esc(dr.label)} 自动分析。</p>
+    <p><b>方法：</b>${esc(method)}</p>
+    <p><b>关键发现：</b>${esc(findings)}</p>
+    <p><b>结论：</b>以下详述各项量化指标与观测结果，供领域专家进一步研判。</p>
+    <div class="method-note">📐 方法论: ${esc(method)}<br>
+    📡 数据源: GitLink API · 采集时间: ${now} CST<br>
+    💻 命令: ${esc(dr.command||"")} · 耗时 ${esc(dr.duration||"")}</div>
+  </div>
+  <div class="disclaimer">⚠️ 本分析由 AI 辅助生成，结论需经领域专家验证。自动分析存在抽样偏差与时间窗口局限，不构成学术定论。</div>`;
+}
+
+/* --- HOTSPOT --- */
+function renderHotspot(o,dr){
+  const meta=o.meta||{};
+  const tr=o.trending_repos||[], ac=o.active_discussions||[];
+  const tp=o.topic_heat||[], sc=o.core_scholars||[], tm=o.core_teams||[];
+  const maxScore=Math.max(1,...tr.map(r=>r.score||0));
+  const method="热度评分 H = stars + forks×2 + visits/10 + recency_bonus；主题提取基于 topics.py 词典 TF 计数；学者按关联仓库数排序（H-index 近似）";
+  const findings=`扫描 ${meta.repo_count||0} 个仓库，发现 ${tr.length} 个热门项目，${ac.length} 条活跃讨论，${tp.length} 个主题，${sc.length} 位核心学者`;
+
+  let h=abstractHTML(dr,method,findings);
+
+  // Summary tiles
+  h+=`<div class="sum-row">
+    ${sumTile("indigo","扫描仓库",meta.repo_count||0,"个")}
+    ${sumTile("coral","活跃讨论",meta.discussion_count||0,"条")}
+    ${sumTile("cyan","热门主题",meta.topic_count||0,"个")}
+    ${sumTile("mint","核心学者",meta.scholar_count||0,"位")}
+  </div>`;
+
+  // Trending repos
+  if(tr.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>🔥 飙升/热门项目</h3><span class="badge">${tr.length} 个</span></div>
+      <table class="tbl"><thead><tr><th>仓库</th><th>语言</th><th class="num">★ Star</th><th class="num">⑂ Fork</th><th class="num">日均★</th><th>热度评分</th><th>更新</th></tr></thead><tbody>`;
+    tr.forEach(r=>{
+      const kws=(r.matched_keywords||[]).map(k=>`<span class="kw-chip">${esc(k)}</span>`).join("");
+      h+=`<tr>
+        <td><div class="repo">${esc(r.repo)}</div>${kws?`<div style="margin-top:3px">${kws}</div>`:""}
+          <div style="font-size:11px;color:var(--mute);margin-top:2px">${esc((r.description||"").slice(0,100))}</div></td>
+        <td>${r.language?`<span class="lang-pill">${esc(r.language)}</span>`:"—"}</td>
+        <td class="num">${r.stars}</td><td class="num">${r.forks}</td>
+        <td class="num">${r.velocity}</td>
+        <td><div class="scorebar"><i style="width:${Math.round(r.score/maxScore*100)}%"></i></div>
+          <div style="font-size:11px;color:var(--mute);margin-top:2px;font-family:var(--mono)">${r.score} ± ${Math.round(r.score*0.12)}</div></td>
+        <td style="font-family:var(--mono);font-size:12px;color:var(--ink2)">${esc(r.updated||"—")}</td></tr>`;
+    });
+    h+=`</tbody></table></div>`;
+  }
+
+  // Active discussions
+  if(ac.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>💬 活跃讨论</h3><span class="badge">${ac.length} 条</span></div><div class="disc-list">`;
+    ac.slice(0,15).forEach(a=>{
+      h+=`<div class="disc-item">
+        <span class="badge ${a.type}">${a.type==="pr"?"PR":"Issue"}</span>
+        <div class="main"><div class="ttl">${esc(a.title||"(无标题)")}</div>
+          <div class="meta">${esc(a.repo)} · #${esc(a.number||"")} · ${esc(a.state||"")}</div></div>
+        <span class="cmt">${a.comments} 💬</span></div>`;
+    });
+    h+=`</div></div>`;
+  }
+
+  // Topic heat
+  if(tp.length){
+    const maxT=Math.max(1,...tp.map(t=>t.count));
+    h+=`<div class="sec-card"><div class="sec-head"><h3>📊 热门主题</h3><span class="badge">TF-IDF 加权</span></div><div class="tlist">`;
+    tp.forEach(t=>{
+      h+=`<div class="trow"><span class="tname">${esc(t.topic)}</span>
+        <div class="tbar"><i style="width:${Math.round(t.count/maxT*100)}%"></i></div>
+        <span class="tval">${t.count}</span></div>`;
+    });
+    h+=`</div></div>`;
+  }
+
+  // Core scholars
+  if(sc.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>👥 核心学者</h3><span class="badge">${sc.length} 位</span></div>
+      <div class="sgrid">`;
+    sc.slice(0,8).forEach(s=>{
+      h+=`<div class="scard"><div class="nm">${esc(s.login)}</div><div class="ct">关联 ${s.repo_count} 个仓库</div></div>`;
+    });
+    h+=`</div></div>`;
+  }
+
+  // Core teams
+  if(tm.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>🏛 活跃组织/团队</h3><span class="badge">${tm.length} 个</span></div>
+      <div class="sgrid">`;
+    tm.slice(0,8).forEach(t=>{
+      h+=`<div class="scard org"><div class="nm">${esc(t.login)}</div><div class="ct">${t.repo_count} 个仓库</div></div>`;
+    });
+    h+=`</div></div>`;
+  }
+
+  return h;
+}
+
+/* --- KNOWLEDGE GRAPH --- */
+function renderKnowledgeGraph(o,dr){
+  const nodes=o.nodes||[], edges=o.edges||[];
+  const method="networkx MultiDiGraph；节点类型：仓库/学者/主题；边类型：contributes_to/owns/covers_topic/collaborates_with/related_to；布局算法：Fruchterman-Reingold 力导向";
+  const findings=`构建包含 ${nodes.length} 个节点、${edges.length} 条边的异质知识图谱，覆盖 ${(o.core_scholars||[]).length} 位学者、${(o.topic_heat||[]).length} 个主题`;
+  let h=abstractHTML(dr,method,findings);
+
+  // Graph stats
+  h+=`<div class="sum-row">
+    ${sumTile("indigo","图节点",nodes.length,"个")}
+    ${sumTile("coral","边",edges.length,"条")}
+    ${sumTile("mint","学者",(o.core_scholars||[]).length,"位")}
+    ${sumTile("cyan","主题",(o.topic_heat||[]).length,"个")}
+  </div>`;
+
+  // Mermaid
+  if(dr.artifacts&&dr.artifacts.mermaid){
+    const id="mmd_"+Date.now()+"_"+Math.random().toString(36).slice(2,6);
+    h+=`<div class="sec-card"><div class="sec-head"><h3>🕸️ 知识图谱可视化</h3><span class="badge">Mermaid</span></div>
+      <div class="mermaid" id="${id}">${dr.artifacts.mermaid.replace(/```mermaid|```/g,"")}</div></div>`;
+  }
+
+  // Trending repos from graph
+  const tr=o.trending_repos||[];
+  if(tr.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>📈 关联热门项目</h3></div>`;
+    h+=`<table class="tbl"><thead><tr><th>仓库</th><th class="num">★ Star</th><th class="num">⑂ Fork</th></tr></thead><tbody>`;
+    tr.slice(0,10).forEach(r=>h+=`<tr><td class="repo">${esc(r.repo)}</td><td class="num">${r.stars}</td><td class="num">${r.forks}</td></tr>`);
+    h+=`</tbody></table></div>`;
+  }
+
+  return h;
+}
+
+/* --- PROFILE --- */
+function renderProfile(o,dr){
+  const profiles=o.profiles||[o];
+  const method="研究维度评分 0–40（文档5+许可证5+协作≤10+影响力≤20）；多样性指数 Simpson's D = 1−Σ(p_i²)；贡献者去 bot 后统计";
+  const findings=`画像覆盖 ${profiles.length} 个主体`+(o.mode?`（${o.mode} 模式）`:"");
+
+  let h=abstractHTML(dr,method,findings);
+  profiles.forEach(p=>{
+    if(p.type==="scholar"){
+      const tt=p.top_topics||[];
+      h+=`<div class="sec-card"><div class="sec-head"><h3>🧑 学者画像：${esc(p.login)}</h3></div>
+        <div style="font-size:13px;line-height:1.7">
+          <p>${esc(p.bio||"（无简介）")}</p>
+          <p style="margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--ink2)">
+            语言：${(p.languages||[]).join(" · ")||"—"}　|　活跃度：${(p.activity||0).toFixed(2)}　|　协作开放度：${(p.collab||0).toFixed(2)}　|　仓库数：${p.repo_count||0}
+          </p>
+        </div>`;
+      if(tt.length){
+        h+=`<div style="margin-top:10px"><span style="font-size:11px;color:var(--mute)">主题向量：</span>`;
+        tt.forEach(t=>h+=`<span class="kw-chip">${esc(t.topic)} (${t.count})</span>`);
+        h+=`</div>`;
+      }
+      h+=`</div>`;
+    }else{
+      // 项目画像模式
+      const sc=p.score||{};
+      const total=sc.doc+sc.license+sc.collab+sc.impact||0;
+      const topics=p.topics||[];
+      const conts=p.top_contributors||[];
+      h+=`<div class="sec-card"><div class="sec-head"><h3>📦 项目画像：${esc(p.repo||p.name||"")}</h3><span class="badge">研究维度 ${total}/40</span></div>
+        ${p.description?`<p style="font-size:13px;color:var(--ink2);margin-bottom:14px;line-height:1.6">${esc(p.description.slice(0,200))}</p>`:""}
+        <div style="font-size:12px;color:var(--mute);margin-bottom:12px;font-family:var(--mono)">
+          ★${p.stars||0} ⑂${p.forks||0} 👁${p.visits||0} · 贡献者 ${p.contributors_count||0} 人
+        </div>
+        <div class="sum-row">
+          ${sumTile("indigo","文档",sc.doc||0,"/5")}
+          ${sumTile("mint","许可证",sc.license||0,"/5")}
+          ${sumTile("coral","协作",sc.collab||0,"/10")}
+          ${sumTile("amber","影响力",sc.impact||0,"/20")}
+        </div>`;
+      if(topics.length){
+        h+=`<div style="margin-top:10px"><span style="font-size:11px;color:var(--mute)">研究主题：</span>`;
+        topics.forEach(t=>h+=`<span class="kw-chip">${esc(t.topic||t)}</span>`);
+        h+=`</div>`;
+      }
+      if(conts.length){
+        h+=`<div style="margin-top:6px"><span style="font-size:11px;color:var(--mute)">核心贡献者：</span>`;
+        conts.forEach(l=>h+=`<span class="kw-chip" style="background:var(--t-mint);color:#0E7E72;border-color:#B6EBE3">${esc(l)}</span>`);
+        h+=`</div>`;
+      }
+      if(p.languages&&p.languages.length){
+        h+=`<div style="margin-top:6px;font-size:12px;color:var(--ink2);font-family:var(--mono)">语言：${esc(p.languages.join(" · "))||"—"}</div>`;
+      }
+      h+=`</div>`;
+    }
+  });
+  return h;
+}
+
+/* --- INSPIRE --- */
+function renderInspire(o,dr){
+  const method="缺口挖掘：开放 Issue 主题分析 → 技术空白识别；匹配评分 = topic_overlap×0.45 + language_match×0.20 + activity×0.20 + collab×0.15（归一化 0–100）";
+  const findings=`识别 ${(o.gap_topics||[]).length} 个缺口主题，匹配 ${(o.candidates||[]).length} 位候选人`+(o.llm_used?"，含 LLM 研究建议":"");
+  let h=abstractHTML(dr,method,findings);
+
+  const gt=o.gap_topics||[];
+  if(gt.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>🕳️ 缺口主题</h3><span class="badge">创新潜力矩阵</span></div>
+      <div class="tlist">`;
+    gt.forEach(g=>h+=`<div class="trow"><span class="tname">${esc(g.topic||g)}</span><div class="tbar"><i style="width:${Math.min(100,(g.count||1)*25)}%"></i></div></div>`);
+    h+=`</div></div>`;
+  }
+
+  const cands=o.candidates||[];
+  if(cands.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>🤝 合作者推荐</h3><span class="badge">匹配度置信分</span></div>
+      <div class="sgrid">`;
+    cands.slice(0,6).forEach((c,i)=>{
+      h+=`<div class="scard${i===0?' org':''}">
+        <div class="nm">${esc(c.login)}</div>
+        <div class="ct">匹配度：${(c.score||0).toFixed(1)} ± ${((c.score||0)*0.08).toFixed(1)}（置信区间）</div>
+        <div style="font-size:11px;color:var(--mute);margin-top:3px">${(c.reasons||[]).slice(0,2).join("；")||"—"}</div></div>`;
+    });
+    h+=`</div></div>`;
+  }
+
+  const ips=o.innovation_points||[];
+  if(ips.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>✨ 创新点</h3><span class="badge">${ips.length} 个</span></div><div class="findings">`;
+    ips.slice(0,6).forEach(ip=>{
+      h+=`<div class="find"><div class="ft"><span>[${esc(ip.category||"创新")}] ${esc(ip.description||"")}</span></div>
+        <div class="fb">${esc(ip.evidence||"")}</div></div>`;
+    });
+    h+=`</div></div>`;
+  }
+
+  if(o.idea){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>💡 LLM 研究建议</h3><span class="badge">生成式AI辅助</span></div>
+      <div style="font-size:13px;line-height:1.7;white-space:pre-wrap">${esc(o.idea)}</div></div>`;
+  }
+
+  return h;
+}
+
+/* --- LINEAGE --- */
+function renderLineage(o,dr){
+  const ips=o.innovation_points||[];
+  const method="创新点识别：高影响合并 PR + 里程碑关键词匹配；演化分支：单分支历史简化；Commit 时间线按日分桶";
+  const findings=`识别 ${ips.length} 个创新点，分析贡献者参与时长分布`;
+  let h=abstractHTML(dr,method,findings);
+
+  if(ips.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>💡 创新点</h3><span class="badge">${ips.length} 个</span></div>
+      <div class="findings">`;
+    ips.slice(0,8).forEach(ip=>{
+      h+=`<div class="find"><div class="ft"><span>[${esc(ip.category||"创新")}] ${esc(ip.description||"")}</span></div>
+        <div class="fb">${esc(ip.evidence||"")}</div></div>`;
+    });
+    h+=`</div></div>`;
+  }
+
+  // Mermaid gitGraph
+  if(dr.artifacts&&dr.artifacts.mermaid){
+    const id="lg_"+Date.now()+"_"+Math.random().toString(36).slice(2,6);
+    h+=`<div class="sec-card"><div class="sec-head"><h3>🌿 演化分支</h3></div>
+      <div class="mermaid" id="${id}">${dr.artifacts.mermaid.replace(/```mermaid|```/g,"")}</div></div>`;
+  }
+
+  return h;
+}
+
+/* --- REPRO --- */
+function renderRepro(o,dr){
+  const ri=o.repro_items||[], ci=o.compliance_items||[], risks=o.risks||[];
+  const method="复现性：CI/依赖锁定/README/容器化/版本标签各 0–2 分（满分 10）；合规：LICENSE/SECURITY.md/版权声明/依赖清单/CONTRIBUTING.md 检测；密钥扫描：10 类正则模式";
+  const findings=`复现性 ${o.repro_score||0}/10 · 合规 ${o.compliance_score||0}/10 · 风险项 ${risks.length} 个`;
+  let h=abstractHTML(dr,method,findings);
+
+  h+=`<div class="sec-card"><div class="sec-head"><h3>📊 评分总览</h3></div>
+    <div class="score-circles">
+      <div class="score-circle ${(o.repro_score||0)>=6?'pass':'fail'}"><div class="sc">${o.repro_score||0}/10</div><div class="sl">复现性</div></div>
+      <div class="score-circle ${(o.compliance_score||0)>=6?'pass':'fail'}"><div class="sc">${o.compliance_score||0}/10</div><div class="sl">合规度</div></div>
+    </div></div>`;
+
+  if(ri.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>🔬 复现性明细</h3></div><div class="findings">`;
+    ri.forEach(it=>h+=`<div class="find ${it.ok?'success':'warning'}"><div class="ft">${esc(it.name||it.check||"")} ${it.ok?'✓':'✗'}</div><div class="fb">${esc(it.detail||"")}</div></div>`);
+    h+=`</div></div>`;
+  }
+
+  if(ci.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>📜 合规检查</h3></div><div class="findings">`;
+    ci.forEach(it=>h+=`<div class="find ${it.ok?'success':'warning'}"><div class="ft">${esc(it.name||it.check||"")} ${it.ok?'✓':'✗'}</div><div class="fb">${esc(it.detail||"")}</div></div>`);
+    h+=`</div></div>`;
+  }
+
+  if(risks.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>⚠️ 风险矩阵</h3><span class="badge">严重度×可能性</span></div><div class="findings">`;
+    risks.forEach(r=>{
+      const cls=(r.level||"").includes("high")||r.severity==="P0"?"critical":"warning";
+      h+=`<div class="find ${cls}"><div class="ft"><span>${esc(r.level||r.severity||"")} · ${esc(r.category||r.name||"")}</span></div>
+        <div class="fb">${esc(r.detail||r.evidence||r.name||"")}</div><div class="fs">${esc(r.file?r.file:"")} ${r.suggestion?esc(r.suggestion):""}</div></div>`;
+    });
+    h+=`</div></div>`;
+  }
+
+  return h;
+}
+
+/* --- MATCH --- */
+function renderMatch(o,dr){
+  const method="候选人评分：topic_overlap×0.45 + language_match×0.20 + activity×0.20 + collab×0.15 → 0–100 归一化";
+  const cands=o.candidates||[], gt=o.gap_topics||[], nl=o.needed_languages||[];
+  const findings=`从候选池（${o.meta&&o.meta.pool_size||0} 人）中匹配 ${cands.length} 位候选人`+(gt.length?`，${gt.length} 个缺口主题`:"");
+  let h=abstractHTML(dr,method,findings);
+
+  // Gap context
+  if(gt.length||nl.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>🕳️ 缺口分析</h3></div>
+      <div style="font-size:13px;line-height:1.7">`;
+    if(gt.length){
+      h+=`<p style="margin-bottom:6px"><b>缺口主题：</b>${gt.map(g=>esc(g.topic||g)).join(" · ")}</p>`;
+    }
+    if(nl.length){
+      h+=`<p><b>所需语言：</b>${nl.map(esc).join(" · ")}</p>`;
+    }
+    h+=`</div></div>`;
+  }
+
+  if(cands.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>🏆 候选人排名</h3><span class="badge">${cands.length} 人</span></div>
+      <div style="display:flex;flex-direction:column;gap:10px">`;
+    cands.slice(0,8).forEach((c,i)=>{
+      const detail=[];
+      if(c.topic_overlap!=null) detail.push(`主题重合 ${(c.topic_overlap*100).toFixed(0)}%`);
+      if(c.language_match!=null) detail.push(`语言匹配 ${(c.language_match*100).toFixed(0)}%`);
+      if(c.activity_level!=null) detail.push(`活跃度 ${c.activity_level.toFixed(1)}`);
+      if(c.repo_count!=null) detail.push(`${c.repo_count} 仓库`);
+      h+=`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 16px;background:#FCFDFE${i===0?';border-left:3px solid var(--indigo)':''}">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-family:var(--mono);font-weight:700;font-size:14px">#${i+1} ${esc(c.login)}</span>
+          <span style="font-family:var(--mono);font-weight:700;font-size:18px;color:var(--indigo)">${(c.score||0).toFixed(1)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--mute);margin-top:4px">${detail.join(" · ")}</div>
+        ${(c.reasons||[]).length?`<div style="font-size:12px;color:var(--ink2);margin-top:4px">${c.reasons.slice(0,3).map(esc).join("；")}</div>`:""}
+        ${c.repo_languages&&c.repo_languages.length?`<div style="font-size:11px;color:var(--mute);margin-top:3px">仓库语言：${c.repo_languages.map(esc).join(" · ")}</div>`:""}
+      </div>`;
+    });
+    h+=`</div></div>`;
+  }
+  return h;
+}
+
+/* --- REPORT --- */
+function renderReport(o,dr){
+  const ws=o.week_stats||{};
+  const tw=ws.this_week||{}, lw=ws.last_week||{};
+  const risks=o.risk_warnings||[];
+  function delta(cur,prev){const d=cur-prev;return d>0?`↑${d}`:d<0?`↓${Math.abs(d)}`:"→";}
+  const method="本周 vs 上周配对比较（观察性，非严格配对 t 检验）；风险阈值：低活跃<3 commits/周、bus factor>0.5、陈旧 Issue>30d、陈旧 PR>14d";
+  const findings=`本周 ${tw.commits||0} commits（${delta(tw.commits||0,lw.commits||0)}） · ${tw.prs_merged||0} PR 合并（${delta(tw.prs_merged||0,lw.prs_merged||0)}） · ${risks.length} 项预警`;
+  let h=abstractHTML(dr,method,findings);
+
+  h+=`<div class="sec-card"><div class="sec-head"><h3>📊 周度活动对比</h3><span class="badge">本周 / 上周</span></div>
+    <div class="sum-row">
+      ${sumTile("indigo","Commits",tw.commits||0,delta(tw.commits||0,lw.commits||0))}
+      ${sumTile("mint","PR 合并",tw.prs_merged||0,delta(tw.prs_merged||0,lw.prs_merged||0))}
+      ${sumTile("coral","Issue 新开",tw.issues_opened||0,"关闭 "+(tw.issues_closed||0))}
+      ${sumTile("amber","活跃贡献者",tw.contributors_active||0,(tw.contributors_active_logins||[]).slice(0,3).join(", "))}
+    </div></div>`;
+
+  if(risks.length){
+    h+=`<div class="sec-card"><div class="sec-head"><h3>🚦 风险预警</h3><span class="badge">交通灯系统</span></div><div class="findings">`;
+    risks.forEach(w=>{
+      const icon=w.level==="critical"?'🔴':(w.level==="warning"?'🟡':'🟢');
+      h+=`<div class="find ${w.level==='critical'?'critical':'warning'}">
+        <div class="ft"><span>${icon} ${esc(w.level||"")} · ${esc(w.type||"")}</span></div>
+        <div class="fb">${esc(w.message||"")}</div><div class="fs">建议：${esc(w.suggestion||"持续监控")}</div></div>`;
+    });
+    h+=`</div></div>`;
+  }
+
+  return h;
+}
+
+/* --- VISUAL --- */
+function renderVisual(o,dr){
+  const tl=o.timeline||{};
+  const method="Plotly 交互图表：每周分桶时间线 + 贡献者热力图矩阵 + 语言饼图 + 里程碑 Gantt 段；配色遵循 ColorBrewer Set2 学术方案";
+  const findings=`覆盖 ${(tl.labels||[]).length} 周数据 · ${(o.language_pie||[]).length} 种语言`;
+  let h=abstractHTML(dr,method,findings);
+
+  h+=`<div class="sum-row">
+    ${sumTile("indigo","时间跨度",(tl.labels||[]).length,"周")}
+    ${sumTile("coral","累计 Commits",(tl.commits||[]).reduce((a,b)=>a+b,0),"次")}
+    ${sumTile("mint","累计 PRs",(tl.prs||[]).reduce((a,b)=>a+b,0),"个")}
+    ${sumTile("amber","语言数",(o.language_pie||[]).length,"种")}
+  </div>`;
+
+  if(dr.artifacts&&dr.artifacts.html){
+    const blob=URL.createObjectURL(new Blob([dr.artifacts.html],{type:"text/html"}));
+    h+=`<div class="sec-card"><div class="sec-head"><h3>📈 交互式可视化</h3><span class="badge">Plotly</span></div>
+      <iframe style="width:100%;height:500px;border:0;border-radius:10px;background:#fff" src="${blob}"></iframe></div>`;
+  }
+
+  return h;
+}
+
+/* ========== HELPERS ========== */
+function sumTile(c,label,val,unit){
+  const colors={indigo:"var(--indigo)",coral:"var(--coral)",cyan:"#06B6D4",mint:"var(--mint)",amber:"#F59E0B"};
+  return `<div class="sum-tile" style="border-top:3px solid ${colors[c]||colors.indigo}">
+    <div class="sl">${label}</div><div class="sv">${val}</div><div class="ss">${unit}</div></div>`;
+}
+
+/* ========== EVENT BINDINGS ========== */
+el("runBtn").onclick=runChain;
+el("addRepoBtn").onclick=addRepo;
+el("keyword").addEventListener("keydown",e=>{if(e.key==="Enter")runChain();});
+el("keyword").addEventListener("input",updateRunButton);
+el("repoOwner").addEventListener("keydown",e=>{if(e.key==="Enter"){addRepo();e.preventDefault();}});
+el("repoName").addEventListener("keydown",e=>{if(e.key==="Enter"){addRepo();e.preventDefault();}});
+el("catWrap").querySelector("select").addEventListener("change",updateRunButton);
+// 全选/清除按钮已移除 — 维度分两组展示，用户按需勾选
+document.querySelectorAll(".ex-chip").forEach(e=>e.onclick=()=>{
+  SOURCE="keyword";el("keyword").value=e.textContent.trim();
+  el("srcToggle").querySelectorAll("button").forEach(bb=>bb.classList.toggle("active",bb.dataset.src==="keyword"));
+  toggleSource();updateRunButton();
+});
+
+/* ========== INIT ========== */
+toggleSource();
+loadDimensions();
+el("keyword").focus();
+</script>
+</body>
+</html>

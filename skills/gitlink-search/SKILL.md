@@ -1,7 +1,7 @@
 ---
 name: gitlink-search
-version: 1.0.0
-description: "搜索：按关键词搜索仓库和用户。当用户需要在 GitLink 上查找特定仓库、搜索某个具体项目或用户名时触发。"
+version: 1.1.0
+description: "搜索：搜索仓库、用户和 Issue。当用户需要在 GitLink 上查找特定仓库、搜索某个项目、用户名或 Issue 时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -22,6 +22,7 @@ metadata:
 |----------|------|
 | `search +repos` | 搜索仓库 |
 | `search +users` | 搜索用户 |
+| `search +issues` | 搜索 Issue（需要 owner/repo） |
 
 ## 使用示例
 
@@ -31,4 +32,16 @@ gitlink-cli search +repos --keyword "machine learning" --limit 10
 
 # 搜索用户
 gitlink-cli search +users --keyword "zhangsan"
+
+# 搜索 Issue（基本用法）
+gitlink-cli search +issues --owner MyOrg --repo my-project --keyword "登录失败"
+
+# 搜索已关闭的 Issue
+gitlink-cli search +issues -k "bug" --category closed
+
+# 搜索指定负责人和标签的 Issue
+gitlink-cli search +issues -k "性能" --assignee 42 --tag 1,2
+
+# 按创建时间正序排列
+gitlink-cli search +issues -k "需求" --sort-by created_on --sort-dir asc
 ```

@@ -2,7 +2,6 @@ package common
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/url"
 
@@ -90,9 +89,19 @@ func (ctx *RuntimeContext) CallAPIWithQuery(method, path string, query url.Value
 	return ctx.Client.Do(method, path, nil, query)
 }
 
-// PostMultipart uploads multipart/form-data through the shared runtime client.
-func (ctx *RuntimeContext) PostMultipart(path string, fields map[string]string, files []client.MultipartFile) (*output.Envelope, error) {
-	return ctx.Client.PostMultipart(path, fields, files)
+// CallAPIRaw makes an API call without appending .json suffix.
+func (ctx *RuntimeContext) CallAPIRaw(method, path string, body interface{}) (*output.Envelope, error) {
+	return ctx.Client.DoRaw(method, path, body, nil)
+}
+
+// CallAPIRawWithQuery makes an API call with query parameters, without .json suffix.
+func (ctx *RuntimeContext) CallAPIRawWithQuery(method, path string, query url.Values) (*output.Envelope, error) {
+	return ctx.Client.DoRaw(method, path, nil, query)
+}
+
+// CallAPIRawForm makes an API call with form-encoded body, without .json suffix.
+func (ctx *RuntimeContext) CallAPIRawForm(method, path string, body url.Values) (*output.Envelope, error) {
+	return ctx.Client.DoForm(method, path, body, nil)
 }
 
 // PaginateAll fetches all pages.
@@ -127,7 +136,11 @@ func (ctx *RuntimeContext) Arg(name string) string {
 func (ctx *RuntimeContext) RequireArg(name string) (string, error) {
 	v := ctx.Arg(name)
 	if v == "" {
-		return "", errors.New(ctx.Tr.Tf("error.missing_required_flag", i18n.Args{"name": name}))
+		tr := ctx.Tr
+		if tr == nil {
+			tr = i18n.Default()
+		}
+		return "", fmt.Errorf("%s", tr.Tf("error.missing_required_flag", i18n.Args{"name": name}))
 	}
 	return v, nil
 }
