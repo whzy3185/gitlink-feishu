@@ -55,6 +55,31 @@ func TestMilestoneCreatePayload(t *testing.T) {
 	assertEqual(t, payload["effective_date"], "2026-07-01")
 }
 
+func TestMilestoneCreateNameOnly(t *testing.T) {
+	var payload map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertRequest(t, r, "POST", "/v1/owner/repo/milestones.json")
+		payload = decodeJSON(t, r)
+		writeJSON(t, w, map[string]interface{}{"status": 0, "message": "success"})
+	}))
+	defer server.Close()
+
+	err := runMilestoneShortcut(t, server, "create", map[string]string{
+		"name": "v1.1",
+	})
+	if err != nil {
+		t.Fatalf("create shortcut failed: %v", err)
+	}
+
+	assertEqual(t, payload["name"], "v1.1")
+	if _, ok := payload["description"]; ok {
+		t.Fatalf("description should be omitted when not provided")
+	}
+	if _, ok := payload["effective_date"]; ok {
+		t.Fatalf("effective_date should be omitted when not provided")
+	}
+}
+
 func TestMilestoneViewWithIssueFilters(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assertRequest(t, r, "GET", "/v1/owner/repo/milestones/7.json")
