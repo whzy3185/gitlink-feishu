@@ -72,6 +72,8 @@
   "cmd.pr.review.short": "创建拉取请求评审",
   "cmd.pr.reviews.short": "列出拉取请求评审",
   "cmd.pr.short": "拉取请求操作",
+  "cmd.pr.status.long": "显示当前登录用户在本仓库相关的开启中拉取请求，分为你创建的和请求你评审的两组。",
+  "cmd.pr.status.short": "显示与你相关的拉取请求",
   "cmd.pr.version_diff.short": "显示拉取请求补丁集版本 diff",
   "cmd.pr.versions.short": "列出拉取请求补丁集版本",
   "cmd.pr.view.short": "查看拉取请求详情",

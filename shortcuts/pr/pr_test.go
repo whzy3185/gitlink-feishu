@@ -532,6 +532,165 @@ func TestPRDiffHTTPError(t *testing.T) {
 	}
 }
 
+// --- status ---
+
+func TestPRStatusGrouping(t *testing.T) {
+	tests := []struct {
+		name        string
+		openPulls   []interface{}
+		reviewPulls []interface{}
+		wantCreated []string
+		wantReview  []string
+	}{
+		{
+			name: "groups created and review-requested",
+			openPulls: []interface{}{
+				makePull(1, "mine one", "currentuser"),
+				makePull(2, "theirs", "someoneelse"),
+				makePull(3, "mine two", "currentuser"),
+			},
+			reviewPulls: []interface{}{
+				makePull(4, "review me", "author4"),
+			},
+			wantCreated: []string{"mine one", "mine two"},
+			wantReview:  []string{"review me"},
+		},
+		{
+			name: "author filter excludes other people",
+			openPulls: []interface{}{
+				makePull(2, "theirs", "someoneelse"),
+			},
+			reviewPulls: []interface{}{},
+			wantCreated: []string{},
+			wantReview:  []string{},
+		},
+		{
+			name:        "empty repository yields empty groups",
+			openPulls:   []interface{}{},
+			reviewPulls: []interface{}{},
+			wantCreated: []string{},
+			wantReview:  []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var reviewerID string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.URL.Path == "/users/me.json":
+					writeJSON(t, w, map[string]interface{}{"login": "currentuser", "id": float64(7)})
+				case r.URL.Path == "/v1/owner/repo/pulls.json":
+					if got := r.URL.Query().Get("status"); got != "0" {
+						t.Fatalf("expected status=0, got %q", got)
+					}
+					if rid := r.URL.Query().Get("reviewer_id"); rid != "" {
+						reviewerID = rid
+						writeJSON(t, w, map[string]interface{}{"pulls": tt.reviewPulls})
+						return
+					}
+					writeJSON(t, w, map[string]interface{}{"pulls": tt.openPulls})
+				default:
+					t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+				}
+			}))
+			defer server.Close()
+
+			result, err := collectPullStatus(statusContext(server))
+			if err != nil {
+				t.Fatalf("collectPullStatus failed: %v", err)
+			}
+
+			assertEqual(t, result["login"], "currentuser")
+			assertPullTitles(t, result["created"], tt.wantCreated)
+			assertPullTitles(t, result["review_requested"], tt.wantReview)
+			if reviewerID != "7" {
+				t.Fatalf("expected reviewer_id=7 sent to API, got %q", reviewerID)
+			}
+		})
+	}
+}
+
+func TestPRStatusPropagatesUserError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	if _, err := collectPullStatus(statusContext(server)); err == nil {
+		t.Fatal("expected error when /users/me fails")
+	}
+}
+
+func TestPRStatusMissingLogin(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, map[string]interface{}{"id": float64(7)})
+	}))
+	defer server.Close()
+
+	if _, err := collectPullStatus(statusContext(server)); err == nil {
+		t.Fatal("expected error when login is missing")
+	}
+}
+
+func TestPRStatusRun(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/users/me.json":
+			writeJSON(t, w, map[string]interface{}{"login": "currentuser", "id": float64(7)})
+		case "/v1/owner/repo/pulls.json":
+			writeJSON(t, w, map[string]interface{}{"pulls": []interface{}{}})
+		default:
+			t.Fatalf("unexpected request: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	if err := runPRShortcut(t, server, "status", nil); err != nil {
+		t.Fatalf("status run failed: %v", err)
+	}
+}
+
+func statusContext(server *httptest.Server) *common.RuntimeContext {
+	return &common.RuntimeContext{
+		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+		Owner:  "owner",
+		Repo:   "repo",
+		Format: "json",
+	}
+}
+
+func makePull(id int, title, authorLogin string) map[string]interface{} {
+	return map[string]interface{}{
+		"id":    float64(id),
+		"title": title,
+		"issue": map[string]interface{}{
+			"author": map[string]interface{}{"login": authorLogin},
+		},
+	}
+}
+
+func assertPullTitles(t *testing.T, raw interface{}, want []string) {
+	t.Helper()
+	items, ok := raw.([]interface{})
+	if !ok {
+		t.Fatalf("expected []interface{}, got %T", raw)
+	}
+	if len(items) != len(want) {
+		t.Fatalf("expected %d pulls, got %d", len(want), len(items))
+	}
+	for i, it := range items {
+		m, ok := it.(map[string]interface{})
+		if !ok {
+			t.Fatalf("pull %d not a map: %T", i, it)
+		}
+		if got := stringField(m, "title"); got != want[i] {
+			t.Fatalf("pull %d title = %q, want %q", i, got, want[i])
+		}
+	}
+}
+
 func runPRShortcut(t *testing.T, server *httptest.Server, name string, args map[string]string) error {
 	t.Helper()
 	shortcut := findPRShortcut(t, name)
