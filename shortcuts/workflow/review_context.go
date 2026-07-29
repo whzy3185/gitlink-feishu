@@ -1,10 +1,12 @@
 package workflow
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
@@ -16,40 +18,31 @@ type ReviewContextOptions struct {
 	Number         int
 	IssueLimit     int
 	LabelLimit     int
+	ThreadLimit    int
 	IncludeRepo    bool
 	IncludePR      bool
 	IncludeFiles   bool
 	IncludeReviews bool
+	IncludeThreads bool
 	IncludeIssues  bool
 	IncludeLabels  bool
-}
-
-type ReviewContext struct {
-	Repository     string                   `json:"repository"`
-	PullRequest    int                      `json:"pull_request"`
-	Source         string                   `json:"source"`
-	Sections       []string                 `json:"sections"`
-	RepositoryInfo map[string]interface{}   `json:"repository_info,omitempty"`
-	PR             map[string]interface{}   `json:"pr,omitempty"`
-	Files          []map[string]interface{} `json:"files,omitempty"`
-	Reviews        []map[string]interface{} `json:"reviews,omitempty"`
-	OpenIssues     []map[string]interface{} `json:"open_issues,omitempty"`
-	Labels         []map[string]interface{} `json:"labels,omitempty"`
-	Notes          []ScoringNote            `json:"notes,omitempty"`
 }
 
 func newReviewContextShortcut() *common.Shortcut {
 	return &common.Shortcut{
 		Name:        "review-context",
-		Description: "Fetch read-only PR review context from shortcut-backed endpoints",
+		Description: "Build read-only PR review context from GitLink or local JSON",
 		Flags: []common.Flag{
-			{Name: "number", Short: "n", Usage: "Pull request number", Required: true},
+			{Name: "from", Usage: "Read review context from a local JSON file"},
+			{Name: "number", Short: "n", Usage: "Pull request number"},
 			{Name: "issue-limit", Usage: "Maximum open issues to include", Default: "20"},
 			{Name: "label-limit", Usage: "Maximum labels to include", Default: "50"},
+			{Name: "thread-limit", Usage: "Maximum review thread records to include", Default: "100"},
 			{Name: "include-repo", Usage: "Include repository info", Bool: true, Default: "true"},
 			{Name: "include-pr", Usage: "Include pull request details", Bool: true, Default: "true"},
 			{Name: "include-files", Usage: "Include pull request changed files", Bool: true, Default: "true"},
 			{Name: "include-reviews", Usage: "Include pull request reviews", Bool: true, Default: "true"},
+			{Name: "include-threads", Usage: "Include pull request review threads", Bool: true, Default: "true"},
 			{Name: "include-issues", Usage: "Include open issue context", Bool: true, Default: "true"},
 			{Name: "include-labels", Usage: "Include issue labels", Bool: true, Default: "true"},
 		},
@@ -58,6 +51,17 @@ func newReviewContextShortcut() *common.Shortcut {
 }
 
 func runReviewContext(ctx *common.RuntimeContext) error {
+	var context ReviewContext
+	if path := strings.TrimSpace(ctx.Arg("from")); path != "" {
+		loaded, err := readReviewContextInput(path)
+		if err != nil {
+			return err
+		}
+		context = loaded
+		finalizeReviewContext(&context, time.Now().UTC())
+		return renderReviewContextToStdout(ctx, context)
+	}
+
 	number, err := parseIntArg(ctx.Arg("number"), 0, "number")
 	if err != nil {
 		return err
@@ -73,22 +77,31 @@ func runReviewContext(ctx *common.RuntimeContext) error {
 	if err != nil {
 		return err
 	}
+	threadLimit, err := parseIntArg(ctx.Arg("thread-limit"), 100, "thread-limit")
+	if err != nil {
+		return err
+	}
 
-	context, err := FetchReviewContext(ctx, ReviewContextOptions{
+	context, err = FetchReviewContext(ctx, ReviewContextOptions{
 		Number:         number,
 		IssueLimit:     issueLimit,
 		LabelLimit:     labelLimit,
+		ThreadLimit:    threadLimit,
 		IncludeRepo:    parseBoolDefault(ctx.Arg("include-repo"), true),
 		IncludePR:      parseBoolDefault(ctx.Arg("include-pr"), true),
 		IncludeFiles:   parseBoolDefault(ctx.Arg("include-files"), true),
 		IncludeReviews: parseBoolDefault(ctx.Arg("include-reviews"), true),
+		IncludeThreads: parseBoolDefault(ctx.Arg("include-threads"), true),
 		IncludeIssues:  parseBoolDefault(ctx.Arg("include-issues"), true),
 		IncludeLabels:  parseBoolDefault(ctx.Arg("include-labels"), true),
 	})
 	if err != nil {
 		return err
 	}
+	return renderReviewContextToStdout(ctx, context)
+}
 
+func renderReviewContextToStdout(ctx *common.RuntimeContext, context ReviewContext) error {
 	format := ctx.Format
 	if strings.TrimSpace(cmdutil.Format) == "" {
 		format = "json"
@@ -99,6 +112,27 @@ func runReviewContext(ctx *common.RuntimeContext) error {
 	}
 	_, err = fmt.Fprint(os.Stdout, rendered)
 	return err
+}
+
+func readReviewContextInput(path string) (ReviewContext, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ReviewContext{}, fmt.Errorf("read review context input: %w", err)
+	}
+	var context ReviewContext
+	if err := json.Unmarshal(data, &context); err != nil {
+		return ReviewContext{}, fmt.Errorf("parse review context input: %w", err)
+	}
+	if strings.TrimSpace(context.Repository) == "" {
+		return ReviewContext{}, fmt.Errorf("parse review context input: repository is required")
+	}
+	if context.PullRequest <= 0 {
+		return ReviewContext{}, fmt.Errorf("parse review context input: pull_request must be positive")
+	}
+	if strings.TrimSpace(context.Source) == "" {
+		context.Source = "local-json"
+	}
+	return context, nil
 }
 
 func FetchReviewContext(ctx *common.RuntimeContext, opts ReviewContextOptions) (ReviewContext, error) {
@@ -115,13 +149,20 @@ func FetchReviewContext(ctx *common.RuntimeContext, opts ReviewContextOptions) (
 	if opts.LabelLimit <= 0 {
 		opts.LabelLimit = 50
 	}
+	if opts.ThreadLimit <= 0 {
+		opts.ThreadLimit = 100
+	}
 
 	result := ReviewContext{
-		Repository:  fmt.Sprintf("%s/%s", owner, repo),
-		PullRequest: opts.Number,
-		Source:      "shortcut-backed-read-only-fetch",
-		Sections:    []string{},
-		Notes:       []ScoringNote{},
+		SchemaVersion: reviewContextSchemaVersion,
+		Repository:    fmt.Sprintf("%s/%s", owner, repo),
+		PullRequest:   opts.Number,
+		Source:        "shortcut-backed-read-only-fetch",
+		Sections:      []string{},
+		Notes:         []ScoringNote{},
+		fileLimit:     100,
+		reviewLimit:   100,
+		threadLimit:   opts.ThreadLimit,
 	}
 	successes := 0
 
@@ -161,6 +202,18 @@ func FetchReviewContext(ctx *common.RuntimeContext, opts ReviewContextOptions) (
 			successes++
 		}
 	}
+	if opts.IncludeThreads {
+		query := url.Values{}
+		query.Set("is_full", "true")
+		path := fmt.Sprintf("%s/pulls/%d/journals", workflowRepoPath(owner, repo), opts.Number)
+		if threads, err := fetchReviewContextList(ctx, path, query, opts.ThreadLimit); err != nil {
+			result.Notes = append(result.Notes, ScoringNote{Metric: "pr_review_threads", Note: fmt.Sprintf("pr +review-comments equivalent failed: %v", err)})
+		} else {
+			result.Threads = normalizeReviewContextThreads(threads, result.CurrentHeadSHA)
+			result.Sections = append(result.Sections, "threads")
+			successes++
+		}
+	}
 	if opts.IncludeIssues {
 		query := url.Values{}
 		query.Set("category", "opened")
@@ -186,6 +239,7 @@ func FetchReviewContext(ctx *common.RuntimeContext, opts ReviewContextOptions) (
 	if successes == 0 {
 		return ReviewContext{}, fmt.Errorf("fetch review context: all enabled sections failed")
 	}
+	finalizeReviewContext(&result, time.Now().UTC())
 	return result, nil
 }
 
@@ -254,12 +308,26 @@ func writeReviewContextMarkdown(w *strings.Builder, context ReviewContext) error
 	_, _ = fmt.Fprintf(w, "- Repository: `%s`\n", context.Repository)
 	_, _ = fmt.Fprintf(w, "- Pull request: `#%d`\n", context.PullRequest)
 	_, _ = fmt.Fprintf(w, "- Source: `%s`\n", context.Source)
+	_, _ = fmt.Fprintf(w, "- Head SHA: `%s`\n", fallbackReviewContextValue(context.CurrentHeadSHA))
+	_, _ = fmt.Fprintf(w, "- Source fingerprint: `%s`\n", context.WorkItem.SourceFingerprint)
 	_, _ = fmt.Fprintf(w, "- Sections: `%s`\n", strings.Join(context.Sections, ", "))
 	_, _ = fmt.Fprintf(w, "\n## Summary\n\n")
 	_, _ = fmt.Fprintf(w, "- Changed files: `%d`\n", len(context.Files))
 	_, _ = fmt.Fprintf(w, "- Reviews: `%d`\n", len(context.Reviews))
+	_, _ = fmt.Fprintf(w, "- Current reviews: `%d`\n", context.Summary.CurrentReviews)
+	_, _ = fmt.Fprintf(w, "- Outdated reviews: `%d`\n", context.Summary.OutdatedReviews)
+	_, _ = fmt.Fprintf(w, "- Review freshness: `%s`\n", context.Summary.ReviewFreshness)
+	_, _ = fmt.Fprintf(w, "- Review decision: `%s`\n", context.Summary.Decision)
+	_, _ = fmt.Fprintf(w, "- Review threads: `%d`\n", len(context.Threads))
+	_, _ = fmt.Fprintf(w, "- Pending responses: `%d`\n", context.Summary.PendingResponse)
 	_, _ = fmt.Fprintf(w, "- Open issues included: `%d`\n", len(context.OpenIssues))
 	_, _ = fmt.Fprintf(w, "- Labels included: `%d`\n", len(context.Labels))
+	if len(context.WorkItem.Unknowns) > 0 {
+		_, _ = fmt.Fprintf(w, "\n## Unknowns\n\n")
+		for _, unknown := range context.WorkItem.Unknowns {
+			_, _ = fmt.Fprintf(w, "- `%s`\n", unknown)
+		}
+	}
 	if len(context.Notes) > 0 {
 		_, _ = fmt.Fprintf(w, "\n## Notes\n\n")
 		for _, note := range context.Notes {
@@ -270,18 +338,27 @@ func writeReviewContextMarkdown(w *strings.Builder, context ReviewContext) error
 }
 
 func writeReviewContextTable(w *strings.Builder, context ReviewContext) error {
-	_, _ = fmt.Fprintf(w, "REPOSITORY\tPR\tSECTIONS\tFILES\tREVIEWS\tISSUES\tLABELS\tNOTES\n")
-	_, _ = fmt.Fprintf(w, "%s\t#%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
+	_, _ = fmt.Fprintf(w, "REPOSITORY\tPR\tHEAD\tDECISION\tFRESHNESS\tFILES\tREVIEWS\tTHREADS\tPENDING\tNOTES\n")
+	_, _ = fmt.Fprintf(w, "%s\t#%d\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\n",
 		context.Repository,
 		context.PullRequest,
-		len(context.Sections),
+		fallbackReviewContextValue(context.CurrentHeadSHA),
+		context.Summary.Decision,
+		context.Summary.ReviewFreshness,
 		len(context.Files),
 		len(context.Reviews),
-		len(context.OpenIssues),
-		len(context.Labels),
+		len(context.Threads),
+		context.Summary.PendingResponse,
 		len(context.Notes),
 	)
 	return nil
+}
+
+func fallbackReviewContextValue(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "unknown"
+	}
+	return value
 }
 
 func plainRepoPath(owner, repo string) string {

@@ -597,12 +597,36 @@ gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format ma
 # Repository workflow report from a local JSON file
 gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format json
 
-# Fetch a read-only PR review context bundle
-gitlink-cli workflow +review-context --owner Gitlink --repo gitlink-cli --number 42 --format json
+# Fetch a typed read-only PR review context with review freshness and threads
+gitlink-cli workflow +review-context \
+  --owner Gitlink \
+  --repo gitlink-cli \
+  --number 42 \
+  --include-reviews \
+  --include-threads \
+  --format json
 
-# Rank the current PR review queue without remote writes
-gitlink-cli workflow +review-queue --owner Gitlink --repo gitlink-cli --state open --limit 30 --format markdown
+# Rebuild the same stable context offline from a fixture or captured JSON
+gitlink-cli workflow +review-context \
+  --from shortcuts/workflow/testdata/review_context_p1_fixture.json \
+  --format markdown
+
+# Fetch every review-queue page, capped at 1000 items, without remote writes
+gitlink-cli workflow +review-queue \
+  --owner Gitlink \
+  --repo gitlink-cli \
+  --state open \
+  --all \
+  --limit 50 \
+  --max-items 1000 \
+  --format markdown
 ```
+
+`workflow +review-context` emits the stable `review.context/v1` schema. It
+compares each formal review and review thread commit with the current PR head,
+classifies freshness as `current`, `outdated`, or `unknown`, and builds a
+`review.work-item/v1` record with a deterministic source fingerprint. Missing
+head or commit bindings remain `unknown` and never imply merge readiness.
 
 Output formats:
 
@@ -617,7 +641,8 @@ Safety:
 - They do not depend on LLM APIs.
 - `workflow +pr-summary` does not comment, approve, reject, or merge pull requests.
 - `workflow +repo-report` aggregates health, issue triage, and PR review summary signals without remote writes.
-- `workflow +review-context` and `workflow +review-queue` are read-only and are the supported P0 inputs for collaboration exports.
+- `workflow +review-context` and `workflow +review-queue` are read-only and are the supported P1 inputs for collaboration exports.
+- A current approval means only that current review evidence exists; it does not mean the pull request is merge-ready.
 
 ### Raw API
 
@@ -684,6 +709,7 @@ See [skills/README.md](skills/README.md) for details.
 | `gitlink-wiki` | Wiki operations (list, view, create, update, delete) |
 | `gitlink-issue` | Issue operations (create, update, close, comment, etc.) |
 | `gitlink-pr` | Pull request operations (create, merge, review, etc.) |
+| `gitlink-pr-review-warroom` | Read-only PR queue, review freshness, thread aggregation, and maintainer reports |
 | `gitlink-member` | Repository member and invite link management |
 | `gitlink-branch` | Branch management (create, delete, list, protect, unprotect) |
 | `gitlink-release` | Release management (create, edit, update, view, delete, etc.) |

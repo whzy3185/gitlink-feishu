@@ -430,6 +430,43 @@ gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved 
 
 `pr +review` 只创建一条正式 Review，不再隐式追加重复的会话评论。行级审查评论写命令仍不开放，必须先完成真实 API 契约和权限验证。
 
+### PR Review 协作工作流
+
+```bash
+# 获取包含 Review 新鲜度和线程状态的稳定只读上下文
+gitlink-cli workflow +review-context \
+  --owner Gitlink \
+  --repo gitlink-cli \
+  --number 42 \
+  --include-reviews \
+  --include-threads \
+  --format json
+
+# 从 fixture 或已采集 JSON 离线重建相同的稳定上下文
+gitlink-cli workflow +review-context \
+  --from shortcuts/workflow/testdata/review_context_p1_fixture.json \
+  --format markdown
+
+# 连续读取全部 PR 队列页面，总量最多 1000 条
+gitlink-cli workflow +review-queue \
+  --owner Gitlink \
+  --repo gitlink-cli \
+  --state open \
+  --all \
+  --limit 50 \
+  --max-items 1000 \
+  --format markdown
+```
+
+`workflow +review-context` 输出稳定的 `review.context/v1` schema。它使用当前
+PR head SHA 判断正式 Review 和线程属于 `current`、`outdated` 还是 `unknown`，
+并生成带稳定 fingerprint 的 `review.work-item/v1`。缺少 head 或 commit 绑定时
+保持 `unknown`，不得推断为可以合并。当前批准只表示存在当前版本的批准证据，
+不等于 `merge_ready`。
+
+上述两个 Workflow 只发起 GET 请求，不评论、不审批、不解决线程、不请求
+Reviewer，也不合并 PR。
+
 ### 发布管理
 
 ```bash
@@ -547,6 +584,7 @@ git push gitlink
 | `gitlink-wiki` | Wiki 操作（列出、查看、创建、更新、删除） |
 | `gitlink-issue` | Issue 操作（创建、更新、关闭、评论等） |
 | `gitlink-pr` | Pull Request 操作（创建、合并、Review 等） |
+| `gitlink-pr-review-warroom` | 只读 PR 队列、Review 新鲜度、线程聚合与维护者协作报告 |
 | `gitlink-member` | 仓库成员与邀请链接管理 |
 | `gitlink-release` | 发布管理（创建、编辑、更新、查看、删除等） |
 | `gitlink-org` | 组织管理（成员、团队等） |

@@ -60,6 +60,8 @@ func newReviewQueueShortcut() *common.Shortcut {
 			{Name: "state", Usage: "Remote pull request state to fetch", Default: "open"},
 			{Name: "page", Short: "p", Usage: "Remote pull request page", Default: "1"},
 			{Name: "limit", Short: "l", Usage: "Maximum pull requests to include", Default: "30"},
+			{Name: "all", Usage: "Fetch consecutive pull request pages with read-only requests", Bool: true, Default: "false"},
+			{Name: "max-items", Usage: "Safety cap when --all is enabled", Default: "1000"},
 			{Name: "lang", Usage: "Output language: en or zh-CN", Default: langEN},
 		},
 		Run: runReviewQueue,
@@ -108,7 +110,17 @@ func collectReviewQueueInput(ctx *common.RuntimeContext) (ReviewQueueInput, erro
 	if state == "" {
 		state = "open"
 	}
-	prs, owner, repo, err := fetchReviewQueuePullRequests(ctx, state, page, limit)
+	var prs []PRSummaryInput
+	var owner, repo string
+	if parseBoolDefault(ctx.Arg("all"), false) {
+		maxItems, parseErr := parseIntArg(ctx.Arg("max-items"), 1000, "max-items")
+		if parseErr != nil {
+			return ReviewQueueInput{}, parseErr
+		}
+		prs, owner, repo, err = fetchAllReviewQueuePullRequests(ctx, state, page, limit, maxItems)
+	} else {
+		prs, owner, repo, err = fetchReviewQueuePullRequests(ctx, state, page, limit)
+	}
 	if err != nil {
 		return ReviewQueueInput{}, err
 	}
@@ -146,13 +158,66 @@ func fetchReviewQueuePullRequests(ctx *common.RuntimeContext, state string, page
 	if page <= 0 {
 		page = 1
 	}
+	prs, err := fetchReviewQueuePage(ctx, owner, repo, state, page, limit)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return prs, owner, repo, nil
+}
+
+func fetchAllReviewQueuePullRequests(ctx *common.RuntimeContext, state string, startPage, pageSize, maxItems int) ([]PRSummaryInput, string, string, error) {
+	owner, repo, err := resolveFetchRepo(ctx, "", "")
+	if err != nil {
+		return nil, "", "", fmt.Errorf("workflow +review-queue remote mode requires --owner and --repo or a Git remote: %w", err)
+	}
+	if startPage <= 0 {
+		startPage = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 30
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	if maxItems <= 0 {
+		maxItems = 1000
+	}
+	out := make([]PRSummaryInput, 0, minReviewQueueInt(pageSize, maxItems))
+	seen := map[string]bool{}
+	for page := startPage; len(out) < maxItems; page++ {
+		items, err := fetchReviewQueuePage(ctx, owner, repo, state, page, pageSize)
+		if err != nil {
+			return nil, "", "", fmt.Errorf("fetch pull requests for review queue page %d: %w", page, err)
+		}
+		if len(items) == 0 {
+			break
+		}
+		for _, item := range items {
+			key := reviewQueuePRKey(item)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, item)
+			if len(out) >= maxItems {
+				break
+			}
+		}
+		if len(items) < pageSize {
+			break
+		}
+	}
+	return out, owner, repo, nil
+}
+
+func fetchReviewQueuePage(ctx *common.RuntimeContext, owner, repo, state string, page, limit int) ([]PRSummaryInput, error) {
 	query := url.Values{}
 	query.Set("state", state)
 	query.Set("page", fmt.Sprintf("%d", page))
 	query.Set("limit", fmt.Sprintf("%d", limit))
 	env, err := ctx.CallAPIWithQuery("GET", workflowRepoPath(owner, repo)+"/pulls", query)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("fetch pull requests for review queue: %w", err)
+		return nil, fmt.Errorf("fetch pull requests for review queue: %w", err)
 	}
 	items := apiList(env.Data)
 	prs := make([]PRSummaryInput, 0, len(items))
@@ -175,7 +240,21 @@ func fetchReviewQueuePullRequests(ctx *common.RuntimeContext, state string, page
 			break
 		}
 	}
-	return prs, owner, repo, nil
+	return prs, nil
+}
+
+func reviewQueuePRKey(item PRSummaryInput) string {
+	if item.Number > 0 {
+		return fmt.Sprintf("number:%d", item.Number)
+	}
+	return "fallback:" + strings.ToLower(strings.TrimSpace(item.Title)) + "\x00" + strings.ToLower(strings.TrimSpace(item.Author))
+}
+
+func minReviewQueueInt(left, right int) int {
+	if left < right {
+		return left
+	}
+	return right
 }
 
 func AnalyzeReviewQueue(input ReviewQueueInput, lang string) ReviewQueueResult {

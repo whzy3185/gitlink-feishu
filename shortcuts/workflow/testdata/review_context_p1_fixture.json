@@ -1,0 +1,73 @@
+{
+  "repository": "owner/repo",
+  "pull_request": 42,
+  "source": "local-fixture",
+  "sections": [
+    "pr",
+    "files",
+    "reviews",
+    "threads"
+  ],
+  "pr": {
+    "number": 42,
+    "title": "feat: add stable review collaboration context",
+    "state": "open",
+    "base_branch": "master",
+    "head_branch": "feature/review-context",
+    "head_commit_sha": "abc123def456",
+    "user": {
+      "login": "alice"
+    }
+  },
+  "files": [
+    {
+      "filename": "shortcuts/workflow/review_context.go"
+    },
+    {
+      "filename": "shortcuts/workflow/review_context_models.go"
+    }
+  ],
+  "reviews": [
+    {
+      "id": 1,
+      "status": "approved",
+      "commit_id": "abc123def456",
+      "created_at": "2026-07-29T08:00:00Z",
+      "user": {
+        "login": "reviewer-one"
+      }
+    },
+    {
+      "id": 2,
+      "status": "rejected",
+      "commit_id": "old456def123",
+      "created_at": "2026-07-28T08:00:00Z",
+      "user": {
+        "login": "reviewer-two"
+      }
+    }
+  ],
+  "threads": [
+    {
+      "id": "10",
+      "review_id": "1",
+      "author": "reviewer-one",
+      "type": "problem",
+      "state": "opened",
+      "need_respond": true,
+      "path": "shortcuts/workflow/review_context.go",
+      "line_code": "new:42",
+      "commit_id": "abc123def456",
+      "created_at": "2026-07-29T08:30:00Z"
+    },
+    {
+      "id": "11",
+      "review_id": "2",
+      "author": "reviewer-two",
+      "state": "resolved",
+      "path": "README.md",
+      "commit_id": "old456def123",
+      "created_at": "2026-07-28T09:00:00Z"
+    }
+  ]
+}

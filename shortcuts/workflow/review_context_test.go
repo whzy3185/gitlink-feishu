@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
@@ -19,9 +20,13 @@ func TestFetchReviewContextAllSections(t *testing.T) {
 		case r.Method == "GET" && r.URL.Path == "/owner/repo/pulls/7.json":
 			writeWorkflowJSON(t, w, map[string]interface{}{
 				"pull_request": map[string]interface{}{
-					"number": 7,
-					"title":  "feat: add workflow context",
-					"user":   map[string]interface{}{"login": "alice"},
+					"number":          7,
+					"title":           "feat: add workflow context",
+					"state":           "open",
+					"base_branch":     "master",
+					"head_branch":     "feature/review-context",
+					"head_commit_sha": "abc123def456",
+					"user":            map[string]interface{}{"login": "alice"},
 				},
 			})
 		case r.Method == "GET" && r.URL.Path == "/owner/repo/pulls/7/files.json":
@@ -33,7 +38,21 @@ func TestFetchReviewContextAllSections(t *testing.T) {
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/pulls/7/reviews.json":
 			writeWorkflowJSON(t, w, map[string]interface{}{
 				"reviews": []map[string]interface{}{
-					{"id": 1, "status": "approved", "user": map[string]interface{}{"login": "reviewer"}},
+					{"id": 1, "status": "approved", "commit_id": "abc123def456", "user": map[string]interface{}{"login": "reviewer"}},
+					{"id": 2, "status": "rejected", "commit_id": "old456", "user": map[string]interface{}{"login": "reviewer2"}},
+				},
+			})
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/pulls/7/journals.json":
+			if got := r.URL.Query().Get("is_full"); got != "true" {
+				t.Fatalf("thread is_full = %q, want true", got)
+			}
+			if got := r.URL.Query().Get("limit"); got != "4" {
+				t.Fatalf("thread limit = %q, want 4", got)
+			}
+			writeWorkflowJSON(t, w, map[string]interface{}{
+				"journals": []map[string]interface{}{
+					{"id": 10, "review_id": 1, "state": "opened", "type": "problem", "need_respond": true, "commit_id": "abc123def456", "path": "main.go"},
+					{"id": 11, "review_id": 1, "state": "resolved", "commit_id": "old456", "path": "README.md"},
 				},
 			})
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/issues.json":
@@ -68,10 +87,12 @@ func TestFetchReviewContextAllSections(t *testing.T) {
 		Number:         7,
 		IssueLimit:     2,
 		LabelLimit:     3,
+		ThreadLimit:    4,
 		IncludeRepo:    true,
 		IncludePR:      true,
 		IncludeFiles:   true,
 		IncludeReviews: true,
+		IncludeThreads: true,
 		IncludeIssues:  true,
 		IncludeLabels:  true,
 	})
@@ -81,14 +102,23 @@ func TestFetchReviewContextAllSections(t *testing.T) {
 	if got.Repository != "owner/repo" || got.PullRequest != 7 {
 		t.Fatalf("got repository=%q pr=%d", got.Repository, got.PullRequest)
 	}
-	if len(got.Sections) != 6 {
-		t.Fatalf("sections = %v, want 6 sections", got.Sections)
+	if len(got.Sections) != 7 {
+		t.Fatalf("sections = %v, want 7 sections", got.Sections)
 	}
-	if len(got.Files) != 1 || len(got.Reviews) != 1 || len(got.OpenIssues) != 1 || len(got.Labels) != 1 {
-		t.Fatalf("context lists not populated: files=%d reviews=%d issues=%d labels=%d", len(got.Files), len(got.Reviews), len(got.OpenIssues), len(got.Labels))
+	if len(got.Files) != 1 || len(got.Reviews) != 2 || len(got.Threads) != 2 || len(got.OpenIssues) != 1 || len(got.Labels) != 1 {
+		t.Fatalf("context lists not populated: files=%d reviews=%d threads=%d issues=%d labels=%d", len(got.Files), len(got.Reviews), len(got.Threads), len(got.OpenIssues), len(got.Labels))
 	}
 	if len(got.Notes) != 0 {
 		t.Fatalf("notes = %+v, want empty", got.Notes)
+	}
+	if got.SchemaVersion != reviewContextSchemaVersion || got.CurrentHeadSHA != "abc123def456" {
+		t.Fatalf("schema/head = %q/%q", got.SchemaVersion, got.CurrentHeadSHA)
+	}
+	if got.Summary.Decision != "changes_pending" || got.Summary.CurrentReviews != 1 || got.Summary.OutdatedReviews != 1 {
+		t.Fatalf("review summary = %+v", got.Summary)
+	}
+	if !strings.HasPrefix(got.WorkItem.SourceFingerprint, "sha256:") {
+		t.Fatalf("fingerprint = %q", got.WorkItem.SourceFingerprint)
 	}
 }
 
@@ -170,6 +200,7 @@ func TestReviewContextShortcutRemoteFetchJSON(t *testing.T) {
 			"include-pr":      "true",
 			"include-files":   "false",
 			"include-reviews": "false",
+			"include-threads": "false",
 			"include-issues":  "false",
 			"include-labels":  "false",
 		},
@@ -206,16 +237,25 @@ func TestRenderReviewContextFormats(t *testing.T) {
 		Repository:  "owner/repo",
 		PullRequest: 4,
 		Source:      "shortcut-backed-read-only-fetch",
-		Sections:    []string{"repo_info", "pr"},
-		Files:       []map[string]interface{}{{"filename": "README.md"}},
-		Notes:       []ScoringNote{{Metric: "labels", Note: "label +list equivalent failed"}},
+		Sections:    []string{"repo_info", "pr", "reviews", "threads"},
+		PR: map[string]interface{}{
+			"number":          4,
+			"title":           "feat: stable review context",
+			"state":           "open",
+			"head_commit_sha": "abc123def456",
+		},
+		Files:   []map[string]interface{}{{"filename": "README.md"}},
+		Reviews: []map[string]interface{}{{"id": 1, "status": "approved", "commit_id": "abc123def456"}},
+		Threads: []ReviewContextThread{},
+		Notes:   []ScoringNote{{Metric: "labels", Note: "label +list equivalent failed"}},
 	}
+	finalizeReviewContext(&context, time.Date(2026, 7, 29, 12, 0, 0, 0, time.UTC))
 
 	table, err := RenderReviewContext(context, "table")
 	if err != nil {
 		t.Fatalf("RenderReviewContext table returned error: %v", err)
 	}
-	if !strings.Contains(table, "REPOSITORY") || !strings.Contains(table, "owner/repo") {
+	if !strings.Contains(table, "REPOSITORY") || !strings.Contains(table, "DECISION") || !strings.Contains(table, "owner/repo") {
 		t.Fatalf("table output = %q", table)
 	}
 
@@ -223,7 +263,7 @@ func TestRenderReviewContextFormats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderReviewContext markdown returned error: %v", err)
 	}
-	if !strings.Contains(markdown, "# PR Review Context") || !strings.Contains(markdown, "label +list") {
+	if !strings.Contains(markdown, "# PR Review Context") || !strings.Contains(markdown, "Review freshness") || !strings.Contains(markdown, "label +list") {
 		t.Fatalf("markdown output = %q", markdown)
 	}
 }

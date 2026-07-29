@@ -6,6 +6,8 @@
 
 实现分支：`feat/round2-review-collaboration-p0`
 
+后续进展：[P1 实施记录](./ROUND2_PR_REVIEW_COLLABORATION_P1_IMPLEMENTATION.md)
+
 ## 1. 本轮目标
 
 本轮只恢复主线可调用性并建立只读协作输入，不进行真实 GitLink、飞书或企业微信写入：

@@ -6,7 +6,8 @@
 文档状态：实现前设计基线（已完成代码级实施复核）
 本轮边界：只完成设计与信息收集，不修改业务代码，不触发 GitLink、飞书或企业微信写入
 
-实现进展：[P0 实施记录](./ROUND2_PR_REVIEW_COLLABORATION_P0_IMPLEMENTATION.md)
+实现进展：[P0 实施记录](./ROUND2_PR_REVIEW_COLLABORATION_P0_IMPLEMENTATION.md) ·
+[P1 实施记录](./ROUND2_PR_REVIEW_COLLABORATION_P1_IMPLEMENTATION.md)
 
 ## 1. 执行摘要
 

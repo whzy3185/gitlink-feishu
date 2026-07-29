@@ -83,6 +83,8 @@ skills/
 │   ├── REFERENCE.md                   # PR API 参考
 │   └── examples/
 │       └── pr-workflow.md             # PR 工作流
+├── gitlink-pr-review-warroom/         # 只读 PR Review 协作
+│   └── SKILL.md                       # 队列、版本新鲜度与线程聚合
 ├── gitlink-member/                    # 仓库成员管理
 │   └── SKILL.md                       # 成员与邀请链接操作指南
 ├── gitlink-branch/                    # 分支管理
@@ -126,6 +128,7 @@ skills/
 | **gitlink-repo** | 仓库管理 | `repo +list`, `repo +create`, `repo +info`, `repo +fork` |
 | **gitlink-issue** | Issue 管理 | `issue +create`, `issue +list`, `issue +view`, `issue +close`, `issue +batch-close` |
 | **gitlink-pr** | Pull Request | `pr +list`, `pr +create`, `pr +view`, `pr +merge`, `pr +versions`, `pr +version-diff`, `pr +reviews`, `pr +review` |
+| **gitlink-pr-review-warroom** | 只读 PR Review 协作 | `workflow +review-queue`, `workflow +review-context` |
 | **gitlink-member** | 仓库成员管理 | `member +list`, `member +add`, `member +batch-add`, `member +role`, `member +invite-link` |
 | **gitlink-branch** | 分支管理 | `branch +list`, `branch +create`, `branch +delete`, `branch +protect` |
 | **gitlink-release** | 版本发布 | `release +list`, `release +create`, `release +view` |
@@ -235,6 +238,7 @@ gitlink-cli org +info -i Gitlink
 **Issue 和 PR**:
 - [gitlink-issue/SKILL.md](gitlink-issue/SKILL.md) - Issue 命令
 - [gitlink-pr/SKILL.md](gitlink-pr/SKILL.md) - PR 命令
+- [gitlink-pr-review-warroom/SKILL.md](gitlink-pr-review-warroom/SKILL.md) - 只读 PR Review 协作
 - [gitlink-issue/examples/issue-workflow.md](gitlink-issue/examples/issue-workflow.md) - Issue 工作流
 
 **发布和搜索**:
