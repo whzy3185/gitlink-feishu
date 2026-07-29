@@ -1,8 +1,9 @@
-# GitLink CLI 复赛 PR Review 协同集成完整设计 v2
+# GitLink CLI 复赛 PR Review 协同集成完整设计 v2.1
 
 设计日期：2026-07-29
 最新主线基线：`origin/master` @ `d3bcbae82a20963c70a20407f8dc578e2127a754`
-文档状态：实现前设计基线
+复核日期：2026-07-29
+文档状态：实现前设计基线（已完成代码级实施复核）
 本轮边界：只完成设计与信息收集，不修改业务代码，不触发 GitLink、飞书或企业微信写入
 
 ## 1. 执行摘要
@@ -61,13 +62,28 @@ GitLink 事实
 
 ### 1.4 当前必须先处理的事实
 
+本次复核直接读取了 `c1446162d5821d4bbddec1dd50b4ce0cc1c12608` 的完整提交和其父提交中的实现，并重新 fetch 官方主线。`origin/master` 仍为 `d3bcbae82a20963c70a20407f8dc578e2127a754`，不存在基线漂移。
+
 最新主线中：
 
-- 飞书 PR #346 的功能文件已合入。
-- `shortcuts/feishu` 单测通过。
-- 根命令没有注册 `feishu`，实际无法调用。
-- 多个 Workflow 文件存在但没有注册。
-- `workflow` 和根 `shortcuts` 测试失败。
+- 飞书 PR #346 的功能文件已合入，`shortcuts/feishu` 单测通过，但根命令没有注册 `feishu`，实际无法调用。
+- `workflow +review-context` 已注册且可见；`workflow +review-queue` 已有实现和测试文件，但未加入 `workflow.Shortcuts()`，实际不可调用。
+- PR 行级 Review 评论的查询、创建、更新、删除源码已经存在，内部 API 参考也覆盖对应端点，但这些命令没有加入 `pr.Shortcuts()`，实际不可调用。
+- `pr +review` 已支持 `common/approved/rejected`、`--commit` 和 `--dry-run`；实际写入成功后还会尝试追加一条 PR 会话评论，而 dry-run 只展示正式 Review 请求，没有展示这个附加写入。
+- `pr +review` 当前直接返回首次 POST 结果，没有按 Review ID 回读，也没有对 head SHA 执行 compare-and-set 式前置校验。
+- Reviewer 只在 PR 数据和创建参数中出现；当前 CLI 没有 PR 创建后请求或移除 Reviewer 的稳定命令，内部 API 参考也没有给出独立的 Reviewer 管理端点。
+- `shortcuts/pr`、`shortcuts/workflow` 和根 `shortcuts` 测试仍失败，失败包括源码已存在但未注册、批量合并后的参数契约漂移和响应字段归一化问题。
+
+上述结论区分四个层级：
+
+```text
+API 文档存在
+!= 源码已实现
+!= CLI 已注册可调用
+!= 真实环境已验证
+```
+
+后续任何能力清单都必须同时记录这四个状态，不能再用“仓库里存在文件”代替“用户可用”。
 
 因此实施顺序必须是：
 
@@ -377,10 +393,11 @@ cmd/gitlink-collab-gateway
 
 1. 恢复 `feishu` 根命令注册。
 2. 对齐 `shortcuts/register.go` 与 `register_test.go`。
-3. 明确 Workflow 文件中哪些命令应注册。
-4. 恢复 `review-queue`、`release-notes` 等计划使用的命令，或删除错误宣称。
-5. 修复批量合并后的 API 字段归一化测试。
-6. 确认 README 命令示例与实际 `--help` 一致。
+3. 注册计划使用的 `workflow +review-queue`；其他 Workflow 要么注册，要么删除错误宣称。
+4. 将只读 `pr +review-comments` 纳入命令树；行级评论写命令保持禁用，直到合同测试和真实 smoke 完成。
+5. 修复 `pr +review` 测试参数契约，并消除或显式建模隐式 journal 双写。
+6. 修复批量合并后的 API 字段归一化测试。
+7. 确认 README 命令示例与实际 `--help` 一致。
 
 ### 7.2 退出条件
 
@@ -388,6 +405,7 @@ cmd/gitlink-collab-gateway
 
 ```powershell
 go test ./shortcuts/feishu
+go test ./shortcuts/pr
 go test ./shortcuts/workflow
 go test ./shortcuts
 go run . feishu --help
@@ -602,7 +620,19 @@ platform + tenant_id + app_or_bot_id + chat_id
 }
 ```
 
-## 9. Review 状态机
+## 9. Review 状态与转换模型
+
+状态必须拆成四个互不覆盖的维度，禁止用单一 `status` 同时表达平台事实、团队进度和模型判断：
+
+```text
+gitlink_pr_state       = open | merged | closed | unknown
+gitlink_review_status  = common | approved | rejected | none | unknown
+review_freshness       = current | outdated | unknown
+review_stage           = 协作流程状态
+thread_state           = opened | resolved | disabled | none | unknown
+```
+
+### 9.1 协作流程状态
 
 ```mermaid
 stateDiagram-v2
@@ -630,9 +660,92 @@ stateDiagram-v2
 规则：
 
 - `review_stage` 是协作状态，不覆盖 GitLink `state`。
-- PR head SHA 变化时，`agent_reviewing` 之后的分析结果标记 stale。
+- 只有工作流服务可以根据事实推进自动状态；认领、等待贡献者和人工决定由有权限的用户触发。
+- PR head SHA 变化时，`agent_reviewing` 之后的分析结果标记 stale，并进入 `waiting_for_re_review`。
 - `review_published` 只在 GitLink 返回正式 Review 结果后设置。
 - `merge_ready` 只是候选状态，不自动执行 merge。
+
+### 9.2 GitLink Review 决定
+
+当前 GitLink API 和 CLI 真实枚举是：
+
+```text
+common
+approved
+rejected
+```
+
+因此产品层不得把 `changes_requested`、`commented` 或 `dismissed` 直接写入 GitLink。跨平台展示时使用下列映射：
+
+| 产品展示 | GitLink 原始状态 | 含义 |
+| --- | --- | --- |
+| `commented` | `common` | 普通 Review，不代表批准或拒绝 |
+| `approved` | `approved` | 正式通过 |
+| `changes_requested` | `rejected` | 当前实现中最接近“要求修改”的正式状态，但文案必须说明平台原始值 |
+| `none` | 无 Review | 尚未提交正式 Review |
+| `unknown` | 字段缺失/解析失败 | 不允许推断为 `none` |
+
+第一轮只允许发布 `common`。`approved` 和 `rejected` 仅用于只读展示，不能通过飞书或企业微信执行。
+
+### 9.3 Review 与 patchset 的新鲜度
+
+每条 Review 必须保留 `review.commit_id`，每次执行前重新读取 `current_head_sha`：
+
+```text
+commit_id == current_head_sha  -> current
+commit_id != current_head_sha  -> outdated
+commit_id 为空或 head 不可得    -> unknown
+```
+
+约束：
+
+- 协作写回路径必须显式传递 `--commit <expected_head_sha>`，不允许省略。
+- `outdated` Review 保留历史记录，但不计入当前版本的通过或阻断结论。
+- `unknown` 按保守策略处理，不得使 PR 进入 `merge_ready`。
+- 新 patchset 到达后，旧分析、旧草稿、旧 ActionPlan 和未消费确认全部失效。
+- API 文档样例中存在 `commit_id: null`，所以必须真实验证不同状态 Review 的字段行为，不能假设该字段永远存在。
+
+### 9.4 Review 线程
+
+行级 Review 评论使用 GitLink 的真实状态：
+
+```text
+opened
+resolved
+disabled
+```
+
+并独立保留：
+
+```text
+need_respond
+parent_id
+review_id
+commit_id
+line_code
+path
+```
+
+聚合规则：
+
+- `opened && need_respond=true` 计为待贡献者处理意见。
+- `opened && need_respond=false` 计为开放讨论，不自动阻断。
+- `resolved` 不计入当前待处理数，但必须进入审计历史。
+- `disabled` 视为失效意见，不得删除其历史引用。
+- `commit_id != current_head_sha` 时同时标记 `outdated`；线程状态和版本新鲜度是两个维度。
+- 回复由 `parent_id` 建树；孤儿回复进入 `unknown_parent` 告警，不静默丢弃。
+
+### 9.5 多人 Review 聚合
+
+```text
+若存在 current rejected                         -> blocked
+否则若存在 current opened problem/need_respond   -> changes_pending
+否则若 required reviewers 均 current approved    -> approved
+否则若存在 current common                        -> commented
+否则                                                -> pending
+```
+
+这里的 `required reviewers` 第一轮只能来自人工配置或明确的仓库规则。GitLink 当前没有经过验证的 Reviewer 请求/移除接口，所以不能根据“建议 Reviewer”自动形成强制审批规则。
 
 ## 10. Agent 与 Skill 设计
 
@@ -1266,7 +1379,43 @@ type GitLinkRunner interface {
 
 ## 15. CLI 和 Gateway 接口
 
-### 15.1 保留并恢复现有命令
+### 15.1 代码级 API 能力矩阵
+
+状态标记：
+
+```text
+已暴露：用户可从当前根命令调用
+未注册：源码存在，但当前命令树不可达
+待实现：没有可复用的稳定实现
+待实测：本轮没有向真实 GitLink 写入
+```
+
+| 能力 | 方法与实现路径 | 源码 | CLI | 自动测试现状 | 生产验证 | 权限/回滚 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 获取 PR | `GET /{owner}/{repo}/pulls/{index}` | 已有 | `pr +view` 已暴露 | 包级测试失败，单命令测试存在 | 只读待 smoke | repo read；无回滚 |
+| 获取变更文件 | `GET /{owner}/{repo}/pulls/{index}/files` | 已有 | `pr +files`/`+diff` 已暴露 | 单命令测试存在，包级失败 | 只读待 smoke | repo read；无回滚 |
+| 获取 patchset | `GET /v1/{owner}/{repo}/pulls/{index}/versions` | 已有 | `pr +versions` 已暴露 | 已有相关覆盖 | 只读待 smoke | repo read；无回滚 |
+| 获取指定版本 diff | `GET /v1/{owner}/{repo}/pulls/{index}/versions/{version_id}/diff` | 已有 | `pr +version-diff` 已暴露 | 已有相关覆盖 | 只读待 smoke | repo read；无回滚 |
+| 获取 Review | `GET /v1/{owner}/{repo}/pulls/{index}/reviews` | 已有 | `pr +reviews` 已暴露 | 测试存在但当前失败 | 只读待 smoke | repo read；无回滚 |
+| 创建 Review | `POST /v1/{owner}/{repo}/pulls/{index}/reviews` | 已有 | `pr +review` 已暴露 | 测试存在但参数契约已漂移 | 写入待测试仓库实测 | repo write；通常只能追加后续 Review |
+| 获取 Review 评论 | `GET /v1/{owner}/{repo}/pulls/{index}/journals` | 已有 | 未注册 | 未发现对应命令测试 | 只读待 smoke | repo read；无回滚 |
+| 创建 Review 评论/回复 | `POST /v1/{owner}/{repo}/pulls/{index}/journals` | 已有 | 未注册 | 未发现对应命令测试 | 写入待实测 | repo write；可删除但审计保留 |
+| 更新/解决/重开评论 | `PUT /v1/{owner}/{repo}/pulls/{index}/journals/{id}` | 已有 | 未注册 | 未发现对应命令测试 | 写入待实测 | repo write；可用旧状态反向更新 |
+| 删除 Review 评论 | `DELETE /v1/{owner}/{repo}/pulls/{index}/journals/{id}` | 已有 | 未注册 | 未发现对应命令测试 | 写入待实测 | repo write；远端删除不可可靠回滚 |
+| 聚合 Review 上下文 | 混合调用 PR、files、reviews 等只读端点 | 已有 | `workflow +review-context` 已暴露 | 测试存在但字段归一化失败 | 只读待 smoke | repo read；无回滚 |
+| 生成 Review 队列 | `GET /v1/{owner}/{repo}/pulls` | 已有 | 未注册 | 测试文件存在，workflow 包仍失败 | 只读待 smoke | repo read；无回滚 |
+| 请求/移除 Reviewer | 独立端点未在内部 API 参考中确认 | 待实现 | 不存在 | 无 | 必须先做 Raw API 实测 | maintain 级候选；回滚语义待确认 |
+
+矩阵中的路径省略了运行时自动追加的 `/api` 前缀和 `.json` 后缀。实施时必须以实际发送的 HTTP 请求为准保留 contract test。
+
+重要结论：
+
+- 行级评论不是“从零开发”，而是“已有源码尚未注册、测试和生产验证”。
+- `workflow +review-context` 不是规划中的新命令，应该直接修复字段归一化并复用。
+- `workflow +review-queue` 应优先完成注册和分页验收，不应另写一套队列实现。
+- Reviewer 指派仍属于 API 发现任务。在确认新增、移除、幂等和权限行为前，不进入功能承诺。
+
+### 15.2 保留并恢复现有飞书命令
 
 ```text
 gitlink-cli feishu +notify
@@ -1277,7 +1426,7 @@ gitlink-cli feishu +doc-export
 gitlink-cli feishu +task-create
 ```
 
-### 15.2 补齐 Workflow
+### 15.3 补齐并复用 Workflow
 
 ```text
 gitlink-cli workflow +review-queue --all
@@ -1287,7 +1436,7 @@ gitlink-cli workflow +pr-summary --id 42
 
 `review-queue --all` 必须真正处理分页，不只接受 `page/limit`。
 
-### 15.3 新增平台无关命令候选
+### 15.4 新增平台无关命令候选
 
 ```text
 gitlink-cli collab +snapshot
@@ -1308,7 +1457,7 @@ gitlink-cli collab +doctor
 4. `action-preview`
 5. `action-apply`
 
-### 15.4 Gateway
+### 15.5 Gateway
 
 ```powershell
 gitlink-collab-gateway `
@@ -1413,6 +1562,39 @@ GitLink 普通 Review：
 - Diff 和日志进入协作平台前进行 secret redaction。
 - 大段代码不直接放群卡，改为受权限控制的 GitLink/Doc 链接。
 
+### 17.5 GitLink 写操作契约
+
+现有 `pr +review` 是底层写入原语，不等于协作场景已经安全。Gateway 或 Workflow 的任何正式 Review 必须执行：
+
+```text
+读取 PR 与 current_head_sha
+-> 生成绑定 expected_head_sha 的 ActionPlan
+-> 展示全部请求和全部副作用
+-> 已绑定维护者确认
+-> 再次读取 current_head_sha
+-> 不一致则拒绝
+-> 仅执行 allowlist 中的写入
+-> 提取 Review ID
+-> GET reviews 回读匹配 Review ID/commit/status/content
+-> 写入审计结果
+```
+
+命令约束：
+
+- `collab +action-preview` 永不写入，输出与 apply 相同的结构化 ActionPlan。
+- `collab +action-apply` 必须同时具备一次性 `action_id`、`expected_head_sha` 和显式 `--yes`；聊天入口的二次确认等价于 `--yes`，但仍要记录确认人。
+- 协作路径调用 `pr +review` 时必须传 `--status common --commit <expected_head_sha>`。
+- `approved`、`rejected`、merge、close、delete 和权限修改不在第一轮 allowlist。
+- 空正文、目标仓库不明确、PR 不为 open、head 不可读取、身份或权限不明时直接失败并返回非零退出码。
+- 日志不得打印 Authorization、Token、Cookie、Webhook query 或完整凭据。
+
+当前 `pr +review` 的实际行为还包含一个附加写入：正式 Review 成功后，会尽力向 PR 对应 Issue journal 再发一条摘要，且失败被忽略。该行为在协作接入前必须二选一处理：
+
+1. 推荐：移除隐式附加评论，正式 Review 保持单一写入。
+2. 如确需双写：增加显式参数，把两个请求都放入 dry-run、ActionPlan、幂等账本和结果报告。
+
+在完成上述修订前，飞书和企业微信不得直接调用现有非 dry-run Review。
+
 ## 18. 幂等、可靠性与并发
 
 ### 18.1 幂等键
@@ -1445,6 +1627,8 @@ receive
 - 响应超时且可能已写入：标记 unknown，先查询目标状态。
 - GitLink Review 结果未知：禁止直接重发。
 - 平台卡片更新失败：不回滚已成功的 GitLink Review。
+- API 未提供客户端幂等键时，由本地 action ledger 保证同一 `action_id|expected_head_sha` 最多执行一次；进程重启后仍需有效。
+- 回读未找到 Review 时不能立即重试 POST，先按 reviewer、commit、status、content hash 和时间窗口对账。
 
 ### 18.4 并发
 
@@ -1530,6 +1714,31 @@ webhook query
 
 ## 21. 测试计划
 
+### 21.0 复核时的真实测试基线
+
+2026-07-29 在干净 worktree、基线 `d3bcbae8` 上执行：
+
+```bash
+go test ./shortcuts/pr ./shortcuts/workflow ./shortcuts/feishu ./shortcuts
+go run . feishu --help
+go run . workflow --help
+go run . pr --help
+```
+
+结果：
+
+| 目标 | 结果 | 主要证据 |
+| --- | --- | --- |
+| `shortcuts/feishu` | 通过 | 包内实现可编译、单测通过 |
+| 根命令 `feishu` | 失败 | `unknown command "feishu"` |
+| `shortcuts/pr` | 失败 | 多个源码命令未注册；Review 测试参数契约漂移；部分 pipe 关闭错误 |
+| `shortcuts/workflow` | 失败 | 多个 Workflow 未注册；Review Context 字段归一化失败；远端 fixture 契约漂移 |
+| 根 `shortcuts` | 失败 | 预期 19 个 group，实际 20 个 |
+| `workflow --help` | 部分可用 | `+review-context` 可见，`+review-queue` 不可见 |
+| `pr --help` | 部分可用 | `+review/+reviews/+versions/+version-diff` 可见，行级 Review 评论命令不可见 |
+
+这组结果是 P0 的输入，不得把单个包通过描述成主线可用。
+
 ### 21.1 P0 主线测试
 
 - 注册表与实际命令一致。
@@ -1597,14 +1806,56 @@ webhook query
 
 禁止在比赛主仓库直接试验自动合并。
 
+### 21.7 PR/Review 合同测试矩阵
+
+| 维度 | 必测用例 |
+| --- | --- |
+| PR 来源 | 同仓库分支、Fork PR |
+| PR 状态 | open、merged、closed、reopened |
+| Review 数量 | 0、1、多 Reviewer、多次同人 Review |
+| Review 状态 | common、approved、rejected、未知值 |
+| 版本关系 | commit 匹配当前 head、旧 commit、commit 为空、head 缺失 |
+| 文件变化 | 新增、修改、删除、重命名、二进制、LFS、超长行 |
+| diff | 正常、按文件过滤、截断、不完整、分页、空 diff |
+| 线程 | 顶层、回复、孤儿回复、opened、resolved、disabled、need_respond |
+| Reviewer | 无 Reviewer、重复请求、外部用户、无权限、删除后保留已有 Review |
+| 文本 | 中文用户名、中文评论、Markdown、特殊字符、超长正文 |
+| 输出 | JSON schema、table、Markdown；unknown 保留 |
+| 网络 | timeout、连接中断、429、5xx、重试后对账 |
+| HTTP | 401、403、404、409、422、429；非零退出码和可执行提示 |
+| 平台 | Windows、Linux、macOS |
+| 兼容 | 新旧 GitLink 字段、对象/数组 envelope、数字/字符串 ID |
+
+每个 API contract test 必须断言 method、path、query、body、输出 schema 和错误码，不能只断言“函数未报错”。
+
+### 21.8 真实 API 验证协议
+
+真实验证只在专用测试仓库和测试 PR 上进行，并按风险递增：
+
+| 顺序 | 动作 | 成功标准 | 失败处置 |
+| ---: | --- | --- | --- |
+| 1 | GET PR/files/versions/diff/reviews | 字段可解析，记录原始响应 fixture | 标记字段 unknown，不猜测 |
+| 2 | GET review journals | 能区分 thread、reply、state 和 commit | 不进入线程功能承诺 |
+| 3 | Review dry-run | 远端零变化；计划包含全部副作用 | 修复 preview 后再继续 |
+| 4 | POST 一次 `common` Review | 返回 Review ID、commit/status/content 正确 | 立即停止后续写入 |
+| 5 | 回读 Review | 按 ID 找到且绑定预期 head | 标记 unknown，先对账 |
+| 6 | 创建一条测试行评论 | 行定位正确，回复/解决可追踪 | 关闭行评论写入范围 |
+| 7 | 更新为 resolved 再 reopened | 状态转换与权限符合文档 | 保持只读 |
+| 8 | Reviewer Raw API 探测 | 明确端点、用户标识、权限、幂等和移除语义 | Reviewer 管理继续延期 |
+
+每一步保存脱敏后的请求、响应、操作者、时间、测试 PR、head SHA 和清理结果。任何一步失败，都不能用下一步“顺便验证”。
+
 ## 22. 分阶段实施计划
 
 ### P0：恢复主线
 
 交付：
 
-- 注册修复。
-- Workflow 命令暴露修复。
+- 根命令和 group 注册表修复。
+- 暴露已实现的 `workflow +review-queue` 和只读 `pr +review-comments`。
+- `workflow +review-context` 字段归一化修复。
+- `pr +review` 参数契约测试修复，并明确处理隐式 journal 双写。
+- 行级评论写命令在 contract test 和真实 API smoke 前保持不可从协作入口调用。
 - 批量合并回归修复。
 - 测试和命令清单。
 
@@ -1615,14 +1866,21 @@ webhook query
 约 100–500 行改动，取决于字段归一化失败范围
 ```
 
-退出条件：目标包测试通过，命令帮助与文档一致。
+退出条件：
+
+```text
+go test ./shortcuts/pr ./shortcuts/workflow ./shortcuts/feishu ./shortcuts
+```
+
+全部通过；`--help`、注册表、源码、README 和 API 矩阵一致。
 
 ### P1：只读 Warroom 核心
 
 交付：
 
 - `ReviewWorkItem/Run/Task`。
-- 全量 review queue。
+- 复用并扩展现有 `workflow +review-queue`，实现全量分页。
+- 复用并扩展现有 `workflow +review-context`，加入当前 head、Review 新鲜度和线程聚合。
 - head SHA/fingerprint。
 - PR 行级 records。
 - Review Doc Markdown。
@@ -1631,11 +1889,11 @@ webhook query
 预计：
 
 ```text
-生产代码约 700–1,400 行
-含测试、Skill、fixture 和文档约 1,500–2,800 行
+生产代码约 500–1,100 行
+含测试、Skill、fixture 和文档约 1,200–2,400 行
 ```
 
-退出条件：无平台 secret 也能完成完整离线演示。
+退出条件：无平台 secret 也能完成完整离线演示；真实只读 PR 能输出稳定 JSON schema，旧 Review 和待响应线程可被正确识别。
 
 ### P2：飞书协作闭环
 
@@ -1669,9 +1927,9 @@ webhook query
 
 - 本地配对/服务身份策略。
 - ActionPlan。
-- `pr +review --status common --dry-run`。
+- 单一写入语义的 `pr +review --status common --commit <head> --dry-run`。
 - 卡片预览和二次确认。
-- stale head、过期、幂等和对账。
+- stale head、过期、幂等、Review ID 回读和未知结果对账。
 - GitLink 结果回写飞书。
 
 预计：
@@ -1681,7 +1939,7 @@ webhook query
 含测试、安全和文档约 1,800–3,200 行
 ```
 
-退出条件：测试 PR 上一次确认只产生一次正式 Review，并能完整追踪。
+退出条件：测试 PR 上一次确认只产生一次正式 Review，回读结果与 ActionPlan 一致，并能完整追踪。行级评论写入和 Reviewer 管理不随本阶段自动开放。
 
 ### P4：企业微信适配
 
@@ -1706,6 +1964,8 @@ webhook query
 
 - 企业微信个人身份和普通 Review 写回。
 - approved/rejected Review。
+- 行级 Review 评论、回复、解决和重开写入。
+- Reviewer 请求和移除；仅在 Raw API 验证完成后进入计划。
 - 合并队列。
 - GitLink Webhook 实时中继。
 - 多 Agent 并行深审。
@@ -1790,6 +2050,29 @@ Agent 负责取证和草拟
 
 ## 24. 验收清单
 
+### 可执行发布闸门
+
+| 阶段 | 可自动判断的通过条件 |
+| --- | --- |
+| P0 | 四个目标包测试退出码为 0；计划命令均出现在 `--help`；不存在“源码有命令但注册表缺失”的检查失败 |
+| P1 | 一个真实 PR 的当前 patchset、文件、Review 和线程能够读取；JSON 通过 schema/golden test；新 patchset 后旧结果被标记 stale |
+| P2 | 飞书测试群能启动只读工作、认领和同步进度；重复事件不产生重复任务；平台侧人工字段不会被刷新覆盖 |
+| P3 | dry-run 远端变化为 0；一次确认只产生一次 `common` Review；响应和回读均得到同一 Review ID；无权限与 stale head 返回非零退出码 |
+| P4 | 同一 WorkItem 在飞书和企业微信的事实、证据、状态枚举和下一步一致 |
+
+以下条件任一不满足，不得宣称对应阶段“已实现”：
+
+```text
+[ ] Raw API/CLI 实际 method、path、query、body 已有 contract test
+[ ] JSON 输出字段稳定，unknown 不被吞掉
+[ ] dry-run 展示全部远端副作用
+[ ] 执行前后 head SHA 一致
+[ ] 写操作后完成回读
+[ ] 同一 action_id 执行两次不会产生重复结果
+[ ] 401/403/404/409/422/429 均返回非零退出码和明确提示
+[ ] Token 和认证头不出现在 stdout、stderr、debug 和审计正文
+```
+
 ### 主线
 
 ```text
@@ -1861,6 +2144,11 @@ Agent 负责取证和草拟
 | 风险 | 影响 | 应对 |
 | --- | --- | --- |
 | 主线批量合并持续变化 | 设计和实现再次漂移 | P0 小 PR、每阶段重新 fetch 和测试 |
+| 源码存在但命令未注册 | 错把不可用功能当成已交付 | 四层能力矩阵、注册完整性测试、`--help` smoke |
+| `pr +review` 隐式双写 | dry-run 与真实副作用不一致 | 移除隐式写入或显式建模两个动作 |
+| Reviewer 端点靠推测 | 越权、覆盖或无法回滚 | Raw API 专项验证前不承诺、不实现自动指派 |
+| Review 未绑定当前 head | 对旧代码给出有效结论 | `--commit` 强制传递、执行前重读、回读核对 |
+| 行级 diff 定位漂移 | 评论落到错误代码或失效 | line_code/commit/path/diff 联合 contract test |
 | PR 数量和 Diff 过大 | 时间和模型成本上升 | 全量粗筛 + Top N 深审 |
 | Agent 结论不稳定 | 团队不信任 | 结构化证据、版本和人工复核 |
 | 飞书成为第二事实源 | 状态冲突 | 字段所有权和单向镜像 |
@@ -1898,6 +2186,8 @@ Agent 负责取证和草拟
 - 飞书和企业微信开发能力核查。
 - 成熟聊天室集成模式整理。
 - 完整产品、架构、数据、流程、安全、测试和分阶段设计。
+- 对完整设计提交进行代码级复核。
+- 补齐四层 API 能力矩阵、Review/线程状态模型、真实测试基线、写操作契约、合同测试矩阵和可执行验收闸门。
 
 本轮不完成：
 
@@ -1916,6 +2206,17 @@ Agent 负责取证和草拟
 - GitLink CLI 最新主线代码、命令注册和测试结果。
 - 已合入的飞书协作导出能力及历史实测报告。
 - 飞书、企业微信、GitHub Slack/Teams 的官方开发资料。
+
+### 仓库内代码证据
+
+- [`pr +review/+reviews/+versions/+version-diff`](../shortcuts/pr/pr.go)
+- [行级 Review 评论实现](../shortcuts/pr/journal.go)
+- [Workflow 实际注册表](../shortcuts/workflow/workflow.go)
+- [`workflow +review-context`](../shortcuts/workflow/review_context.go)
+- [`workflow +review-queue`](../shortcuts/workflow/review_queue.go)
+- [飞书命令实现](../shortcuts/feishu/feishu.go)
+- [GitLink 内部 API 参考](../doc/gitlink_api_reference.md)
+- [PR Review 评论变更说明](../doc/changes/pr-review-comment-management.md)
 
 ### GitLink
 
