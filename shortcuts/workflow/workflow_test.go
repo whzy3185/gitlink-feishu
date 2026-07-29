@@ -19,20 +19,23 @@ func TestShortcutsExposesWorkflowCommands(t *testing.T) {
 	for _, shortcut := range shortcuts {
 		names[shortcut.Name] = true
 	}
-	if !names["triage"] {
-		t.Fatal("Shortcuts missing triage")
+	required := []string{
+		"triage",
+		"health",
+		"pr-summary",
+		"repo-report",
+		"review-context",
+		"review-queue",
+		"release-notes",
+		"dependency-audit",
+		"issue-dedupe",
+		"release-readiness",
+		"stale",
 	}
-	if !names["health"] {
-		t.Fatal("Shortcuts missing health")
-	}
-	if !names["pr-summary"] {
-		t.Fatal("Shortcuts missing pr-summary")
-	}
-	if !names["repo-report"] {
-		t.Fatal("Shortcuts missing repo-report")
-	}
-	if !names["release-notes"] {
-		t.Fatal("Shortcuts missing release-notes")
+	for _, name := range required {
+		if !names[name] {
+			t.Errorf("Shortcuts missing %s", name)
+		}
 	}
 }
 

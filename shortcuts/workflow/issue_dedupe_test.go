@@ -73,8 +73,8 @@ func TestCollectIssueDedupeInputRemoteFetch(t *testing.T) {
 		if r.Method != "GET" || r.URL.Path != "/v1/owner/repo/issues.json" {
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		if got := r.URL.Query().Get("state"); got != "open" {
-			t.Fatalf("state = %q, want open", got)
+		if got := r.URL.Query().Get("category"); got != "opened" {
+			t.Fatalf("category = %q, want opened", got)
 		}
 		if got := r.URL.Query().Get("page"); got != "2" {
 			t.Fatalf("page = %q, want 2", got)

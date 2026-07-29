@@ -420,10 +420,15 @@ gitlink-cli pr +version-diff --owner Gitlink --repo forgeplus -i 42 --version-id
 # 查看 PR 审查记录
 gitlink-cli pr +reviews --owner Gitlink --repo forgeplus -i 42
 
+# 只读查看行级审查评论和待处理讨论
+gitlink-cli pr +review-comments --owner Gitlink --repo forgeplus -i 42 --state opened --need-respond true
+
 # 创建 PR 审查（支持 dry-run 预览）
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM" --dry-run
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
 ```
+
+`pr +review` 只创建一条正式 Review，不再隐式追加重复的会话评论。行级审查评论写命令仍不开放，必须先完成真实 API 契约和权限验证。
 
 ### 发布管理
 

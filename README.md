@@ -410,10 +410,17 @@ gitlink-cli pr +version-diff --owner Gitlink --repo forgeplus -i 42 --version-id
 # List PR reviews
 gitlink-cli pr +reviews --owner Gitlink --repo forgeplus -i 42
 
+# List line-level review comments and unresolved discussions (read-only)
+gitlink-cli pr +review-comments --owner Gitlink --repo forgeplus -i 42 --state opened --need-respond true
+
 # Create a PR review (with dry-run preview)
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM" --dry-run
 gitlink-cli pr +review --owner Gitlink --repo forgeplus -i 42 --status approved -c "LGTM"
 ```
+
+`pr +review` creates one formal review. It no longer posts an implicit duplicate
+journal comment. Line-level review comment write commands remain unavailable
+until their production API contract and permission behavior are verified.
 
 ### Branch Management
 
@@ -507,6 +514,13 @@ gitlink-cli search +users -k "zhangsan"
 - `workflow +health`
 - `workflow +pr-summary`
 - `workflow +repo-report`
+- `workflow +review-context`
+- `workflow +review-queue`
+- `workflow +release-notes`
+- `workflow +dependency-audit`
+- `workflow +issue-dedupe`
+- `workflow +release-readiness`
+- `workflow +stale`
 
 `workflow +pr-summary` defaults to `table` when `--format` is omitted.
 `workflow +repo-report` defaults to `markdown` when `--format` is omitted.
@@ -582,6 +596,12 @@ gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format ma
 
 # Repository workflow report from a local JSON file
 gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format json
+
+# Fetch a read-only PR review context bundle
+gitlink-cli workflow +review-context --owner Gitlink --repo gitlink-cli --number 42 --format json
+
+# Rank the current PR review queue without remote writes
+gitlink-cli workflow +review-queue --owner Gitlink --repo gitlink-cli --state open --limit 30 --format markdown
 ```
 
 Output formats:
@@ -597,6 +617,7 @@ Safety:
 - They do not depend on LLM APIs.
 - `workflow +pr-summary` does not comment, approve, reject, or merge pull requests.
 - `workflow +repo-report` aggregates health, issue triage, and PR review summary signals without remote writes.
+- `workflow +review-context` and `workflow +review-queue` are read-only and are the supported P0 inputs for collaboration exports.
 
 ### Raw API
 

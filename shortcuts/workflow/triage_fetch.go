@@ -79,13 +79,16 @@ func normalizeIssueItem(raw interface{}) (IssueInput, bool) {
 	if id == "" {
 		id = fmt.Sprintf("%d", number)
 	}
-	state := firstIssueString(item, "state", "status")
+	state := firstIssueString(item, "state", "status", "status_name")
 	author := firstIssueString(item, "author", "user", "creator")
 	urlValue := firstIssueString(item, "html_url", "url", "web_url")
 	labels := firstIssueLabels(item["labels"])
+	if len(labels) == 0 {
+		labels = firstIssueLabels(item["issue_tags"])
+	}
 	createdAt := firstIssueTime(item, "created_at", "created")
 	updatedAt := firstIssueTime(item, "updated_at", "updated", "last_updated_at")
-	comments := firstIssueInt(item, "comments_count", "comments")
+	comments := firstIssueInt(item, "comments_count", "comments", "comment_journals_count", "journals_count")
 
 	return IssueInput{
 		ID:            id,
@@ -151,6 +154,14 @@ func firstIssueTime(item map[string]interface{}, keys ...string) time.Time {
 func firstIssueLabels(value interface{}) []string {
 	switch labels := value.(type) {
 	case []interface{}:
+		out := make([]string, 0, len(labels))
+		for _, label := range labels {
+			if s := apiStringValue(label); s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []map[string]interface{}:
 		out := make([]string, 0, len(labels))
 		for _, label := range labels {
 			if s := apiStringValue(label); s != "" {

@@ -209,8 +209,15 @@ func TestPRCreate(t *testing.T) {
 func TestPRCreateNoBody(t *testing.T) {
 	var payload map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		payload = decodeJSON(t, r)
-		writeJSON(t, w, map[string]interface{}{"id": float64(43), "title": "feat: nob"})
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo.json":
+			writeJSON(t, w, map[string]interface{}{"default_branch": "master"})
+		case r.Method == "POST" && r.URL.Path == "/owner/repo/pulls.json":
+			payload = decodeJSON(t, r)
+			writeJSON(t, w, map[string]interface{}{"id": float64(43), "title": "feat: nob"})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
@@ -224,6 +231,7 @@ func TestPRCreateNoBody(t *testing.T) {
 	if _, ok := payload["body"]; ok {
 		t.Fatal("body should not be in payload when not provided")
 	}
+	assertEqual(t, payload["base"], "master")
 }
 
 // --- view ---
@@ -653,7 +661,9 @@ func TestPRReviewsList(t *testing.T) {
 
 func TestPRReviewCreate(t *testing.T) {
 	var reviewPayload map[string]interface{}
+	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
 		if r.Method == "POST" && r.URL.Path == "/v1/owner/repo/pulls/13/reviews.json" {
 			reviewPayload = common.DecodeJSON(t, r)
 			common.WriteJSON(t, w, map[string]interface{}{
@@ -668,16 +678,41 @@ func TestPRReviewCreate(t *testing.T) {
 	defer server.Close()
 
 	err := runPRShortcut(t, server, "review", map[string]string{
-		"id":     "13",
-		"body":   "Looks good",
-		"status": "approved",
+		"id":      "13",
+		"content": "Looks good",
+		"status":  "approved",
+		"commit":  "abc123",
 	})
 	if err != nil {
 		t.Fatalf("review create failed: %v", err)
 	}
 
+	common.AssertEqual(t, requestCount, 1)
 	common.AssertEqual(t, reviewPayload["content"], "Looks good")
 	common.AssertEqual(t, reviewPayload["status"], "approved")
+	common.AssertEqual(t, reviewPayload["commit_id"], "abc123")
+}
+
+func TestPRReviewDryRunDoesNotCallServer(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		t.Fatalf("dry-run must not send a request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	err := runPRShortcut(t, server, "review", map[string]string{
+		"id":      "13",
+		"content": "Looks good",
+		"status":  "approved",
+		"commit":  "abc123",
+		"dry-run": "true",
+	})
+	if err != nil {
+		t.Fatalf("review dry-run failed: %v", err)
+	}
+
+	common.AssertEqual(t, requestCount, 0)
 }
 
 // --- Diff tests ---

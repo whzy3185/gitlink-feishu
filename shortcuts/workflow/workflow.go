@@ -26,6 +26,12 @@ func Shortcuts() []*common.Shortcut {
 		newPRSummaryShortcut(nil),
 		newRepoReportShortcut(),
 		newReviewContextShortcut(),
+		newReviewQueueShortcut(),
+		newReleaseNotesShortcut(),
+		newDependencyAuditShortcut(),
+		newIssueDedupeShortcut(),
+		newReleaseReadinessShortcut(),
+		newStaleShortcut(),
 	}
 }
 

@@ -32,7 +32,7 @@ func normalizePullRequestListState(state string) string {
 
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
-	return []*common.Shortcut{
+	shortcuts := []*common.Shortcut{
 		{
 			Name:        "list",
 			Description: tr.T("cmd.pr.list.short"),
@@ -252,13 +252,24 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.pr.diff.short"),
 			Flags: []common.Flag{
 				{Name: "id", Short: "i", Usage: tr.T("flag.pr.id"), Required: true},
+				{Name: "file", Short: "f", Usage: tr.T("flag.pr.file")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
 				id, _ := ctx.RequireArg("id")
-				env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s/files", ctx.RepoPath(), id), nil)
+				path := fmt.Sprintf("%s/pulls/%s/files", ctx.RepoPath(), id)
+				if file := ctx.Arg("file"); file != "" {
+					query := url.Values{}
+					query.Set("filepath", file)
+					env, err := ctx.CallAPIWithQuery("GET", path, query)
+					if err != nil {
+						return err
+					}
+					return ctx.Output(env)
+				}
+				env, err := ctx.CallAPI("GET", path, nil)
 				if err != nil {
 					return err
 				}
@@ -402,19 +413,6 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					return err
 				}
 
-				// Also post a journal comment so the review is visible in the PR conversation.
-				prEnv, journalErr := ctx.CallAPI("GET", fmt.Sprintf("%s/pulls/%s", ctx.RepoPath(), id), nil)
-				if journalErr == nil {
-					if issueID, extractErr := extractIssueID(prEnv); extractErr == nil {
-						statusLabel := map[string]string{
-							"approved": "approved", "rejected": "rejected", "common": "commented",
-						}[status]
-						summary := fmt.Sprintf("## Review: %s\n\n%s", statusLabel, content)
-						_, _ = ctx.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", ctx.Owner, ctx.Repo, issueID),
-							map[string]interface{}{"notes": summary})
-					}
-				}
-
 				return ctx.Output(env)
 			},
 		},
@@ -525,6 +523,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			},
 		},
 	}
+	return append(shortcuts, restoredPRShortcuts(tr)...)
 }
 
 func requireIntFlag(ctx *common.RuntimeContext, name string) (string, error) {
