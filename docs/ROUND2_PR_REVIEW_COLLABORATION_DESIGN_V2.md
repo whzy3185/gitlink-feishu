@@ -1902,6 +1902,23 @@ go test ./shortcuts/pr ./shortcuts/workflow ./shortcuts/feishu ./shortcuts
 
 ### P2：飞书协作闭环
 
+当前实施状态（2026-07-30）：
+
+```text
+P2.0 已开始：官方 Feishu Channel SDK、GET-only 入站 Gateway、
+受控群仓库绑定、持久事件去重、异步 Job、Review Queue/Context 读取、
+草稿模板与 partial 快照保护已经落地。
+
+Base、Doc、Card、Task 写同步，以及绑定/认领的真实协作状态仍未落地，
+因此当前不能宣称已满足完整 P2 退出条件。
+```
+
+实施细节见：
+
+```text
+docs/ROUND2_PR_REVIEW_COLLABORATION_P2_IMPLEMENTATION.md
+```
+
 交付：
 
 - 飞书 Go Channel SDK spike。

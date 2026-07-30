@@ -1,0 +1,19 @@
+{
+  "schema_version": "feishu.review-bindings/v1",
+  "bindings": [
+    {
+      "chat_id": "oc_round2_review",
+      "repository": "Gitlink/gitlink-cli",
+      "enabled": true,
+      "admin_user_ids": [
+        "ou_owner"
+      ],
+      "allowed_user_ids": [
+        "ou_owner",
+        "ou_reviewer"
+      ],
+      "deadline_hours": 24,
+      "binding_revision": "fixture-v1"
+    }
+  ]
+}

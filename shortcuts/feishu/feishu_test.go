@@ -20,7 +20,7 @@ func TestShortcutsExposeExpectedCommands(t *testing.T) {
 	for _, shortcut := range Shortcuts() {
 		got[shortcut.Name] = true
 	}
-	for _, name := range []string{"bot-test", "notify", "weekly-report", "owner-digest", "contributor-digest", "app-check", "doc-check", "bitable-check", "task-check", "doc-export", "bitable-schema", "bitable-records", "bitable-sync", "task-preview", "task-create"} {
+	for _, name := range []string{"bot-test", "notify", "weekly-report", "owner-digest", "contributor-digest", "app-check", "doc-check", "bitable-check", "task-check", "doc-export", "bitable-schema", "bitable-records", "bitable-sync", "task-preview", "task-create", "review-gateway"} {
 		if !got[name] {
 			t.Fatalf("Shortcuts missing %s", name)
 		}

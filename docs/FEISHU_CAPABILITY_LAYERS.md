@@ -4,6 +4,51 @@ Date: 2026-06-26
 
 This document defines the implemented and planned Feishu integration layers for `gitlink-cli`.
 
+## Layer 0.5: P2 Review Gateway Preview
+
+Status: experimental GET-only inbound surface.
+
+Purpose:
+
+```text
+Let maintainers start GitLink PR review reads from an allowlisted Feishu group
+without allowing Feishu to mutate GitLink or Feishu collaboration resources.
+```
+
+Implemented command:
+
+```text
+gitlink-cli feishu +review-gateway
+```
+
+Implemented capabilities:
+
+```text
+Official Feishu Channel SDK persistent-connection adapter.
+Offline normalized-event fixture mode.
+Controlled chat-to-repository binding file.
+Group allowlist, required mention, disabled DM, and sender allowlist.
+Durable message_id / event_id deduplication in SQLite.
+Asynchronous GET-only Review Queue and Review Context jobs.
+Deterministic Review draft preview.
+Partial snapshot protection and merged/closed archive planning.
+```
+
+Current boundary:
+
+```text
+No GitLink writes.
+No Feishu Base, Doc, Card, or Task writes.
+Repository binding and PR claim commands produce plans only.
+Live Feishu validation requires a configured self-built app and test group.
+```
+
+See:
+
+```text
+docs/ROUND2_PR_REVIEW_COLLABORATION_P2_IMPLEMENTATION.md
+```
+
 ## Layer 1: Stable Webhook Export
 
 Status: stable surface.

@@ -1,0 +1,9 @@
+{
+  "event_id": "evt_round2_fixture",
+  "message_id": "om_round2_fixture",
+  "event_type": "message",
+  "chat_id": "oc_round2_review",
+  "chat_type": "group",
+  "user_id": "ou_owner",
+  "content": "查看 PR #431"
+}

@@ -42,8 +42,20 @@ $env:FEISHU_WEBHOOK_SECRET="REDACTED"
 
 | Name | Purpose | Required | Used by | Sensitive | How to obtain |
 | --- | --- | --- | --- | --- | --- |
-| `FEISHU_APP_ID` | Self-built app ID | Required for Open Platform `--send` or diagnostic `--remote` | `+app-check`, `+doc-check`, `+bitable-check`, `+task-check`, `+doc-export`, `+bitable-sync`, `+task-create` | Yes | Feishu Open Platform app page |
-| `FEISHU_APP_SECRET` | Self-built app secret | Required for Open Platform `--send` or diagnostic `--remote` | same as above | Yes | Feishu Open Platform app credentials |
+| `FEISHU_APP_ID` | Self-built app ID | Required for Open Platform `--send`, diagnostic `--remote`, or `+review-gateway --listen` | `+app-check`, `+doc-check`, `+bitable-check`, `+task-check`, `+doc-export`, `+bitable-sync`, `+task-create`, `+review-gateway --listen` | Yes | Feishu Open Platform app page |
+| `FEISHU_APP_SECRET` | Self-built app secret | Required for Open Platform `--send`, diagnostic `--remote`, or `+review-gateway --listen` | same as above plus `+review-gateway --listen` | Yes | Feishu Open Platform app credentials |
+
+`+review-gateway --listen` also uses `FEISHU_APP_ID`. It requires a Feishu
+self-built app with bot capability, persistent-connection event subscription,
+and an external binding file. The binding file and SQLite state database should
+remain under `.local` or another deployment-controlled path:
+
+```powershell
+go run . feishu +review-gateway `
+  --listen `
+  --bindings .local/review-gateway-bindings.json `
+  --state-db .local/review-gateway.db
+```
 
 Example:
 

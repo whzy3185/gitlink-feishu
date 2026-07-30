@@ -51,6 +51,81 @@ type ReviewQueueItem struct {
 	ReviewFocus     []string `json:"review_focus,omitempty"`
 }
 
+type ReviewQueueFetchOptions struct {
+	Owner     string
+	Repo      string
+	State     string
+	StartPage int
+	PageSize  int
+	MaxItems  int
+	Language  string
+}
+
+// FetchReviewQueue builds a prioritized review queue using GET-only GitLink
+// requests. It exists as a stable entry point for collaboration gateways so
+// they do not need to emulate CLI flags or mutate RuntimeContext repository
+// state.
+func FetchReviewQueue(ctx *common.RuntimeContext, opts ReviewQueueFetchOptions) (ReviewQueueResult, error) {
+	if ctx == nil {
+		return ReviewQueueResult{}, fmt.Errorf("review queue runtime context is required")
+	}
+	owner, repo, err := resolveFetchRepo(ctx, opts.Owner, opts.Repo)
+	if err != nil {
+		return ReviewQueueResult{}, fmt.Errorf("resolve review queue repository: %w", err)
+	}
+	state := strings.TrimSpace(opts.State)
+	if state == "" {
+		state = "open"
+	}
+	startPage := opts.StartPage
+	if startPage <= 0 {
+		startPage = 1
+	}
+	pageSize := opts.PageSize
+	if pageSize <= 0 {
+		pageSize = 30
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	maxItems := opts.MaxItems
+	if maxItems <= 0 {
+		maxItems = 100
+	}
+
+	prs := make([]PRSummaryInput, 0, minReviewQueueInt(pageSize, maxItems))
+	seen := map[string]bool{}
+	for page := startPage; len(prs) < maxItems; page++ {
+		items, fetchErr := fetchReviewQueuePage(ctx, owner, repo, state, page, pageSize)
+		if fetchErr != nil {
+			return ReviewQueueResult{}, fmt.Errorf("fetch pull requests for review queue page %d: %w", page, fetchErr)
+		}
+		if len(items) == 0 {
+			break
+		}
+		for _, item := range items {
+			key := reviewQueuePRKey(item)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			prs = append(prs, item)
+			if len(prs) >= maxItems {
+				break
+			}
+		}
+		if len(items) < pageSize {
+			break
+		}
+	}
+	input := ReviewQueueInput{
+		Repository:   fmt.Sprintf("%s/%s", owner, repo),
+		PullRequests: prs,
+		Source:       "remote-read-only-fetch",
+	}
+	return AnalyzeReviewQueue(input, normalizeLang(opts.Language)), nil
+}
+
 func newReviewQueueShortcut() *common.Shortcut {
 	return &common.Shortcut{
 		Name:        "review-queue",
