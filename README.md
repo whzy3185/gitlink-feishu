@@ -602,6 +602,7 @@ gitlink-cli workflow +review-context \
   --owner Gitlink \
   --repo gitlink-cli \
   --number 42 \
+  --include-versions \
   --include-reviews \
   --include-threads \
   --format json
@@ -623,10 +624,16 @@ gitlink-cli workflow +review-queue \
 ```
 
 `workflow +review-context` emits the stable `review.context/v1` schema. It
-compares each formal review and review thread commit with the current PR head,
-classifies freshness as `current`, `outdated`, or `unknown`, and builds a
-`review.work-item/v1` record with a deterministic source fingerprint. Missing
-head or commit bindings remain `unknown` and never imply merge readiness.
+reads the current patchset, compares each formal review and review thread commit
+with the current PR head, classifies freshness as `current`, `outdated`, or
+`unknown`, and builds a `review.work-item/v1` record with a deterministic source
+fingerprint. Reviewer summaries use each reviewer's last orderable current
+decision instead of treating an earlier rejection as permanent.
+
+The output also reports `collection_status`, `partial`, per-section status, and
+structured `fetch_errors`. Missing head or commit bindings remain `unknown` and
+never imply merge readiness. Collaboration adapters must not overwrite a prior
+complete snapshot with empty values from a partial collection.
 
 Output formats:
 

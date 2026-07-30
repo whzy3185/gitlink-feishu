@@ -33,6 +33,58 @@ func TestEvaluateReviewFreshness(t *testing.T) {
 	}
 }
 
+func TestNormalizeCurrentReviewContextPatchsetUsesLatestVersion(t *testing.T) {
+	got := normalizeCurrentReviewContextPatchset([]map[string]interface{}{
+		{
+			"id":              100,
+			"head_commit_sha": "old123def456",
+			"created_time":    1785000000,
+			"updated_time":    1785000000,
+		},
+		{
+			"id":              101,
+			"head_commit_sha": "head123def456",
+			"base_commit_sha": "base123def456",
+			"files_count":     7,
+			"commits_count":   3,
+			"add_line_num":    42,
+			"del_line_num":    5,
+			"created_time":    1785001000,
+			"updated_time":    1785001000,
+		},
+	})
+	if got.ID != "101" || got.HeadSHA != "head123def456" || got.FilesCount != 7 || got.CommitsCount != 3 {
+		t.Fatalf("current patchset = %+v", got)
+	}
+	if got.CreatedAt == "" || got.UpdatedAt == "" {
+		t.Fatalf("patchset times were not normalized: %+v", got)
+	}
+}
+
+func TestExtractReviewContextPRFactsSupportsObservedGitLinkShape(t *testing.T) {
+	facts := extractReviewContextPRFacts("owner/repo", 42, map[string]interface{}{
+		"id":                 4242,
+		"base":               "master",
+		"head":               "feature/review-context",
+		"create_user":        "contributor",
+		"pull_request_staus": "open",
+		"state":              "open",
+		"status":             0,
+		"merged":             false,
+	})
+	if facts.State != "open" || facts.Author != "contributor" || facts.BaseBranch != "master" || facts.HeadBranch != "feature/review-context" {
+		t.Fatalf("observed PR facts = %+v", facts)
+	}
+
+	merged := extractReviewContextPRFacts("owner/repo", 43, map[string]interface{}{
+		"state":  "closed",
+		"merged": true,
+	})
+	if merged.State != "merged" {
+		t.Fatalf("merged PR state = %q", merged.State)
+	}
+}
+
 func TestSummarizeReviewCollaborationUsesOnlyCurrentEvidence(t *testing.T) {
 	needResponse := true
 	reviews := []ReviewContextReview{
@@ -71,6 +123,112 @@ func TestSummarizeReviewCollaborationCurrentRejectionBlocks(t *testing.T) {
 	}, nil, true, true)
 	if got.GitLinkReviewStatus != "rejected" || got.Decision != "blocked" {
 		t.Fatalf("summary = %+v, want rejected/blocked", got)
+	}
+}
+
+func TestSummarizeReviewCollaborationUsesLatestDecisionPerReviewer(t *testing.T) {
+	tests := []struct {
+		name         string
+		reviews      []ReviewContextReview
+		wantStatus   string
+		wantDecision string
+	}{
+		{
+			name: "same reviewer rejection followed by approval",
+			reviews: []ReviewContextReview{
+				{ID: "1", ActorID: "7", Actor: "alice", Status: "rejected", Freshness: reviewFreshnessCurrent, CreatedAt: "2026-07-29T08:00:00Z"},
+				{ID: "2", ActorID: "7", Actor: "alice", Status: "approved", Freshness: reviewFreshnessCurrent, CreatedAt: "2026-07-29T09:00:00Z"},
+			},
+			wantStatus:   "approved",
+			wantDecision: "approved",
+		},
+		{
+			name: "same reviewer approval followed by rejection",
+			reviews: []ReviewContextReview{
+				{ID: "1", ActorID: "7", Actor: "alice", Status: "approved", Freshness: reviewFreshnessCurrent, CreatedAt: "2026-07-29T08:00:00Z"},
+				{ID: "2", ActorID: "7", Actor: "alice", Status: "rejected", Freshness: reviewFreshnessCurrent, CreatedAt: "2026-07-29T09:00:00Z"},
+			},
+			wantStatus:   "rejected",
+			wantDecision: "blocked",
+		},
+		{
+			name: "numeric id orders records without timestamps",
+			reviews: []ReviewContextReview{
+				{ID: "10", Actor: "alice", Status: "rejected", Freshness: reviewFreshnessCurrent},
+				{ID: "11", Actor: "alice", Status: "approved", Freshness: reviewFreshnessCurrent},
+			},
+			wantStatus:   "approved",
+			wantDecision: "approved",
+		},
+		{
+			name: "GitLink timestamp takes precedence over numeric id",
+			reviews: []ReviewContextReview{
+				{ID: "20", Actor: "alice", Status: "rejected", Freshness: reviewFreshnessCurrent, CreatedAt: "2026-05-23 20:50"},
+				{ID: "10", Actor: "alice", Status: "approved", Freshness: reviewFreshnessCurrent, CreatedAt: "2026-05-23 21:14"},
+			},
+			wantStatus:   "approved",
+			wantDecision: "approved",
+		},
+		{
+			name: "different reviewers preserve rejection",
+			reviews: []ReviewContextReview{
+				{ID: "1", ActorID: "7", Actor: "alice", Status: "approved", Freshness: reviewFreshnessCurrent},
+				{ID: "2", ActorID: "8", Actor: "bob", Status: "rejected", Freshness: reviewFreshnessCurrent},
+			},
+			wantStatus:   "rejected",
+			wantDecision: "blocked",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := summarizeReviewCollaboration("open", test.reviews, nil, true, true)
+			if got.GitLinkReviewStatus != test.wantStatus || got.Decision != test.wantDecision {
+				t.Fatalf("summary = %+v, want %s/%s", got, test.wantStatus, test.wantDecision)
+			}
+		})
+	}
+}
+
+func TestReviewerSummaryKeepsAmbiguousConflictingOrderUnknown(t *testing.T) {
+	summaries := buildReviewContextReviewerSummaries([]ReviewContextReview{
+		{ID: "review-a", ActorID: "7", Actor: "alice", Status: "approved", Freshness: reviewFreshnessCurrent},
+		{ID: "review-b", ActorID: "7", Actor: "alice", Status: "rejected", Freshness: reviewFreshnessCurrent},
+	})
+	if len(summaries) != 1 {
+		t.Fatalf("summaries = %+v, want one reviewer", summaries)
+	}
+	summary := summaries[0]
+	if summary.CurrentDecision != "unknown" || summary.DecisionOrderKnown || summary.LatestEffectiveReview != nil {
+		t.Fatalf("reviewer summary = %+v, want ambiguous unknown decision", summary)
+	}
+	got := summarizeReviewCollaboration("open", []ReviewContextReview{
+		{ID: "review-a", ActorID: "7", Status: "approved", Freshness: reviewFreshnessCurrent},
+		{ID: "review-b", ActorID: "7", Status: "rejected", Freshness: reviewFreshnessCurrent},
+	}, nil, true, true)
+	if got.GitLinkReviewStatus != "unknown" || got.Decision != "pending" {
+		t.Fatalf("collaboration summary = %+v, want unknown/pending", got)
+	}
+}
+
+func TestReviewWorkItemRoutingHonorsTerminalAndReReviewStates(t *testing.T) {
+	tests := []struct {
+		name    string
+		summary ReviewCollaborationSummary
+		stage   string
+		next    string
+	}{
+		{name: "merged", summary: ReviewCollaborationSummary{GitLinkPRState: "merged"}, stage: "merged", next: "none"},
+		{name: "closed", summary: ReviewCollaborationSummary{GitLinkPRState: "closed"}, stage: "closed", next: "none"},
+		{name: "outdated only", summary: ReviewCollaborationSummary{GitLinkPRState: "open", OutdatedReviews: 2, Decision: "pending"}, stage: "waiting_for_re_review", next: "request_re_review_for_current_head"},
+		{name: "ambiguous current", summary: ReviewCollaborationSummary{GitLinkPRState: "open", CurrentReviews: 2, Decision: "pending"}, stage: "human_reviewing", next: "resolve_ambiguous_reviewer_decision"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stage, next, _, _ := reviewWorkItemRouting(test.summary)
+			if stage != test.stage || next != test.next {
+				t.Fatalf("routing = %s/%s, want %s/%s", stage, next, test.stage, test.next)
+			}
+		})
 	}
 }
 
@@ -164,7 +322,7 @@ func TestFinalizeReviewContextMarksConfiguredLimitAsSampled(t *testing.T) {
 
 func TestNormalizeReviewContextThreadsMarksOrphanReplies(t *testing.T) {
 	threads := normalizeReviewContextThreads([]map[string]interface{}{
-		{"id": 1, "state": "opened", "commit_id": "abc123def456"},
+		{"id": 1, "state": "opened", "commit_id": "abc123def456", "note": "Please add a regression test.", "review": map[string]interface{}{"id": 77}},
 		{"id": 2, "parent_id": 1, "state": "opened", "commit_id": "abc123def456"},
 		{"id": 3, "parent_id": 99, "state": "opened", "commit_id": "abc123def456"},
 	}, "abc123def456")
@@ -182,10 +340,25 @@ func TestNormalizeReviewContextThreadsMarksOrphanReplies(t *testing.T) {
 	if !byID["3"].UnknownParent {
 		t.Fatal("reply to missing parent not marked orphan")
 	}
+	if byID["1"].Content != "Please add a regression test." {
+		t.Fatalf("thread content = %q", byID["1"].Content)
+	}
+	if byID["1"].ReviewID != "77" {
+		t.Fatalf("thread review id = %q", byID["1"].ReviewID)
+	}
 }
 
 func TestReviewContextP1FixtureMatchesMarkdownGolden(t *testing.T) {
-	fixturePath := filepath.Join("testdata", "review_context_p1_fixture.json")
+	assertReviewContextFixtureGolden(t, "review_context_p1_fixture.json", "review_context_p1.golden.md")
+}
+
+func TestReviewContextP11ObservedFixtureMatchesMarkdownGolden(t *testing.T) {
+	assertReviewContextFixtureGolden(t, "review_context_p11_observed_fixture.json", "review_context_p11_observed.golden.md")
+}
+
+func assertReviewContextFixtureGolden(t *testing.T, fixtureName, goldenName string) {
+	t.Helper()
+	fixturePath := filepath.Join("testdata", fixtureName)
 	data, err := os.ReadFile(fixturePath)
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
@@ -200,7 +373,7 @@ func TestReviewContextP1FixtureMatchesMarkdownGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderReviewContext: %v", err)
 	}
-	goldenPath := filepath.Join("testdata", "review_context_p1.golden.md")
+	goldenPath := filepath.Join("testdata", goldenName)
 	want, err := os.ReadFile(goldenPath)
 	if err != nil {
 		t.Fatalf("read golden: %v", err)
@@ -250,5 +423,8 @@ func TestFinalizeReviewContextPreservesTypedOfflineRecords(t *testing.T) {
 	}
 	if context.CurrentHeadSHA != "abc123def456" || context.Summary.Decision != "approved" {
 		t.Fatalf("offline context summary = %+v", context)
+	}
+	if reviewContextReviewCount(context) != 1 {
+		t.Fatalf("typed review count = %d, want 1", reviewContextReviewCount(context))
 	}
 }

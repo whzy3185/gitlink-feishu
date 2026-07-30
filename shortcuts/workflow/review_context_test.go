@@ -35,11 +35,28 @@ func TestFetchReviewContextAllSections(t *testing.T) {
 					{"filename": "shortcuts/workflow/review_context.go", "additions": 120},
 				},
 			})
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/pulls/7/versions.json":
+			if got := r.URL.Query().Get("limit"); got != "5" {
+				t.Fatalf("version limit = %q, want 5", got)
+			}
+			writeWorkflowJSON(t, w, map[string]interface{}{
+				"versions": []map[string]interface{}{
+					{
+						"id":              101,
+						"head_commit_sha": "abc123def456",
+						"base_commit_sha": "base123def456",
+						"files_count":     1,
+						"commits_count":   2,
+						"created_time":    1785122000,
+						"updated_time":    1785122334,
+					},
+				},
+			})
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/pulls/7/reviews.json":
 			writeWorkflowJSON(t, w, map[string]interface{}{
 				"reviews": []map[string]interface{}{
-					{"id": 1, "status": "approved", "commit_id": "abc123def456", "user": map[string]interface{}{"login": "reviewer"}},
-					{"id": 2, "status": "rejected", "commit_id": "old456", "user": map[string]interface{}{"login": "reviewer2"}},
+					{"id": 1, "status": "approved", "commit_id": "abc123def456", "user": map[string]interface{}{"id": 71, "login": "reviewer"}},
+					{"id": 2, "status": "rejected", "commit_id": "old456", "user": map[string]interface{}{"id": 72, "login": "reviewer2"}},
 				},
 			})
 		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/pulls/7/journals.json":
@@ -51,7 +68,7 @@ func TestFetchReviewContextAllSections(t *testing.T) {
 			}
 			writeWorkflowJSON(t, w, map[string]interface{}{
 				"journals": []map[string]interface{}{
-					{"id": 10, "review_id": 1, "state": "opened", "type": "problem", "need_respond": true, "commit_id": "abc123def456", "path": "main.go"},
+					{"id": 10, "review_id": 1, "state": "opened", "type": "problem", "need_respond": true, "commit_id": "abc123def456", "path": "main.go", "note": "Please handle the error."},
 					{"id": 11, "review_id": 1, "state": "resolved", "commit_id": "old456", "path": "README.md"},
 				},
 			})
@@ -84,17 +101,19 @@ func TestFetchReviewContextAllSections(t *testing.T) {
 
 	ctx := workflowTestContext(server)
 	got, err := FetchReviewContext(ctx, ReviewContextOptions{
-		Number:         7,
-		IssueLimit:     2,
-		LabelLimit:     3,
-		ThreadLimit:    4,
-		IncludeRepo:    true,
-		IncludePR:      true,
-		IncludeFiles:   true,
-		IncludeReviews: true,
-		IncludeThreads: true,
-		IncludeIssues:  true,
-		IncludeLabels:  true,
+		Number:          7,
+		IssueLimit:      2,
+		LabelLimit:      3,
+		VersionLimit:    5,
+		ThreadLimit:     4,
+		IncludeRepo:     true,
+		IncludePR:       true,
+		IncludeFiles:    true,
+		IncludeVersions: true,
+		IncludeReviews:  true,
+		IncludeThreads:  true,
+		IncludeIssues:   true,
+		IncludeLabels:   true,
 	})
 	if err != nil {
 		t.Fatalf("FetchReviewContext returned error: %v", err)
@@ -102,8 +121,8 @@ func TestFetchReviewContextAllSections(t *testing.T) {
 	if got.Repository != "owner/repo" || got.PullRequest != 7 {
 		t.Fatalf("got repository=%q pr=%d", got.Repository, got.PullRequest)
 	}
-	if len(got.Sections) != 7 {
-		t.Fatalf("sections = %v, want 7 sections", got.Sections)
+	if len(got.Sections) != 8 {
+		t.Fatalf("sections = %v, want 8 sections", got.Sections)
 	}
 	if len(got.Files) != 1 || len(got.Reviews) != 2 || len(got.Threads) != 2 || len(got.OpenIssues) != 1 || len(got.Labels) != 1 {
 		t.Fatalf("context lists not populated: files=%d reviews=%d threads=%d issues=%d labels=%d", len(got.Files), len(got.Reviews), len(got.Threads), len(got.OpenIssues), len(got.Labels))
@@ -114,8 +133,20 @@ func TestFetchReviewContextAllSections(t *testing.T) {
 	if got.SchemaVersion != reviewContextSchemaVersion || got.CurrentHeadSHA != "abc123def456" {
 		t.Fatalf("schema/head = %q/%q", got.SchemaVersion, got.CurrentHeadSHA)
 	}
+	if got.CurrentVersionID != "101" || got.CurrentPatchset.CommitsCount != 2 {
+		t.Fatalf("current patchset = %+v", got.CurrentPatchset)
+	}
 	if got.Summary.Decision != "changes_pending" || got.Summary.CurrentReviews != 1 || got.Summary.OutdatedReviews != 1 {
 		t.Fatalf("review summary = %+v", got.Summary)
+	}
+	if len(got.ReviewerSummaries) != 2 || got.ReviewRecords[0].ActorID == "" {
+		t.Fatalf("reviewer summaries/actor ids = %+v / %+v", got.ReviewerSummaries, got.ReviewRecords)
+	}
+	if got.Threads[0].Content != "Please handle the error." {
+		t.Fatalf("thread content = %q", got.Threads[0].Content)
+	}
+	if got.CollectionStatus != reviewCollectionComplete || got.Partial || len(got.FetchErrors) != 0 {
+		t.Fatalf("collection state = %s partial=%v errors=%+v", got.CollectionStatus, got.Partial, got.FetchErrors)
 	}
 	if !strings.HasPrefix(got.WorkItem.SourceFingerprint, "sha256:") {
 		t.Fatalf("fingerprint = %q", got.WorkItem.SourceFingerprint)
@@ -150,6 +181,44 @@ func TestFetchReviewContextPartialFailureKeepsNotes(t *testing.T) {
 	if len(got.Notes) != 1 || got.Notes[0].Metric != "pr_files" {
 		t.Fatalf("notes = %+v, want one pr_files note", got.Notes)
 	}
+	if !got.Partial || got.CollectionStatus != reviewCollectionPartial || len(got.FetchErrors) != 1 {
+		t.Fatalf("collection = %s partial=%v errors=%+v", got.CollectionStatus, got.Partial, got.FetchErrors)
+	}
+	fetchError := got.FetchErrors[0]
+	if fetchError.Section != "files" || fetchError.Method != "GET" || fetchError.StatusCode != http.StatusInternalServerError || !fetchError.Retryable {
+		t.Fatalf("fetch error = %+v", fetchError)
+	}
+}
+
+func TestFetchReviewContextPRFailureIsFatal(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/owner/repo.json":
+			writeWorkflowJSON(t, w, map[string]interface{}{"name": "repo"})
+		case "/owner/repo/pulls/9.json":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("pull request not found"))
+		default:
+			t.Fatalf("unexpected request after required PR failure: %s %s", r.Method, r.URL.String())
+		}
+	}))
+	defer server.Close()
+
+	got, err := FetchReviewContext(workflowTestContext(server), ReviewContextOptions{
+		Number:       9,
+		IncludeRepo:  true,
+		IncludePR:    true,
+		IncludeFiles: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "fetch required pull request") {
+		t.Fatalf("error = %v, want required PR failure", err)
+	}
+	if len(got.FetchErrors) != 1 || got.FetchErrors[0].Section != "pr" || got.FetchErrors[0].StatusCode != http.StatusNotFound {
+		t.Fatalf("structured PR fetch error = %+v", got.FetchErrors)
+	}
+	if got.CollectionStatus != reviewCollectionPartial || !got.Partial {
+		t.Fatalf("collection = %s partial=%v", got.CollectionStatus, got.Partial)
+	}
 }
 
 func TestFetchReviewContextAllSectionsFail(t *testing.T) {
@@ -159,12 +228,15 @@ func TestFetchReviewContextAllSectionsFail(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err := FetchReviewContext(workflowTestContext(server), ReviewContextOptions{
+	got, err := FetchReviewContext(workflowTestContext(server), ReviewContextOptions{
 		Number:      9,
 		IncludeRepo: true,
 	})
 	if err == nil {
 		t.Fatal("expected error when all enabled sections fail")
+	}
+	if got.CollectionStatus != reviewCollectionFailed || !got.Partial || len(got.FetchErrors) != 1 {
+		t.Fatalf("failed collection context = %+v", got)
 	}
 }
 
@@ -193,16 +265,17 @@ func TestReviewContextShortcutRemoteFetchJSON(t *testing.T) {
 		Repo:   "repo",
 		Format: "json",
 		Args: map[string]string{
-			"number":          "3",
-			"issue-limit":     "20",
-			"label-limit":     "50",
-			"include-repo":    "true",
-			"include-pr":      "true",
-			"include-files":   "false",
-			"include-reviews": "false",
-			"include-threads": "false",
-			"include-issues":  "false",
-			"include-labels":  "false",
+			"number":           "3",
+			"issue-limit":      "20",
+			"label-limit":      "50",
+			"include-repo":     "true",
+			"include-pr":       "true",
+			"include-files":    "false",
+			"include-versions": "false",
+			"include-reviews":  "false",
+			"include-threads":  "false",
+			"include-issues":   "false",
+			"include-labels":   "false",
 		},
 	}
 

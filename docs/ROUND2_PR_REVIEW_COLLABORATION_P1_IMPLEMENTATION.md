@@ -6,6 +6,9 @@
 
 实现分支：`feat/round2-review-collaboration-p1`
 
+门禁收口：
+[P1.1 实施与真实只读合同验证](./ROUND2_PR_REVIEW_COLLABORATION_P11_GATE.md)
+
 ## 1. 本轮目标
 
 P1 将 P0 的只读 Review 输入收敛为可供维护者、协作适配层和 Agent Host
@@ -198,6 +201,10 @@ git diff --check
 `whzy3185/gitlink-feishu`，且不自动创建 GitHub PR。
 
 ## 6. 已知限制
+
+以下内容记录 P1 提交时的状态。真实只读字段复核、Reviewer 最后有效决定、
+线程正文和结构化采集错误已在 P1.1 收口；当前状态以
+[P1.1 门禁文档](./ROUND2_PR_REVIEW_COLLABORATION_P11_GATE.md)为准。
 
 - Review 和线程字段来自当前公开客户端模型与本地 Mock 证据，仍需使用真实
   GitLink 只读响应完成字段契约复核。

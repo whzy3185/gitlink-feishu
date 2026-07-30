@@ -1,7 +1,7 @@
 ---
 name: gitlink-pr-review-warroom
-version: 1.0.0
-description: "以只读方式整理 GitLink PR 审查队列和单个 PR 的 Review、版本新鲜度、待响应线程与下一步建议。适用于维护者在集中 Review、比赛收尾或贡献高峰期间建立共享审查工作台。"
+version: 1.1.0
+description: "以只读方式整理 GitLink PR 审查队列和单个 PR 的 patchset、Reviewer 最后有效决定、线程正文、采集完整性与下一步建议。适用于维护者在集中 Review、比赛收尾或贡献高峰期间建立共享审查工作台。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -56,6 +56,7 @@ gitlink-cli workflow +review-context \
   --owner <owner> \
   --repo <repo> \
   --number <pr-number> \
+  --include-versions \
   --include-reviews \
   --include-threads \
   --format json
@@ -66,12 +67,20 @@ gitlink-cli workflow +review-context \
 ```text
 schema_version
 current_head_sha
+current_patchset
 review_records[].commit_id
 review_records[].freshness
+reviewer_summaries[].latest_effective_review
+reviewer_summaries[].current_decision
 threads[].state
 threads[].need_respond
 threads[].freshness
+threads[].content
 review_summary
+collection_status
+partial
+section_statuses
+fetch_errors
 work_item.source_fingerprint
 work_item.unknowns
 ```
@@ -99,6 +108,8 @@ review.commit_id != current_head_sha  -> outdated
 - `outdated` 保留为历史证据，不参与当前版本通过或阻断判断。
 - `unknown` 必须保守处理，不得据此判断可合并。
 - `approved` 仅代表存在当前批准，不等于 `merge_ready`。
+- 同一 Reviewer 的多次当前 Review 以最后一条可可靠排序的决定为准。
+- 多条冲突决定无法按时间或数字 ID 排序时，保持 `unknown` 并交给人工。
 
 ## 第四步：解释线程
 
@@ -108,8 +119,27 @@ review.commit_id != current_head_sha  -> outdated
 - `disabled`：保留历史，不参与当前决定。
 - `unknown_parent=true`：回复引用的父记录缺失，必须报告。
 - 过期线程不自动阻断当前版本，但应作为历史上下文展示。
+- 报告必须保留 `threads[].content`；正文缺失时明确显示平台未返回内容。
 
-## 第五步：形成维护者报告
+## 第五步：检查采集完整性
+
+在解释 Review 结论前先检查：
+
+```text
+collection_status
+partial
+section_statuses[]
+fetch_errors[]
+work_item.source_scope
+```
+
+- `complete`：必需分段均成功、未采样，且版本绑定没有未知项。
+- `partial`：至少一个分段失败、达到读取上限或版本绑定未知。
+- `failed`：没有取得可用只读分段。
+- `partial=true` 时，不得用本次空值覆盖协作平台中的上一份完整镜像。
+- `fetch_errors` 必须进入维护者告警和重试队列，不能仅记录自由文本。
+
+## 第六步：形成维护者报告
 
 ```bash
 gitlink-cli workflow +review-context \
@@ -126,6 +156,8 @@ gitlink-cli workflow +review-context \
 - Review 新鲜度；
 - 线程状态；
 - 聚合决定；
+- 每名 Reviewer 的最后有效决定；
+- 采集完整性和结构化错误；
 - 未知项；
 - 推荐下一步。
 
