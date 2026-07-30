@@ -15,6 +15,12 @@ feat: add Feishu P2 review gateway foundation
 feat/round2-review-collaboration-p21-live-reply
 ```
 
+当前机器人面向产品、协作和飞书开放平台的完整能力说明见：
+
+```text
+docs/FEISHU_REVIEW_BOT_CAPABILITY_SUMMARY.md
+```
+
 ## 1. 定位与边界
 
 P2.1 的目标是：
