@@ -4,9 +4,9 @@ Date: 2026-06-26
 
 This document defines the implemented and planned Feishu integration layers for `gitlink-cli`.
 
-## Layer 0.5: P2 Review Gateway Preview
+## Layer 0.5: P2 Review Gateway
 
-Status: experimental GET-only inbound surface.
+Status: P2.1 experimental GET-only inbound and live reply surface.
 
 Purpose:
 
@@ -32,21 +32,26 @@ Durable message_id / event_id deduplication in SQLite.
 Asynchronous GET-only Review Queue and Review Context jobs.
 Deterministic Review draft preview.
 Partial snapshot protection and merged/closed archive planning.
+SQLite job leases, retry limits, restart recovery, and persisted results.
+Two-second handler budget and non-blocking local telemetry.
+Asynchronous acknowledgement and durable final reply to the source message.
+Read-only chat discovery for administrator pre-binding.
 ```
 
 Current boundary:
 
 ```text
 No GitLink writes.
-No Feishu Base, Doc, Card, or Task writes.
+No Feishu Base, Doc, or Task writes.
 Repository binding and PR claim commands produce plans only.
-Live Feishu validation requires a configured self-built app and test group.
+Live text replies are limited to the configured self-built app and pre-bound test group.
 ```
 
 See:
 
 ```text
 docs/ROUND2_PR_REVIEW_COLLABORATION_P2_IMPLEMENTATION.md
+docs/ROUND2_PR_REVIEW_COLLABORATION_P21_IMPLEMENTATION.md
 ```
 
 ## Layer 1: Stable Webhook Export

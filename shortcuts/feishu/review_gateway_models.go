@@ -1,6 +1,7 @@
 package feishu
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -71,6 +72,12 @@ type ReviewGatewayJob struct {
 	MutatesGitLink        bool   `json:"mutates_gitlink"`
 	CollaborationMutation bool   `json:"collaboration_mutation"`
 	RequiresAdmin         bool   `json:"requires_admin"`
+	AttemptCount          int    `json:"attempt_count"`
+	MaxAttempts           int    `json:"max_attempts"`
+	NextAttemptAt         string `json:"next_attempt_at,omitempty"`
+	LeaseOwner            string `json:"lease_owner,omitempty"`
+	LeaseExpiresAt        string `json:"lease_expires_at,omitempty"`
+	HandlerLatencyMs      int64  `json:"handler_latency_ms,omitempty"`
 }
 
 type ReviewGatewayEventRef struct {
@@ -83,18 +90,19 @@ type ReviewGatewayEventRef struct {
 }
 
 type ReviewGatewayReceipt struct {
-	SchemaVersion string                `json:"schema_version"`
-	Mode          string                `json:"mode"`
-	Accepted      bool                  `json:"accepted"`
-	Duplicate     bool                  `json:"duplicate"`
-	Stale         bool                  `json:"stale"`
-	Bound         bool                  `json:"bound"`
-	Reason        string                `json:"reason,omitempty"`
-	DedupeKey     string                `json:"dedupe_key,omitempty"`
-	Event         ReviewGatewayEventRef `json:"event"`
-	Binding       *ReviewChatBinding    `json:"binding,omitempty"`
-	Intent        ReviewGatewayIntent   `json:"intent"`
-	Job           *ReviewGatewayJob     `json:"job,omitempty"`
+	SchemaVersion    string                `json:"schema_version"`
+	Mode             string                `json:"mode"`
+	Accepted         bool                  `json:"accepted"`
+	Duplicate        bool                  `json:"duplicate"`
+	Stale            bool                  `json:"stale"`
+	Bound            bool                  `json:"bound"`
+	Reason           string                `json:"reason,omitempty"`
+	DedupeKey        string                `json:"dedupe_key,omitempty"`
+	Event            ReviewGatewayEventRef `json:"event"`
+	Binding          *ReviewChatBinding    `json:"binding,omitempty"`
+	Intent           ReviewGatewayIntent   `json:"intent"`
+	Job              *ReviewGatewayJob     `json:"job,omitempty"`
+	HandlerLatencyMs int64                 `json:"handler_latency_ms,omitempty"`
 }
 
 type ReviewSnapshotState struct {
@@ -234,6 +242,18 @@ func NewReviewGateway(bindings ReviewGatewayBindings, config ReviewGatewayConfig
 }
 
 func (g *ReviewGateway) Plan(event ReviewGatewayEvent) (ReviewGatewayReceipt, error) {
+	return g.PlanContext(context.Background(), event)
+}
+
+func (g *ReviewGateway) PlanContext(ctx context.Context, event ReviewGatewayEvent) (ReviewGatewayReceipt, error) {
+	return g.planContext(ctx, event, true)
+}
+
+func (g *ReviewGateway) planWithoutReserveContext(ctx context.Context, event ReviewGatewayEvent) (ReviewGatewayReceipt, error) {
+	return g.planContext(ctx, event, false)
+}
+
+func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEvent, reserve bool) (ReviewGatewayReceipt, error) {
 	now := g.now().UTC()
 	event = normalizeReviewGatewayEvent(event)
 	receipt := ReviewGatewayReceipt{
@@ -298,15 +318,25 @@ func (g *ReviewGateway) Plan(event ReviewGatewayEvent) (ReviewGatewayReceipt, er
 
 	dedupeKey := reviewGatewayDedupeKey(event)
 	receipt.DedupeKey = dedupeKey
-	reserved, err := g.deduper.Reserve(dedupeKey, now, 24*time.Hour)
-	if err != nil {
-		receipt.Reason = "state_store_failed"
-		return receipt, err
-	}
-	if !reserved {
-		receipt.Duplicate = true
-		receipt.Reason = "duplicate_event"
-		return receipt, nil
+	if reserve {
+		var reserved bool
+		var err error
+		if contextual, ok := g.deduper.(interface {
+			ReserveContext(context.Context, string, time.Time, time.Duration) (bool, error)
+		}); ok {
+			reserved, err = contextual.ReserveContext(ctx, dedupeKey, now, 24*time.Hour)
+		} else {
+			reserved, err = g.deduper.Reserve(dedupeKey, now, 24*time.Hour)
+		}
+		if err != nil {
+			receipt.Reason = "state_store_failed"
+			return receipt, err
+		}
+		if !reserved {
+			receipt.Duplicate = true
+			receipt.Reason = "duplicate_event"
+			return receipt, nil
+		}
 	}
 
 	job := newReviewGatewayJob(event, intent, dedupeKey, now)
@@ -376,6 +406,8 @@ func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, d
 		MutatesGitLink:        false,
 		CollaborationMutation: collaborationMutation,
 		RequiresAdmin:         requiresAdmin,
+		MaxAttempts:           3,
+		NextAttemptAt:         now.Format(time.RFC3339Nano),
 	}
 }
 

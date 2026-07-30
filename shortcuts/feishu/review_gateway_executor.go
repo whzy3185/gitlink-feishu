@@ -38,6 +38,7 @@ type ReviewGatewayExecutionResult struct {
 	SnapshotPlan      *ReviewSnapshotPlan     `json:"snapshot_plan,omitempty"`
 	Draft             *ReviewDraftPreview     `json:"draft,omitempty"`
 	Error             string                  `json:"error,omitempty"`
+	AttemptCount      int                     `json:"attempt_count,omitempty"`
 }
 
 type ReviewGatewayQueueView struct {
@@ -103,6 +104,7 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		ReadOnlyGitLink: true,
 		MutatesGitLink:  false,
 		CompletedAt:     now().UTC().Format(time.RFC3339),
+		AttemptCount:    job.AttemptCount,
 	}
 	select {
 	case <-ctx.Done():
@@ -134,7 +136,7 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 			return reviewGatewayExecutionFailure(result, err)
 		}
 		result.Queue = buildReviewGatewayQueueView(queue)
-		result.Message = "已完成 GitLink GET-only Review Queue 读取；结果仅输出为本地预览。"
+		result.Message = "已完成 GitLink GET-only Review Queue 读取。"
 		return result, nil
 
 	case "read_review_context", "refresh_review_context", "generate_review_draft":
@@ -167,18 +169,18 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		if job.Action == "generate_review_draft" {
 			draft := buildReviewDraftPreview(reviewContext)
 			result.Draft = &draft
-			result.Message = "已生成确定性 Review 草稿模板；草稿仅本地预览，未写回 GitLink 或飞书。"
+			result.Message = "已生成确定性 Review 草稿模板；草稿不会写回 GitLink。"
 		}
 		return result, nil
 
 	case "help":
-		result.Message = "支持：查看待审查、查看 PR #编号、刷新 PR #编号、生成 PR #编号 Review 草稿、查看绑定、领取 PR #编号。P2 当前仅执行 GitLink GET-only 读取与协作变更预览。"
+		result.Message = "支持：查看待审查、查看 PR #编号、刷新 PR #编号、生成 PR #编号 Review 草稿、查看绑定、领取 PR #编号。GitLink 始终 GET-only；首次群绑定必须由管理员预先配置。"
 	case "show_binding":
 		result.Message = fmt.Sprintf("当前群已绑定仓库 %s；绑定来源是受控配置文件。", job.Repository)
 	case "read_my_review_tasks":
 		result.Message = "个人 Review 任务视图已进入任务模型，本阶段尚未写入飞书 Task。"
 	case "plan_bind_repository":
-		result.Message = fmt.Sprintf("已生成仓库绑定变更计划：%s；本阶段不会修改绑定配置。", job.Repository)
+		result.Message = fmt.Sprintf("已生成仓库绑定变更计划：%s；该命令仅供离线预览，长连接首次绑定必须由管理员预配置。", job.Repository)
 	case "plan_claim_review":
 		result.Message = fmt.Sprintf("已生成 PR #%d 认领变更计划；本阶段不会写入飞书 Base、Task 或 GitLink。", job.PRNumber)
 	default:

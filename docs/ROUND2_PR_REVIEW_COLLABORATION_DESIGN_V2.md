@@ -1905,9 +1905,12 @@ go test ./shortcuts/pr ./shortcuts/workflow ./shortcuts/feishu ./shortcuts
 当前实施状态（2026-07-30）：
 
 ```text
-P2.0 已开始：官方 Feishu Channel SDK、GET-only 入站 Gateway、
+P2.0 已完成：官方 Feishu Channel SDK、GET-only 入站 Gateway、
 受控群仓库绑定、持久事件去重、异步 Job、Review Queue/Context 读取、
 草稿模板与 partial 快照保护已经落地。
+
+P2.1 已开始：SQLite Job 租约与重启恢复、重试上限、结果与回复状态持久化、
+2 秒 handler 门禁、管理员只读群发现、真实飞书文本回执和最终结果回复已经实现。
 
 Base、Doc、Card、Task 写同步，以及绑定/认领的真实协作状态仍未落地，
 因此当前不能宣称已满足完整 P2 退出条件。
@@ -1917,6 +1920,7 @@ Base、Doc、Card、Task 写同步，以及绑定/认领的真实协作状态仍
 
 ```text
 docs/ROUND2_PR_REVIEW_COLLABORATION_P2_IMPLEMENTATION.md
+docs/ROUND2_PR_REVIEW_COLLABORATION_P21_IMPLEMENTATION.md
 ```
 
 交付：

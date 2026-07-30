@@ -2,9 +2,13 @@ package feishu
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
+	"io"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -245,13 +249,20 @@ func TestReviewGatewayQueueRunsAsynchronously(t *testing.T) {
 		t.Fatalf("NewReviewGateway: %v", err)
 	}
 	store := NewMemoryReviewGatewayJobStore()
-	completed := make(chan error, 1)
-	queue := NewReviewGatewayQueue(gateway, store, 1, func(_ ReviewGatewayJob, err error) {
-		completed <- err
+	completed := make(chan ReviewGatewayJobOutcome, 1)
+	queue := NewReviewGatewayQueue(gateway, store, 1, func(outcome ReviewGatewayJobOutcome) {
+		completed <- outcome
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go queue.Run(ctx, func(context.Context, ReviewGatewayJob) error { return nil })
+	go queue.Run(ctx, func(_ context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {
+		return ReviewGatewayExecutionResult{
+			SchemaVersion: reviewGatewayResultSchema,
+			JobID:         job.JobID,
+			Status:        "completed",
+			Mode:          "preview",
+		}, nil
+	})
 
 	receipt := queue.Enqueue(ctx, ReviewGatewayEvent{
 		EventID:      "evt_queue",
@@ -266,9 +277,9 @@ func TestReviewGatewayQueueRunsAsynchronously(t *testing.T) {
 		t.Fatalf("queue receipt = %#v", receipt)
 	}
 	select {
-	case err := <-completed:
-		if err != nil {
-			t.Fatalf("queue handler: %v", err)
+	case outcome := <-completed:
+		if outcome.Err != nil {
+			t.Fatalf("queue handler: %v", outcome.Err)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for asynchronous job")
@@ -327,6 +338,21 @@ func TestReviewGatewaySDKEventNormalizationExcludesCardToken(t *testing.T) {
 	})
 	if message.EventType != "message" || message.MessageID != "om_message" || message.Content != "查看 PR #42" {
 		t.Fatalf("normalized message = %#v", message)
+	}
+
+	mentioned := reviewGatewayEventFromMessage(&larktypes.NormalizedMessage{
+		EventID:   "evt_mentioned",
+		MessageID: "om_mentioned",
+		ChatID:    "oc_review",
+		ChatType:  "group",
+		UserID:    "ou_owner",
+		Content:   "@_user_1  查看 PR #42",
+		Mentions: []larktypes.Mention{
+			{Key: "@_user_1", OpenID: "ou_bot", IsBot: true},
+		},
+	})
+	if mentioned.Content != "查看 PR #42" {
+		t.Fatalf("bot mention was not removed from command: %#v", mentioned)
 	}
 
 	card, ok := reviewGatewayEventFromCardAction(&larktypes.CardActionEvent{
@@ -399,4 +425,492 @@ func assertReviewGatewayReason(t *testing.T, gateway *ReviewGateway, event Revie
 	if receipt.Accepted || receipt.Reason != want {
 		t.Fatalf("receipt = %#v, want reason %q", receipt, want)
 	}
+}
+
+func TestSQLiteReviewGatewayStoreRecoversExpiredRunningJob(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "review-gateway-recovery.db")
+	now := time.Date(2026, 7, 30, 10, 0, 0, 0, time.UTC)
+	store, err := OpenSQLiteReviewGatewayStore(path)
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	job := testReviewGatewayJob(now, "job-recovery")
+	if err := store.SaveJob(context.Background(), job); err != nil {
+		t.Fatalf("SaveJob: %v", err)
+	}
+	claimed, err := store.ClaimReadyJobs(context.Background(), ReviewGatewayClaimOptions{
+		LeaseOwner:    "worker-1",
+		Now:           now,
+		LeaseDuration: time.Minute,
+		Limit:         1,
+	})
+	if err != nil || len(claimed) != 1 || claimed[0].AttemptCount != 1 {
+		t.Fatalf("first claim = %#v, %v", claimed, err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	reopened, err := OpenSQLiteReviewGatewayStore(path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer reopened.Close()
+	notExpired, err := reopened.ClaimReadyJobs(context.Background(), ReviewGatewayClaimOptions{
+		LeaseOwner:    "worker-2",
+		Now:           now.Add(30 * time.Second),
+		LeaseDuration: time.Minute,
+		Limit:         1,
+	})
+	if err != nil || len(notExpired) != 0 {
+		t.Fatalf("unexpired lease was recovered: %#v, %v", notExpired, err)
+	}
+	recovered, err := reopened.ClaimReadyJobs(context.Background(), ReviewGatewayClaimOptions{
+		LeaseOwner:    "worker-2",
+		Now:           now.Add(2 * time.Minute),
+		LeaseDuration: time.Minute,
+		Limit:         1,
+	})
+	if err != nil || len(recovered) != 1 {
+		t.Fatalf("expired job recovery = %#v, %v", recovered, err)
+	}
+	if recovered[0].AttemptCount != 2 || recovered[0].LeaseOwner != "worker-2" {
+		t.Fatalf("recovered job metadata = %#v", recovered[0])
+	}
+}
+
+func TestSQLiteReviewGatewayQueueAtomicallyDeduplicatesAndRecoversOrphanReservation(t *testing.T) {
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "review-gateway-atomic.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 7, 30, 10, 0, 0, 0, time.UTC)
+	gateway, err := NewReviewGateway(
+		ReviewGatewayBindings{Bindings: []ReviewChatBinding{{
+			ChatID:     "oc_review",
+			Repository: "owner/repo",
+			Enabled:    true,
+		}}},
+		ReviewGatewayConfig{Now: func() time.Time { return now }},
+		store,
+	)
+	if err != nil {
+		t.Fatalf("NewReviewGateway: %v", err)
+	}
+	queue := NewReviewGatewayQueue(gateway, store, 2, nil)
+	queue.now = func() time.Time { return now }
+	event := ReviewGatewayEvent{
+		EventID:   "evt_atomic",
+		MessageID: "om_atomic",
+		EventType: "message",
+		ChatID:    "oc_review",
+		ChatType:  "group",
+		UserID:    "ou_owner",
+		Content:   "查看 PR #42",
+	}
+	first := queue.Enqueue(context.Background(), event)
+	if !first.Accepted || first.Job == nil {
+		t.Fatalf("first atomic enqueue = %#v", first)
+	}
+	second := queue.Enqueue(context.Background(), event)
+	if second.Accepted || !second.Duplicate || second.Reason != "duplicate_event" {
+		t.Fatalf("duplicate atomic enqueue = %#v", second)
+	}
+
+	orphanEvent := event
+	orphanEvent.EventID = "evt_orphan"
+	orphanEvent.MessageID = "om_orphan"
+	orphanKey := reviewGatewayDedupeKey(orphanEvent)
+	reserved, err := store.ReserveContext(context.Background(), orphanKey, now, 24*time.Hour)
+	if err != nil || !reserved {
+		t.Fatalf("create P2.0 orphan reservation = %v, %v", reserved, err)
+	}
+	recovered := queue.Enqueue(context.Background(), orphanEvent)
+	if !recovered.Accepted || recovered.Job == nil {
+		t.Fatalf("orphan reservation was not recovered atomically: %#v", recovered)
+	}
+	var jobCount int
+	if err := store.db.QueryRow(
+		"SELECT COUNT(*) FROM review_gateway_jobs WHERE dedupe_key=?",
+		orphanKey,
+	).Scan(&jobCount); err != nil {
+		t.Fatalf("count recovered job: %v", err)
+	}
+	if jobCount != 1 {
+		t.Fatalf("recovered job count = %d", jobCount)
+	}
+}
+
+func TestSQLiteReviewGatewayStorePersistsResultAndReplyState(t *testing.T) {
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "review-gateway-result.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 7, 30, 10, 0, 0, 0, time.UTC)
+	job := testReviewGatewayJob(now, "job-result")
+	if err := store.SaveJob(context.Background(), job); err != nil {
+		t.Fatalf("SaveJob: %v", err)
+	}
+	claimed, err := store.ClaimReadyJobs(context.Background(), ReviewGatewayClaimOptions{
+		LeaseOwner: "worker-result",
+		Now:        now,
+		Limit:      1,
+	})
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("ClaimReadyJobs = %#v, %v", claimed, err)
+	}
+	result := ReviewGatewayExecutionResult{
+		SchemaVersion:    reviewGatewayResultSchema,
+		JobID:            job.JobID,
+		Status:           "completed",
+		Mode:             "preview",
+		Action:           job.Action,
+		Repository:       job.Repository,
+		PRNumber:         job.PRNumber,
+		RequestedBy:      job.RequestedBy,
+		ReadOnlyGitLink:  true,
+		MutatesGitLink:   false,
+		CompletedAt:      now.Format(time.RFC3339),
+		CollectionStatus: "complete",
+		HeadSHA:          "head-sha",
+	}
+	if err := store.CompleteJob(context.Background(), claimed[0], result); err != nil {
+		t.Fatalf("CompleteJob: %v", err)
+	}
+	var status, resultJSON, replyStatus string
+	if err := store.db.QueryRow(
+		"SELECT status, result_json, reply_status FROM review_gateway_jobs WHERE job_id=?",
+		job.JobID,
+	).Scan(&status, &resultJSON, &replyStatus); err != nil {
+		t.Fatalf("read persisted result: %v", err)
+	}
+	if status != "completed" || replyStatus != "pending" || !strings.Contains(resultJSON, `"head_sha":"head-sha"`) {
+		t.Fatalf("persisted state = status=%q reply=%q result=%s", status, replyStatus, resultJSON)
+	}
+	pending, err := store.ClaimPendingReplies(context.Background(), ReviewGatewayClaimOptions{
+		LeaseOwner: "reply-worker",
+		Now:        time.Now().UTC().Add(time.Second),
+		Limit:      1,
+	})
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("ClaimPendingReplies = %#v, %v", pending, err)
+	}
+	if pending[0].Result.HeadSHA != "head-sha" || pending[0].Job.SourceMessageID != job.SourceMessageID {
+		t.Fatalf("pending reply = %#v", pending[0])
+	}
+}
+
+func TestSQLiteReviewGatewayStoreRetriesThenPublishesTerminalFailure(t *testing.T) {
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "review-gateway-retry.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 7, 30, 10, 0, 0, 0, time.UTC)
+	job := testReviewGatewayJob(now, "job-retry")
+	job.MaxAttempts = 2
+	if err := store.SaveJob(context.Background(), job); err != nil {
+		t.Fatalf("SaveJob: %v", err)
+	}
+	claim := func(at time.Time, owner string) ReviewGatewayJob {
+		t.Helper()
+		jobs, claimErr := store.ClaimReadyJobs(context.Background(), ReviewGatewayClaimOptions{
+			LeaseOwner: owner,
+			Now:        at,
+			Limit:      1,
+		})
+		if claimErr != nil || len(jobs) != 1 {
+			t.Fatalf("ClaimReadyJobs(%s) = %#v, %v", owner, jobs, claimErr)
+		}
+		return jobs[0]
+	}
+	first := claim(now, "worker-1")
+	failed := failedReviewGatewayResult(first, errors.New("temporary read failure"), now)
+	willRetry, err := store.RetryOrFailJob(context.Background(), first, failed, failed.Error, now)
+	if err != nil || !willRetry {
+		t.Fatalf("first RetryOrFailJob = retry=%v err=%v", willRetry, err)
+	}
+	tooEarly, err := store.ClaimReadyJobs(context.Background(), ReviewGatewayClaimOptions{
+		LeaseOwner: "worker-early",
+		Now:        now.Add(time.Second),
+		Limit:      1,
+	})
+	if err != nil || len(tooEarly) != 0 {
+		t.Fatalf("retry was claimable before next_attempt_at: %#v, %v", tooEarly, err)
+	}
+	second := claim(now.Add(3*time.Second), "worker-2")
+	if second.AttemptCount != 2 {
+		t.Fatalf("second attempt count = %d", second.AttemptCount)
+	}
+	failed = failedReviewGatewayResult(second, errors.New("terminal read failure"), now.Add(3*time.Second))
+	willRetry, err = store.RetryOrFailJob(context.Background(), second, failed, failed.Error, now.Add(3*time.Second))
+	if err != nil || willRetry {
+		t.Fatalf("terminal RetryOrFailJob = retry=%v err=%v", willRetry, err)
+	}
+	pending, err := store.ClaimPendingReplies(context.Background(), ReviewGatewayClaimOptions{
+		LeaseOwner: "reply-worker",
+		Now:        now.Add(4 * time.Second),
+		Limit:      1,
+	})
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("terminal failure reply = %#v, %v", pending, err)
+	}
+	if pending[0].Result.Status != "failed" || pending[0].Result.AttemptCount != 2 {
+		t.Fatalf("terminal failure result = %#v", pending[0].Result)
+	}
+}
+
+func TestSQLiteReviewGatewayStoreMigratesP20Schema(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "review-gateway-migrate.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	_, err = db.Exec(`
+		CREATE TABLE review_gateway_events (
+			dedupe_key TEXT PRIMARY KEY,
+			received_at TEXT NOT NULL,
+			expires_at TEXT NOT NULL
+		);
+		CREATE TABLE review_gateway_jobs (
+			job_id TEXT PRIMARY KEY,
+			dedupe_key TEXT NOT NULL,
+			status TEXT NOT NULL,
+			action TEXT NOT NULL,
+			repository TEXT,
+			pr_number INTEGER,
+			requested_by TEXT NOT NULL,
+			chat_id TEXT NOT NULL,
+			payload_json TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			error_summary TEXT
+		);
+	`)
+	if err != nil {
+		t.Fatalf("create P2.0 schema: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close P2.0 db: %v", err)
+	}
+	store, err := OpenSQLiteReviewGatewayStore(path)
+	if err != nil {
+		t.Fatalf("migrate P2.0 schema: %v", err)
+	}
+	defer store.Close()
+	var resultJSONColumn string
+	if err := store.db.QueryRow(
+		"SELECT name FROM pragma_table_info('review_gateway_jobs') WHERE name='result_json'",
+	).Scan(&resultJSONColumn); err != nil {
+		t.Fatalf("result_json migration missing: %v", err)
+	}
+}
+
+func TestReviewGatewayHandlerBudgetStopsLockedSQLite(t *testing.T) {
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "review-gateway-locked.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	gateway, err := NewReviewGateway(ReviewGatewayBindings{
+		Bindings: []ReviewChatBinding{{
+			ChatID:     "oc_review",
+			Repository: "owner/repo",
+			Enabled:    true,
+		}},
+	}, ReviewGatewayConfig{}, store)
+	if err != nil {
+		t.Fatalf("NewReviewGateway: %v", err)
+	}
+	queue := NewReviewGatewayQueue(gateway, store, 1, nil)
+	tx, err := store.db.Begin()
+	if err != nil {
+		t.Fatalf("lock db: %v", err)
+	}
+	defer tx.Rollback()
+	started := time.Now()
+	err = handleReviewGatewayInbound(
+		context.Background(),
+		ReviewGatewayEvent{
+			EventID:   "evt_locked",
+			MessageID: "om_locked",
+			EventType: "message",
+			ChatID:    "oc_review",
+			UserID:    "ou_owner",
+			Content:   "查看 PR #42",
+		},
+		queue,
+		nil,
+		&reviewGatewayJSONOutput{writer: io.Discard},
+		300*time.Millisecond,
+		100*time.Millisecond,
+	)
+	elapsed := time.Since(started)
+	if err == nil || !strings.Contains(err.Error(), "persistence failed") {
+		t.Fatalf("locked handler error = %v", err)
+	}
+	if elapsed > 500*time.Millisecond {
+		t.Fatalf("handler exceeded controlled budget: %v", elapsed)
+	}
+}
+
+func TestReviewGatewayAsyncOutputDoesNotBlockHandler(t *testing.T) {
+	writer := &blockingReviewGatewayWriter{
+		started: make(chan struct{}, 1),
+		release: make(chan struct{}),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	output := &reviewGatewayJSONOutput{writer: writer}
+	output.Start(ctx, 1)
+	if !output.TryEmit(map[string]string{"event": "first"}) {
+		t.Fatal("first output was not accepted")
+	}
+	select {
+	case <-writer.started:
+	case <-time.After(time.Second):
+		t.Fatal("writer did not start")
+	}
+	if !output.TryEmit(map[string]string{"event": "second"}) {
+		t.Fatal("second output should fit buffered queue")
+	}
+	started := time.Now()
+	if output.TryEmit(map[string]string{"event": "third"}) {
+		t.Fatal("third output should be dropped instead of blocking")
+	}
+	if time.Since(started) > 50*time.Millisecond {
+		t.Fatal("non-blocking output path blocked")
+	}
+	close(writer.release)
+}
+
+func TestReviewGatewayReplyDispatcherRepliesOnceToOriginalMessage(t *testing.T) {
+	now := time.Date(2026, 7, 30, 10, 0, 0, 0, time.UTC)
+	store := NewMemoryReviewGatewayJobStore()
+	job := testReviewGatewayJob(now, "job-reply")
+	if err := store.SaveJob(context.Background(), job); err != nil {
+		t.Fatalf("SaveJob: %v", err)
+	}
+	claimed, err := store.ClaimReadyJobs(context.Background(), ReviewGatewayClaimOptions{
+		LeaseOwner: "worker",
+		Now:        now,
+		Limit:      1,
+	})
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("ClaimReadyJobs = %#v, %v", claimed, err)
+	}
+	result := ReviewGatewayExecutionResult{
+		SchemaVersion:    reviewGatewayResultSchema,
+		JobID:            job.JobID,
+		Status:           "completed",
+		Mode:             "preview",
+		Action:           job.Action,
+		Repository:       job.Repository,
+		PRNumber:         job.PRNumber,
+		RequestedBy:      job.RequestedBy,
+		ReadOnlyGitLink:  true,
+		MutatesGitLink:   false,
+		CompletedAt:      now.Format(time.RFC3339),
+		CollectionStatus: "complete",
+		ReviewStage:      "triaged",
+		Decision:         "pending",
+	}
+	if err := store.CompleteJob(context.Background(), claimed[0], result); err != nil {
+		t.Fatalf("CompleteJob: %v", err)
+	}
+	sender := &recordingReviewGatewaySender{}
+	dispatcher := NewReviewGatewayReplyDispatcher(
+		sender,
+		store,
+		&reviewGatewayJSONOutput{writer: io.Discard},
+		2,
+	)
+	dispatcher.now = func() time.Time { return now.Add(time.Second) }
+	dispatcher.deliverPendingReplies(context.Background())
+	dispatcher.deliverPendingReplies(context.Background())
+
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	if len(sender.inputs) != 1 {
+		t.Fatalf("reply count = %d, want 1", len(sender.inputs))
+	}
+	if sender.inputs[0].ReplyMessageID != job.SourceMessageID {
+		t.Fatalf("reply target = %q", sender.inputs[0].ReplyMessageID)
+	}
+	if !strings.Contains(sender.inputs[0].Text, "GitLink 写入：0") {
+		t.Fatalf("reply boundary missing: %s", sender.inputs[0].Text)
+	}
+	store.mu.Lock()
+	replyStatus := store.ReplyStatus[job.JobID]
+	store.mu.Unlock()
+	if replyStatus != "sent" {
+		t.Fatalf("reply status = %q", replyStatus)
+	}
+}
+
+func TestReviewGatewayChannelPolicyRequiresPreboundGroup(t *testing.T) {
+	bindings := ReviewGatewayBindings{Bindings: []ReviewChatBinding{
+		{ChatID: "oc_enabled", Repository: "owner/repo", Enabled: true},
+		{ChatID: "oc_disabled", Repository: "owner/other", Enabled: false},
+	}}
+	channel := newFeishuReviewGatewayChannel("app-id", "app-secret", bindings)
+	policy := channel.GetPolicy()
+	if len(policy.GroupAllowlist) != 1 || policy.GroupAllowlist[0] != "oc_enabled" {
+		t.Fatalf("group allowlist = %#v", policy.GroupAllowlist)
+	}
+	if policy.RequireMention == nil || !*policy.RequireMention || policy.DMMode != "disabled" {
+		t.Fatalf("channel policy = %#v", policy)
+	}
+}
+
+func testReviewGatewayJob(now time.Time, id string) ReviewGatewayJob {
+	return ReviewGatewayJob{
+		SchemaVersion:   reviewGatewayJobSchema,
+		JobID:           id,
+		DedupeKey:       "feishu:message:" + id,
+		Status:          "queued",
+		Mode:            "preview",
+		Action:          "read_review_context",
+		Repository:      "owner/repo",
+		PRNumber:        42,
+		ChatID:          "oc_review",
+		RequestedBy:     "ou_owner",
+		SourceEventID:   "evt_" + id,
+		SourceMessageID: "om_" + id,
+		CreatedAt:       now.Format(time.RFC3339Nano),
+		MutatesGitLink:  false,
+		MaxAttempts:     3,
+		NextAttemptAt:   now.Format(time.RFC3339Nano),
+	}
+}
+
+type recordingReviewGatewaySender struct {
+	mu     sync.Mutex
+	inputs []larktypes.SendInput
+}
+
+func (s *recordingReviewGatewaySender) Send(_ context.Context, input *larktypes.SendInput) (*larktypes.SendResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.inputs = append(s.inputs, *input)
+	return &larktypes.SendResult{
+		MessageID: "om_reply",
+		ChatID:    input.ChatID,
+	}, nil
+}
+
+type blockingReviewGatewayWriter struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (w *blockingReviewGatewayWriter) Write(payload []byte) (int, error) {
+	select {
+	case w.started <- struct{}{}:
+	default:
+	}
+	<-w.release
+	return len(payload), nil
 }

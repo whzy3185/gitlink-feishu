@@ -101,8 +101,13 @@ go run . feishu +review-gateway `
 ```
 
 离线模式不带 `--execute-read-only` 时只生成 Job 计划；带该参数时会继续执行
-同一条 GitLink GET-only 工作并输出摘要结果。监听模式对已接受事件自动异步执行
-GET-only Job。它不会向飞书发送消息，也没有 `--send` 开关。
+同一条 GitLink GET-only 工作并输出摘要结果。P2.0 监听模式对已接受事件自动异步
+执行 GET-only Job，但不会向飞书发送消息。真实回复、任务恢复和结果持久化已在
+P2.1 单独实现和记录：
+
+```text
+docs/ROUND2_PR_REVIEW_COLLABORATION_P21_IMPLEMENTATION.md
+```
 
 ### 3.2 群与仓库绑定
 
@@ -447,6 +452,9 @@ FEISHU_WEBHOOK_URL
 ## 9. 仍未关闭的 P2 门禁
 
 P2.0 后仍需完成：
+
+P2.1 已开始关闭这里的真实收发和可靠性前置门禁；协作状态与资源同步仍按以下阶段
+继续推进。
 
 ### P2.1 协作状态
 
