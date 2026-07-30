@@ -446,6 +446,7 @@ func finalizeReviewContext(context *ReviewContext, now time.Time) {
 	if context == nil {
 		return
 	}
+	sanitizeReviewContextDiagnostics(context)
 	context.SchemaVersion = reviewContextSchemaVersion
 	facts := extractReviewContextPRFacts(context.Repository, context.PullRequest, context.PR)
 	if facts.HeadSHA == "" {
@@ -752,11 +753,14 @@ func latestEffectiveReviewerReview(reviews []ReviewContextReview) (*ReviewContex
 func compareReviewContextRecency(left, right ReviewContextReview) (int, bool) {
 	leftTime := effectiveReviewContextTime(left)
 	rightTime := effectiveReviewContextTime(right)
-	if !leftTime.IsZero() && !rightTime.IsZero() && !leftTime.Equal(rightTime) {
-		if leftTime.After(rightTime) {
-			return 1, true
+	if !leftTime.IsZero() || !rightTime.IsZero() {
+		if !leftTime.IsZero() && !rightTime.IsZero() && !leftTime.Equal(rightTime) {
+			if leftTime.After(rightTime) {
+				return 1, true
+			}
+			return -1, true
 		}
-		return -1, true
+		return 0, false
 	}
 	leftID, leftOK := reviewContextNumericID(left.ID)
 	rightID, rightOK := reviewContextNumericID(right.ID)

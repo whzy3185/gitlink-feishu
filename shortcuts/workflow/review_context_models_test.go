@@ -170,6 +170,15 @@ func TestSummarizeReviewCollaborationUsesLatestDecisionPerReviewer(t *testing.T)
 			wantDecision: "approved",
 		},
 		{
+			name: "mixed timestamp availability stays unknown",
+			reviews: []ReviewContextReview{
+				{ID: "20", Actor: "alice", Status: "rejected", Freshness: reviewFreshnessCurrent},
+				{ID: "10", Actor: "alice", Status: "approved", Freshness: reviewFreshnessCurrent, CreatedAt: "2026-05-23 21:14"},
+			},
+			wantStatus:   "unknown",
+			wantDecision: "pending",
+		},
+		{
 			name: "different reviewers preserve rejection",
 			reviews: []ReviewContextReview{
 				{ID: "1", ActorID: "7", Actor: "alice", Status: "approved", Freshness: reviewFreshnessCurrent},
@@ -426,5 +435,35 @@ func TestFinalizeReviewContextPreservesTypedOfflineRecords(t *testing.T) {
 	}
 	if reviewContextReviewCount(context) != 1 {
 		t.Fatalf("typed review count = %d, want 1", reviewContextReviewCount(context))
+	}
+}
+
+func TestFinalizeReviewContextRedactsOfflineDiagnostics(t *testing.T) {
+	context := ReviewContext{
+		Repository:  "owner/repo",
+		PullRequest: 42,
+		FetchErrors: []ReviewContextFetchError{{
+			Section: "reviews",
+			Message: "GET https://gitlink.example/api?access_token=top-secret Authorization: Bearer abc.def.ghi",
+		}},
+		Notes: []ScoringNote{{
+			Metric: "pr_reviews",
+			Note:   "cookie=session-secret",
+		}},
+	}
+	finalizeReviewContext(&context, time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC))
+
+	encoded, err := json.Marshal(context)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	output := string(encoded)
+	for _, secret := range []string{"top-secret", "abc.def.ghi", "session-secret", "access_token="} {
+		if strings.Contains(output, secret) {
+			t.Fatalf("diagnostic leaked %q: %s", secret, output)
+		}
+	}
+	if !strings.Contains(output, "***") {
+		t.Fatalf("redacted marker missing: %s", output)
 	}
 }

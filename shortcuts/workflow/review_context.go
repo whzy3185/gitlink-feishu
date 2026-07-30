@@ -202,7 +202,7 @@ func FetchReviewContext(ctx *common.RuntimeContext, opts ReviewContextOptions) (
 			recordReviewContextFetchError(&result, "pr", "GET", path, err, "pr +view equivalent failed")
 			result.Notes = uniqueScoringNotes(result.Notes)
 			finalizeReviewContext(&result, time.Now().UTC())
-			return result, fmt.Errorf("fetch required pull request: %w", err)
+			return result, fmt.Errorf("fetch required pull request: %s", safeReviewContextErrorMessage(err))
 		} else {
 			result.PR = pr
 			result.Sections = append(result.Sections, "pr")
@@ -336,13 +336,14 @@ func recordReviewContextSectionSuccess(context *ReviewContext, section string, i
 }
 
 func recordReviewContextFetchError(context *ReviewContext, section, method, path string, err error, notePrefix string) {
+	safeMessage := safeReviewContextErrorMessage(err)
 	fetchError := ReviewContextFetchError{
 		Section:   section,
 		Method:    method,
 		Path:      path,
 		Code:      "request_failed",
 		Retryable: true,
-		Message:   err.Error(),
+		Message:   safeMessage,
 	}
 	var apiErr *client.APIError
 	if errors.As(err, &apiErr) {
@@ -355,7 +356,7 @@ func recordReviewContextFetchError(context *ReviewContext, section, method, path
 	context.FetchErrors = append(context.FetchErrors, fetchError)
 	context.Notes = append(context.Notes, ScoringNote{
 		Metric: reviewContextLegacyMetric(section),
-		Note:   fmt.Sprintf("%s: %v", notePrefix, err),
+		Note:   fmt.Sprintf("%s: %s", notePrefix, safeMessage),
 	})
 	updateReviewContextSectionStatus(context, section, reviewSectionFailed, 0, 0)
 }
