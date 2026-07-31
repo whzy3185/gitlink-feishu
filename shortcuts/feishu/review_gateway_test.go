@@ -705,6 +705,25 @@ func TestSQLiteReviewGatewayStoreMigratesP20Schema(t *testing.T) {
 			updated_at TEXT NOT NULL,
 			error_summary TEXT
 		);
+		CREATE TABLE review_action_plans (
+			plan_id TEXT PRIMARY KEY,
+			repository TEXT NOT NULL,
+			pr_number INTEGER NOT NULL,
+			actor_id TEXT NOT NULL,
+			gitlink_login TEXT NOT NULL,
+			expected_head_sha TEXT NOT NULL,
+			source_fingerprint TEXT NOT NULL,
+			review_status TEXT NOT NULL,
+			content TEXT NOT NULL,
+			status TEXT NOT NULL,
+			idempotency_key TEXT NOT NULL UNIQUE,
+			source_job_id TEXT NOT NULL,
+			review_id TEXT NOT NULL DEFAULT '',
+			error_summary TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL,
+			expires_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);
 	`)
 	if err != nil {
 		t.Fatalf("create P2.0 schema: %v", err)
@@ -722,6 +741,21 @@ func TestSQLiteReviewGatewayStoreMigratesP20Schema(t *testing.T) {
 		"SELECT name FROM pragma_table_info('review_gateway_jobs') WHERE name='result_json'",
 	).Scan(&resultJSONColumn); err != nil {
 		t.Fatalf("result_json migration missing: %v", err)
+	}
+	for _, column := range []string{
+		"lease_owner",
+		"lease_expires_at",
+		"attempt_count",
+		"max_attempts",
+		"reconciliation_status",
+	} {
+		var migrated string
+		if err := store.db.QueryRow(
+			"SELECT name FROM pragma_table_info('review_action_plans') WHERE name=?",
+			column,
+		).Scan(&migrated); err != nil {
+			t.Fatalf("review_action_plans.%s migration missing: %v", column, err)
+		}
 	}
 }
 
@@ -982,7 +1016,7 @@ func TestReviewCollaborationClaimDeadlineReleaseAndAudit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("deadline: %v", err)
 	}
-	if !strings.HasPrefix(item.DueAt, "2026-08-02") {
+	if item.DueAt != "2026-08-02" {
 		t.Fatalf("deadline = %q", item.DueAt)
 	}
 
@@ -1210,8 +1244,81 @@ func TestReviewActionPlanIsIdempotentCommonOnlyAndActorBound(t *testing.T) {
 	if _, err := store.CreateReviewActionPlan(context.Background(), approved); err == nil {
 		t.Fatal("approved action plan must be rejected")
 	}
-	if _, err := store.ClaimReviewActionPlan(context.Background(), plan.PlanID, "another-user", now); err == nil {
+	if _, err := store.ClaimReviewActionPlan(context.Background(), ReviewActionPlanClaimOptions{
+		PlanID:        plan.PlanID,
+		ActorID:       "another-user",
+		LeaseOwner:    "test-lease",
+		Now:           now,
+		LeaseDuration: time.Minute,
+	}); err == nil {
 		t.Fatal("another Feishu user must not claim the action plan")
+	}
+}
+
+func TestReviewActionPlanLeaseRecoversOnlyBeforeRemoteWriteBoundary(t *testing.T) {
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "action-plan-lease.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
+	job := testReviewGatewayJob(now, "action-plan-lease")
+	plan, err := store.CreateReviewActionPlan(context.Background(), NewReviewActionPlan(
+		job,
+		"gitlink-reviewer",
+		"head-431",
+		"fingerprint-431",
+		"Review summary",
+		now,
+	))
+	if err != nil {
+		t.Fatalf("CreateReviewActionPlan: %v", err)
+	}
+	first, err := store.ClaimReviewActionPlan(context.Background(), ReviewActionPlanClaimOptions{
+		PlanID:        plan.PlanID,
+		ActorID:       job.RequestedBy,
+		LeaseOwner:    "lease-one",
+		Now:           now,
+		LeaseDuration: time.Minute,
+	})
+	if err != nil || first.AttemptCount != 1 || first.Reconciliation != "pre_write" {
+		t.Fatalf("first claim = %#v, err=%v", first, err)
+	}
+	if _, err := store.ClaimReviewActionPlan(context.Background(), ReviewActionPlanClaimOptions{
+		PlanID:        plan.PlanID,
+		ActorID:       job.RequestedBy,
+		LeaseOwner:    "lease-two",
+		Now:           now.Add(30 * time.Second),
+		LeaseDuration: time.Minute,
+	}); err == nil {
+		t.Fatal("active execution lease must not be stolen")
+	}
+	recovered, err := store.ClaimReviewActionPlan(context.Background(), ReviewActionPlanClaimOptions{
+		PlanID:        plan.PlanID,
+		ActorID:       job.RequestedBy,
+		LeaseOwner:    "lease-two",
+		Now:           now.Add(2 * time.Minute),
+		LeaseDuration: time.Minute,
+	})
+	if err != nil || recovered.AttemptCount != 2 || recovered.LeaseOwner != "lease-two" {
+		t.Fatalf("recovered claim = %#v, err=%v", recovered, err)
+	}
+	if err := store.MarkReviewActionPlanWriteStarted(
+		context.Background(),
+		plan.PlanID,
+		"lease-two",
+		now.Add(2*time.Minute),
+	); err != nil {
+		t.Fatalf("MarkReviewActionPlanWriteStarted: %v", err)
+	}
+	if _, err := store.ClaimReviewActionPlan(context.Background(), ReviewActionPlanClaimOptions{
+		PlanID:        plan.PlanID,
+		ActorID:       job.RequestedBy,
+		LeaseOwner:    "lease-three",
+		Now:           now.Add(4 * time.Minute),
+		LeaseDuration: time.Minute,
+	}); err == nil || !strings.Contains(err.Error(), "reconciliation") {
+		t.Fatalf("post-boundary reclaim error = %v", err)
 	}
 }
 
@@ -1306,22 +1413,37 @@ func TestConfirmedCommonReviewWritesExactlyOnceAndReadsReviewID(t *testing.T) {
 	defer store.Close()
 	now := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
 	job := testReviewGatewayJob(now, "live-write")
+	runtime := &common.RuntimeContext{
+		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+		Owner:  "owner",
+		Repo:   "repo",
+	}
+	initialContext, err := workflow.FetchReviewContext(runtime, workflow.ReviewContextOptions{
+		Owner:           "owner",
+		Repo:            "repo",
+		Number:          42,
+		VersionLimit:    100,
+		ThreadLimit:     100,
+		IncludePR:       true,
+		IncludeFiles:    true,
+		IncludeVersions: true,
+		IncludeReviews:  true,
+		IncludeThreads:  true,
+	})
+	if err != nil {
+		t.Fatalf("FetchReviewContext for plan: %v", err)
+	}
 	plan := NewReviewActionPlan(
 		job,
 		"gitlink-reviewer",
 		"head-431",
-		"fingerprint-431",
+		initialContext.WorkItem.SourceFingerprint,
 		"Evidence-backed Review summary",
 		now,
 	)
 	plan, err = store.CreateReviewActionPlan(context.Background(), plan)
 	if err != nil {
 		t.Fatalf("CreateReviewActionPlan: %v", err)
-	}
-	runtime := &common.RuntimeContext{
-		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
-		Owner:  "owner",
-		Repo:   "repo",
 	}
 	executor := &ReviewGatewayExecutor{
 		Runtime:     runtime,
@@ -1355,6 +1477,154 @@ func TestConfirmedCommonReviewWritesExactlyOnceAndReadsReviewID(t *testing.T) {
 	}
 }
 
+func TestConfirmedCommonReviewRejectsChangedSourceFingerprint(t *testing.T) {
+	state := &commonReviewTestServerState{}
+	server := newCommonReviewTestServer(t, state)
+	defer server.Close()
+	runtime := &common.RuntimeContext{
+		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+		Owner:  "owner",
+		Repo:   "repo",
+	}
+	initialContext, err := workflow.FetchReviewContext(runtime, workflow.ReviewContextOptions{
+		Owner:           "owner",
+		Repo:            "repo",
+		Number:          42,
+		VersionLimit:    100,
+		ThreadLimit:     100,
+		IncludePR:       true,
+		IncludeFiles:    true,
+		IncludeVersions: true,
+		IncludeReviews:  true,
+		IncludeThreads:  true,
+	})
+	if err != nil {
+		t.Fatalf("FetchReviewContext for plan: %v", err)
+	}
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "fingerprint.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
+	job := testReviewGatewayJob(now, "fingerprint-plan")
+	plan, err := store.CreateReviewActionPlan(context.Background(), NewReviewActionPlan(
+		job,
+		"gitlink-reviewer",
+		initialContext.CurrentHeadSHA,
+		initialContext.WorkItem.SourceFingerprint,
+		"Review based on initial facts",
+		now,
+	))
+	if err != nil {
+		t.Fatalf("CreateReviewActionPlan: %v", err)
+	}
+	state.mu.Lock()
+	state.reviewChanged = true
+	state.mu.Unlock()
+	executor := &ReviewGatewayExecutor{
+		Runtime:     runtime,
+		ActionPlans: store,
+		IdentityBindings: []ReviewIdentityBinding{{
+			FeishuUserID: job.RequestedBy,
+			GitLinkLogin: "gitlink-reviewer",
+			Enabled:      true,
+		}},
+		EnableGitLinkWrite: true,
+		Now:                func() time.Time { return now.Add(time.Minute) },
+	}
+	confirmJob := testReviewGatewayJob(now.Add(time.Minute), "confirm-fingerprint")
+	confirmJob.Action = "confirm_common_review"
+	confirmJob.Argument = plan.PlanID
+	confirmJob.Mode = "controlled_write"
+	result, err := executor.Execute(context.Background(), confirmJob)
+	if err != nil {
+		t.Fatalf("confirm changed fingerprint: %v", err)
+	}
+	if result.WriteResult == nil || result.WriteResult.Status != "stale" ||
+		result.WriteResult.Mutated || state.writes() != 0 {
+		t.Fatalf("fingerprint boundary = %#v, writes=%d", result, state.writes())
+	}
+}
+
+func TestReviewWriteCompletionPersistenceFailureRequiresReconciliation(t *testing.T) {
+	state := &commonReviewTestServerState{}
+	server := newCommonReviewTestServer(t, state)
+	defer server.Close()
+	runtime := &common.RuntimeContext{
+		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+		Owner:  "owner",
+		Repo:   "repo",
+	}
+	initialContext, err := workflow.FetchReviewContext(runtime, workflow.ReviewContextOptions{
+		Owner:           "owner",
+		Repo:            "repo",
+		Number:          42,
+		VersionLimit:    100,
+		ThreadLimit:     100,
+		IncludePR:       true,
+		IncludeFiles:    true,
+		IncludeVersions: true,
+		IncludeReviews:  true,
+		IncludeThreads:  true,
+	})
+	if err != nil {
+		t.Fatalf("FetchReviewContext for plan: %v", err)
+	}
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "finish-failure.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
+	job := testReviewGatewayJob(now, "finish-failure-plan")
+	plan, err := store.CreateReviewActionPlan(context.Background(), NewReviewActionPlan(
+		job,
+		"gitlink-reviewer",
+		initialContext.CurrentHeadSHA,
+		initialContext.WorkItem.SourceFingerprint,
+		"Review requiring durable completion",
+		now,
+	))
+	if err != nil {
+		t.Fatalf("CreateReviewActionPlan: %v", err)
+	}
+	actionPlans := &failingFinishReviewActionPlanStore{ReviewActionPlanStore: store}
+	executor := &ReviewGatewayExecutor{
+		Runtime:     runtime,
+		ActionPlans: actionPlans,
+		IdentityBindings: []ReviewIdentityBinding{{
+			FeishuUserID: job.RequestedBy,
+			GitLinkLogin: "gitlink-reviewer",
+			Enabled:      true,
+		}},
+		EnableGitLinkWrite: true,
+		Now:                func() time.Time { return now.Add(time.Minute) },
+	}
+	confirmJob := testReviewGatewayJob(now.Add(time.Minute), "confirm-finish-failure")
+	confirmJob.Action = "confirm_common_review"
+	confirmJob.Argument = plan.PlanID
+	confirmJob.Mode = "controlled_write"
+	result, err := executor.Execute(context.Background(), confirmJob)
+	if err != nil {
+		t.Fatalf("completion persistence failure must not retry POST: %v", err)
+	}
+	if result.WriteResult == nil ||
+		result.WriteResult.Status != "unknown_needs_reconciliation" ||
+		!result.WriteResult.Mutated ||
+		state.writes() != 1 ||
+		actionPlans.unknownCalls != 1 {
+		t.Fatalf("reconciliation result = %#v, writes=%d, unknown=%d", result, state.writes(), actionPlans.unknownCalls)
+	}
+	stored, err := store.GetReviewActionPlan(context.Background(), plan.PlanID)
+	if err != nil {
+		t.Fatalf("GetReviewActionPlan: %v", err)
+	}
+	if stored.Status != "unknown" || stored.Reconciliation != "required" {
+		t.Fatalf("stored reconciliation state = %#v", stored)
+	}
+}
+
 func testReviewGatewayJob(now time.Time, id string) ReviewGatewayJob {
 	return ReviewGatewayJob{
 		SchemaVersion:   reviewGatewayJobSchema,
@@ -1374,6 +1644,79 @@ func testReviewGatewayJob(now time.Time, id string) ReviewGatewayJob {
 		MaxAttempts:     3,
 		NextAttemptAt:   now.Format(time.RFC3339Nano),
 	}
+}
+
+type commonReviewTestServerState struct {
+	mu            sync.Mutex
+	reviewChanged bool
+	writeCount    int
+}
+
+func (s *commonReviewTestServerState) writes() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.writeCount
+}
+
+func newCommonReviewTestServer(t *testing.T, state *commonReviewTestServerState) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/owner/repo/pulls/42.json":
+			_, _ = writer.Write([]byte(`{"pull_request":{"number":42,"title":"Review me","state":"open","head_commit_sha":"head-431"}}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/owner/repo/pulls/42/versions.json":
+			_, _ = writer.Write([]byte(`{"versions":[{"id":7,"head_commit_sha":"head-431","files_count":1,"commits_count":1}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/owner/repo/pulls/42/files.json":
+			_, _ = writer.Write([]byte(`{"files":[{"filename":"main.go","additions":3}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/owner/repo/pulls/42/reviews.json":
+			state.mu.Lock()
+			changed := state.reviewChanged
+			state.mu.Unlock()
+			if changed {
+				_, _ = writer.Write([]byte(`{"reviews":[{"id":88,"status":"common","commit_id":"head-431","content":"new fact","created_at":"2026-07-31T08:00:30Z"}]}`))
+			} else {
+				_, _ = writer.Write([]byte(`{"reviews":[]}`))
+			}
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/owner/repo/pulls/42/journals.json":
+			_, _ = writer.Write([]byte(`{"journals":[]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/users/me.json":
+			_, _ = writer.Write([]byte(`{"login":"gitlink-reviewer","id":71}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/v1/owner/repo/pulls/42/reviews.json":
+			state.mu.Lock()
+			state.writeCount++
+			state.mu.Unlock()
+			_, _ = writer.Write([]byte(`{"review":{"id":902}}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", request.Method, request.URL.Path)
+		}
+	}))
+}
+
+type failingFinishReviewActionPlanStore struct {
+	ReviewActionPlanStore
+	unknownCalls int
+}
+
+func (s *failingFinishReviewActionPlanStore) FinishReviewActionPlan(
+	context.Context,
+	string,
+	string,
+	string,
+	string,
+	time.Time,
+) error {
+	return errors.New("simulated local completion persistence failure")
+}
+
+func (s *failingFinishReviewActionPlanStore) MarkReviewActionPlanUnknown(
+	ctx context.Context,
+	planID,
+	errorSummary string,
+	now time.Time,
+) error {
+	s.unknownCalls++
+	return s.ReviewActionPlanStore.MarkReviewActionPlanUnknown(ctx, planID, errorSummary, now)
 }
 
 type recordingReviewGatewaySender struct {

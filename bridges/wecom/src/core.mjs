@@ -17,14 +17,17 @@ export function normalizeTextFrame(frame, now = new Date()) {
   };
 }
 
-export function validateInbound(event, allowChats, allowUsers) {
+export function validateInbound(event, allowChats, allowUsers, allowAll = false) {
   if (!event.event_id || !event.chat_id || !event.user_id) {
     return { allowed: false, reason: 'invalid_identity' };
   }
-  if (allowChats.size > 0 && !allowChats.has(event.chat_id)) {
+  if (!allowAll && allowChats.size === 0 && allowUsers.size === 0) {
+    return { allowed: false, reason: 'allowlist_required' };
+  }
+  if (!allowAll && allowChats.size > 0 && !allowChats.has(event.chat_id)) {
     return { allowed: false, reason: 'chat_not_allowed' };
   }
-  if (allowUsers.size > 0 && !allowUsers.has(event.user_id)) {
+  if (!allowAll && allowUsers.size > 0 && !allowUsers.has(event.user_id)) {
     return { allowed: false, reason: 'sender_not_allowed' };
   }
   if (!event.text) {

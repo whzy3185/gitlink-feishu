@@ -166,6 +166,7 @@ func newReviewWarroomShortcut() *common.Shortcut {
 		Description: "Build a cross-repository owner view from one or more review.context/v1 files",
 		Flags: []common.Flag{
 			{Name: "from", Usage: "Comma-separated review.context/v1 JSON files", Required: true},
+			{Name: "collaboration", Usage: "Optional comma-separated canonical P2 WorkItem or collaboration bundle JSON files"},
 		},
 		Run: func(runtime *common.RuntimeContext) error {
 			contexts := []ReviewContext{}
@@ -179,7 +180,15 @@ func newReviewWarroomShortcut() *common.Shortcut {
 			if len(contexts) == 0 {
 				return fmt.Errorf("--from requires at least one Review Context file")
 			}
-			return runtime.OutputData(BuildReviewWarroom(contexts, time.Now().UTC()))
+			collaborationItems, err := readReviewCollaborationItems(runtime.Arg("collaboration"))
+			if err != nil {
+				return err
+			}
+			return runtime.OutputData(BuildReviewWarroomWithCollaboration(
+				contexts,
+				collaborationItems,
+				time.Now().UTC(),
+			))
 		},
 	}
 }
@@ -281,6 +290,10 @@ func SynthesizeReviewAssessments(
 			result.Conflicts = append(result.Conflicts, "assessment rejected because schema, run, or head did not match")
 			continue
 		}
+		if validationError := validateReviewAgentAssessment(assessment); validationError != "" {
+			result.Conflicts = append(result.Conflicts, "assessment rejected: "+validationError)
+			continue
+		}
 		role, exists := taskRoles[assessment.TaskID]
 		if !exists || role != assessment.Role || seen[assessment.TaskID] {
 			result.Conflicts = append(result.Conflicts, "assessment rejected because task ownership was invalid or duplicated")
@@ -306,7 +319,43 @@ func SynthesizeReviewAssessments(
 	return result
 }
 
+func validateReviewAgentAssessment(assessment ReviewAgentAssessment) string {
+	if assessment.Status != "completed" {
+		return "status must be completed"
+	}
+	if _, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(assessment.CompletedAt)); err != nil {
+		return "completed_at must be an RFC3339 timestamp"
+	}
+	for _, finding := range assessment.Findings {
+		if reviewSeverityRank(finding.Severity) == 0 {
+			return "finding severity must be critical, high, medium, or low"
+		}
+		if strings.TrimSpace(finding.Summary) == "" ||
+			strings.TrimSpace(finding.Evidence) == "" ||
+			strings.TrimSpace(finding.Confidence) == "" {
+			return "each finding requires summary, evidence, and confidence"
+		}
+		if finding.Line < 0 {
+			return "finding line cannot be negative"
+		}
+	}
+	for _, unknown := range assessment.Unknowns {
+		if strings.TrimSpace(unknown) == "" {
+			return "unknown entries cannot be empty"
+		}
+	}
+	return ""
+}
+
 func BuildReviewWarroom(contexts []ReviewContext, now time.Time) ReviewWarroom {
+	return BuildReviewWarroomWithCollaboration(contexts, nil, now)
+}
+
+func BuildReviewWarroomWithCollaboration(
+	contexts []ReviewContext,
+	collaborationItems []collab.WorkItem,
+	now time.Time,
+) ReviewWarroom {
 	result := ReviewWarroom{
 		SchemaVersion:         reviewWarroomSchema,
 		GeneratedAt:           now.UTC().Format(time.RFC3339Nano),
@@ -314,8 +363,19 @@ func BuildReviewWarroom(contexts []ReviewContext, now time.Time) ReviewWarroom {
 		GitLinkWrites:         0,
 	}
 	repositories := map[string]bool{}
+	collaborationByKey := map[string]collab.WorkItem{}
+	for _, item := range collaborationItems {
+		if item.PRKey != "" {
+			collaborationByKey[item.PRKey] = item
+		}
+	}
 	for _, reviewContext := range contexts {
 		repositories[reviewContext.Repository] = true
+		collaboration := collaborationByKey[reviewContext.WorkItem.PRKey]
+		collaborationStatus := collaboration.CollaborationStatus
+		if collaborationStatus == "" {
+			collaborationStatus = "unassigned"
+		}
 		item := collab.WorkItem{
 			SchemaVersion:       collab.WorkItemSchema,
 			PRKey:               reviewContext.WorkItem.PRKey,
@@ -328,9 +388,11 @@ func BuildReviewWarroom(contexts []ReviewContext, now time.Time) ReviewWarroom {
 			CollectionStatus:    reviewContext.CollectionStatus,
 			HeadSHA:             reviewContext.CurrentHeadSHA,
 			SourceFingerprint:   reviewContext.WorkItem.SourceFingerprint,
-			CollaborationStatus: "unassigned",
-			Archived:            reviewContext.WorkItem.GitLinkState == "merged" || reviewContext.WorkItem.GitLinkState == "closed",
-			NextStep:            reviewContext.WorkItem.RecommendedNextStep,
+			AssignedTo:          collaboration.AssignedTo,
+			CollaborationStatus: collaborationStatus,
+			DueAt:               collaboration.DueAt,
+			Archived:            collaboration.Archived || reviewContext.WorkItem.GitLinkState == "merged" || reviewContext.WorkItem.GitLinkState == "closed",
+			NextStep:            firstNonEmptyWorkflow(collaboration.NextStep, reviewContext.WorkItem.RecommendedNextStep),
 			UpdatedAt:           reviewContext.WorkItem.GeneratedAt,
 		}
 		result.Items = append(result.Items, item)
@@ -353,6 +415,35 @@ func BuildReviewWarroom(contexts []ReviewContext, now time.Time) ReviewWarroom {
 		return result.Items[i].PRKey < result.Items[j].PRKey
 	})
 	return result
+}
+
+func readReviewCollaborationItems(value string) ([]collab.WorkItem, error) {
+	items := []collab.WorkItem{}
+	for _, path := range splitReviewPaths(value) {
+		payload, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		var item collab.WorkItem
+		if err := json.Unmarshal(payload, &item); err == nil && item.SchemaVersion == collab.WorkItemSchema {
+			if err := item.Validate(); err != nil {
+				return nil, fmt.Errorf("parse %s: %w", filepath.Base(path), err)
+			}
+			items = append(items, item)
+			continue
+		}
+		var wrapper struct {
+			Canonical collab.WorkItem `json:"canonical"`
+		}
+		if err := json.Unmarshal(payload, &wrapper); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", filepath.Base(path), err)
+		}
+		if err := wrapper.Canonical.Validate(); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", filepath.Base(path), err)
+		}
+		items = append(items, wrapper.Canonical)
+	}
+	return items, nil
 }
 
 func calculateReviewChangedFiles(current ReviewContext, previous *ReviewContext) []ReviewChangedFile {

@@ -124,7 +124,14 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 		result.Message = "ActionPlan 校验通过，但启动参数未显式启用 GitLink common Review 写入；GitLink 写入为 0。"
 		return result, nil
 	}
-	plan, err = e.ActionPlans.ClaimReviewActionPlan(ctx, plan.PlanID, job.RequestedBy, now)
+	leaseOwner := "review-write:" + job.JobID
+	plan, err = e.ActionPlans.ClaimReviewActionPlan(ctx, ReviewActionPlanClaimOptions{
+		PlanID:        plan.PlanID,
+		ActorID:       job.RequestedBy,
+		LeaseOwner:    leaseOwner,
+		Now:           now,
+		LeaseDuration: 2 * time.Minute,
+	})
 	if err != nil {
 		return reviewGatewayExecutionFailure(result, err)
 	}
@@ -150,14 +157,16 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 		_ = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "failed", "", err.Error(), now)
 		return reviewGatewayExecutionFailure(result, err)
 	}
+	populateReviewGatewayContextResult(&result, reviewContext)
 	if reviewContext.Partial || reviewContext.CollectionStatus != "complete" ||
-		reviewContext.CurrentHeadSHA != plan.ExpectedHeadSHA {
+		reviewContext.CurrentHeadSHA != plan.ExpectedHeadSHA ||
+		reviewContext.WorkItem.SourceFingerprint != plan.SourceFingerprint {
 		_ = e.ActionPlans.FinishReviewActionPlan(
 			ctx,
 			plan.PlanID,
 			"stale",
 			"",
-			"PR head or completeness changed",
+			"PR head, source fingerprint, or completeness changed",
 			now,
 		)
 		result.WriteResult = &ReviewWriteResult{
@@ -169,7 +178,7 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 			ReviewStatus: plan.ReviewStatus,
 			Mutated:      false,
 		}
-		result.Message = "PR head 或数据完整性已变化，ActionPlan 已失效；GitLink 写入为 0。"
+		result.Message = "PR head、Review 事实指纹或数据完整性已变化，ActionPlan 已失效；GitLink 写入为 0。"
 		return result, nil
 	}
 	runtimeCopy := *e.Runtime
@@ -185,6 +194,17 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 		_ = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "failed", "", err.Error(), now)
 		return reviewGatewayExecutionFailure(result, err)
 	}
+	if err := e.ActionPlans.MarkReviewActionPlanWriteStarted(
+		ctx,
+		plan.PlanID,
+		leaseOwner,
+		now,
+	); err != nil {
+		return reviewGatewayExecutionFailure(result, fmt.Errorf(
+			"persist Review write boundary before POST: %w",
+			err,
+		))
+	}
 	envelope, writeErr := runtimeCopy.CallAPI(
 		"POST",
 		fmt.Sprintf("/v1/%s/%s/pulls/%d/reviews", owner, repo, plan.PRNumber),
@@ -195,16 +215,31 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 		},
 	)
 	if writeErr != nil {
-		_ = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "unknown", "", writeErr.Error(), now)
+		finishErr := e.ActionPlans.FinishReviewActionPlan(
+			ctx,
+			plan.PlanID,
+			"unknown",
+			"",
+			writeErr.Error(),
+			now,
+		)
+		if finishErr != nil {
+			_ = e.ActionPlans.MarkReviewActionPlanUnknown(
+				ctx,
+				plan.PlanID,
+				"GitLink POST result and local reconciliation persistence are both uncertain",
+				now,
+			)
+		}
 		result.WriteResult = &ReviewWriteResult{
 			PlanID:         plan.PlanID,
-			Status:         "unknown",
+			Status:         "unknown_needs_reconciliation",
 			Repository:     plan.Repository,
 			PRNumber:       plan.PRNumber,
 			HeadSHA:        plan.ExpectedHeadSHA,
 			ReviewStatus:   plan.ReviewStatus,
 			Mutated:        false,
-			Reconciliation: "query current reviews before retrying; automatic retry is disabled",
+			Reconciliation: "query current reviews by head and content before retrying; automatic retry is disabled",
 		}
 		result.Message = "GitLink 返回不确定结果；ActionPlan 标记 unknown，禁止自动重试以避免重复 Review。"
 		return result, nil
@@ -224,7 +259,27 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 		reconciliation,
 		now,
 	); err != nil {
-		return reviewGatewayExecutionFailure(result, err)
+		_ = e.ActionPlans.MarkReviewActionPlanUnknown(
+			ctx,
+			plan.PlanID,
+			"GitLink Review may exist but local completion state was not persisted",
+			now,
+		)
+		result.ReadOnlyGitLink = false
+		result.MutatesGitLink = true
+		result.WriteResult = &ReviewWriteResult{
+			PlanID:         plan.PlanID,
+			Status:         "unknown_needs_reconciliation",
+			ReviewID:       reviewID,
+			Repository:     plan.Repository,
+			PRNumber:       plan.PRNumber,
+			HeadSHA:        plan.ExpectedHeadSHA,
+			ReviewStatus:   "common",
+			Mutated:        true,
+			Reconciliation: "GitLink POST succeeded; verify Review ID/content before any retry",
+		}
+		result.Message = "GitLink POST 已返回成功，但本地完成状态保存失败；已禁止自动重试并要求人工对账。"
+		return result, nil
 	}
 	result.ReadOnlyGitLink = false
 	result.MutatesGitLink = true

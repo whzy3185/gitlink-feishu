@@ -224,6 +224,7 @@ Skill 负责指导 Agent 使用稳定的 CLI/Review Context，不把开放式 Ag
 - [飞书 Agent 回复与行动修订](./FEISHU_AGENT_RESPONSE_20260731.md)
 - [P2.1.1 收口与真实验收规划](./ROUND2_PR_REVIEW_COLLABORATION_P211_CLOSEOUT_PLAN.md)
 - [P2–P5 实施记录](./ROUND2_PR_REVIEW_COLLABORATION_P2_P5_IMPLEMENTATION.md)
+- [P2–P5 P0 收口记录](./ROUND2_P0_CLOSEOUT_20260731.md)
 
 ## 8. 迁入的独立复赛资料
 

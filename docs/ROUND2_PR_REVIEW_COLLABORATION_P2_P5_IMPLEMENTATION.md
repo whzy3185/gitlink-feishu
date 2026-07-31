@@ -53,10 +53,13 @@ Base、Doc 和 Task 的真实 OpenAPI 写入必须显式增加 `--sync-feishu-re
 3. 生成 15 分钟有效的 `review.action-plan/v1`；
 4. 同一飞书账号发送 `确认 Review <plan-id>`；
 5. 重新读取 head 和完整性；
-6. 校验当前 GitLink Token 的 `/users/me` 身份；
-7. 只有启动时显式传入 `--enable-gitlink-review-write` 才执行 POST；
-8. 成功后保存 Review ID；
-9. 网络结果不确定时标记 `unknown`，禁止自动重试。
+6. 同时比较最新 `SourceFingerprint`，Review 或线程事实变化会使计划失效；
+7. 校验当前 GitLink Token 的 `/users/me` 身份；
+8. 使用带超时的执行租约；只允许在远端写入边界之前恢复过期执行；
+9. 只有启动时显式传入 `--enable-gitlink-review-write` 才执行 POST；
+10. POST 前持久化 `remote_write_possible` 对账边界；
+11. 成功后保存 Review ID；
+12. 网络结果或本地完成状态不确定时进入 `unknown_needs_reconciliation`，禁止自动重试。
 
 以下仍强制禁用：
 
@@ -85,6 +88,7 @@ internal/collab
 - Webhook key 输出脱敏；
 - 官方 `@wecom/aibot-node-sdk@1.0.7` 长连接 sidecar；
 - sidecar 单实例锁、群/用户 allowlist、脱敏观测；
+- chat/user allowlist 默认 fail-closed，只有显式 `WECOM_ALLOW_ALL=true` 才可全量放行；
 - 仓库内置 `wecom +review-core`，仅监听回环地址并要求独立 Bearer Token；
 - sidecar 只允许回环 HTTP(S) Core 地址，不向 Core 发送 GitLink Token 或企业微信 Bot Secret；
 - 固定 HTTP Review Core 协议，不拼接或执行 shell；
@@ -92,7 +96,7 @@ internal/collab
 - 未配置 Core 时只进入 observe-only smoke；
 - P4 入站只接受 Review 只读命令。
 
-## P5：Agent 协同与生产化
+## P5：多 Agent Review 协议与离线编排合同
 
 新增命令：
 
@@ -114,6 +118,8 @@ workflow +review-warroom
 `review-synthesize`：
 
 - 只接收同一 run、同一 head、同一任务的 assessment；
+- 只计入 `status=completed` 且 `completed_at` 合法的 assessment；
+- Finding 必须具有有效 severity、summary、evidence 和 confidence；
 - 拒绝 stale、重复和角色不匹配结果；
 - Finding 按严重度排序；
 - 缺少 Agent 结果或存在冲突时保持 incomplete；
@@ -122,9 +128,13 @@ workflow +review-warroom
 `review-warroom`：
 
 - 聚合多个仓库的 Review Context；
+- 可通过 `--collaboration` 叠加 P2 canonical WorkItem，保留负责人、协作状态和截止日期；
 - 保留每个 PR 的 head、fingerprint、完整性、状态和下一步；
 - partial 单独计数；
 - 只生成 Owner 工作台事实，不执行写入。
+
+当前 P5 不会自行启动模型或 Agent。它实现的是分工计划、输入输出合同、结果校验和汇总；
+实际 Agent 执行仍由外部 Agent Host 完成。
 
 生产门禁：
 
@@ -143,7 +153,8 @@ go run . workflow +review-orchestrate `
   --max-agents 3
 
 go run . workflow +review-warroom `
-  --from .\repo-one-pr-12.json,.\repo-two-pr-31.json
+  --from .\repo-one-pr-12.json,.\repo-two-pr-31.json `
+  --collaboration .\repo-one-work-item.json,.\repo-two-work-item.json
 
 go run . wecom +review-notify `
   --from .\review-work-item.json

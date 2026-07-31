@@ -27,6 +27,9 @@ $env:GITLINK_REVIEW_CORE_TOKEN = "one-random-local-bridge-token"
 npm start
 ```
 
+At least one chat/user allowlist is required by default. `WECOM_ALLOW_ALL=true`
+is available only as an explicit development override.
+
 Without `GITLINK_REVIEW_CORE_URL`, the bridge is an observe-only SDK smoke
 environment and replies with a controlled boundary message.
 

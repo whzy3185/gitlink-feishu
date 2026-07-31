@@ -47,8 +47,25 @@ test('write-like commands are rejected before the Review Core', () => {
     chat_id: 'chat-1',
     user_id: 'user-1',
     text: '合并 PR #431',
-  }, new Set(), new Set());
+  }, new Set(), new Set(), true);
   assert.deepEqual(decision, { allowed: false, reason: 'unsupported_command' });
+});
+
+test('empty allowlists fail closed unless allow-all is explicit', () => {
+  const event = {
+    event_id: 'event-1',
+    chat_id: 'chat-1',
+    user_id: 'user-1',
+    text: '查看 PR #431',
+  };
+  assert.deepEqual(
+    validateInbound(event, new Set(), new Set()),
+    { allowed: false, reason: 'allowlist_required' },
+  );
+  assert.deepEqual(
+    validateInbound(event, new Set(), new Set(), true),
+    { allowed: true, reason: 'allowed' },
+  );
 });
 
 test('Review Core endpoint is restricted to loopback HTTP', () => {

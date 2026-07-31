@@ -112,6 +112,11 @@ CREATE TABLE IF NOT EXISTS review_action_plans (
     source_job_id TEXT NOT NULL,
     review_id TEXT NOT NULL DEFAULT '',
     error_summary TEXT NOT NULL DEFAULT '',
+    lease_owner TEXT NOT NULL DEFAULT '',
+    lease_expires_at TEXT NOT NULL DEFAULT '',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    reconciliation_status TEXT NOT NULL DEFAULT 'not_required',
     created_at TEXT NOT NULL,
     expires_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -144,6 +149,14 @@ var reviewGatewayJobMigrations = map[string]string{
 	"reply_lease_expires_at": "TEXT NOT NULL DEFAULT ''",
 	"reply_message_id":       "TEXT NOT NULL DEFAULT ''",
 	"reply_error_summary":    "TEXT NOT NULL DEFAULT ''",
+}
+
+var reviewActionPlanMigrations = map[string]string{
+	"lease_owner":           "TEXT NOT NULL DEFAULT ''",
+	"lease_expires_at":      "TEXT NOT NULL DEFAULT ''",
+	"attempt_count":         "INTEGER NOT NULL DEFAULT 0",
+	"max_attempts":          "INTEGER NOT NULL DEFAULT 3",
+	"reconciliation_status": "TEXT NOT NULL DEFAULT 'not_required'",
 }
 
 var (
@@ -452,6 +465,10 @@ func OpenSQLiteReviewGatewayStore(path string) (*SQLiteReviewGatewayStore, error
 		_ = db.Close()
 		return nil, err
 	}
+	if err := ensureReviewActionPlanColumns(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	for _, statement := range []string{
 		`CREATE INDEX IF NOT EXISTS review_gateway_jobs_ready
 		 ON review_gateway_jobs(status, next_attempt_at)`,
@@ -497,6 +514,46 @@ func ensureReviewGatewayJobColumns(db *sql.DB) error {
 		statement := fmt.Sprintf("ALTER TABLE review_gateway_jobs ADD COLUMN %s %s", name, reviewGatewayJobMigrations[name])
 		if _, err := db.Exec(statement); err != nil {
 			return fmt.Errorf("migrate review gateway job column %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+func ensureReviewActionPlanColumns(db *sql.DB) error {
+	rows, err := db.Query("PRAGMA table_info(review_action_plans)")
+	if err != nil {
+		return fmt.Errorf("inspect review action plan schema: %w", err)
+	}
+	existing := map[string]bool{}
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue sql.NullString
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("read review action plan schema: %w", err)
+		}
+		existing[name] = true
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close review action plan schema rows: %w", err)
+	}
+	names := make([]string, 0, len(reviewActionPlanMigrations))
+	for name := range reviewActionPlanMigrations {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if existing[name] {
+			continue
+		}
+		statement := fmt.Sprintf(
+			"ALTER TABLE review_action_plans ADD COLUMN %s %s",
+			name,
+			reviewActionPlanMigrations[name],
+		)
+		if _, err := db.Exec(statement); err != nil {
+			return fmt.Errorf("migrate review action plan column %s: %w", name, err)
 		}
 	}
 	return nil

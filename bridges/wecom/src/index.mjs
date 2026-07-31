@@ -17,6 +17,7 @@ const coreURL = String(process.env.GITLINK_REVIEW_CORE_URL ?? '').trim();
 const coreToken = String(process.env.GITLINK_REVIEW_CORE_TOKEN ?? '').trim();
 const allowChats = parseSet(process.env.WECOM_ALLOWED_CHAT_IDS);
 const allowUsers = parseSet(process.env.WECOM_ALLOWED_USER_IDS);
+const allowAll = /^(1|true|yes)$/i.test(String(process.env.WECOM_ALLOW_ALL ?? '').trim());
 const lockPath = path.resolve(process.env.WECOM_BRIDGE_LOCK ?? '.local/wecom-review-bridge.lock');
 
 if (!botId || !secret) {
@@ -27,6 +28,9 @@ if (!validateCoreURL(coreURL)) {
 }
 if (coreURL && !coreToken) {
   throw new Error('GITLINK_REVIEW_CORE_TOKEN is required when the Review Core is configured');
+}
+if (!allowAll && allowChats.size === 0 && allowUsers.size === 0) {
+  throw new Error('configure a WeCom chat/user allowlist or explicitly set WECOM_ALLOW_ALL=true');
 }
 
 fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
@@ -75,7 +79,7 @@ client.on('authenticated', () => {
 
 client.on('message.text', async (frame) => {
   const event = normalizeTextFrame(frame);
-  const decision = validateInbound(event, allowChats, allowUsers);
+  const decision = validateInbound(event, allowChats, allowUsers, allowAll);
   process.stdout.write(`${JSON.stringify(observation('policy', event, decision))}\n`);
   if (!decision.allowed) {
     if (decision.reason === 'unsupported_command') {

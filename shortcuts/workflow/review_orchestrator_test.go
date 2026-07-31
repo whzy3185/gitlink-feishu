@@ -3,6 +3,8 @@ package workflow
 import (
 	"testing"
 	"time"
+
+	"github.com/gitlink-org/gitlink-cli/internal/collab"
 )
 
 func TestBuildReviewAgentPlanRoutesIncrementalScopesAndKeepsOwnerDecision(t *testing.T) {
@@ -72,6 +74,8 @@ func TestSynthesizeReviewAssessmentsRejectsStaleAndNeverApproves(t *testing.T) {
 			TaskID:        "task-correctness",
 			Role:          "correctness",
 			HeadSHA:       plan.HeadSHA,
+			Status:        "completed",
+			CompletedAt:   "2026-07-31T08:10:00Z",
 			Findings: []ReviewAgentFinding{{
 				Severity:   "high",
 				Path:       "main.go",
@@ -86,6 +90,8 @@ func TestSynthesizeReviewAssessmentsRejectsStaleAndNeverApproves(t *testing.T) {
 			TaskID:        "task-tests",
 			Role:          "tests",
 			HeadSHA:       "stale-head",
+			Status:        "completed",
+			CompletedAt:   "2026-07-31T08:10:00Z",
 		},
 	}
 	result := SynthesizeReviewAssessments(plan, assessments)
@@ -93,6 +99,46 @@ func TestSynthesizeReviewAssessmentsRejectsStaleAndNeverApproves(t *testing.T) {
 		result.Recommendation != "human_decision_required" ||
 		!result.HumanDecisionRequired || result.GitLinkWrites != 0 {
 		t.Fatalf("synthesis = %#v", result)
+	}
+}
+
+func TestSynthesizeReviewAssessmentsRejectsFailedOrIncompleteAssessment(t *testing.T) {
+	plan := ReviewAgentPlan{
+		SchemaVersion: reviewAgentPlanSchema,
+		RunID:         "run-validation",
+		HeadSHA:       "head-validation",
+		Tasks: []ReviewAgentTask{
+			{TaskID: "task-failed", Role: "correctness"},
+			{TaskID: "task-invalid-finding", Role: "tests"},
+		},
+	}
+	result := SynthesizeReviewAssessments(plan, []ReviewAgentAssessment{
+		{
+			SchemaVersion: reviewAgentAssessmentSchema,
+			RunID:         plan.RunID,
+			TaskID:        "task-failed",
+			Role:          "correctness",
+			HeadSHA:       plan.HeadSHA,
+			Status:        "failed",
+			CompletedAt:   "2026-07-31T08:10:00Z",
+		},
+		{
+			SchemaVersion: reviewAgentAssessmentSchema,
+			RunID:         plan.RunID,
+			TaskID:        "task-invalid-finding",
+			Role:          "tests",
+			HeadSHA:       plan.HeadSHA,
+			Status:        "completed",
+			CompletedAt:   "2026-07-31T08:10:00Z",
+			Findings: []ReviewAgentFinding{{
+				Severity: "not-a-severity",
+				Summary:  "missing evidence and confidence",
+			}},
+		},
+	})
+	if result.Status != "incomplete" || result.AssessmentsReceived != 0 ||
+		len(result.Conflicts) != 2 || result.Recommendation != "human_decision_required" {
+		t.Fatalf("invalid assessments were accepted: %#v", result)
 	}
 }
 
@@ -131,5 +177,41 @@ func TestBuildReviewWarroomKeepsCrossRepositoryFactsAndPartialCounts(t *testing.
 		warroom.PartialItems != 1 || warroom.Items[0].PRKey != "owner/two#2" ||
 		warroom.GitLinkWrites != 0 {
 		t.Fatalf("warroom = %#v", warroom)
+	}
+}
+
+func TestBuildReviewWarroomOverlaysP2CollaborationState(t *testing.T) {
+	contexts := []ReviewContext{{
+		Repository:       "owner/repo",
+		PullRequest:      42,
+		CurrentHeadSHA:   "head-42",
+		CollectionStatus: "complete",
+		WorkItem: ReviewWorkItem{
+			PRKey:               "owner/repo#42",
+			ReviewStage:         "human_reviewing",
+			GitLinkState:        "open",
+			RecommendedNextStep: "review current patchset",
+			GeneratedAt:         "2026-07-31T08:00:00Z",
+		},
+	}}
+	warroom := BuildReviewWarroomWithCollaboration(contexts, []collab.WorkItem{{
+		SchemaVersion:       collab.WorkItemSchema,
+		PRKey:               "owner/repo#42",
+		Repository:          "owner/repo",
+		PRNumber:            42,
+		ReviewStage:         "human_reviewing",
+		CollectionStatus:    "complete",
+		AssignedTo:          "ou_reviewer",
+		CollaborationStatus: "reviewing",
+		DueAt:               "2026-08-02",
+		NextStep:            "finish assigned Review",
+	}}, time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC))
+	if len(warroom.Items) != 1 {
+		t.Fatalf("warroom items = %#v", warroom.Items)
+	}
+	item := warroom.Items[0]
+	if item.AssignedTo != "ou_reviewer" || item.CollaborationStatus != "reviewing" ||
+		item.DueAt != "2026-08-02" || item.NextStep != "finish assigned Review" {
+		t.Fatalf("P2 collaboration overlay lost: %#v", item)
 	}
 }

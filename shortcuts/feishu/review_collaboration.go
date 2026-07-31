@@ -112,7 +112,7 @@ func (s *SQLiteReviewGatewayStore) ApplyCollaborationAction(
 		if parseErr != nil {
 			return ReviewCollaborationItem{}, fmt.Errorf("deadline must use YYYY-MM-DD")
 		}
-		item.DueAt = due.UTC().Format(time.RFC3339)
+		item.DueAt = due.Format("2006-01-02")
 	default:
 		return ReviewCollaborationItem{}, fmt.Errorf("unsupported collaboration action %q", job.Action)
 	}
