@@ -2,6 +2,7 @@ package feishu
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -18,9 +19,15 @@ type ReviewGatewayReplyEvent struct {
 	Type          string `json:"type"`
 	JobID         string `json:"job_id"`
 	Status        string `json:"status"`
-	MessageID     string `json:"message_id,omitempty"`
+	MessageIDHash string `json:"message_id_hash,omitempty"`
 	Error         string `json:"error,omitempty"`
 	ObservedAt    string `json:"observed_at"`
+}
+
+type ReviewGatewayNotice struct {
+	ChatID          string
+	SourceMessageID string
+	Reason          string
 }
 
 type ReviewGatewayReplyDispatcher struct {
@@ -28,7 +35,9 @@ type ReviewGatewayReplyDispatcher struct {
 	store         ReviewGatewayJobStore
 	output        *reviewGatewayJSONOutput
 	acks          chan ReviewGatewayJob
+	notices       chan ReviewGatewayNotice
 	wake          chan struct{}
+	instanceID    string
 	leaseOwner    string
 	leaseDuration time.Duration
 	pollInterval  time.Duration
@@ -44,11 +53,24 @@ func NewReviewGatewayReplyDispatcher(sender reviewGatewayMessageSender, store Re
 		store:         store,
 		output:        output,
 		acks:          make(chan ReviewGatewayJob, capacity),
+		notices:       make(chan ReviewGatewayNotice, capacity),
 		wake:          make(chan struct{}, 1),
 		leaseOwner:    fmt.Sprintf("reply-%d", time.Now().UnixNano()),
 		leaseDuration: time.Minute,
 		pollInterval:  time.Second,
 		now:           time.Now,
+	}
+}
+
+func (d *ReviewGatewayReplyDispatcher) TryNotice(notice ReviewGatewayNotice) bool {
+	if d == nil || d.sender == nil || notice.SourceMessageID == "" || notice.ChatID == "" {
+		return false
+	}
+	select {
+	case d.notices <- notice:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -87,6 +109,8 @@ func (d *ReviewGatewayReplyDispatcher) Run(ctx context.Context) {
 			return
 		case job := <-d.acks:
 			d.sendAcknowledgement(ctx, job)
+		case notice := <-d.notices:
+			d.sendNotice(ctx, notice)
 		case <-d.wake:
 			d.drainAcknowledgements(ctx)
 			d.deliverPendingReplies(ctx)
@@ -95,6 +119,34 @@ func (d *ReviewGatewayReplyDispatcher) Run(ctx context.Context) {
 			d.deliverPendingReplies(ctx)
 		}
 	}
+}
+
+func (d *ReviewGatewayReplyDispatcher) sendNotice(ctx context.Context, notice ReviewGatewayNotice) {
+	text := formatReviewGatewayNotice(notice.Reason)
+	if text == "" {
+		return
+	}
+	sendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	result, err := d.sender.Send(sendCtx, &larktypes.SendInput{
+		ChatID:         notice.ChatID,
+		ReplyMessageID: notice.SourceMessageID,
+		MsgType:        "text",
+		Text:           text,
+	})
+	event := ReviewGatewayReplyEvent{
+		SchemaVersion: reviewGatewaySchemaVersion,
+		Type:          "rejection_notice",
+		Status:        "sent",
+		ObservedAt:    d.now().UTC().Format(time.RFC3339),
+	}
+	if err != nil {
+		event.Status = "failed"
+		event.Error = redactReviewGatewayError(err.Error())
+	} else if result != nil {
+		event.MessageIDHash = reviewGatewayHashIdentifier(result.MessageID)
+	}
+	d.output.TryEmit(event)
 }
 
 func (d *ReviewGatewayReplyDispatcher) drainAcknowledgements(ctx context.Context) {
@@ -128,7 +180,7 @@ func (d *ReviewGatewayReplyDispatcher) sendAcknowledgement(ctx context.Context, 
 		event.Status = "failed"
 		event.Error = redactReviewGatewayError(err.Error())
 	} else if result != nil {
-		event.MessageID = result.MessageID
+		event.MessageIDHash = reviewGatewayHashIdentifier(result.MessageID)
 	}
 	d.output.TryEmit(event)
 }
@@ -148,12 +200,20 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 		}
 		item := pending[0]
 		sendCtx, sendCancel := context.WithTimeout(ctx, 10*time.Second)
-		sendResult, sendErr := d.sender.Send(sendCtx, &larktypes.SendInput{
+		sendInput := &larktypes.SendInput{
 			ChatID:         item.Job.ChatID,
 			ReplyMessageID: item.Job.SourceMessageID,
 			MsgType:        "text",
 			Text:           formatReviewGatewayResultReply(item.Job, item.Result),
-		})
+		}
+		if item.Result.Collaboration != nil {
+			if cardJSON, marshalErr := json.Marshal(item.Result.Collaboration.Card); marshalErr == nil {
+				sendInput.MsgType = "interactive"
+				sendInput.Text = ""
+				sendInput.Card = string(cardJSON)
+			}
+		}
+		sendResult, sendErr := d.sender.Send(sendCtx, sendInput)
 		sendCancel()
 		event := ReviewGatewayReplyEvent{
 			SchemaVersion: reviewGatewaySchemaVersion,
@@ -171,7 +231,7 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 			messageID := ""
 			if sendResult != nil {
 				messageID = sendResult.MessageID
-				event.MessageID = messageID
+				event.MessageIDHash = reviewGatewayHashIdentifier(messageID)
 			}
 			_ = d.store.MarkReplySent(persistCtx, item.Job.JobID, messageID, d.now().UTC())
 		}
@@ -193,6 +253,19 @@ func formatReviewGatewayAcknowledgement(job ReviewGatewayJob) string {
 		target,
 		job.JobID,
 	)
+}
+
+func formatReviewGatewayNotice(reason string) string {
+	switch reason {
+	case "sender_not_allowed":
+		return "当前账号没有操作本群 GitLink Review 助手的权限，请联系群管理员加入允许名单。"
+	case "binding_requires_admin":
+		return "仓库绑定只能由已配置的管理员执行；当前请求没有修改任何绑定。"
+	case "unsupported_read_only_command":
+		return "暂不支持该指令。当前可用：查看/刷新 PR、生成 Review 草稿、领取/释放 PR、设置截止时间、准备提交 common Review。批准、拒绝、评论、Reviewer 变更和合并始终禁用。"
+	default:
+		return ""
+	}
 }
 
 func formatReviewGatewayResultReply(job ReviewGatewayJob, result ReviewGatewayExecutionResult) string {
@@ -225,6 +298,35 @@ func formatReviewGatewayResultReply(job ReviewGatewayJob, result ReviewGatewayEx
 				item.Title,
 			))
 			if len(lines) >= 8 {
+				break
+			}
+		}
+		lines = append(lines, "GitLink 写入：0")
+		return truncateReviewGatewayText(strings.Join(lines, "\n"), 3000)
+	}
+	if result.Collaboration != nil {
+		item := result.Collaboration.Item
+		return truncateReviewGatewayText(fmt.Sprintf(
+			"%s PR #%d Review 协作已更新\n协作状态：%s\n负责人：%s\n截止时间：%s\nReview 阶段：%s\nGitLink 写入：0",
+			item.Repository,
+			item.PRNumber,
+			item.CollaborationStatus,
+			firstNonEmpty(item.AssignedTo, "未认领"),
+			firstNonEmpty(item.DueAt, "未设置"),
+			item.ReviewStage,
+		), 3000)
+	}
+	if result.CollaborationItems != nil {
+		lines := []string{fmt.Sprintf("我的 Review 任务：%d", len(result.CollaborationItems))}
+		for _, item := range result.CollaborationItems {
+			lines = append(lines, fmt.Sprintf(
+				"- %s PR #%d：%s，截止 %s",
+				item.Repository,
+				item.PRNumber,
+				item.CollaborationStatus,
+				firstNonEmpty(item.DueAt, "未设置"),
+			))
+			if len(lines) >= 10 {
 				break
 			}
 		}

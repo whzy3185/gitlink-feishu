@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -14,6 +16,8 @@ import (
 
 	larktypes "github.com/larksuite/oapi-sdk-go/v3/channel/types"
 
+	"github.com/gitlink-org/gitlink-cli/internal/client"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
 )
 
@@ -28,7 +32,9 @@ func TestParseReviewGatewayIntent(t *testing.T) {
 		{input: "查看绑定", wantName: "show_binding"},
 		{input: "查看待 Review", wantName: "read_review_queue"},
 		{input: "查看 PR #431", wantName: "read_review_context", wantNumber: 431},
-		{input: "领取 PR 431", wantName: "plan_claim_review", wantNumber: 431},
+		{input: "领取 PR 431", wantName: "claim_review", wantNumber: 431},
+		{input: "释放 PR #431", wantName: "release_review", wantNumber: 431},
+		{input: "准备提交 PR #431 Review", wantName: "prepare_common_review", wantNumber: 431},
 		{input: "生成 PR #431 Review 草稿", wantName: "generate_review_draft", wantNumber: 431},
 		{input: "刷新 PR #431", wantName: "refresh_review_context", wantNumber: 431},
 		{input: "绑定仓库 gitlink-org/gitlink-cli", wantName: "plan_bind_repository", wantRepo: "gitlink-org/gitlink-cli"},
@@ -41,6 +47,17 @@ func TestParseReviewGatewayIntent(t *testing.T) {
 				t.Fatalf("parseReviewGatewayIntent(%q) = %#v", test.input, got)
 			}
 		})
+	}
+}
+
+func TestParseReviewGatewayControlledWriteIntents(t *testing.T) {
+	deadline := parseReviewGatewayIntent("设置 PR #431 截止 2026-08-02")
+	if deadline.Name != "set_review_deadline" || deadline.PRNumber != 431 || deadline.Argument != "2026-08-02" {
+		t.Fatalf("deadline intent = %#v", deadline)
+	}
+	confirmation := parseReviewGatewayIntent("确认 Review review-plan-1234abcd")
+	if confirmation.Name != "confirm_common_review" || confirmation.Argument != "review-plan-1234abcd" {
+		t.Fatalf("confirmation intent = %#v", confirmation)
 	}
 }
 
@@ -855,13 +872,486 @@ func TestReviewGatewayChannelPolicyRequiresPreboundGroup(t *testing.T) {
 		{ChatID: "oc_enabled", Repository: "owner/repo", Enabled: true},
 		{ChatID: "oc_disabled", Repository: "owner/other", Enabled: false},
 	}}
-	channel := newFeishuReviewGatewayChannel("app-id", "app-secret", bindings)
+	channel := newFeishuReviewGatewayChannel("app-id", "app-secret", bindings, nil, "test-instance")
 	policy := channel.GetPolicy()
 	if len(policy.GroupAllowlist) != 1 || policy.GroupAllowlist[0] != "oc_enabled" {
 		t.Fatalf("group allowlist = %#v", policy.GroupAllowlist)
 	}
 	if policy.RequireMention == nil || !*policy.RequireMention || policy.DMMode != "disabled" {
 		t.Fatalf("channel policy = %#v", policy)
+	}
+}
+
+func TestReviewGatewayInstanceLockRejectsSecondActiveProcess(t *testing.T) {
+	statePath := filepath.Join(t.TempDir(), "gateway.db")
+	now := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
+	first, err := acquireReviewGatewayInstanceLock(statePath, "cli_test", now)
+	if err != nil {
+		t.Fatalf("first lock: %v", err)
+	}
+	defer first.Release()
+	if _, err := acquireReviewGatewayInstanceLock(statePath, "cli_test", now.Add(time.Second)); err == nil ||
+		!strings.Contains(err.Error(), "another review gateway instance is active") {
+		t.Fatalf("second lock error = %v", err)
+	}
+}
+
+func TestReviewGatewayInstanceLockCanBeReleasedAndReacquired(t *testing.T) {
+	statePath := filepath.Join(t.TempDir(), "gateway.db")
+	first, err := acquireReviewGatewayInstanceLock(statePath, "cli_test", time.Now())
+	if err != nil {
+		t.Fatalf("first lock: %v", err)
+	}
+	if err := first.Release(); err != nil {
+		t.Fatalf("release lock: %v", err)
+	}
+	second, err := acquireReviewGatewayInstanceLock(statePath, "cli_test", time.Now())
+	if err != nil {
+		t.Fatalf("second lock after release: %v", err)
+	}
+	defer second.Release()
+	if first.metadata.InstanceID == second.metadata.InstanceID {
+		t.Fatal("instance IDs should differ")
+	}
+}
+
+func TestReviewGatewayObservationHashesIdentityAndOmitsContent(t *testing.T) {
+	message := &larktypes.NormalizedMessage{
+		EventID:      "evt_secret",
+		MessageID:    "om_secret",
+		ChatID:       "oc_secret",
+		ChatType:     "group",
+		UserID:       "ou_secret",
+		Content:      "查看 PR #431 and a private note",
+		MentionedBot: true,
+	}
+	observation := reviewGatewayNormalizedObservation("policy", "instance-test", message)
+	observation.Allowed = reviewGatewayBoolPointer(true)
+	payload, err := json.Marshal(observation)
+	if err != nil {
+		t.Fatalf("marshal observation: %v", err)
+	}
+	text := string(payload)
+	for _, secret := range []string{"evt_secret", "om_secret", "oc_secret", "ou_secret", "private note"} {
+		if strings.Contains(text, secret) {
+			t.Fatalf("observation leaked %q: %s", secret, text)
+		}
+	}
+	if observation.EventIDHash == "" || observation.MessageIDHash == "" || observation.ChatIDHash == "" {
+		t.Fatalf("missing hashes: %#v", observation)
+	}
+}
+
+func TestReviewGatewayRejectionNoticeIsSafeAndBounded(t *testing.T) {
+	for _, reason := range []string{"sender_not_allowed", "binding_requires_admin", "unsupported_read_only_command"} {
+		text := formatReviewGatewayNotice(reason)
+		if text == "" {
+			t.Fatalf("empty notice for %s", reason)
+		}
+		if strings.Contains(strings.ToLower(text), "token") || strings.Contains(text, "oc_") || strings.Contains(text, "ou_") {
+			t.Fatalf("unsafe notice for %s: %s", reason, text)
+		}
+	}
+	if text := formatReviewGatewayNotice("chat_not_bound"); text != "" {
+		t.Fatalf("unbound chat should remain silent: %s", text)
+	}
+}
+
+func TestReviewCollaborationClaimDeadlineReleaseAndAudit(t *testing.T) {
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "collaboration.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
+	job := testReviewGatewayJob(now, "collaboration")
+	job.Action = "claim_review"
+	job.Mode = "collaboration"
+	item, err := store.ApplyCollaborationAction(context.Background(), job, now)
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if item.AssignedTo != job.RequestedBy || item.CollaborationStatus != "reviewing" {
+		t.Fatalf("claimed item = %#v", item)
+	}
+
+	job.Action = "set_review_deadline"
+	job.Argument = "2026-08-02"
+	job.JobID = "job-deadline"
+	item, err = store.ApplyCollaborationAction(context.Background(), job, now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("deadline: %v", err)
+	}
+	if !strings.HasPrefix(item.DueAt, "2026-08-02") {
+		t.Fatalf("deadline = %q", item.DueAt)
+	}
+
+	job.Action = "release_review"
+	job.JobID = "job-release"
+	item, err = store.ApplyCollaborationAction(context.Background(), job, now.Add(2*time.Minute))
+	if err != nil {
+		t.Fatalf("release: %v", err)
+	}
+	if item.AssignedTo != "" || item.CollaborationStatus != "unassigned" || item.DueAt != "" {
+		t.Fatalf("released item = %#v", item)
+	}
+	var auditCount int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM review_collaboration_audit WHERE pr_key = ?`, item.PRKey).Scan(&auditCount); err != nil {
+		t.Fatalf("audit count: %v", err)
+	}
+	if auditCount != 3 {
+		t.Fatalf("audit count = %d, want 3", auditCount)
+	}
+}
+
+func TestReviewCollaborationPartialSnapshotPreservesCompleteFacts(t *testing.T) {
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "collaboration.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
+	job := testReviewGatewayJob(now, "facts")
+	complete := ReviewGatewayExecutionResult{
+		CollectionStatus:  "complete",
+		HeadSHA:           "head-complete",
+		SourceFingerprint: "fingerprint-complete",
+		ReviewStage:       "human_reviewing",
+		Decision:          "pending",
+	}
+	item, err := store.UpsertCollaborationFacts(context.Background(), job, complete, now)
+	if err != nil {
+		t.Fatalf("complete upsert: %v", err)
+	}
+	partial := complete
+	partial.CollectionStatus = "partial"
+	partial.Partial = true
+	partial.HeadSHA = "head-partial"
+	partial.SourceFingerprint = "fingerprint-partial"
+	item, err = store.UpsertCollaborationFacts(context.Background(), job, partial, now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("partial upsert: %v", err)
+	}
+	if item.HeadSHA != "head-complete" || item.SourceFingerprint != "fingerprint-complete" || item.CollectionStatus != "complete" {
+		t.Fatalf("partial snapshot overwrote complete facts: %#v", item)
+	}
+}
+
+func TestReviewCollaborationBundleUsesOneStableWorkItem(t *testing.T) {
+	item := ReviewCollaborationItem{
+		SchemaVersion:       reviewCollaborationItemSchema,
+		PRKey:               "Gitlink/gitlink-cli#431",
+		Repository:          "Gitlink/gitlink-cli",
+		PRNumber:            431,
+		ReviewStage:         "human_reviewing",
+		Decision:            "pending",
+		CollectionStatus:    "complete",
+		AssignedTo:          "ou_reviewer",
+		CollaborationStatus: "reviewing",
+		UpdatedAt:           "2026-07-31T08:00:00Z",
+	}
+	bundle := BuildReviewCollaborationBundle(item)
+	if bundle.GitLinkWrites != 0 || bundle.UniqueKey == "" || bundle.BitableRecord.UniqueKey != bundle.UniqueKey {
+		t.Fatalf("bundle identity/boundary = %#v", bundle)
+	}
+	if bundle.Task == nil || bundle.Task.UniqueKey != bundle.UniqueKey {
+		t.Fatalf("task not linked to work item: %#v", bundle.Task)
+	}
+	if !strings.Contains(bundle.DocMarkdown, "GitLink 写入：0") {
+		t.Fatalf("document boundary missing: %s", bundle.DocMarkdown)
+	}
+}
+
+func TestReviewResourceStatePreventsDuplicateTaskAndDocSnapshot(t *testing.T) {
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "resources.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
+	if err := store.SaveReviewResourceState(
+		context.Background(),
+		"review-work-item:owner_repo_42",
+		"feishu_task",
+		"task-remote-1",
+		"fingerprint-1",
+		now,
+	); err != nil {
+		t.Fatalf("SaveReviewResourceState: %v", err)
+	}
+	state, err := store.GetReviewResourceState(
+		context.Background(),
+		"review-work-item:owner_repo_42",
+		"feishu_task",
+	)
+	if err != nil {
+		t.Fatalf("GetReviewResourceState: %v", err)
+	}
+	if state.RemoteID != "task-remote-1" || state.ContentFingerprint != "fingerprint-1" {
+		t.Fatalf("resource state = %#v", state)
+	}
+}
+
+func TestFeishuReviewCollaborationPublisherCreatesTaskOnce(t *testing.T) {
+	taskCreates := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/auth/v3/tenant_access_token/internal":
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","tenant_access_token":"tenant-token","expire":7200}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/task/v2/tasks":
+			taskCreates++
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","data":{"task":{"guid":"task-guid-431"}}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "publisher.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	publisher := &FeishuReviewCollaborationPublisher{
+		Client: OpenAPIClient{BaseURL: server.URL, HTTP: server.Client()},
+		Store:  store,
+		Config: ReviewCollaborationPublisherConfig{
+			AppID:      "cli_test",
+			AppSecret:  "test-secret",
+			EnableTask: true,
+		},
+		Now: func() time.Time {
+			return time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
+		},
+	}
+	bundle := ReviewCollaborationBundle{
+		UniqueKey: "review-work-item:Gitlink_gitlink-cli_431",
+		Task: &TaskCandidate{
+			UniqueKey:   "review-work-item:Gitlink_gitlink-cli_431",
+			Title:       "Review Gitlink/gitlink-cli #431",
+			Description: "Human review task",
+		},
+	}
+
+	first, err := publisher.Publish(context.Background(), bundle)
+	if err != nil {
+		t.Fatalf("first Publish: %v", err)
+	}
+	second, err := publisher.Publish(context.Background(), bundle)
+	if err != nil {
+		t.Fatalf("second Publish: %v", err)
+	}
+	if taskCreates != 1 {
+		t.Fatalf("task creates = %d, want 1", taskCreates)
+	}
+	if len(first) != 1 || first[0].Action != "created" || first[0].RemoteID != "task-guid-431" {
+		t.Fatalf("first publish = %#v", first)
+	}
+	if len(second) != 1 || second[0].Action != "existing" || second[0].RemoteID != "task-guid-431" {
+		t.Fatalf("second publish = %#v", second)
+	}
+}
+
+func TestReviewExecutorCollectsPublisherWarningsWithoutRetryingGitLinkRead(t *testing.T) {
+	result := ReviewGatewayExecutionResult{Status: "completed"}
+	publisher := &recordingReviewCollaborationPublisher{
+		results: []ReviewResourceSyncResult{{
+			Resource: "feishu_doc",
+			Action:   "failed",
+			Error:    "permission denied",
+		}},
+	}
+	executor := &ReviewGatewayExecutor{Publisher: publisher}
+	executor.publishCollaboration(
+		context.Background(),
+		&result,
+		ReviewCollaborationBundle{UniqueKey: "review-work-item:owner_repo_42"},
+	)
+	if publisher.calls != 1 || len(result.ResourceSync) != 1 || len(result.Warnings) != 1 {
+		t.Fatalf("publisher outcome = %#v, calls=%d", result, publisher.calls)
+	}
+	if result.Status != "completed" {
+		t.Fatalf("collaboration resource failure should not retry GitLink read: %#v", result)
+	}
+}
+
+func TestReviewActionPlanIsIdempotentCommonOnlyAndActorBound(t *testing.T) {
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "action-plan.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
+	job := testReviewGatewayJob(now, "action-plan")
+	plan := NewReviewActionPlan(
+		job,
+		"gitlink-reviewer",
+		"head-431",
+		"fingerprint-431",
+		"Review summary",
+		now,
+	)
+	first, err := store.CreateReviewActionPlan(context.Background(), plan)
+	if err != nil {
+		t.Fatalf("CreateReviewActionPlan: %v", err)
+	}
+	second, err := store.CreateReviewActionPlan(context.Background(), plan)
+	if err != nil {
+		t.Fatalf("idempotent CreateReviewActionPlan: %v", err)
+	}
+	if first.PlanID != second.PlanID || first.ReviewStatus != "common" {
+		t.Fatalf("idempotent plans = %#v / %#v", first, second)
+	}
+	approved := plan
+	approved.PlanID = "approved-plan"
+	approved.IdempotencyKey = "approved-key"
+	approved.ReviewStatus = "approved"
+	if _, err := store.CreateReviewActionPlan(context.Background(), approved); err == nil {
+		t.Fatal("approved action plan must be rejected")
+	}
+	if _, err := store.ClaimReviewActionPlan(context.Background(), plan.PlanID, "another-user", now); err == nil {
+		t.Fatal("another Feishu user must not claim the action plan")
+	}
+}
+
+func TestReviewWriteRemainsDisabledWithoutExplicitStartupFlag(t *testing.T) {
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "action-plan.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
+	job := testReviewGatewayJob(now, "action-plan-disabled")
+	plan := NewReviewActionPlan(
+		job,
+		"gitlink-reviewer",
+		"head-431",
+		"fingerprint-431",
+		"Review summary",
+		now,
+	)
+	plan, err = store.CreateReviewActionPlan(context.Background(), plan)
+	if err != nil {
+		t.Fatalf("CreateReviewActionPlan: %v", err)
+	}
+	confirmJob := testReviewGatewayJob(now.Add(time.Minute), "confirm-disabled")
+	confirmJob.Action = "confirm_common_review"
+	confirmJob.Argument = plan.PlanID
+	confirmJob.Mode = "controlled_write"
+	executor := &ReviewGatewayExecutor{
+		Runtime:     &common.RuntimeContext{},
+		ActionPlans: store,
+		IdentityBindings: []ReviewIdentityBinding{{
+			FeishuUserID: confirmJob.RequestedBy,
+			GitLinkLogin: "gitlink-reviewer",
+			Enabled:      true,
+		}},
+		EnableGitLinkWrite: false,
+	}
+	result, err := executor.Execute(context.Background(), confirmJob)
+	if err != nil {
+		t.Fatalf("disabled confirmation: %v", err)
+	}
+	if result.WriteResult == nil || result.WriteResult.Status != "write_disabled" ||
+		result.WriteResult.Mutated || result.MutatesGitLink {
+		t.Fatalf("write boundary = %#v", result)
+	}
+	stored, err := store.GetReviewActionPlan(context.Background(), plan.PlanID)
+	if err != nil {
+		t.Fatalf("GetReviewActionPlan: %v", err)
+	}
+	if stored.Status != "pending_confirmation" {
+		t.Fatalf("disabled confirmation changed plan state to %q", stored.Status)
+	}
+}
+
+func TestConfirmedCommonReviewWritesExactlyOnceAndReadsReviewID(t *testing.T) {
+	var writeCount int
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/owner/repo/pulls/42.json":
+			_, _ = writer.Write([]byte(`{"pull_request":{"number":42,"title":"Review me","state":"open","head_commit_sha":"head-431"}}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/owner/repo/pulls/42/versions.json":
+			_, _ = writer.Write([]byte(`{"versions":[{"id":7,"head_commit_sha":"head-431","files_count":1,"commits_count":1}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/owner/repo/pulls/42/files.json":
+			_, _ = writer.Write([]byte(`{"files":[{"filename":"main.go","additions":3}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/owner/repo/pulls/42/reviews.json":
+			_, _ = writer.Write([]byte(`{"reviews":[]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/owner/repo/pulls/42/journals.json":
+			_, _ = writer.Write([]byte(`{"journals":[]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/users/me.json":
+			_, _ = writer.Write([]byte(`{"login":"gitlink-reviewer","id":71}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/v1/owner/repo/pulls/42/reviews.json":
+			writeCount++
+			var payload map[string]interface{}
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode Review payload: %v", err)
+			}
+			if payload["status"] != "common" || payload["commit_id"] != "head-431" {
+				t.Fatalf("Review payload = %#v", payload)
+			}
+			_, _ = writer.Write([]byte(`{"review":{"id":901}}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", request.Method, request.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "action-plan.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
+	job := testReviewGatewayJob(now, "live-write")
+	plan := NewReviewActionPlan(
+		job,
+		"gitlink-reviewer",
+		"head-431",
+		"fingerprint-431",
+		"Evidence-backed Review summary",
+		now,
+	)
+	plan, err = store.CreateReviewActionPlan(context.Background(), plan)
+	if err != nil {
+		t.Fatalf("CreateReviewActionPlan: %v", err)
+	}
+	runtime := &common.RuntimeContext{
+		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+		Owner:  "owner",
+		Repo:   "repo",
+	}
+	executor := &ReviewGatewayExecutor{
+		Runtime:     runtime,
+		ActionPlans: store,
+		IdentityBindings: []ReviewIdentityBinding{{
+			FeishuUserID: job.RequestedBy,
+			GitLinkLogin: "gitlink-reviewer",
+			Enabled:      true,
+		}},
+		EnableGitLinkWrite: true,
+		Now:                func() time.Time { return now.Add(time.Minute) },
+	}
+	confirmJob := testReviewGatewayJob(now.Add(time.Minute), "confirm-live")
+	confirmJob.Action = "confirm_common_review"
+	confirmJob.Argument = plan.PlanID
+	confirmJob.Mode = "controlled_write"
+	result, err := executor.Execute(context.Background(), confirmJob)
+	if err != nil {
+		t.Fatalf("confirm common Review: %v", err)
+	}
+	if result.WriteResult == nil || !result.WriteResult.Mutated ||
+		result.WriteResult.Status != "completed" || result.WriteResult.ReviewID != "901" ||
+		!result.MutatesGitLink || writeCount != 1 {
+		t.Fatalf("write result = %#v, writes=%d", result, writeCount)
+	}
+	if _, err := executor.Execute(context.Background(), confirmJob); err == nil {
+		t.Fatal("completed ActionPlan must reject a second confirmation")
+	}
+	if writeCount != 1 {
+		t.Fatalf("duplicate confirmation created %d Reviews", writeCount)
 	}
 }
 
@@ -904,6 +1394,20 @@ func (s *recordingReviewGatewaySender) Send(_ context.Context, input *larktypes.
 type blockingReviewGatewayWriter struct {
 	started chan struct{}
 	release chan struct{}
+}
+
+type recordingReviewCollaborationPublisher struct {
+	calls   int
+	results []ReviewResourceSyncResult
+	err     error
+}
+
+func (p *recordingReviewCollaborationPublisher) Publish(
+	_ context.Context,
+	_ ReviewCollaborationBundle,
+) ([]ReviewResourceSyncResult, error) {
+	p.calls++
+	return p.results, p.err
 }
 
 func (w *blockingReviewGatewayWriter) Write(payload []byte) (int, error) {

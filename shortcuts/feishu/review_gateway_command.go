@@ -58,15 +58,18 @@ type reviewGatewayFeishuChannel struct {
 	larktypes.Channel
 	dispatcher *dispatcher.EventDispatcher
 	policy     *larksafety.PolicyGate
+	output     *reviewGatewayJSONOutput
+	instanceID string
 }
 
 func newReviewGatewayShortcut() *common.Shortcut {
 	return &common.Shortcut{
 		Name:        "review-gateway",
-		Description: "Preview Feishu-to-GitLink review collaboration through a GET-only gateway",
-		Long: "P2 preview gateway. Offline mode reads one normalized Feishu event from JSON. " +
+		Description: "Run the durable Feishu-to-GitLink Review collaboration gateway",
+		Long: "P2-P3 Review collaboration gateway. Offline mode reads one normalized Feishu event from JSON. " +
 			"Listen mode uses the official Feishu Channel SDK and persistent connection. " +
-			"GitLink access remains GET-only; collaboration mutations are plans only.",
+			"GitLink is GET-only by default; only an identity-bound, current-head, explicitly confirmed common Review " +
+			"can write when --enable-gitlink-review-write is set. Approval, rejection, comments, reviewer changes, and merge remain disabled.",
 		Flags: []common.Flag{
 			{Name: "from-event", Usage: "Read one normalized Feishu event from a local JSON file"},
 			{Name: "bindings", Usage: "Read controlled chat-to-repository bindings from JSON"},
@@ -82,6 +85,12 @@ func newReviewGatewayShortcut() *common.Shortcut {
 			{Name: "job-timeout-seconds", Usage: "Timeout for each GitLink GET-only job", Default: "60"},
 			{Name: "handler-timeout-ms", Usage: "Total Feishu callback persistence budget", Default: "2000"},
 			{Name: "sqlite-timeout-ms", Usage: "SQLite budget inside each Feishu callback", Default: "500"},
+			{Name: "enable-gitlink-review-write", Usage: "Explicitly enable confirmed common Review writes; approved/rejected/comment/merge remain disabled", Bool: true, Default: "false"},
+			{Name: "sync-feishu-resources", Usage: "Explicitly sync configured Base/Doc/Task resources from the canonical WorkItem", Bool: true, Default: "false"},
+			{Name: "base-app-token", Usage: "Feishu Base app token. Defaults to FEISHU_BASE_APP_TOKEN"},
+			{Name: "review-table-id", Usage: "Feishu Base table for Review WorkItems. Defaults to FEISHU_REVIEW_TABLE_ID"},
+			{Name: "review-document-id", Usage: "Feishu DocX receiving Review snapshots. Defaults to FEISHU_REVIEW_DOCUMENT_ID"},
+			{Name: "sync-feishu-task", Usage: "Create at most one Feishu Task for each active Review WorkItem", Bool: true, Default: "false"},
 		},
 		Run: runReviewGateway,
 	}
@@ -243,6 +252,11 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		return fmt.Errorf("--sqlite-timeout-ms must be lower than --handler-timeout-ms")
 	}
 	statePath := firstNonEmpty(runtime.Arg("state-db"), ".local/review-gateway.db")
+	instanceLock, err := acquireReviewGatewayInstanceLock(statePath, appID, time.Now())
+	if err != nil {
+		return err
+	}
+	defer instanceLock.Release()
 	store, err := OpenSQLiteReviewGatewayStore(statePath)
 	if err != nil {
 		return err
@@ -257,11 +271,49 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 	defer stop()
 	output.Start(liveCtx, queueSize)
 
-	channel := newFeishuReviewGatewayChannel(appID, appSecret, bindings)
+	channel := newFeishuReviewGatewayChannel(appID, appSecret, bindings, output, instanceLock.metadata.InstanceID)
 	replyDispatcher := NewReviewGatewayReplyDispatcher(channel, store, output, queueSize)
-	executor := &ReviewGatewayExecutor{Runtime: runtime}
+	replyDispatcher.instanceID = instanceLock.metadata.InstanceID
+	var publisher ReviewCollaborationPublisher
+	syncFeishuResources := parseBool(runtime.Arg("sync-feishu-resources"))
+	if syncFeishuResources {
+		publisherConfig := ReviewCollaborationPublisherConfig{
+			AppID:         appID,
+			AppSecret:     appSecret,
+			BaseAppToken:  firstNonEmpty(runtime.Arg("base-app-token"), os.Getenv("FEISHU_BASE_APP_TOKEN")),
+			ReviewTableID: firstNonEmpty(runtime.Arg("review-table-id"), os.Getenv("FEISHU_REVIEW_TABLE_ID")),
+			DocumentID:    firstNonEmpty(runtime.Arg("review-document-id"), os.Getenv("FEISHU_REVIEW_DOCUMENT_ID")),
+			EnableTask:    parseBool(runtime.Arg("sync-feishu-task")),
+		}
+		if (publisherConfig.BaseAppToken == "") != (publisherConfig.ReviewTableID == "") {
+			return fmt.Errorf("Base Review sync requires both --base-app-token and --review-table-id")
+		}
+		if publisherConfig.BaseAppToken == "" && publisherConfig.DocumentID == "" && !publisherConfig.EnableTask {
+			return fmt.Errorf("--sync-feishu-resources requires at least one Base, Doc, or Task target")
+		}
+		publisher = &FeishuReviewCollaborationPublisher{
+			Client: NewOpenAPIClient(nil),
+			Store:  store,
+			Config: publisherConfig,
+		}
+	}
+	executor := &ReviewGatewayExecutor{
+		Runtime:            runtime,
+		Collaboration:      store,
+		ActionPlans:        store,
+		IdentityBindings:   bindings.IdentityBindings,
+		EnableGitLinkWrite: parseBool(runtime.Arg("enable-gitlink-review-write")),
+		Publisher:          publisher,
+	}
 	queue := NewReviewGatewayQueue(gateway, store, queueSize, func(outcome ReviewGatewayJobOutcome) {
 		output.TryEmit(outcome.Result)
+		resultObservation := newReviewGatewayObservation("result", instanceLock.metadata.InstanceID)
+		resultObservation.MessageIDHash = reviewGatewayHashIdentifier(outcome.Job.SourceMessageID)
+		resultObservation.ChatIDHash = reviewGatewayHashIdentifier(outcome.Job.ChatID)
+		resultObservation.SenderIDHash = reviewGatewayHashIdentifier(outcome.Job.RequestedBy)
+		resultObservation.Allowed = reviewGatewayBoolPointer(outcome.Err == nil)
+		resultObservation.Reason = outcome.Result.Status
+		output.TryEmit(resultObservation)
 		if !outcome.WillRetry {
 			replyDispatcher.Wake()
 		}
@@ -271,6 +323,23 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		jobCtx, cancel := context.WithTimeout(liveCtx, time.Duration(jobTimeoutSeconds)*time.Second)
 		defer cancel()
 		return executor.Execute(jobCtx, job)
+	})
+	output.TryEmit(reviewGatewayLifecycleEvent{
+		SchemaVersion: reviewGatewaySchemaVersion,
+		Type:          "preflight",
+		Message: fmt.Sprintf(
+			"instance=%s enabled_bindings=%d allowed_users=%d admin_users=%d state_db=%s handler_budget_ms=%d sqlite_budget_ms=%d gitlink_common_review_write=%t feishu_resource_sync=%t",
+			instanceLock.metadata.InstanceID,
+			countEnabledReviewGatewayBindings(bindings),
+			countReviewGatewayBindingUsers(bindings, false),
+			countReviewGatewayBindingUsers(bindings, true),
+			instanceLock.metadata.StateDBHash,
+			handlerTimeoutMS,
+			sqliteTimeoutMS,
+			executor.EnableGitLinkWrite,
+			syncFeishuResources,
+		),
+		ObservedAt: time.Now().UTC().Format(time.RFC3339),
 	})
 
 	channel.OnGatewayMessage(func(ctx context.Context, message *larktypes.NormalizedMessage) error {
@@ -303,10 +372,14 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		)
 	})
 	channel.OnReady(func() {
+		boundary := "GitLink execution is GET-only by default."
+		if executor.EnableGitLinkWrite {
+			boundary = "Confirmed common Review write is enabled; every other GitLink mutation remains disabled."
+		}
 		output.TryEmit(reviewGatewayLifecycleEvent{
 			SchemaVersion: reviewGatewaySchemaVersion,
 			Type:          "ready",
-			Message:       "Feishu Channel SDK connected; inbound jobs are durable, replies are asynchronous, and GitLink execution remains GET-only.",
+			Message:       "Feishu Channel SDK connected; inbound jobs are durable and replies are asynchronous. " + boundary,
 			ObservedAt:    time.Now().UTC().Format(time.RFC3339),
 		})
 	})
@@ -347,8 +420,19 @@ func handleReviewGatewayInbound(
 		queue.ObserveHandlerLatency(receipt.Job.JobID, latencyMs)
 	}
 	output.TryEmit(receipt)
+	instanceID := ""
+	if replies != nil {
+		instanceID = replies.instanceID
+	}
+	output.TryEmit(reviewGatewayReceiptObservation(instanceID, receipt))
 	if receipt.Accepted && receipt.Job != nil {
 		replies.TryAcknowledge(*receipt.Job)
+	} else if replies != nil && shouldNotifyReviewGatewayRejection(receipt) {
+		replies.TryNotice(ReviewGatewayNotice{
+			ChatID:          event.ChatID,
+			SourceMessageID: event.MessageID,
+			Reason:          receipt.Reason,
+		})
 	}
 	if receipt.Reason == "state_store_failed" {
 		return fmt.Errorf("review gateway callback persistence failed within %d ms", sqliteBudget.Milliseconds())
@@ -359,7 +443,13 @@ func handleReviewGatewayInbound(
 	return nil
 }
 
-func newFeishuReviewGatewayChannel(appID, appSecret string, bindings ReviewGatewayBindings) *reviewGatewayFeishuChannel {
+func newFeishuReviewGatewayChannel(
+	appID,
+	appSecret string,
+	bindings ReviewGatewayBindings,
+	output *reviewGatewayJSONOutput,
+	instanceID string,
+) *reviewGatewayFeishuChannel {
 	eventDispatcher := dispatcher.NewEventDispatcher("", "")
 	apiClient := lark.NewClient(appID, appSecret, lark.WithLogLevel(larkcore.LogLevelWarn))
 	wsClient := larkws.NewClient(
@@ -381,6 +471,8 @@ func newFeishuReviewGatewayChannel(appID, appSecret string, bindings ReviewGatew
 		Channel:    channel,
 		dispatcher: eventDispatcher,
 		policy:     larksafety.NewPolicyGate(&policy, nil),
+		output:     output,
+		instanceID: instanceID,
 	}
 }
 
@@ -389,15 +481,29 @@ func (c *reviewGatewayFeishuChannel) OnGatewayMessage(handler func(context.Conte
 		return
 	}
 	c.dispatcher.OnP2MessageReceiveV1(func(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
+		c.output.TryEmit(reviewGatewayRawObservation(event, c.instanceID))
 		message := larknormalize.ParseMessage(event)
 		if message == nil {
+			observation := newReviewGatewayObservation("normalized", c.instanceID)
+			observation.Allowed = reviewGatewayBoolPointer(false)
+			observation.Reason = "normalization_failed"
+			c.output.TryEmit(observation)
 			return nil
 		}
+		c.output.TryEmit(reviewGatewayNormalizedObservation("normalized", c.instanceID, message))
 		bot := c.GetBotIdentity(ctx)
 		if bot == nil {
+			observation := reviewGatewayNormalizedObservation("identity", c.instanceID, message)
+			observation.Allowed = reviewGatewayBoolPointer(false)
+			observation.Reason = "bot_identity_unavailable"
+			c.output.TryEmit(observation)
 			return fmt.Errorf("Feishu bot identity is unavailable")
 		}
 		if message.UserID == bot.OpenID {
+			observation := reviewGatewayNormalizedObservation("identity", c.instanceID, message)
+			observation.Allowed = reviewGatewayBoolPointer(false)
+			observation.Reason = "self_message"
+			c.output.TryEmit(observation)
 			return nil
 		}
 		for i := range message.Mentions {
@@ -409,11 +515,59 @@ func (c *reviewGatewayFeishuChannel) OnGatewayMessage(handler func(context.Conte
 				mention.IsBot = true
 			}
 		}
-		if decision := c.policy.Evaluate(message); !decision.Allowed {
+		c.output.TryEmit(reviewGatewayNormalizedObservation("identity", c.instanceID, message))
+		decision := c.policy.Evaluate(message)
+		observation := reviewGatewayNormalizedObservation("policy", c.instanceID, message)
+		observation.Allowed = reviewGatewayBoolPointer(decision.Allowed)
+		observation.Reason = string(decision.Reason)
+		if decision.Allowed {
+			observation.Reason = "allowed"
+		}
+		c.output.TryEmit(observation)
+		if !decision.Allowed {
 			return nil
 		}
 		return handler(ctx, message)
 	})
+}
+
+func countEnabledReviewGatewayBindings(bindings ReviewGatewayBindings) int {
+	count := 0
+	for _, binding := range bindings.Bindings {
+		if binding.Enabled {
+			count++
+		}
+	}
+	return count
+}
+
+func countReviewGatewayBindingUsers(bindings ReviewGatewayBindings, admins bool) int {
+	users := map[string]bool{}
+	for _, binding := range bindings.Bindings {
+		values := binding.AllowedUserIDs
+		if admins {
+			values = binding.AdminUserIDs
+		}
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value != "" {
+				users[value] = true
+			}
+		}
+	}
+	return len(users)
+}
+
+func shouldNotifyReviewGatewayRejection(receipt ReviewGatewayReceipt) bool {
+	if !receipt.Bound || strings.TrimSpace(receipt.Event.MessageID) == "" {
+		return false
+	}
+	switch receipt.Reason {
+	case "sender_not_allowed", "unsupported_read_only_command", "binding_requires_admin":
+		return true
+	default:
+		return false
+	}
 }
 
 func reviewGatewayEventFromMessage(message *larktypes.NormalizedMessage) ReviewGatewayEvent {

@@ -24,6 +24,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/search"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/user"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/webhook"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/wecom"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/wiki"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
 )
@@ -53,6 +54,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"compare":      compare.Shortcuts(),
 		"export":       export.Shortcuts(),
 		"feishu":       feishu.Shortcuts(tr),
+		"wecom":        wecom.Shortcuts(),
 		"webhook":      webhook.Shortcuts(tr),
 		"workflow":     workflow.Shortcuts(),
 		"wiki":         wiki.Shortcuts(tr),
@@ -77,6 +79,7 @@ func RegisterAll(root *cobra.Command, translators ...*i18n.Translator) {
 		"compare":      "Compare branches, tags, or commits",
 		"export":       "Data export to CSV/JSON",
 		"feishu":       "Feishu collaboration exports and delivery",
+		"wecom":        "Enterprise WeChat Review collaboration delivery",
 		"webhook":      tr.T("cmd.webhook.short"),
 		"workflow":     "AI agent workflow analysis",
 		"wiki":         tr.T("cmd.wiki.short"),

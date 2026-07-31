@@ -24,6 +24,8 @@
 
 - [飞书 Agent 排障交接](docs/FEISHU_AGENT_DEBUG_HANDOFF.md)
 - [飞书 Agent 回复与本地行动修订](docs/FEISHU_AGENT_RESPONSE_20260731.md)
+- [P2.1.1 收口与真实验收规划](docs/ROUND2_PR_REVIEW_COLLABORATION_P211_CLOSEOUT_PLAN.md)
+- [P2–P5 实施记录](docs/ROUND2_PR_REVIEW_COLLABORATION_P2_P5_IMPLEMENTATION.md)
 
 当前边界：
 

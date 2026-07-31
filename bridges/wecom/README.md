@@ -1,0 +1,39 @@
+# GitLink Enterprise WeChat Review Bridge
+
+This sidecar uses the official `@wecom/aibot-node-sdk` long connection and
+normalizes WeCom text frames into `gitlink.collab-inbound/v1`.
+
+The stable P4 boundary is GET-only:
+
+- one process per bot, enforced with a local instance lock;
+- group and user allowlists are fail-closed when configured;
+- raw identifiers are hashed in observations;
+- the bridge calls a fixed local Review Core HTTP endpoint and never builds or
+  executes shell commands;
+- no GitLink token or WeCom bot secret is sent to the Review Core;
+- merge, approval, rejection, line comment, and reviewer mutation commands are
+  not accepted.
+
+Run:
+
+```powershell
+npm install
+$env:WECOM_BOT_ID = "..."
+$env:WECOM_BOT_SECRET = "..."
+$env:WECOM_ALLOWED_CHAT_IDS = "..."
+$env:WECOM_ALLOWED_USER_IDS = "..."
+$env:GITLINK_REVIEW_CORE_URL = "http://127.0.0.1:8765/v1/review/inbound"
+$env:GITLINK_REVIEW_CORE_TOKEN = "one-random-local-bridge-token"
+npm start
+```
+
+Without `GITLINK_REVIEW_CORE_URL`, the bridge is an observe-only SDK smoke
+environment and replies with a controlled boundary message.
+
+Start the repository-provided loopback Review Core in another terminal with the
+same token:
+
+```powershell
+$env:GITLINK_REVIEW_CORE_TOKEN = "one-random-local-bridge-token"
+go run . wecom +review-core --repository Gitlink/gitlink-cli
+```

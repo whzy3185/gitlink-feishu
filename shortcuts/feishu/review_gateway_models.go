@@ -45,14 +45,22 @@ type ReviewChatBinding struct {
 }
 
 type ReviewGatewayBindings struct {
-	SchemaVersion string              `json:"schema_version"`
-	Bindings      []ReviewChatBinding `json:"bindings"`
+	SchemaVersion    string                  `json:"schema_version"`
+	Bindings         []ReviewChatBinding     `json:"bindings"`
+	IdentityBindings []ReviewIdentityBinding `json:"identity_bindings,omitempty"`
+}
+
+type ReviewIdentityBinding struct {
+	FeishuUserID string `json:"feishu_user_id"`
+	GitLinkLogin string `json:"gitlink_login"`
+	Enabled      bool   `json:"enabled"`
 }
 
 type ReviewGatewayIntent struct {
 	Name       string `json:"name"`
 	Repository string `json:"repository,omitempty"`
 	PRNumber   int    `json:"pr_number,omitempty"`
+	Argument   string `json:"argument,omitempty"`
 }
 
 type ReviewGatewayJob struct {
@@ -64,6 +72,7 @@ type ReviewGatewayJob struct {
 	Action                string `json:"action"`
 	Repository            string `json:"repository,omitempty"`
 	PRNumber              int    `json:"pr_number,omitempty"`
+	Argument              string `json:"argument,omitempty"`
 	ChatID                string `json:"chat_id"`
 	RequestedBy           string `json:"requested_by"`
 	SourceEventID         string `json:"source_event_id,omitempty"`
@@ -152,6 +161,10 @@ var (
 	reviewGatewayRepositoryPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 	reviewGatewayPRPattern         = regexp.MustCompile(`(?i)^查看\s*PR\s*#?(\d+)$`)
 	reviewGatewayClaimPattern      = regexp.MustCompile(`(?i)^领取\s*PR\s*#?(\d+)$`)
+	reviewGatewayReleasePattern    = regexp.MustCompile(`(?i)^释放\s*PR\s*#?(\d+)$`)
+	reviewGatewayDeadlinePattern   = regexp.MustCompile(`(?i)^设置\s*PR\s*#?(\d+)\s*截止\s*(\d{4}-\d{2}-\d{2})$`)
+	reviewGatewayPreparePattern    = regexp.MustCompile(`(?i)^准备提交\s*PR\s*#?(\d+)\s*Review$`)
+	reviewGatewayConfirmPattern    = regexp.MustCompile(`(?i)^确认\s*Review\s+([A-Za-z0-9:_-]+)$`)
 	reviewGatewayDraftPattern      = regexp.MustCompile(`(?i)^生成\s*PR\s*#?(\d+)\s*Review\s*草稿$`)
 	reviewGatewayRefreshPattern    = regexp.MustCompile(`(?i)^刷新\s*PR\s*#?(\d+)$`)
 	reviewGatewayBindPattern       = regexp.MustCompile(`(?i)^绑定仓库\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$`)
@@ -161,7 +174,9 @@ var (
 	}{
 		{pattern: reviewGatewayBindPattern, name: "plan_bind_repository"},
 		{pattern: reviewGatewayPRPattern, name: "read_review_context"},
-		{pattern: reviewGatewayClaimPattern, name: "plan_claim_review"},
+		{pattern: reviewGatewayClaimPattern, name: "claim_review"},
+		{pattern: reviewGatewayReleasePattern, name: "release_review"},
+		{pattern: reviewGatewayPreparePattern, name: "prepare_common_review"},
 		{pattern: reviewGatewayDraftPattern, name: "generate_review_draft"},
 		{pattern: reviewGatewayRefreshPattern, name: "refresh_review_context"},
 	}
@@ -237,6 +252,21 @@ func NewReviewGateway(bindings ReviewGatewayBindings, config ReviewGatewayConfig
 		binding.AdminUserIDs = sortedUniqueReviewGatewayStrings(binding.AdminUserIDs)
 		binding.AllowedUserIDs = sortedUniqueReviewGatewayStrings(binding.AllowedUserIDs)
 		result.bindings[binding.ChatID] = binding
+	}
+	identityUsers := map[string]bool{}
+	for _, identity := range bindings.IdentityBindings {
+		if !identity.Enabled {
+			continue
+		}
+		userID := strings.TrimSpace(identity.FeishuUserID)
+		login := strings.TrimSpace(identity.GitLinkLogin)
+		if userID == "" || login == "" {
+			return nil, fmt.Errorf("enabled Review identity bindings require feishu_user_id and gitlink_login")
+		}
+		if identityUsers[userID] {
+			return nil, fmt.Errorf("duplicate Review identity binding for Feishu user %q", userID)
+		}
+		identityUsers[userID] = true
 	}
 	return result, nil
 }
@@ -368,6 +398,13 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 	case "查看我的 review 任务", "我的 review 任务", "my review tasks":
 		return ReviewGatewayIntent{Name: "read_my_review_tasks"}
 	}
+	if match := reviewGatewayDeadlinePattern.FindStringSubmatch(content); len(match) == 3 {
+		number, _ := strconv.Atoi(match[1])
+		return ReviewGatewayIntent{Name: "set_review_deadline", PRNumber: number, Argument: match[2]}
+	}
+	if match := reviewGatewayConfirmPattern.FindStringSubmatch(content); len(match) == 2 {
+		return ReviewGatewayIntent{Name: "confirm_common_review", Argument: match[1]}
+	}
 	for _, rule := range reviewGatewayIntentPatterns {
 		match := rule.pattern.FindStringSubmatch(content)
 		if len(match) != 2 {
@@ -385,25 +422,40 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 }
 
 func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, dedupeKey string, now time.Time) ReviewGatewayJob {
-	collaborationMutation := intent.Name == "plan_bind_repository" || intent.Name == "plan_claim_review"
+	collaborationMutation := intent.Name == "plan_bind_repository" ||
+		intent.Name == "claim_review" ||
+		intent.Name == "release_review" ||
+		intent.Name == "set_review_deadline"
 	requiresAdmin := intent.Name == "plan_bind_repository"
-	jobSeed := strings.Join([]string{dedupeKey, intent.Name, intent.Repository, strconv.Itoa(intent.PRNumber)}, "\x00")
+	jobSeed := strings.Join([]string{dedupeKey, intent.Name, intent.Repository, strconv.Itoa(intent.PRNumber), intent.Argument}, "\x00")
 	digest := sha256.Sum256([]byte(jobSeed))
+	mode := "preview"
+	if collaborationMutation && intent.Name != "plan_bind_repository" {
+		mode = "collaboration"
+	}
+	mutatesGitLink := intent.Name == "confirm_common_review"
+	if intent.Name == "prepare_common_review" {
+		mode = "action_plan"
+	}
+	if mutatesGitLink {
+		mode = "controlled_write"
+	}
 	return ReviewGatewayJob{
 		SchemaVersion:         reviewGatewayJobSchema,
 		JobID:                 "job-" + hex.EncodeToString(digest[:8]),
 		DedupeKey:             dedupeKey,
 		Status:                "queued",
-		Mode:                  "preview",
+		Mode:                  mode,
 		Action:                intent.Name,
 		Repository:            intent.Repository,
 		PRNumber:              intent.PRNumber,
+		Argument:              intent.Argument,
 		ChatID:                event.ChatID,
 		RequestedBy:           event.UserID,
 		SourceEventID:         event.EventID,
 		SourceMessageID:       event.MessageID,
 		CreatedAt:             now.Format(time.RFC3339),
-		MutatesGitLink:        false,
+		MutatesGitLink:        mutatesGitLink,
 		CollaborationMutation: collaborationMutation,
 		RequiresAdmin:         requiresAdmin,
 		MaxAttempts:           3,

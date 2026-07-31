@@ -1,0 +1,56 @@
+name: Round 2 Review Collaboration Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - feat/round2-review-collaboration-p2-p5
+
+permissions:
+  contents: read
+
+jobs:
+  p2-p5:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: bridges/wecom/package-lock.json
+
+      - name: Install locked Enterprise WeChat SDK
+        working-directory: bridges/wecom
+        run: npm ci --ignore-scripts
+
+      - name: Check P2-P5 formatting
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l \
+            internal/collab/*.go \
+            shortcuts/feishu/review_*.go \
+            shortcuts/wecom/*.go \
+            shortcuts/workflow/review_orchestrator*.go)"
+          test -z "${unformatted}" || {
+            echo "${unformatted}"
+            exit 1
+          }
+
+      - name: Test P2-P5 Go packages
+        run: go test ./shortcuts/feishu ./shortcuts/wecom ./shortcuts/workflow
+
+      - name: Test Enterprise WeChat bridge contracts
+        working-directory: bridges/wecom
+        run: npm test
+
+      - name: Build all production packages
+        run: go build ./...
+
+      - name: Vet P2-P5 packages
+        run: go vet ./internal/collab ./shortcuts/feishu ./shortcuts/wecom ./shortcuts/workflow

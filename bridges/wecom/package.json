@@ -1,0 +1,17 @@
+{
+  "name": "gitlink-wecom-review-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "GET-only Enterprise WeChat intelligent bot adapter for the GitLink Review collaboration core",
+  "scripts": {
+    "start": "node src/index.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@wecom/aibot-node-sdk": "1.0.7"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

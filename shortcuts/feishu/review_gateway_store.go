@@ -63,6 +63,70 @@ CREATE TABLE IF NOT EXISTS review_gateway_jobs (
 );
 CREATE INDEX IF NOT EXISTS review_gateway_jobs_status
     ON review_gateway_jobs(status);
+
+CREATE TABLE IF NOT EXISTS review_collaboration_items (
+    pr_key TEXT PRIMARY KEY,
+    repository TEXT NOT NULL,
+    pr_number INTEGER NOT NULL,
+    chat_id TEXT NOT NULL,
+    review_stage TEXT NOT NULL DEFAULT 'unreviewed',
+    decision TEXT NOT NULL DEFAULT 'pending',
+    collection_status TEXT NOT NULL DEFAULT 'pending',
+    head_sha TEXT NOT NULL DEFAULT '',
+    source_fingerprint TEXT NOT NULL DEFAULT '',
+    assigned_to TEXT NOT NULL DEFAULT '',
+    collaboration_status TEXT NOT NULL DEFAULT 'unassigned',
+    due_at TEXT NOT NULL DEFAULT '',
+    archived INTEGER NOT NULL DEFAULT 0,
+    updated_by TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS review_collaboration_items_assignee
+    ON review_collaboration_items(assigned_to, archived);
+
+CREATE TABLE IF NOT EXISTS review_collaboration_audit (
+    audit_id TEXT PRIMARY KEY,
+    pr_key TEXT NOT NULL,
+    action TEXT NOT NULL,
+    actor_id TEXT NOT NULL,
+    before_json TEXT NOT NULL,
+    after_json TEXT NOT NULL,
+    source_job_id TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS review_collaboration_audit_pr
+    ON review_collaboration_audit(pr_key, created_at);
+
+CREATE TABLE IF NOT EXISTS review_action_plans (
+    plan_id TEXT PRIMARY KEY,
+    repository TEXT NOT NULL,
+    pr_number INTEGER NOT NULL,
+    actor_id TEXT NOT NULL,
+    gitlink_login TEXT NOT NULL,
+    expected_head_sha TEXT NOT NULL,
+    source_fingerprint TEXT NOT NULL,
+    review_status TEXT NOT NULL,
+    content TEXT NOT NULL,
+    status TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    source_job_id TEXT NOT NULL,
+    review_id TEXT NOT NULL DEFAULT '',
+    error_summary TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS review_action_plans_status
+    ON review_action_plans(status, expires_at);
+
+CREATE TABLE IF NOT EXISTS review_collaboration_resources (
+    work_item_key TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    remote_id TEXT NOT NULL DEFAULT '',
+    content_fingerprint TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (work_item_key, resource_type)
+);
 `
 
 var reviewGatewayJobMigrations = map[string]string{

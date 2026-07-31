@@ -32,6 +32,16 @@ jobs:
       - name: Test workflow shortcuts
         run: go test ./shortcuts/workflow
 
+      - name: Test Enterprise WeChat adapter
+        run: go test ./shortcuts/wecom
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Test Enterprise WeChat long-connection bridge contracts
+        run: node --test bridges/wecom/test/*.test.mjs
+
       - name: Run Go tests
         run: go test ./...
 
