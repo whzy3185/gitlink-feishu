@@ -618,3 +618,9 @@ Reviewer：基于新 Context 重新评估
 - 云空间权限：<https://open.feishu.cn/document/server-docs/docs/permission/overview>
 - Task v2：<https://open.feishu.cn/document/task-v2/overview>
 - OAuth user access token：<https://open.feishu.cn/document/authentication-management/access-token/get-user-access-token?lang=zh-CN>
+
+当前长连接无响应问题的脱敏证据、实现细节和提供给飞书 Agent 的问题清单见：
+
+```text
+docs/FEISHU_AGENT_DEBUG_HANDOFF.md
+```
