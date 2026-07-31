@@ -1,0 +1,46 @@
+{
+  "_contract_status": "offline_renderer_sample_not_sent",
+  "_event_id": "repo-attention:gitlink_gitlink-cli:repo_report_fixture_v1",
+  "msgtype": "template_card",
+  "template_card": {
+    "card_type": "text_notice",
+    "source": {
+      "desc": "GitLink CLI · 仅预览",
+      "desc_color": 1
+    },
+    "main_title": {
+      "title": "GitLink Owner 简报",
+      "desc": "Gitlink/gitlink-cli"
+    },
+    "emphasis_content": {
+      "title": "3",
+      "desc": "高风险协作项"
+    },
+    "sub_title_text": "已分析 3 个 Issue 和 3 个 PR；2 个高风险 Issue、1 个高风险 PR。健康分 88，CI 状态未知。",
+    "horizontal_content_list": [
+      {
+        "keyname": "建议 1",
+        "value": "先审阅高风险 Issue 和 PR"
+      },
+      {
+        "keyname": "建议 2",
+        "value": "为 2 个 Issue 补充复现信息"
+      },
+      {
+        "keyname": "边界",
+        "value": "规则分析，不执行 GitLink 写操作"
+      }
+    ],
+    "jump_list": [
+      {
+        "type": 1,
+        "url": "https://www.gitlink.org.cn/Gitlink/gitlink-cli",
+        "title": "打开 GitLink"
+      }
+    ],
+    "card_action": {
+      "type": 1,
+      "url": "https://www.gitlink.org.cn/Gitlink/gitlink-cli"
+    }
+  }
+}

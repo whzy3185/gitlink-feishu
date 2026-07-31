@@ -1,0 +1,66 @@
+{
+  "schema_version": "collab.event/v0",
+  "event_id": "repo-attention:gitlink_gitlink-cli:repo_report_fixture_v1",
+  "event_type": "repository.attention_required",
+  "source_fingerprint": "sha256:3a7850e05a6c6cac9cce5fa973c0fcef1aad982d9b46590fa35103f7f2a4de97",
+  "source": {
+    "system": "gitlink",
+    "repository": "Gitlink/gitlink-cli",
+    "mode": "local_fixture",
+    "url": "https://www.gitlink.org.cn/Gitlink/gitlink-cli"
+  },
+  "data_scope": {
+    "issues_analyzed": 3,
+    "pull_requests_analyzed": 3,
+    "repository_open_issues_reported_by_health_input": 8,
+    "complete_repository_inventory": false
+  },
+  "audience": [
+    "owner"
+  ],
+  "severity": "high",
+  "title": "Gitlink/gitlink-cli 有 3 个高风险协作项需要关注",
+  "summary": "已分析 3 个 Issue 和 3 个 PR；其中 2 个高风险 Issue、1 个高风险 PR。",
+  "evidence": [
+    {
+      "kind": "issue_risk_bucket",
+      "value": 2,
+      "confidence": "rule_based",
+      "source_url": "https://www.gitlink.org.cn/Gitlink/gitlink-cli/issues"
+    },
+    {
+      "kind": "pull_request_risk_bucket",
+      "value": 1,
+      "confidence": "rule_based",
+      "source_url": "https://www.gitlink.org.cn/Gitlink/gitlink-cli/pulls"
+    },
+    {
+      "kind": "health_score",
+      "value": 88,
+      "confidence": "derived",
+      "source_url": "https://www.gitlink.org.cn/Gitlink/gitlink-cli"
+    }
+  ],
+  "unknowns": [
+    "ci_status"
+  ],
+  "next_steps": [
+    {
+      "action": "review_high_risk_items",
+      "label": "先审阅高风险 Issue 和 PR",
+      "requires_confirmation": true,
+      "executes_write": false
+    },
+    {
+      "action": "request_missing_information",
+      "label": "为 2 个 Issue 补充复现信息",
+      "requires_confirmation": true,
+      "executes_write": false
+    }
+  ],
+  "delivery_policy": {
+    "mode": "preview_only",
+    "personal_delivery_allowed": false,
+    "gitlink_write_allowed": false
+  }
+}

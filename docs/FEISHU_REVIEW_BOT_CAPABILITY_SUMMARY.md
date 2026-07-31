@@ -624,3 +624,9 @@ Reviewer：基于新 Context 重新评估
 ```text
 docs/FEISHU_AGENT_DEBUG_HANDOFF.md
 ```
+
+完整实现、历史资料、企业微信对照研究和所有阶段文档的统一入口见：
+
+```text
+docs/FEISHU_COMPLETE_IMPLEMENTATION_INDEX.md
+```
