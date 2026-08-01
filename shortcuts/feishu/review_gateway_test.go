@@ -1340,7 +1340,9 @@ func TestReviewGatewayReplyDispatcherMaintainsOneCardPerWorkItem(t *testing.T) {
 		&reviewGatewayJSONOutput{writer: io.Discard},
 		2,
 	)
-	dispatcher.now = func() time.Time { return now.Add(time.Minute) }
+	// CompleteJob timestamps reply readiness with the real clock. Keep the
+	// dispatcher clock ahead of that value so this test remains deterministic.
+	dispatcher.now = func() time.Time { return time.Now().Add(time.Minute) }
 
 	deliver := func(id, decision string, at time.Time) ReviewCollaborationBundle {
 		t.Helper()

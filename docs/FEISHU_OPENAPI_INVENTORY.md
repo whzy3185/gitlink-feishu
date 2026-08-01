@@ -52,6 +52,9 @@ https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document-block/cre
 https://open.feishu.cn/document/server-docs/docs/wiki-v2/space/get_node
 
 Base / Bitable:
+https://open.feishu.cn/document/server-docs/docs/bitable-v1/app/create
+https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table/list
+https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table/create
 https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-record/search
 https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-record/create?lang=zh-CN
 https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-record/update
@@ -71,12 +74,15 @@ https://www.feishu.cn/feishu-cli
 | --- | --- | --- | --- | --- | --- |
 | Custom bot webhook | `POST /open-apis/bot/v2/hook/{token}` | `+bot-test`, `+notify`, `+weekly-report`, `+owner-digest`, `+contributor-digest` | Implemented stable | Feishu chat message | Requires `--send`; preview by default |
 | Custom bot signature | timestamp + HMAC-SHA256 signing secret | same as above | Implemented stable | Request signature only | `FEISHU_WEBHOOK_SECRET` optional |
-| Tenant token | `POST /auth/v3/tenant_access_token/internal` | `+app-check --remote`, `+doc-check --remote`, `+bitable-check --remote`, `+task-check --remote`, `+doc-export`, `+bitable-sync`, `+task-create` | Implemented | Tenant token | No token cache yet |
+| Tenant token | `POST /auth/v3/tenant_access_token/internal` | `+app-check --remote`, `+doc-check --remote`, `+bitable-check --remote`, `+task-check --remote`, `+doc-export`, `+bitable-sync`, `+review-base-bootstrap`, `+task-create` | Implemented | Tenant token | No token cache yet |
 | Wiki node resolution | `GET /wiki/v2/spaces/get_node?token=...` | `+doc-check --remote`, `+doc-export` | Implemented | Wiki metadata read | Used to resolve Wiki node to DocX object token |
 | DocX create | `POST /docx/v1/documents` | `+doc-export` | Implemented experimental | New DocX document | Requires folder/resource permission |
 | DocX append blocks | `POST /docx/v1/documents/{document_id}/blocks/{block_id}/children` | `+doc-export` | Implemented experimental | DocX block tree | Real write can fail on scope or document permission |
 | Bitable search | `POST /bitable/v1/apps/{app_token}/tables/{table_id}/records/search` | `+bitable-check --remote`, `+bitable-sync` | Implemented | Existing Base table | `+bitable-check` searches a sentinel key without writing |
-| Bitable create record | `POST /bitable/v1/apps/{app_token}/tables/{table_id}/records` | `+bitable-sync` | Implemented experimental | Existing Base table | No table/field/view creation |
+| Bitable create Base | `POST /bitable/v1/apps` | `+review-base-bootstrap --send` | Implemented experimental | New dedicated Review Base | Preview by default; saves a local recovery env immediately after creation |
+| Bitable list tables | `GET /bitable/v1/apps/{app_token}/tables` | `+review-base-bootstrap --send` | Implemented | Existing/new Base | Reuses an exact `Review WorkItems` table name on retry |
+| Bitable create table and fields | `POST /bitable/v1/apps/{app_token}/tables` | `+review-base-bootstrap --send` | Implemented experimental | New Review WorkItems table | Creates all 14 initial fields; retains the blank default table and deletes nothing |
+| Bitable create record | `POST /bitable/v1/apps/{app_token}/tables/{table_id}/records` | `+bitable-sync`, Review gateway publisher | Implemented experimental | Existing Base table | Review publisher preserves human-owned collaboration fields |
 | Bitable update record | `PUT /bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}` | `+bitable-sync` | Implemented experimental | Existing Base table | Never deletes records |
 | Task create | `POST /task/v2/tasks` | `+task-create` | Implemented experimental | Feishu task | Project/section placement is not mapped into request body yet |
 | IM app bot send | `POST /im/v1/messages?receive_id_type=...` | none | Planned | App-bot message | Needed for direct/group app bot sends beyond custom bot |
@@ -589,12 +595,23 @@ DocX / Wiki validation:
 Bitable validation:
 
 ```text
+Review collaboration Base:
+1. Grant the self-built app Base/Bitable create and edit scopes.
+2. Run `feishu +review-base-bootstrap` without `--send` and inspect the plan.
+3. Run it again with `--send` to create the dedicated Base and 14-field
+   Review WorkItems table.
+4. Dot-source `.local/feishu-review-resources.env.ps1`; it defines
+   FEISHU_REVIEW_BASE_APP_TOKEN and FEISHU_REVIEW_TABLE_ID.
+5. The command retains the blank default table and never deletes resources.
+6. On interruption, dot-source the recovery env and rerun; an exact existing
+   Review WorkItems table is reused.
+
+Legacy report export tables:
 1. Create or choose a Base manually.
 2. Create reports, issues, prs, contributors, and tasks tables manually.
 3. Add a unique_key field to every table.
 4. Copy FEISHU_BASE_APP_TOKEN and each table ID into local env.
-5. Grant the self-built app Base/Bitable access.
-6. Run +bitable-sync without --send first, then with --send.
+5. Run +bitable-sync without --send first, then with --send.
 ```
 
 For a quick validation, multiple table env vars can point to the same test

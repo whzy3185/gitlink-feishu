@@ -96,7 +96,7 @@ func newReviewGatewayShortcut() *common.Shortcut {
 			{Name: "sqlite-timeout-ms", Usage: "SQLite budget inside each Feishu callback", Default: "500"},
 			{Name: "enable-gitlink-review-write", Usage: "Explicitly enable confirmed common Review writes; approved/rejected/comment/merge remain disabled", Bool: true, Default: "false"},
 			{Name: "sync-feishu-resources", Usage: "Explicitly sync configured Base/Doc/Task resources from the canonical WorkItem", Bool: true, Default: "false"},
-			{Name: "base-app-token", Usage: "Feishu Base app token. Defaults to FEISHU_BASE_APP_TOKEN"},
+			{Name: "base-app-token", Usage: "Review Base app token. Defaults to FEISHU_REVIEW_BASE_APP_TOKEN, then FEISHU_BASE_APP_TOKEN"},
 			{Name: "review-table-id", Usage: "Feishu Base table for Review WorkItems. Defaults to FEISHU_REVIEW_TABLE_ID"},
 			{Name: "review-document-id", Usage: "Feishu DocX receiving Review snapshots. Defaults to FEISHU_REVIEW_DOCUMENT_ID"},
 			{Name: "review-document-folder-token", Usage: "Feishu folder for one durable Review document per PR. Defaults to FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN"},
@@ -313,9 +313,13 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 	syncFeishuResources := parseBool(runtime.Arg("sync-feishu-resources"))
 	if syncFeishuResources {
 		publisherConfig := ReviewCollaborationPublisherConfig{
-			AppID:               appID,
-			AppSecret:           appSecret,
-			BaseAppToken:        firstNonEmpty(runtime.Arg("base-app-token"), os.Getenv("FEISHU_BASE_APP_TOKEN")),
+			AppID:     appID,
+			AppSecret: appSecret,
+			BaseAppToken: firstNonEmpty(
+				runtime.Arg("base-app-token"),
+				os.Getenv("FEISHU_REVIEW_BASE_APP_TOKEN"),
+				os.Getenv("FEISHU_BASE_APP_TOKEN"),
+			),
 			ReviewTableID:       firstNonEmpty(runtime.Arg("review-table-id"), os.Getenv("FEISHU_REVIEW_TABLE_ID")),
 			DocumentID:          firstNonEmpty(runtime.Arg("review-document-id"), os.Getenv("FEISHU_REVIEW_DOCUMENT_ID")),
 			DocumentFolderToken: firstNonEmpty(runtime.Arg("review-document-folder-token"), os.Getenv("FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN")),

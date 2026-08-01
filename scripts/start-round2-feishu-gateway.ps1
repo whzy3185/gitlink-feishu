@@ -7,7 +7,7 @@ param(
 
     [string]$StateDB = ".local/review-gateway-v2.db",
     [switch]$EnableFeishuResourceSync,
-    [string]$BaseAppToken = $env:FEISHU_BASE_APP_TOKEN,
+    [string]$BaseAppToken = $(if ([string]::IsNullOrWhiteSpace($env:FEISHU_REVIEW_BASE_APP_TOKEN)) { $env:FEISHU_BASE_APP_TOKEN } else { $env:FEISHU_REVIEW_BASE_APP_TOKEN }),
     [string]$ReviewTableID = $env:FEISHU_REVIEW_TABLE_ID,
     [string]$ReviewDocumentID = $env:FEISHU_REVIEW_DOCUMENT_ID,
     [string]$ReviewDocumentFolderToken = $env:FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN,

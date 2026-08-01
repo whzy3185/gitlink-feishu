@@ -34,9 +34,30 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		newBitableSchemaShortcut(),
 		newBitableRecordsShortcut(),
 		newBitableSyncShortcut(),
+		newReviewBaseBootstrapShortcut(),
 		newTaskPreviewShortcut(),
 		newTaskCreateShortcut(),
 		newReviewGatewayShortcut(),
+	}
+}
+
+func newReviewBaseBootstrapShortcut() *common.Shortcut {
+	return &common.Shortcut{
+		Name:        "review-base-bootstrap",
+		Description: "Preview or create the dedicated Feishu Base and Review WorkItems table",
+		Flags: []common.Flag{
+			{Name: "app-id", Usage: "Feishu self-built app ID. Defaults to FEISHU_APP_ID"},
+			{Name: "app-secret", Usage: "Feishu self-built app secret. Defaults to FEISHU_APP_SECRET"},
+			{Name: "base-name", Usage: "Name of the new Feishu Base", Default: defaultReviewBaseName},
+			{Name: "table-name", Usage: "Review WorkItem table name", Default: defaultReviewTableName},
+			{Name: "view-name", Usage: "Default table view name", Default: defaultReviewViewName},
+			{Name: "folder-token", Usage: "Optional target folder. Defaults to FEISHU_REVIEW_BASE_FOLDER_TOKEN"},
+			{Name: "time-zone", Usage: "Base time zone", Default: "Asia/Shanghai"},
+			{Name: "resume-app-token", Usage: "Resume/reuse a created Base. Defaults to FEISHU_REVIEW_BASE_APP_TOKEN"},
+			{Name: "output-env", Usage: "Local PowerShell environment file for created resource IDs", Default: defaultReviewEnvPath},
+			{Name: "send", Usage: "Actually create/reuse Feishu resources; preview is the default", Bool: true, Default: "false"},
+		},
+		Run: runReviewBaseBootstrap,
 	}
 }
 

@@ -59,10 +59,12 @@ try {
     $oldAppID = $env:FEISHU_APP_ID
     $oldAppSecret = $env:FEISHU_APP_SECRET
     $oldBaseToken = $env:FEISHU_BASE_APP_TOKEN
+    $oldReviewBaseToken = $env:FEISHU_REVIEW_BASE_APP_TOKEN
     $oldReviewTable = $env:FEISHU_REVIEW_TABLE_ID
     $env:FEISHU_APP_ID = "app_contract"
     $env:FEISHU_APP_SECRET = "secret_contract"
     $env:FEISHU_BASE_APP_TOKEN = "base_contract"
+    $env:FEISHU_REVIEW_BASE_APP_TOKEN = ""
     $env:FEISHU_REVIEW_TABLE_ID = ""
     try {
         $readOnly = & (Join-Path $PSScriptRoot "start-round2-feishu-gateway.ps1") `
@@ -103,6 +105,7 @@ try {
         $env:FEISHU_APP_ID = $oldAppID
         $env:FEISHU_APP_SECRET = $oldAppSecret
         $env:FEISHU_BASE_APP_TOKEN = $oldBaseToken
+        $env:FEISHU_REVIEW_BASE_APP_TOKEN = $oldReviewBaseToken
         $env:FEISHU_REVIEW_TABLE_ID = $oldReviewTable
     }
 

@@ -60,6 +60,30 @@ type BitableWriteResult struct {
 	Updated  bool   `json:"updated,omitempty"`
 }
 
+type CreatedBitableApp struct {
+	AppToken       string `json:"app_token"`
+	DefaultTableID string `json:"default_table_id,omitempty"`
+	Name           string `json:"name,omitempty"`
+	URL            string `json:"url,omitempty"`
+}
+
+type BitableTableSummary struct {
+	TableID string `json:"table_id"`
+	Name    string `json:"name"`
+}
+
+type BitableFieldSpec struct {
+	FieldName string `json:"field_name"`
+	Type      int    `json:"type"`
+	UIType    string `json:"ui_type,omitempty"`
+}
+
+type CreatedBitableTable struct {
+	TableID       string   `json:"table_id"`
+	DefaultViewID string   `json:"default_view_id,omitempty"`
+	FieldIDs      []string `json:"field_id_list,omitempty"`
+}
+
 type CreatedTask struct {
 	TaskID string `json:"task_id,omitempty"`
 }
@@ -280,6 +304,146 @@ func (c OpenAPIClient) CreateDocument(ctx context.Context, tenantToken string, f
 		return CreatedDocument{}, fmt.Errorf("Feishu docx create response missing document_id")
 	}
 	return resp.Data.Document, nil
+}
+
+func (c OpenAPIClient) CreateBitableApp(
+	ctx context.Context,
+	tenantToken,
+	name,
+	folderToken,
+	timeZone string,
+) (CreatedBitableApp, error) {
+	body := map[string]string{"name": strings.TrimSpace(name)}
+	if body["name"] == "" {
+		return CreatedBitableApp{}, fmt.Errorf("Feishu Base name is required")
+	}
+	if strings.TrimSpace(folderToken) != "" {
+		body["folder_token"] = strings.TrimSpace(folderToken)
+	}
+	if strings.TrimSpace(timeZone) != "" {
+		body["time_zone"] = strings.TrimSpace(timeZone)
+	}
+	reqBody, err := json.Marshal(body)
+	if err != nil {
+		return CreatedBitableApp{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint("/bitable/v1/apps"), bytes.NewReader(reqBody))
+	if err != nil {
+		return CreatedBitableApp{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(tenantToken))
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	var resp struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			App CreatedBitableApp `json:"app"`
+		} `json:"data"`
+	}
+	if err := c.doJSON(req, &resp); err != nil {
+		return CreatedBitableApp{}, err
+	}
+	if resp.Code != 0 {
+		return CreatedBitableApp{}, fmt.Errorf("Feishu Base create returned code %d: %s", resp.Code, resp.Msg)
+	}
+	if strings.TrimSpace(resp.Data.App.AppToken) == "" {
+		return CreatedBitableApp{}, fmt.Errorf("Feishu Base create response missing app_token")
+	}
+	return resp.Data.App, nil
+}
+
+func (c OpenAPIClient) ListBitableTables(
+	ctx context.Context,
+	tenantToken,
+	appToken string,
+) ([]BitableTableSummary, error) {
+	pageToken := ""
+	result := []BitableTableSummary{}
+	for {
+		query := url.Values{}
+		query.Set("page_size", "100")
+		if pageToken != "" {
+			query.Set("page_token", pageToken)
+		}
+		path := fmt.Sprintf("/bitable/v1/apps/%s/tables?%s", url.PathEscape(strings.TrimSpace(appToken)), query.Encode())
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint(path), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(tenantToken))
+		var resp struct {
+			Code int    `json:"code"`
+			Msg  string `json:"msg"`
+			Data struct {
+				Items     []BitableTableSummary `json:"items"`
+				HasMore   bool                  `json:"has_more"`
+				PageToken string                `json:"page_token"`
+			} `json:"data"`
+		}
+		if err := c.doJSON(req, &resp); err != nil {
+			return nil, err
+		}
+		if resp.Code != 0 {
+			return nil, fmt.Errorf("Feishu Base table list returned code %d: %s", resp.Code, resp.Msg)
+		}
+		result = append(result, resp.Data.Items...)
+		if !resp.Data.HasMore {
+			return result, nil
+		}
+		pageToken = strings.TrimSpace(resp.Data.PageToken)
+		if pageToken == "" {
+			return nil, fmt.Errorf("Feishu Base table list has_more without page_token")
+		}
+	}
+}
+
+func (c OpenAPIClient) CreateBitableTable(
+	ctx context.Context,
+	tenantToken,
+	appToken,
+	name,
+	defaultViewName string,
+	fields []BitableFieldSpec,
+) (CreatedBitableTable, error) {
+	if strings.TrimSpace(name) == "" {
+		return CreatedBitableTable{}, fmt.Errorf("Feishu Base table name is required")
+	}
+	if len(fields) == 0 {
+		return CreatedBitableTable{}, fmt.Errorf("Feishu Base table fields are required")
+	}
+	body := map[string]interface{}{
+		"table": map[string]interface{}{
+			"name":              strings.TrimSpace(name),
+			"default_view_name": strings.TrimSpace(defaultViewName),
+			"fields":            fields,
+		},
+	}
+	reqBody, err := json.Marshal(body)
+	if err != nil {
+		return CreatedBitableTable{}, err
+	}
+	path := fmt.Sprintf("/bitable/v1/apps/%s/tables", url.PathEscape(strings.TrimSpace(appToken)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint(path), bytes.NewReader(reqBody))
+	if err != nil {
+		return CreatedBitableTable{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(tenantToken))
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	var resp struct {
+		Code int                 `json:"code"`
+		Msg  string              `json:"msg"`
+		Data CreatedBitableTable `json:"data"`
+	}
+	if err := c.doJSON(req, &resp); err != nil {
+		return CreatedBitableTable{}, err
+	}
+	if resp.Code != 0 {
+		return CreatedBitableTable{}, fmt.Errorf("Feishu Base table create returned code %d: %s", resp.Code, resp.Msg)
+	}
+	if strings.TrimSpace(resp.Data.TableID) == "" {
+		return CreatedBitableTable{}, fmt.Errorf("Feishu Base table create response missing table_id")
+	}
+	return resp.Data, nil
 }
 
 func (c OpenAPIClient) CreateBlocks(ctx context.Context, tenantToken string, documentID string, parentBlockID string, blocks []DocBlock) (CreatedBlocks, error) {

@@ -357,3 +357,36 @@ owner/repository
 ```
 
 Task、Webhook、Agent 和 GitLink common Review 放到前述证据通过之后。这样比赛演示已经能清楚展示“飞书团队协作影响 GitLink Review 效率”，同时避免把真实写回风险和平台配置问题混在一起。
+
+## 9. 使用命令行创建专用 Review Base
+
+不再要求手工逐列创建 `Review WorkItems` 表。当前分支提供：
+
+```powershell
+# 只生成计划，不访问飞书、不产生写入
+.\gitlink-cli.exe feishu +review-base-bootstrap
+
+# 明确确认后才创建 Base 和数据表
+.\gitlink-cli.exe feishu +review-base-bootstrap --send
+
+# 将创建结果加载到当前 PowerShell 会话
+. .\.local\feishu-review-resources.env.ps1
+```
+
+默认计划创建：
+
+```text
+Base: GitLink Review Queue - Round 2 Test
+Table: Review WorkItems
+View: Review Queue
+Fields: 14
+```
+
+安全边界：
+
+- 默认 preview，飞书写入 0、GitLink 写入 0；
+- `--send` 只创建或复用专用 Base/表，不删除默认空表或旧表；
+- 创建 Base 后立即保存本地恢复文件；创建表失败时可以加载恢复文件后重跑；
+- 重跑会按精确表名复用 `Review WorkItems`，避免重复建表；
+- 控制台只显示资源标识符哈希，完整 app token 和 table ID 只保存在被 `.gitignore` 保护的 `.local` 文件；
+- Gateway 优先读取 `FEISHU_REVIEW_BASE_APP_TOKEN`，不会覆盖历史报表使用的 `FEISHU_BASE_APP_TOKEN`。

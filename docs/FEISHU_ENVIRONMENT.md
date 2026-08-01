@@ -100,6 +100,8 @@ go run . feishu +notify --from-workflow-json .local\report.zh-CN.json --lang zh-
 | Name | Purpose | Required | Used by | Sensitive | How to obtain |
 | --- | --- | --- | --- | --- | --- |
 | `FEISHU_BASE_APP_TOKEN` | Base app token | Required for `+bitable-check` and `+bitable-sync --send` | `+bitable-check`, `+bitable-sync` | Yes | Feishu Base URL / Open Platform docs |
+| `FEISHU_REVIEW_BASE_APP_TOKEN` | Dedicated Review Base app token | Optional for preview; generated or reused by `+review-base-bootstrap --send` and preferred by the Review gateway | `+review-base-bootstrap`, `+review-gateway` | Yes | `.local/feishu-review-resources.env.ps1` |
+| `FEISHU_REVIEW_TABLE_ID` | Dedicated Review WorkItems table ID | Required when Review gateway Base sync is enabled | `+review-base-bootstrap`, `+review-gateway` | Yes | `.local/feishu-review-resources.env.ps1` |
 | `FEISHU_REPORT_TABLE_ID` | Reports table ID | Required when checking or syncing `reports` | `+bitable-check`, `+bitable-sync` | Yes | Base table settings / API |
 | `FEISHU_ISSUE_TABLE_ID` | Issues table ID | Required when checking or syncing `issues` | `+bitable-check`, `+bitable-sync` | Yes | Base table settings / API |
 | `FEISHU_PR_TABLE_ID` | Pull request table ID | Required when checking or syncing `prs` | `+bitable-check`, `+bitable-sync` | Yes | Base table settings / API |
