@@ -1,5 +1,10 @@
 # GitLink 飞书 PR Review 协作 P2–P5 交接
 
+> 本文保留 2026-08-01 P2–P5 交接时的状态与问题。后续已经实现 Installation v2、多仓库、
+> 固定卡片更新、签名 Webhook、外部 Agent Runner 和企业微信多仓库只读能力；当前事实与
+> 尚待真实验收项以 [协作平台 v2 实现说明](./ROUND2_FEISHU_PLATFORM_V2_IMPLEMENTATION.md)
+> 和 [证据清单](./ROUND2_PLATFORM_EVIDENCE_CHECKLIST.md) 为准。
+
 日期：2026-08-01
 
 分支：`feat/round2-review-collaboration-p2-p5`

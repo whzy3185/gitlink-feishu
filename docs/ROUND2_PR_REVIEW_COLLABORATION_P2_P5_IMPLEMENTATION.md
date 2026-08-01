@@ -1,5 +1,9 @@
 # 复赛 PR Review 协作 P2–P5 实施记录
 
+> 本文是 `feat/round2-review-collaboration-p2-p5` 的历史实施快照。Installation v2、
+> 多仓库、固定卡片 PATCH、GitLink Webhook、外部 Agent Runner 和企业微信多仓库能力的
+> 当前事实以 [协作平台 v2 实现说明](./ROUND2_FEISHU_PLATFORM_V2_IMPLEMENTATION.md) 为准。
+
 日期：2026-07-31
 分支：`feat/round2-review-collaboration-p2-p5`
 

@@ -9,12 +9,15 @@ P2.0：飞书只读入站与任务基础设施
 P2.1：真实飞书只读收发与可靠性门禁
 P2.2：飞书协作资源发布合同
 P3：受控 common Review 写回门禁
+P4：企业微信长连接只读适配
+P5：外部多 Agent 运行与确定性汇总
+Platform v2：Installation、多仓库、Webhook 与资源生命周期
 ```
 
 对应分支：
 
 ```text
-feat/round2-review-collaboration-p2-p5
+feat/round2-feishu-platform-v2
 ```
 
 ## 1. 完整定位
@@ -30,7 +33,7 @@ Gateway**。
 
 当前机器人不是一个新的大模型 Agent，也不会自行决定是否批准、拒绝或合并 PR。
 它负责确定性的事件接入、权限校验、任务可靠执行、GitLink 只读取证和飞书回复。
-后续可让已有 Agent 消费同一套 Review Context，负责风险分析、排序和草稿生成，
+当前可以通过受控 HTTP Runner 让已有 Agent Host 消费同一套 Review Context 任务合同，负责风险分析、排序和草稿生成，
 但 Agent 的建议仍然只是证据和草稿。
 
 项目的责任划分是：
@@ -126,7 +129,8 @@ gitlink-cli feishu +review-gateway --discover-chats --format json
 
 ```text
 飞书 chat_id
-<-> GitLink owner/repo
+<-> GitLink installation
+<-> 一个或多个显式允许的 owner/repo
 ```
 
 绑定还可以设置：
@@ -136,6 +140,12 @@ gitlink-cli feishu +review-gateway --discover-chats --format json
 - 允许使用机器人的用户；
 - 默认截止时间；
 - 绑定配置版本。
+- 默认仓库；
+- installation 的 observe / collaborate / write 模式；
+- installation 与群两级仓库 allowlist。
+
+多仓库群可使用 `查看 owner/repo PR #编号`。没有默认仓库时，未限定仓库的命令会要求用户
+先选择仓库；不在 installation 或群 allowlist 中的仓库不会进入 Job。
 
 首次绑定必须由管理员预配置。尚未绑定的群不在机器人 `GroupAllowlist` 内，不能
 依靠该群中的聊天命令绕过准入策略完成自助绑定。
@@ -185,8 +195,9 @@ GitLink 写入：0
 - 建议的人工下一步；
 - 明确的 `GitLink 写入：0`。
 
-当前正式输出是有长度上限的文本回复。飞书卡片事件入口已经接入，但 Review
-卡片模板、按钮状态和卡片持续更新尚未完成。
+当前正式输出支持文本回复和 WorkItem 交互卡片。每个群内的 PR 维护一条固定卡片：首次创建、
+内容变化时 PATCH 原卡片、指纹不变时跳过。真实租户中的按钮模板、动作回调和长期更新仍待验收，
+不能仅凭 Mock 合同写成平台验收完成。
 
 ### 3.6 飞书开发者后台配置面
 
@@ -403,7 +414,7 @@ SQLite schema 迁移、恢复、重试、结果和回复测试
 |---|---|---|---|
 | Channel SDK | 群聊、单聊、评论事件、回复和安全策略 | 已使用群聊与回复 | P2.1 |
 | 消息回复树 | 将回执和结果固定在原 PR 请求下 | 已使用 | P2.1 |
-| 交互卡片 | 展示 PR 摘要、领取、刷新、打开证据 | WorkItem 卡片和回调入口已实现，真实卡片动作待验收 | P2.2 |
+| 交互卡片 | 展示 PR 摘要、领取、刷新、打开证据 | 固定卡片创建、资源映射、指纹跳过和 PATCH 更新已实现；真实卡片动作待验收 | Platform v2 |
 | 流式卡片 | 展示“读取、分析、草拟”的实时进度 | 未实现 | P2.2 |
 | 多维表格 Base | 团队 Review Queue、负责人、截止时间、筛选与视图 | Publisher、资源映射和指纹已实现，真实写入待验收 | P2.2 |
 | 甘特图/看板视图 | 从 Base 协作字段观察 Review 进度和期限 | 字段数据合同已具备，真实视图待配置 | P2.2 |
@@ -631,6 +642,8 @@ P3 代码门禁已经实现，但在专用测试 PR 的 before/after、Review ID
 docs/FEISHU_AGENT_P2_P5_HANDOFF_20260801.md
 docs/FEISHU_AGENT_PLATFORM_FOLLOWUP_20260801.md
 docs/FEISHU_AGENT_PLATFORM_RESPONSE_AUDIT_20260801.md
+docs/ROUND2_FEISHU_PLATFORM_V2_IMPLEMENTATION.md
+docs/ROUND2_PLATFORM_EVIDENCE_CHECKLIST.md
 ```
 
 完整实现、历史资料、企业微信对照研究和所有阶段文档的统一入口见：

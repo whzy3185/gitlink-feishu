@@ -363,6 +363,11 @@ P2.1 单元测试
 回执与最终 Review 两次回复
 GitLink PR #431 GET-only 查询
 Task v2 client_token、负责人、关注人和全天截止日期请求合同
+Installation v2 与多仓库群绑定合同
+固定 WorkItem 卡片创建、指纹跳过与 PATCH 更新合同
+GitLink 签名 Webhook 入站与持久去重合同
+外部 Agent Runner 与 assessment 强校验合同
+企业微信多仓库只读 Review Core 与跨重启事件去重合同
 ```
 
 ### 未成立
@@ -370,7 +375,7 @@ Task v2 client_token、负责人、关注人和全天截止日期请求合同
 ```text
 常驻部署
 Base / Doc / Task 真实同步
-交互卡片延时更新和长期更新
+交互卡片真实租户动作、延时 ACK 和长期 PATCH 验收
 GitLink 专用测试 PR 的受控 common Review 写回
 企业微信真实长连接和回复
 ```
