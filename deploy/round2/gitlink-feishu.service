@@ -1,0 +1,23 @@
+[Unit]
+Description=GitLink Feishu Review Collaboration Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gitlink-review
+Group=gitlink-review
+EnvironmentFile=/etc/gitlink/feishu.env
+ExecStart=/opt/gitlink/bin/gitlink-cli feishu +review-gateway --listen --bindings /etc/gitlink/review-bindings.json --state-db /var/lib/gitlink-review/review-gateway.db --webhook-listen-address 127.0.0.1:8787 --webhook-path /gitlink/events
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/gitlink-review
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

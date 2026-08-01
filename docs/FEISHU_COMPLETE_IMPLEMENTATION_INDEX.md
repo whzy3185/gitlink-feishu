@@ -5,7 +5,7 @@
 汇总分支：
 
 ```text
-feat/round2-review-collaboration-p2-p5
+feat/round2-feishu-platform-v2
 ```
 
 仓库：
@@ -210,6 +210,9 @@ Skill 负责指导 Agent 使用稳定的 CLI/Review Context，不把开放式 Ag
 - [P2.1 实施](./ROUND2_PR_REVIEW_COLLABORATION_P21_IMPLEMENTATION.md)
 - [P2–P5 实施](./ROUND2_PR_REVIEW_COLLABORATION_P2_P5_IMPLEMENTATION.md)
 - [P2–P5 门禁收口](./ROUND2_P0_CLOSEOUT_20260731.md)
+- [飞书协作平台 v2 实现](./ROUND2_FEISHU_PLATFORM_V2_IMPLEMENTATION.md)
+- [真实平台验收与证据清单](./ROUND2_PLATFORM_EVIDENCE_CHECKLIST.md)
+- [Installation v2 示例配置](./examples/feishu-review-bindings-v2.json)
 
 ### 飞书研究和运行
 
@@ -290,7 +293,9 @@ docs/feishu-integration-design/
 
 ## 10. 企业微信资料
 
-企业微信当前是 P4 候选适配层，没有写入当前 Go Gateway。
+企业微信已经具备官方智能机器人长连接 Sidecar、本机只读 Review Core、多仓库 allowlist、
+限定仓库命令、流式回复和跨重启事件去重。真实企业微信租户验收仍待执行；企业微信入口不开放
+GitLink 写入。
 
 相关资料集中在：
 

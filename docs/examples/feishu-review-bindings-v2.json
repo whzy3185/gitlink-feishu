@@ -1,0 +1,50 @@
+{
+  "schema_version": "feishu.review-bindings/v2",
+  "installations": [
+    {
+      "installation_id": "gitlink-production",
+      "gitlink_host": "https://www.gitlink.org.cn",
+      "owner": "Gitlink",
+      "credential_ref": "env:GITLINK_INSTALL_GITLINK_TOKEN",
+      "operation_mode": "collaborate",
+      "allowed_repositories": [
+        "Gitlink/gitlink-cli",
+        "Gitlink/example-repository"
+      ],
+      "webhook_id": "gitlink-production-pr-events",
+      "webhook_secret_ref": "env:GITLINK_INSTALL_GITLINK_WEBHOOK_SECRET",
+      "enabled": true
+    }
+  ],
+  "bindings": [
+    {
+      "chat_id": "oc_replace_with_real_chat_id",
+      "installation_id": "gitlink-production",
+      "repositories": [
+        "Gitlink/gitlink-cli",
+        "Gitlink/example-repository"
+      ],
+      "default_repository": "Gitlink/gitlink-cli",
+      "enabled": true,
+      "admin_user_ids": [
+        "ou_replace_with_owner_open_id"
+      ],
+      "allowed_user_ids": [
+        "ou_replace_with_owner_open_id",
+        "ou_replace_with_reviewer_open_id"
+      ],
+      "deadline_hours": 24,
+      "binding_revision": "replace-with-change-ticket-or-git-sha"
+    }
+  ],
+  "identity_bindings": [
+    {
+      "installation_id": "gitlink-production",
+      "feishu_user_id": "ou_replace_with_owner_open_id",
+      "gitlink_login": "replace_with_gitlink_login",
+      "verification_method": "owner_admin_verified",
+      "verified_at": "2026-08-01T00:00:00Z",
+      "enabled": true
+    }
+  ]
+}

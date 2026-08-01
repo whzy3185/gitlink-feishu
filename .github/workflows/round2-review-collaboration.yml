@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feat/round2-review-collaboration-p2-p5
+      - feat/round2-feishu-platform-v2
 
 permissions:
   contents: read
@@ -36,7 +37,7 @@ jobs:
             internal/collab/*.go \
             shortcuts/feishu/review_*.go \
             shortcuts/wecom/*.go \
-            shortcuts/workflow/review_orchestrator*.go)"
+            shortcuts/workflow/review_*.go)"
           test -z "${unformatted}" || {
             echo "${unformatted}"
             exit 1

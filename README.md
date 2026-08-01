@@ -782,6 +782,8 @@ gitlink-cli/
 
 - [Skills Guide](skills/README.md) — AI Agent Skills detailed documentation
 - [Design Document](doc/design.md) — Architecture design and development plan
+- [Round 2 Feishu collaboration platform v2](docs/ROUND2_FEISHU_PLATFORM_V2_IMPLEMENTATION.md)
+- [Round 2 external platform evidence checklist](docs/ROUND2_PLATFORM_EVIDENCE_CHECKLIST.md)
 
 ## FAQ
 
