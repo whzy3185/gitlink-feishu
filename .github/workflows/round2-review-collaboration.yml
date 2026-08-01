@@ -43,6 +43,10 @@ jobs:
             exit 1
           }
 
+      - name: Test Round 2 PowerShell deployment tools
+        shell: pwsh
+        run: ./scripts/test-round2-powershell.ps1
+
       - name: Test P2-P5 Go packages
         run: go test ./shortcuts/feishu ./shortcuts/wecom ./shortcuts/workflow
 

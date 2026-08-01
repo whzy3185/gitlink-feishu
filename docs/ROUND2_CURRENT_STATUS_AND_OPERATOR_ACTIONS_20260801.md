@@ -55,10 +55,12 @@ GitHub Actions：Round 2 Review Collaboration Gate 成功
 ### 2.3 当前运行配置
 
 ```text
-绑定 schema：feishu.review-bindings/v1
+绑定 schema：feishu.review-bindings/v2
 启用群绑定：1
 绑定仓库：Gitlink/gitlink-cli
-Installation：0
+Installation：1（gitlink-public）
+Installation mode：collaborate
+Installation credential：未配置
 identity binding：0
 GitLink Token：未配置
 sync-feishu-resources：false
@@ -69,6 +71,8 @@ Agent Provider：未配置
 ```
 
 因此群内目前只能看到单仓库只读 Review，而看不到 Base、Doc、Task、多 Agent 或 GitLink 写回。
+
+本机配置已由 `scripts/migrate-review-bindings-v2.ps1` 机械迁移到 `.local/review-gateway-bindings-v2.json`，该文件包含真实群绑定且受 `.gitignore` 保护，不会提交到仓库。当前 Gateway 已使用这份 v2 配置重新启动。`scripts/start-round2-feishu-gateway.ps1` 提供只读和飞书资源同步两种显式启动模式，并且有意不提供 GitLink 写入开关。
 
 ## 3. 只读诊断结果
 
@@ -274,12 +278,12 @@ owner/repository
 
 ### R1：迁移 v2 多仓库绑定，不产生外部写入
 
-1. 从当前 v1 文件迁移到 `feishu.review-bindings/v2`；
-2. 保留当前测试群和 `Gitlink/gitlink-cli`；
-3. 加入第二个明确授权仓库；
-4. Installation 保持 `operation_mode=collaborate`；
-5. 不配置 GitLink Token；
-6. 验证未限定仓库时的默认/歧义行为和两个限定仓库查询。
+1. [x] 从当前 v1 文件迁移到 `feishu.review-bindings/v2`；
+2. [x] 保留当前测试群和 `Gitlink/gitlink-cli`；
+3. [ ] 加入第二个明确授权仓库；
+4. [x] Installation 保持 `operation_mode=collaborate`；
+5. [x] 不配置 GitLink Token；
+6. [ ] 验证未限定仓库时的默认/歧义行为和两个限定仓库查询。
 
 门禁：GitLink 写入 0，飞书资源写入 0。
 

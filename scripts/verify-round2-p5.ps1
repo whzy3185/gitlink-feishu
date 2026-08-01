@@ -11,7 +11,7 @@ function Assert-NativeSuccess {
     }
 }
 
-Write-Host "1/7 Go formatting check"
+Write-Host "1/8 Go formatting check"
 $trackedChanges = @(git diff --name-only --diff-filter=ACMR)
 $untrackedChanges = @(git ls-files --others --exclude-standard)
 $goFiles = @($trackedChanges + $untrackedChanges |
@@ -25,27 +25,30 @@ if ($changed) {
     throw "gofmt required:`n$changed"
 }
 
-Write-Host "2/7 Feishu Review collaboration tests"
+Write-Host "2/8 Round 2 PowerShell deployment tool contracts"
+& (Join-Path $PSScriptRoot "test-round2-powershell.ps1")
+
+Write-Host "3/8 Feishu Review collaboration tests"
 go test ./shortcuts/feishu
 Assert-NativeSuccess "Feishu Review collaboration tests"
 
-Write-Host "3/7 Enterprise WeChat adapter tests"
+Write-Host "4/8 Enterprise WeChat adapter tests"
 go test ./shortcuts/wecom
 Assert-NativeSuccess "Enterprise WeChat adapter tests"
 
-Write-Host "4/7 Review Core and Agent orchestration tests"
+Write-Host "5/8 Review Core and Agent orchestration tests"
 go test ./shortcuts/workflow
 Assert-NativeSuccess "Review Core and Agent orchestration tests"
 
-Write-Host "5/7 Enterprise WeChat sidecar contract tests"
+Write-Host "6/8 Enterprise WeChat sidecar contract tests"
 node --test bridges/wecom/test/*.test.mjs
 Assert-NativeSuccess "Enterprise WeChat sidecar contract tests"
 
-Write-Host "6/7 Full repository build"
+Write-Host "7/8 Full repository build"
 go build ./...
 Assert-NativeSuccess "Full repository build"
 
-Write-Host "7/7 P2-P5 vet"
+Write-Host "8/8 P2-P5 vet"
 go vet ./internal/collab ./shortcuts/feishu ./shortcuts/wecom ./shortcuts/workflow
 Assert-NativeSuccess "P2-P5 vet"
 
