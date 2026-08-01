@@ -4,6 +4,7 @@
 [![License](https://img.shields.io/badge/License-MulanPSL--2.0-blue.svg)](https://license.coscl.org.cn/MulanPSL2)
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue.svg)](https://golang.org)
 [![npm version](https://img.shields.io/npm/v/@gitlink-ai/cli.svg)](https://www.npmjs.com/package/@gitlink-ai/cli)
+[![复赛 Review 协作门禁](https://github.com/whzy3185/gitlink-feishu/actions/workflows/round2-review-collaboration.yml/badge.svg?branch=feat%2Fround2-review-collaboration-p2-p5)](https://github.com/whzy3185/gitlink-feishu/actions/workflows/round2-review-collaboration.yml?query=branch%3Afeat%2Fround2-review-collaboration-p2-p5)
 
 [GitLink（确实开源）](https://www.gitlink.org.cn) 官方 CLI 工具 — 为人类和 AI Agent 双重设计。支持 **macOS、Linux、Windows**，覆盖仓库管理、Wiki、Issue 追踪、Pull Request、Webhook、成员协作、CI/CD 和 AI 自动化工作流，包含 40+ 命令和 AI Agent [Skills](./skills/)。
 

@@ -7,8 +7,8 @@
 针对提交 `9d17980fe3ec1ad3e8d62611b04749a4fa32ab13` 的代码复核指出的 P0
 问题，本轮完成了代码与离线合同收口。准确边界仍然是：
 
-> P2–P5 定向代码门禁完成；真实飞书、企业微信和 GitLink 测试 PR 验收需要单独保存
-> 脱敏证据，不能由本地测试替代。
+> P2–P5 定向代码门禁完成。飞书消息、Gateway、GitLink GET-only 和飞书最终回复主链路
+> 已于 2026-08-01 通过；其余外部资源与写入验收仍需单独保存脱敏证据。
 
 ## 已关闭问题
 
@@ -145,8 +145,8 @@ P2–P5 vet
 ## 仍需真实环境完成
 
 ```text
-飞书真实消息 -> Gateway -> GitLink GET -> 飞书最终回复
 Base / Doc / Task 首次写入和重复执行
+飞书同一 message_id 去重、执行中重启和 reply 恢复故障演练
 企业微信真实消息 -> sidecar -> Review Core -> GitLink -> 流式回复
 GitLink 测试 PR 一次 common Review 的 before/after 和 Review ID
 ```

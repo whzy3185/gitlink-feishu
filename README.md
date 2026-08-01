@@ -4,6 +4,7 @@
 [![License](https://img.shields.io/badge/License-MulanPSL--2.0-blue.svg)](https://license.coscl.org.cn/MulanPSL2)
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue.svg)](https://golang.org)
 [![npm version](https://img.shields.io/npm/v/@gitlink-ai/cli.svg)](https://www.npmjs.com/package/@gitlink-ai/cli)
+[![Round 2 Review Collaboration Gate](https://github.com/whzy3185/gitlink-feishu/actions/workflows/round2-review-collaboration.yml/badge.svg?branch=feat%2Fround2-review-collaboration-p2-p5)](https://github.com/whzy3185/gitlink-feishu/actions/workflows/round2-review-collaboration.yml?query=branch%3Afeat%2Fround2-review-collaboration-p2-p5)
 
 The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans and AI Agents. Supports **macOS, Linux, and Windows**. Covers repository management, wiki pages, issue tracking, pull requests, webhooks, member collaboration, CI/CD, and AI-powered workflows, with 40+ commands and AI Agent [Skills](./skills/).
 

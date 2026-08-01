@@ -3,6 +3,7 @@ package feishu
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -464,13 +465,36 @@ func TestTaskCreateMockHTTP(t *testing.T) {
 		case r.Method == http.MethodPost && r.URL.Path == "/task/v2/tasks":
 			sawTask = true
 			var payload struct {
-				Summary string `json:"summary"`
+				Summary     string `json:"summary"`
+				ClientToken string `json:"client_token"`
+				Due         struct {
+					Timestamp string `json:"timestamp"`
+					IsAllDay  bool   `json:"is_all_day"`
+				} `json:"due"`
+				Members []struct {
+					Type string `json:"type"`
+					ID   string `json:"id"`
+					Role string `json:"role"`
+				} `json:"members"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				t.Fatalf("decode task payload: %v", err)
 			}
 			if payload.Summary == "" {
 				t.Fatal("task summary is empty")
+			}
+			if r.URL.Query().Get("user_id_type") != "open_id" {
+				t.Fatalf("user_id_type = %q, want open_id", r.URL.Query().Get("user_id_type"))
+			}
+			if len(payload.ClientToken) != 32 {
+				t.Fatalf("client_token = %q, want 32 hex characters", payload.ClientToken)
+			}
+			wantDue := time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC).UnixMilli()
+			if payload.Due.Timestamp != fmt.Sprintf("%d", wantDue) || !payload.Due.IsAllDay {
+				t.Fatalf("due = %#v, want UTC date-only timestamp %d", payload.Due, wantDue)
+			}
+			if len(payload.Members) != 2 || payload.Members[0].ID != "ou_owner" || payload.Members[0].Role != "assignee" || payload.Members[1].ID != "ou_follower" || payload.Members[1].Role != "follower" {
+				t.Fatalf("members = %#v", payload.Members)
 			}
 			_, _ = w.Write([]byte(`{"code":0,"msg":"success","data":{"task":{"guid":"task_guid_123456"}}}`))
 		default:
@@ -484,15 +508,18 @@ func TestTaskCreateMockHTTP(t *testing.T) {
 	defer func() { openAPIBaseURL = oldBaseURL }()
 
 	tasks := []TaskCandidate{{
-		UniqueKey:   "task:test",
-		Title:       "Review GitLink workflow report",
-		Description: "Workflow report task",
-		SourceType:  "report",
-		SourceKey:   "report-review",
-		Repository:  "Gitlink/gitlink-cli",
-		Priority:    "low",
-		TaskType:    "report_review",
-		Status:      "todo",
+		UniqueKey:       "task:test",
+		Title:           "Review GitLink workflow report",
+		Description:     "Workflow report task",
+		SourceType:      "report",
+		SourceKey:       "report-review",
+		Repository:      "Gitlink/gitlink-cli",
+		Priority:        "low",
+		TaskType:        "report_review",
+		Status:          "todo",
+		AssigneeOpenID:  "ou_owner",
+		FollowerOpenIDs: []string{"ou_follower", "ou_owner", "ou_follower"},
+		DueDate:         "2026-08-05",
 	}}
 	opts := TaskCreateOptions{AppID: "cli_xxx", AppSecret: "secret", Send: true}
 	if err := createTasksOrPreview(&common.RuntimeContext{}, opts, tasks); err != nil {
@@ -500,6 +527,42 @@ func TestTaskCreateMockHTTP(t *testing.T) {
 	}
 	if !sawTask {
 		t.Fatal("expected task create request")
+	}
+}
+
+func TestTaskClientTokenIsStableForIdenticalRequestAndChangesWithPayload(t *testing.T) {
+	task := TaskCandidate{
+		UniqueKey:      "review-work-item:Gitlink_gitlink-cli_431",
+		Title:          "Review Gitlink/gitlink-cli #431",
+		Description:    "Human review task",
+		AssigneeOpenID: "ou_owner",
+		DueDate:        "2026-08-05",
+	}
+	first, err := buildTaskCreateBody(task)
+	if err != nil {
+		t.Fatalf("buildTaskCreateBody: %v", err)
+	}
+	second, err := buildTaskCreateBody(task)
+	if err != nil {
+		t.Fatalf("buildTaskCreateBody second call: %v", err)
+	}
+	if first["client_token"] != second["client_token"] {
+		t.Fatalf("client_token changed for identical request: %q != %q", first["client_token"], second["client_token"])
+	}
+	task.Title = "Review updated patchset"
+	changed, err := buildTaskCreateBody(task)
+	if err != nil {
+		t.Fatalf("buildTaskCreateBody changed call: %v", err)
+	}
+	if first["client_token"] == changed["client_token"] {
+		t.Fatal("client_token did not change with request payload")
+	}
+}
+
+func TestTaskCreateRejectsInvalidDueDate(t *testing.T) {
+	_, err := buildTaskCreateBody(TaskCandidate{UniqueKey: "task:test", Title: "Review", DueDate: "next week"})
+	if err == nil || !strings.Contains(err.Error(), "YYYY-MM-DD") {
+		t.Fatalf("buildTaskCreateBody error = %v, want YYYY-MM-DD validation", err)
 	}
 }
 

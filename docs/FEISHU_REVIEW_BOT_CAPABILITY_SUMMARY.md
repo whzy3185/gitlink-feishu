@@ -1,18 +1,20 @@
 # GitLink 飞书 Review 机器人能力总结
 
-日期：2026-07-30
+日期：2026-08-01
 
 对应阶段：
 
 ```text
 P2.0：飞书只读入站与任务基础设施
 P2.1：真实飞书只读收发与可靠性门禁
+P2.2：飞书协作资源发布合同
+P3：受控 common Review 写回门禁
 ```
 
 对应分支：
 
 ```text
-feat/round2-review-collaboration-p21-live-reply
+feat/round2-review-collaboration-p2-p5
 ```
 
 ## 1. 完整定位
@@ -377,18 +379,21 @@ SQLite schema 迁移、恢复、重试、结果和回复测试
 目标 Go 包测试与 vet
 ```
 
-### 7.2 仍需真实用户触发
+### 7.2 P2.1 真实端到端验收
 
 ```text
+2026-08-01
 测试群真实用户 @机器人“查看 PR #431”
--> handler 在预算内完成持久化
--> 用户收到已接收回复
--> 后台完成 GitLink GET-only
--> 用户收到最终 Review 回复
--> 重发同一 message_id 不产生第二个 Job 和最终回复
+-> 收到“已接收只读 Review 请求”回复
+-> SQLite 创建 job-0bb364af6b1d2be3
+-> 后台完成 Gitlink/gitlink-cli PR #431 GET-only
+-> 收到阶段、决策、协作状态、负责人和截止时间的最终回复
+-> 两次回复均明确显示“GitLink 写入：0”
 ```
 
-在保存这条链路的脱敏证据前，不把测试群端到端验收标记为通过。
+由此确认飞书入站、Gateway、SQLite Job、GitLink GET-only 和飞书最终回复主链路已经通过。
+同一 `message_id` 重投去重、执行中重启恢复以及 reply 恢复仍应作为可靠性故障演练单独保存证据，
+不与本次正常路径验收混为一项。
 
 ## 8. 如何继续借用飞书的强势能力
 
@@ -398,13 +403,13 @@ SQLite schema 迁移、恢复、重试、结果和回复测试
 |---|---|---|---|
 | Channel SDK | 群聊、单聊、评论事件、回复和安全策略 | 已使用群聊与回复 | P2.1 |
 | 消息回复树 | 将回执和结果固定在原 PR 请求下 | 已使用 | P2.1 |
-| 交互卡片 | 展示 PR 摘要、领取、刷新、打开证据 | 回调入口已接，模板未实现 | P2.2 |
+| 交互卡片 | 展示 PR 摘要、领取、刷新、打开证据 | WorkItem 卡片和回调入口已实现，真实卡片动作待验收 | P2.2 |
 | 流式卡片 | 展示“读取、分析、草拟”的实时进度 | 未实现 | P2.2 |
-| 多维表格 Base | 团队 Review Queue、负责人、截止时间、筛选与视图 | 未实现 | P2.2 |
-| 甘特图/看板视图 | 从 Base 协作字段观察 Review 进度和期限 | 未实现 | P2.2 |
-| Docx 云文档 | 保存完整 Review 证据、草稿和人工修订 | 未实现 | P2.2 |
+| 多维表格 Base | 团队 Review Queue、负责人、截止时间、筛选与视图 | Publisher、资源映射和指纹已实现，真实写入待验收 | P2.2 |
+| 甘特图/看板视图 | 从 Base 协作字段观察 Review 进度和期限 | 字段数据合同已具备，真实视图待配置 | P2.2 |
+| Docx 云文档 | 保存完整 Review 证据、草稿和人工修订 | Publisher、资源映射和指纹已实现，真实写入待验收 | P2.2 |
 | 云文档评论 | 在 Review Doc 中 @机器人追问证据 | SDK 可接，尚未启用 | P2.2 |
-| Task v2 | Reviewer 任务、负责人、关注人、截止时间、提醒 | 未实现 | P2.2 |
+| Task v2 | Reviewer 任务、负责人、关注人、截止时间、提醒 | Publisher 已加入 `client_token`、assignee/follower 和全天 due 合同，真实写入待验收 | P2.2 |
 | OAuth | 飞书账号与 GitLink identity reference 的用户确认 | 未实现 | P3 前置 |
 | 云空间权限 | 控制 Review Doc、Base 和知识库的可见与编辑范围 | 未实现 | P2.2 |
 
@@ -572,12 +577,12 @@ Reviewer：基于新 Context 重新评估
 
 ## 10. 下一轮推荐顺序
 
-### P2.1 验收收口
+### P2.1 可靠性证据补强
 
-1. 完成真实用户群消息到两次回复；
-2. 重复消息去重验证；
-3. 执行中重启恢复验证；
-4. 保存脱敏验收记录。
+1. 保存本次真实消息、Job 和回复的脱敏验收记录；
+2. 重复 `message_id` 去重故障演练；
+3. 执行中重启恢复故障演练；
+4. 最终回复失败后的恢复演练。
 
 ### P2.2 最小飞书协作闭环
 
@@ -598,7 +603,8 @@ Reviewer：基于新 Context 重新评估
 5. 普通 Review 的 dry-run；
 6. 明确人工确认。
 
-在 P3 门禁完成前，飞书不得执行 GitLink Review、评论、Reviewer 或合并写入。
+P3 代码门禁已经实现，但在专用测试 PR 的 before/after、Review ID 和对账证据完成前，
+飞书生产入口仍不得执行 GitLink Review。批准、拒绝、行级评论、Reviewer 管理和合并继续禁止。
 
 ## 11. 当前一句话介绍
 
@@ -619,10 +625,12 @@ Reviewer：基于新 Context 重新评估
 - Task v2：<https://open.feishu.cn/document/task-v2/overview>
 - OAuth user access token：<https://open.feishu.cn/document/authentication-management/access-token/get-user-access-token?lang=zh-CN>
 
-当前长连接无响应问题的脱敏证据、实现细节和提供给飞书 Agent 的问题清单见：
+当前 P2–P5 实现、真实验收状态和提供给飞书 Agent 的问题清单见：
 
 ```text
-docs/FEISHU_AGENT_DEBUG_HANDOFF.md
+docs/FEISHU_AGENT_P2_P5_HANDOFF_20260801.md
+docs/FEISHU_AGENT_PLATFORM_FOLLOWUP_20260801.md
+docs/FEISHU_AGENT_PLATFORM_RESPONSE_AUDIT_20260801.md
 ```
 
 完整实现、历史资料、企业微信对照研究和所有阶段文档的统一入口见：

@@ -3,12 +3,14 @@ package feishu
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -314,15 +316,15 @@ func (c OpenAPIClient) UpdateBitableRecord(ctx context.Context, tenantToken stri
 }
 
 func (c OpenAPIClient) CreateTask(ctx context.Context, tenantToken string, task TaskCandidate) (CreatedTask, error) {
-	body := map[string]interface{}{
-		"summary":     task.Title,
-		"description": task.Description + taskLinkSuffix(task),
+	body, err := buildTaskCreateBody(task)
+	if err != nil {
+		return CreatedTask{}, err
 	}
 	reqBody, err := json.Marshal(body)
 	if err != nil {
 		return CreatedTask{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint("/task/v2/tasks"), bytes.NewReader(reqBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint("/task/v2/tasks?user_id_type=open_id"), bytes.NewReader(reqBody))
 	if err != nil {
 		return CreatedTask{}, err
 	}
@@ -348,6 +350,66 @@ func (c OpenAPIClient) CreateTask(ctx context.Context, tenantToken string, task 
 		return CreatedTask{}, fmt.Errorf("Feishu task create returned code %d: %s", resp.Code, resp.Msg)
 	}
 	return CreatedTask{TaskID: firstNonEmpty(resp.Data.Task.GUID, resp.Data.Task.TaskID, resp.Data.GUID, resp.Data.TaskID)}, nil
+}
+
+func buildTaskCreateBody(task TaskCandidate) (map[string]interface{}, error) {
+	description := task.Description + taskLinkSuffix(task)
+	body := map[string]interface{}{
+		"summary":     task.Title,
+		"description": description,
+	}
+
+	members := taskMembers(task)
+	if len(members) > 0 {
+		body["members"] = members
+	}
+
+	if dueDate := strings.TrimSpace(task.DueDate); dueDate != "" {
+		parsed, err := time.Parse("2006-01-02", dueDate)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Feishu task due_date %q: expected YYYY-MM-DD", dueDate)
+		}
+		body["due"] = map[string]interface{}{
+			"timestamp":  fmt.Sprintf("%d", parsed.UTC().UnixMilli()),
+			"is_all_day": true,
+		}
+	}
+
+	// Feishu retains successful client_token deduplication for only a short
+	// window. Include the canonical request content so a changed task never
+	// reuses a token with different parameters, which Feishu defines as
+	// unspecified behavior.
+	canonical, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	digest := sha256.Sum256(append([]byte(strings.TrimSpace(task.UniqueKey)+"\n"), canonical...))
+	body["client_token"] = fmt.Sprintf("%x", digest[:16])
+	return body, nil
+}
+
+func taskMembers(task TaskCandidate) []map[string]string {
+	assignee := strings.TrimSpace(task.AssigneeOpenID)
+	seen := map[string]bool{}
+	members := make([]map[string]string, 0, 1+len(task.FollowerOpenIDs))
+	if assignee != "" {
+		seen[assignee] = true
+		members = append(members, map[string]string{"type": "user", "id": assignee, "role": "assignee"})
+	}
+	followers := make([]string, 0, len(task.FollowerOpenIDs))
+	for _, candidate := range task.FollowerOpenIDs {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" || seen[candidate] {
+			continue
+		}
+		seen[candidate] = true
+		followers = append(followers, candidate)
+	}
+	sort.Strings(followers)
+	for _, follower := range followers {
+		members = append(members, map[string]string{"type": "user", "id": follower, "role": "follower"})
+	}
+	return members
 }
 
 func (c OpenAPIClient) endpoint(path string) string {

@@ -7,9 +7,13 @@
 
 P2.1.1、P2.2、P3、P4、P5 的代码合同已经实现。当前准确状态是：
 
-> 本地代码门禁完成；真实飞书、企业微信和 GitLink 写入验收仍需在测试租户、测试群和测试 PR 中单独执行。
+> 本地代码门禁完成；飞书消息到 GitLink GET-only 再到飞书最终回复的真实主链路已于
+> 2026-08-01 通过。Base、Doc、Task、企业微信和 GitLink 写入仍需在测试资源中单独验收。
 
 本轮没有在实现或测试过程中执行真实 GitLink Review、批准、拒绝、评论、Reviewer 管理或合并。
+
+真实飞书验收使用 `Gitlink/gitlink-cli` PR #431。机器人先返回 Job 回执，再返回
+`triaged / pending / unassigned` 的最终结果；两次回复均显示 `GitLink 写入：0`。
 
 ## P2.1.1：真实飞书链路收口
 
@@ -35,6 +39,7 @@ P2.1.1、P2.2、P3、P4、P5 的代码合同已经实现。当前准确状态是
 - partial 快照不能覆盖已有完整事实；
 - merged/closed 自动进入归档状态；
 - 同一 WorkItem 生成飞书卡片、Base record、Doc Markdown 和 Task candidate；
+- Task v2 创建包含内容稳定的 `client_token`、`open_id` 负责人/关注人和全天截止日期；
 - 最终回复可直接使用飞书交互卡片；
 - 可选 Publisher 将同一 WorkItem 同步到飞书多维表格、云文档和任务；
 - `review_collaboration_resources` 保存远端 ID 与内容指纹，避免重复创建任务或重复追加同一文档快照；
@@ -223,9 +228,10 @@ Gateway 启动显式 --enable-gitlink-review-write
 函数缺失、i18n 文案漂移和 API 旗标漂移。本轮不以机械修改无关历史模块掩盖该基线；无
 `-Full` 的 P2–P5 门禁只验证本轮包并要求全仓生产代码能够构建。
 
-代码门禁通过不等同于真实平台验收。真实平台还应分别保存：
+代码门禁通过不等同于全部真实平台验收。飞书正常路径已通过，仍应补强其脱敏证据并完成：
 
-- 飞书原消息 ID、handler latency、reply message ID、SQLite Job/Reply 状态；
+- 飞书同一 `message_id` 去重、执行中重启和 reply 恢复故障演练；
+- Base、Doc 和 Task 首次写入、重复执行和远端成功/本地失败对账；
 - 企业微信 req_id、脱敏 observation、最终流式回复或模板卡片回执；
 - GitLink 测试 PR 的 write-before/write-after Review 列表和 Review ID；
 - 全程使用的 commit SHA、配置 revision 和脱敏证据。

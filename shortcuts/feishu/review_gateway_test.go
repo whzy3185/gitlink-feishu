@@ -1082,6 +1082,7 @@ func TestReviewCollaborationBundleUsesOneStableWorkItem(t *testing.T) {
 		CollectionStatus:    "complete",
 		AssignedTo:          "ou_reviewer",
 		CollaborationStatus: "reviewing",
+		DueAt:               "2026-08-05",
 		UpdatedAt:           "2026-07-31T08:00:00Z",
 	}
 	bundle := BuildReviewCollaborationBundle(item)
@@ -1090,6 +1091,9 @@ func TestReviewCollaborationBundleUsesOneStableWorkItem(t *testing.T) {
 	}
 	if bundle.Task == nil || bundle.Task.UniqueKey != bundle.UniqueKey {
 		t.Fatalf("task not linked to work item: %#v", bundle.Task)
+	}
+	if bundle.Task.AssigneeOpenID != "ou_reviewer" || bundle.Task.DueDate != "2026-08-05" {
+		t.Fatalf("task collaboration mapping = %#v", bundle.Task)
 	}
 	if !strings.Contains(bundle.DocMarkdown, "GitLink 写入：0") {
 		t.Fatalf("document boundary missing: %s", bundle.DocMarkdown)

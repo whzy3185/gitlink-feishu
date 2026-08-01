@@ -13,19 +13,22 @@ import (
 )
 
 type TaskCandidate struct {
-	UniqueKey        string `json:"unique_key"`
-	Title            string `json:"title"`
-	Description      string `json:"description"`
-	SourceType       string `json:"source_type"`
-	SourceKey        string `json:"source_key"`
-	Repository       string `json:"repository"`
-	Priority         string `json:"priority"`
-	TaskType         string `json:"task_type"`
-	RecommendedOwner string `json:"recommended_owner,omitempty"`
-	Status           string `json:"status"`
-	DueHint          string `json:"due_hint,omitempty"`
-	GitLinkURL       string `json:"gitlink_url,omitempty"`
-	DocURL           string `json:"doc_url,omitempty"`
+	UniqueKey        string   `json:"unique_key"`
+	Title            string   `json:"title"`
+	Description      string   `json:"description"`
+	SourceType       string   `json:"source_type"`
+	SourceKey        string   `json:"source_key"`
+	Repository       string   `json:"repository"`
+	Priority         string   `json:"priority"`
+	TaskType         string   `json:"task_type"`
+	RecommendedOwner string   `json:"recommended_owner,omitempty"`
+	AssigneeOpenID   string   `json:"assignee_open_id,omitempty"`
+	FollowerOpenIDs  []string `json:"follower_open_ids,omitempty"`
+	Status           string   `json:"status"`
+	DueHint          string   `json:"due_hint,omitempty"`
+	DueDate          string   `json:"due_date,omitempty"`
+	GitLinkURL       string   `json:"gitlink_url,omitempty"`
+	DocURL           string   `json:"doc_url,omitempty"`
 }
 
 type TaskCreateOptions struct {
@@ -211,7 +214,7 @@ func createTasksOrPreview(ctx *common.RuntimeContext, opts TaskCreateOptions, ta
 		Tasks:         tasks,
 		Warnings: []string{
 			"Experimental: Feishu task creation requires self-built app task scopes.",
-			"Deduplication is local unique_key generation only; Feishu Task API search/linking is not implemented in this pass.",
+			"Task creation uses Feishu client_token for short retry deduplication; durable identity still relies on the locally persisted task GUID mapping.",
 		},
 	}
 	if !opts.Send {

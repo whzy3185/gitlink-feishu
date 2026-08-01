@@ -383,8 +383,10 @@ func BuildReviewCollaborationBundle(item ReviewCollaborationItem) ReviewCollabor
 		Priority:         reviewCollaborationPriority(item),
 		TaskType:         "pr_review",
 		RecommendedOwner: item.AssignedTo,
+		AssigneeOpenID:   item.AssignedTo,
 		Status:           item.CollaborationStatus,
 		DueHint:          item.DueAt,
+		DueDate:          item.DueAt,
 		GitLinkURL:       fmt.Sprintf("https://www.gitlink.org.cn/%s/pulls/%d", item.Repository, item.PRNumber),
 	}
 	if item.Archived {

@@ -1,11 +1,11 @@
 # GitLink 飞书完整实现与资料索引
 
-日期：2026-07-31
+更新日期：2026-08-01
 
 汇总分支：
 
 ```text
-feat/feishu-complete-review-integration
+feat/round2-review-collaboration-p2-p5
 ```
 
 仓库：
@@ -63,6 +63,8 @@ WAL / SHM
 | P2.1 | 可靠 Job、真实回复、handler 门禁、结果持久化 | `fa3c1fb5` |
 | 能力说明 | 机器人完整能力和飞书平台映射 | `61c44fdb` |
 | 排障交接 | 入站无响应证据与飞书 Agent 问题 | `63017d24` |
+| P2–P5 | 飞书资源 Publisher、受控 Review、企业微信、多 Agent 协议 | `9d17980f` |
+| P2–P5 门禁收口 | 写回对账、安全校验、专项 CI | `de59c393` |
 
 原本地 P0 提交：
 
@@ -206,6 +208,8 @@ Skill 负责指导 Agent 使用稳定的 CLI/Review Context，不把开放式 Ag
 - [P1.1 门禁](./ROUND2_PR_REVIEW_COLLABORATION_P11_GATE.md)
 - [P2.0 实施](./ROUND2_PR_REVIEW_COLLABORATION_P2_IMPLEMENTATION.md)
 - [P2.1 实施](./ROUND2_PR_REVIEW_COLLABORATION_P21_IMPLEMENTATION.md)
+- [P2–P5 实施](./ROUND2_PR_REVIEW_COLLABORATION_P2_P5_IMPLEMENTATION.md)
+- [P2–P5 门禁收口](./ROUND2_P0_CLOSEOUT_20260731.md)
 
 ### 飞书研究和运行
 
@@ -225,6 +229,9 @@ Skill 负责指导 Agent 使用稳定的 CLI/Review Context，不把开放式 Ag
 - [P2.1.1 收口与真实验收规划](./ROUND2_PR_REVIEW_COLLABORATION_P211_CLOSEOUT_PLAN.md)
 - [P2–P5 实施记录](./ROUND2_PR_REVIEW_COLLABORATION_P2_P5_IMPLEMENTATION.md)
 - [P2–P5 P0 收口记录](./ROUND2_P0_CLOSEOUT_20260731.md)
+- [P2–P5 飞书 Agent 完整交接](./FEISHU_AGENT_P2_P5_HANDOFF_20260801.md)
+- [飞书平台第二轮问题](./FEISHU_AGENT_PLATFORM_FOLLOWUP_20260801.md)
+- [飞书 Agent 第二轮答复核验](./FEISHU_AGENT_PLATFORM_RESPONSE_AUDIT_20260801.md)
 
 ## 8. 迁入的独立复赛资料
 
@@ -347,18 +354,20 @@ WebSocket 连接
 群历史读取
 SQLite 可靠 Job 与回复状态
 P2.1 单元测试
+真实群 @ 消息进入业务 handler
+回执与最终 Review 两次回复
+GitLink PR #431 GET-only 查询
+Task v2 client_token、负责人、关注人和全天截止日期请求合同
 ```
 
 ### 未成立
 
 ```text
-真实群消息稳定进入业务 handler
-完整两次回复链路
-真实用户 allowlist
-开发者后台事件版本/发布核对
 常驻部署
 Base / Doc / Task 真实同步
-GitLink 写回
+交互卡片延时更新和长期更新
+GitLink 专用测试 PR 的受控 common Review 写回
+企业微信真实长连接和回复
 ```
 
 ## 14. 验证命令
