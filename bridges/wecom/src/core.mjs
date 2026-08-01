@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export function normalizeTextFrame(frame, now = new Date()) {
   const body = frame?.body ?? {};
@@ -40,7 +42,11 @@ export function validateInbound(event, allowChats, allowUsers, allowAll = false)
 }
 
 export function isReadOnlyIntent(text) {
-  const supported = /^(帮助|help|查看待审查|review queue|查看\s*PR\s*#?\d+|刷新\s*PR\s*#?\d+|生成\s*PR\s*#?\d+\s*Review\s*草稿)$/i;
+  const repository = String.raw`(?:[^\s/]+\/[^\s/]+)`;
+  const supported = new RegExp(
+    String.raw`^(?:帮助|help|查看\s*(?:${repository}\s+)?待审查|review\s+queue(?:\s+${repository})?|查看\s+(?:${repository}\s+)?PR\s*#?\d+|刷新\s+(?:${repository}\s+)?PR\s*#?\d+|生成\s+(?:${repository}\s+)?PR\s*#?\d+\s*Review\s*草稿)$`,
+    'i',
+  );
   return supported.test(String(text ?? '').trim());
 }
 
@@ -71,6 +77,88 @@ export function parseSet(value) {
   );
 }
 
+export function parseBoundedInteger(value, fallback, minimum, maximum) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(minimum, Math.min(maximum, parsed));
+}
+
+export class DurableEventDedupe {
+  constructor(filePath, { ttlMs = 86400000, maxEntries = 10000, now = Date.now } = {}) {
+    this.filePath = path.resolve(filePath);
+    this.ttlMs = ttlMs;
+    this.maxEntries = maxEntries;
+    this.now = now;
+    this.entries = new Map();
+    this.load();
+  }
+
+  load() {
+    let document;
+    try {
+      document = JSON.parse(fs.readFileSync(this.filePath, 'utf8'));
+    } catch (error) {
+      if (error.code === 'ENOENT') return;
+      throw new Error(`cannot load WeCom dedupe journal: ${error.message}`);
+    }
+    if (document?.schema_version !== 'wecom.review-dedupe/v1' || !Array.isArray(document.entries)) {
+      throw new Error('invalid WeCom dedupe journal schema');
+    }
+    const cutoff = this.now() - this.ttlMs;
+    for (const entry of document.entries) {
+      if (typeof entry?.key === 'string' && Number.isFinite(entry?.seen_at) && entry.seen_at >= cutoff) {
+        this.entries.set(entry.key, entry.seen_at);
+      }
+    }
+    this.prune(this.now());
+  }
+
+  reserve(eventId) {
+    const now = this.now();
+    this.prune(now);
+    const key = createHash('sha256').update(String(eventId)).digest('hex');
+    if (this.entries.has(key)) return false;
+    this.entries.set(key, now);
+    this.prune(now);
+    this.persist();
+    return true;
+  }
+
+  release(eventId) {
+    const key = createHash('sha256').update(String(eventId)).digest('hex');
+    if (!this.entries.delete(key)) return false;
+    this.persist();
+    return true;
+  }
+
+  prune(now) {
+    const cutoff = now - this.ttlMs;
+    for (const [key, seenAt] of this.entries) {
+      if (seenAt < cutoff) this.entries.delete(key);
+    }
+    while (this.entries.size > this.maxEntries) {
+      const oldest = [...this.entries.entries()].sort((left, right) => left[1] - right[1])[0];
+      if (!oldest) break;
+      this.entries.delete(oldest[0]);
+    }
+  }
+
+  persist() {
+    fs.mkdirSync(path.dirname(this.filePath), { recursive: true, mode: 0o700 });
+    const temporary = `${this.filePath}.${process.pid}.tmp`;
+    const document = {
+      schema_version: 'wecom.review-dedupe/v1',
+      entries: [...this.entries.entries()].map(([key, seen_at]) => ({ key, seen_at })),
+    };
+    try {
+      fs.writeFileSync(temporary, `${JSON.stringify(document)}\n`, { mode: 0o600 });
+      fs.renameSync(temporary, this.filePath);
+    } finally {
+      try { fs.unlinkSync(temporary); } catch {}
+    }
+  }
+}
+
 export function validateCoreURL(value) {
   if (!String(value ?? '').trim()) return true;
   try {
@@ -84,7 +172,7 @@ export function validateCoreURL(value) {
 
 export function safeFallback(event) {
   if (!isReadOnlyIntent(event.text)) {
-    return '当前企业微信适配器只开放 GitLink Review 只读查询。支持：帮助、查看待审查、查看 PR #编号、刷新 PR #编号、生成 PR #编号 Review 草稿。GitLink 写入：0。';
+    return '当前企业微信适配器只开放 GitLink Review 只读查询。支持：帮助、查看 owner/repo 待审查、查看 owner/repo PR #编号、刷新 owner/repo PR #编号、生成 owner/repo PR #编号 Review 草稿。GitLink 写入：0。';
   }
   return '已收到只读 Review 请求，但尚未配置 GITLINK_REVIEW_CORE_URL。GitLink 写入：0。';
 }

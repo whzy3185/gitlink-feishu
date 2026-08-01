@@ -145,3 +145,54 @@ func TestReviewCoreListenAddressIsLoopbackOnly(t *testing.T) {
 		t.Fatal("non-loopback listen address must be rejected")
 	}
 }
+
+func TestReviewCoreRepositoryConfigRequiresExplicitAllowlist(t *testing.T) {
+	if _, _, err := parseReviewCoreRepositoryConfig("", "", ""); err == nil {
+		t.Fatal("empty repository allowlist must fail closed")
+	}
+	repositories, defaultRepository, err := parseReviewCoreRepositoryConfig(
+		"",
+		"Gitlink/gitlink-cli,owner/second",
+		"Gitlink/gitlink-cli",
+	)
+	if err != nil {
+		t.Fatalf("parse config: %v", err)
+	}
+	if len(repositories) != 2 || defaultRepository != "Gitlink/gitlink-cli" {
+		t.Fatalf("repositories=%#v default=%q", repositories, defaultRepository)
+	}
+	if _, _, err := parseReviewCoreRepositoryConfig("", "owner/repo", "other/repo"); err == nil {
+		t.Fatal("default outside allowlist must fail")
+	}
+}
+
+func TestReviewCoreResolvesQualifiedRepositories(t *testing.T) {
+	handler := &ReviewCoreHandler{
+		Repositories: map[string]string{
+			"gitlink/gitlink-cli": "Gitlink/gitlink-cli",
+			"owner/second":        "owner/second",
+		},
+		DefaultRepository: "Gitlink/gitlink-cli",
+	}
+	owner, repo, repository, err := handler.resolveRepository("OWNER/SECOND")
+	if err != nil || owner != "owner" || repo != "second" || repository != "owner/second" {
+		t.Fatalf("qualified resolution = %q/%q %q, %v", owner, repo, repository, err)
+	}
+	owner, repo, repository, err = handler.resolveRepository("")
+	if err != nil || owner != "Gitlink" || repo != "gitlink-cli" || repository != "Gitlink/gitlink-cli" {
+		t.Fatalf("default resolution = %q/%q %q, %v", owner, repo, repository, err)
+	}
+	if _, _, _, err := handler.resolveRepository("outside/repo"); err == nil {
+		t.Fatal("repository outside allowlist must be rejected")
+	}
+}
+
+func TestReviewCoreRequiresRepositoryWhenMultipleHaveNoDefault(t *testing.T) {
+	handler := &ReviewCoreHandler{Repositories: map[string]string{
+		"owner/one": "owner/one",
+		"owner/two": "owner/two",
+	}}
+	if _, _, _, err := handler.resolveRepository(""); err == nil {
+		t.Fatal("ambiguous unqualified command must be rejected")
+	}
+}

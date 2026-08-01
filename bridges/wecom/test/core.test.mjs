@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
+  DurableEventDedupe,
+  isReadOnlyIntent,
   normalizeTextFrame,
   observation,
   safeFallback,
@@ -77,4 +82,33 @@ test('Review Core endpoint is restricted to loopback HTTP', () => {
 
 test('fallback remains GET-only', () => {
   assert.match(safeFallback({ text: '合并 PR #431' }), /GitLink 写入：0/);
+});
+
+test('qualified multi-repository commands remain read-only', () => {
+  assert.equal(isReadOnlyIntent('查看 Gitlink/gitlink-cli PR #431'), true);
+  assert.equal(isReadOnlyIntent('查看 owner/second 待审查'), true);
+  assert.equal(isReadOnlyIntent('review queue owner/second'), true);
+  assert.equal(isReadOnlyIntent('合并 owner/second PR #42'), false);
+});
+
+test('durable dedupe stores only hashed event ids and survives restart', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wecom-dedupe-'));
+  const journal = path.join(directory, 'events.json');
+  let now = 100000;
+  try {
+    const first = new DurableEventDedupe(journal, { ttlMs: 60000, maxEntries: 100, now: () => now });
+    assert.equal(first.reserve('raw-message-id'), true);
+    assert.equal(first.reserve('raw-message-id'), false);
+    const persisted = fs.readFileSync(journal, 'utf8');
+    assert.equal(persisted.includes('raw-message-id'), false);
+
+    const restarted = new DurableEventDedupe(journal, { ttlMs: 60000, maxEntries: 100, now: () => now });
+    assert.equal(restarted.reserve('raw-message-id'), false);
+    assert.equal(restarted.release('raw-message-id'), true);
+    assert.equal(restarted.reserve('raw-message-id'), true);
+    now += 60001;
+    assert.equal(restarted.reserve('raw-message-id'), true);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });

@@ -8,6 +8,8 @@ The stable P4 boundary is GET-only:
 - one process per bot, enforced with a local instance lock;
 - group and user allowlists are fail-closed when configured;
 - raw identifiers are hashed in observations;
+- message IDs are stored only as SHA-256 keys in a bounded durable dedupe
+  journal, so SDK retries remain idempotent across restarts;
 - the bridge calls a fixed local Review Core HTTP endpoint and never builds or
   executes shell commands;
 - no GitLink token or WeCom bot secret is sent to the Review Core;
@@ -40,3 +42,20 @@ same token:
 $env:GITLINK_REVIEW_CORE_TOKEN = "one-random-local-bridge-token"
 go run . wecom +review-core --repository Gitlink/gitlink-cli
 ```
+
+For multiple explicitly authorized repositories:
+
+```powershell
+go run . wecom +review-core `
+  --repositories Gitlink/gitlink-cli,owner/second `
+  --default-repository Gitlink/gitlink-cli
+```
+
+Qualified commands use `查看 owner/repo PR #42` or
+`查看 owner/repo 待审查`. If multiple repositories are allowed and no default
+is configured, unqualified commands fail with `repository_required`.
+
+The dedupe journal defaults to `.local/wecom-review-dedupe.json`. Override its
+location with `WECOM_DEDUPE_JOURNAL`; TTL and capacity are bounded through
+`WECOM_DEDUPE_TTL_SECONDS` and `WECOM_DEDUPE_MAX_ENTRIES`. A journal read or
+write failure denies the event instead of risking a duplicate Review query.
