@@ -10,7 +10,7 @@ param(
     [string]$BaseAppToken = $(if ([string]::IsNullOrWhiteSpace($env:FEISHU_REVIEW_BASE_APP_TOKEN)) { $env:FEISHU_BASE_APP_TOKEN } else { $env:FEISHU_REVIEW_BASE_APP_TOKEN }),
     [string]$ReviewTableID = $env:FEISHU_REVIEW_TABLE_ID,
     [string]$ReviewDocumentID = $env:FEISHU_REVIEW_DOCUMENT_ID,
-    [string]$ReviewDocumentFolderToken = $env:FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN,
+    [string]$ReviewDocumentFolderToken = $(if ([string]::IsNullOrWhiteSpace($env:FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN)) { $env:FEISHU_FOLDER_TOKEN } else { $env:FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN }),
     [switch]$EnableTask,
     [switch]$CheckOnly
 )
@@ -60,21 +60,12 @@ foreach ($value in @(
 
 if ($EnableFeishuResourceSync) {
     $arguments.Add("--sync-feishu-resources")
-    if ($BaseAppToken.Trim() -ne "") {
-        foreach ($value in @("--base-app-token", $BaseAppToken, "--review-table-id", $ReviewTableID)) {
-            $arguments.Add($value)
-        }
-    }
-    if ($ReviewDocumentID.Trim() -ne "") {
-        foreach ($value in @("--review-document-id", $ReviewDocumentID)) {
-            $arguments.Add($value)
-        }
-    }
-    if ($ReviewDocumentFolderToken.Trim() -ne "") {
-        foreach ($value in @("--review-document-folder-token", $ReviewDocumentFolderToken)) {
-            $arguments.Add($value)
-        }
-    }
+    # Resource identifiers are inherited through the child environment instead
+    # of command-line arguments so they are not exposed by process listings.
+    $env:FEISHU_REVIEW_BASE_APP_TOKEN = $BaseAppToken
+    $env:FEISHU_REVIEW_TABLE_ID = $ReviewTableID
+    $env:FEISHU_REVIEW_DOCUMENT_ID = $ReviewDocumentID
+    $env:FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN = $ReviewDocumentFolderToken
     if ($EnableTask) {
         $arguments.Add("--sync-feishu-task")
     }

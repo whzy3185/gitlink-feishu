@@ -61,11 +61,15 @@ try {
     $oldBaseToken = $env:FEISHU_BASE_APP_TOKEN
     $oldReviewBaseToken = $env:FEISHU_REVIEW_BASE_APP_TOKEN
     $oldReviewTable = $env:FEISHU_REVIEW_TABLE_ID
+    $oldFolderToken = $env:FEISHU_FOLDER_TOKEN
+    $oldReviewFolderToken = $env:FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN
     $env:FEISHU_APP_ID = "app_contract"
     $env:FEISHU_APP_SECRET = "secret_contract"
     $env:FEISHU_BASE_APP_TOKEN = "base_contract"
     $env:FEISHU_REVIEW_BASE_APP_TOKEN = ""
     $env:FEISHU_REVIEW_TABLE_ID = ""
+    $env:FEISHU_FOLDER_TOKEN = "legacy_folder_contract"
+    $env:FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN = ""
     try {
         $readOnly = & (Join-Path $PSScriptRoot "start-round2-feishu-gateway.ps1") `
             -Executable $fakeExecutable `
@@ -101,12 +105,29 @@ try {
         if (-not $resource.feishu_resource_sync -or -not $resource.base_target -or -not $resource.document_folder_target) {
             throw "resource launcher contract failed"
         }
+
+        $folderFallback = & (Join-Path $PSScriptRoot "start-round2-feishu-gateway.ps1") `
+            -Executable $fakeExecutable `
+            -Bindings $destination `
+            -EnableFeishuResourceSync `
+            -CheckOnly | ConvertFrom-Json
+        if (-not $folderFallback.document_folder_target) {
+            throw "legacy folder fallback contract failed"
+        }
+
+        $launcherSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot "start-round2-feishu-gateway.ps1") -Raw
+        if ($launcherSource -match '\$arguments\.Add\(\$BaseAppToken\)' -or
+            $launcherSource -match '\$arguments\.Add\(\$ReviewDocumentFolderToken\)') {
+            throw "resource identifiers must not be passed through process arguments"
+        }
     } finally {
         $env:FEISHU_APP_ID = $oldAppID
         $env:FEISHU_APP_SECRET = $oldAppSecret
         $env:FEISHU_BASE_APP_TOKEN = $oldBaseToken
         $env:FEISHU_REVIEW_BASE_APP_TOKEN = $oldReviewBaseToken
         $env:FEISHU_REVIEW_TABLE_ID = $oldReviewTable
+        $env:FEISHU_FOLDER_TOKEN = $oldFolderToken
+        $env:FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN = $oldReviewFolderToken
     }
 
     Write-Host "Round 2 PowerShell deployment tool contracts passed."

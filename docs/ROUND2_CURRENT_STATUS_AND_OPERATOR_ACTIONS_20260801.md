@@ -390,3 +390,19 @@ Fields: 14
 - 重跑会按精确表名复用 `Review WorkItems`，避免重复建表；
 - 控制台只显示资源标识符哈希，完整 app token 和 table ID 只保存在被 `.gitignore` 保护的 `.local` 文件；
 - Gateway 优先读取 `FEISHU_REVIEW_BASE_APP_TOKEN`，不会覆盖历史报表使用的 `FEISHU_BASE_APP_TOKEN`。
+
+### 9.1 2026-08-01 命令行真实验收结果
+
+```text
+专用 Review Base：创建成功
+Review WorkItems 表：14 字段创建成功
+PR #431 WorkItem：complete、partial=false，创建成功
+相同 unique_key 再查询：恰好 1 条，第二次写入 0
+Review Evidence Doc：创建成功，11 个内容块，revision=1
+Task：单条低风险验收任务创建成功
+Gateway：Base + 每 PR Doc + Task 同步已启用
+Gateway 资源标识符：只通过子进程环境变量传递，不出现在进程参数
+GitLink 写入：0
+```
+
+真实资源 ID 仅保存在本地受忽略文件和 SQLite 映射中；文档只记录脱敏哈希或数量。下一条群内 `@gitlink 查看 PR #431` 会由已启用资源同步的 Gateway 执行完整 Publisher 链路。
