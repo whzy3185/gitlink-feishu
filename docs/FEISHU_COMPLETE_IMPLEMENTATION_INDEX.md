@@ -211,6 +211,7 @@ Skill 负责指导 Agent 使用稳定的 CLI/Review Context，不把开放式 Ag
 - [P2–P5 实施](./ROUND2_PR_REVIEW_COLLABORATION_P2_P5_IMPLEMENTATION.md)
 - [P2–P5 门禁收口](./ROUND2_P0_CLOSEOUT_20260731.md)
 - [飞书协作平台 v2 实现](./ROUND2_FEISHU_PLATFORM_V2_IMPLEMENTATION.md)
+- [GitHub App 参考模型与公共仓库读取边界](./GITLINK_FEISHU_GITHUB_APP_REFERENCE_20260801.md)
 - [真实平台验收与证据清单](./ROUND2_PLATFORM_EVIDENCE_CHECKLIST.md)
 - [Installation v2 示例配置](./examples/feishu-review-bindings-v2.json)
 

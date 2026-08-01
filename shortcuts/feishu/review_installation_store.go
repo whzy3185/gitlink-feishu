@@ -60,13 +60,14 @@ func (s *SQLiteReviewGatewayStore) SyncReviewGatewayConfiguration(
 	for _, installation := range normalized.Installations {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO gitlink_installations(
 			installation_id, gitlink_host, owner, credential_ref, operation_mode,
-			webhook_id, webhook_secret_ref, enabled, updated_at
-		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			allow_public_read, webhook_id, webhook_secret_ref, enabled, updated_at
+		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			installation.InstallationID,
 			installation.GitLinkHost,
 			installation.Owner,
 			installation.CredentialRef,
 			installation.OperationMode,
+			boolToSQLiteInteger(installation.AllowPublicRead),
 			installation.WebhookID,
 			installation.WebhookSecretRef,
 			boolToSQLiteInteger(installation.Enabled),
@@ -96,13 +97,14 @@ func (s *SQLiteReviewGatewayStore) SyncReviewGatewayConfiguration(
 		for _, repository := range binding.Repositories {
 			if _, err := tx.ExecContext(ctx, `INSERT INTO chat_repository_bindings(
 				chat_id, installation_id, repository, is_default, enabled,
-				admin_user_ids_json, allowed_user_ids_json, updated_at
-			) VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
+				allow_public_read, admin_user_ids_json, allowed_user_ids_json, updated_at
+			) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				binding.ChatID,
 				binding.InstallationID,
 				repository,
 				boolToSQLiteInteger(repository == binding.DefaultRepository),
 				boolToSQLiteInteger(binding.Enabled),
+				boolToSQLiteInteger(binding.AllowPublicRead),
 				string(adminJSON),
 				string(allowedJSON),
 				appliedAt,

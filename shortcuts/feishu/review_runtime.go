@@ -66,7 +66,10 @@ func (e *ReviewGatewayExecutor) runtimeForJob(job ReviewGatewayJob) (*common.Run
 		return nil, fmt.Errorf("GitLink installation %q is disabled", installation.InstallationID)
 	}
 	credential := ""
-	if installation.CredentialRef != "" {
+	if job.PublicRead && !reviewGatewayActionAllowsPublicRepository(job.Action) {
+		return nil, fmt.Errorf("public repository discovery is not allowed for action %q", job.Action)
+	}
+	if !job.PublicRead && installation.CredentialRef != "" {
 		var err error
 		credential, err = resolveReviewGatewaySecretReference(installation.CredentialRef)
 		if err != nil {
@@ -90,14 +93,16 @@ func (e *ReviewGatewayExecutor) runtimeForJob(job ReviewGatewayJob) (*common.Run
 	timeout := time.Duration(0)
 	if e.Runtime.Client.HTTP != nil {
 		timeout = e.Runtime.Client.HTTP.Timeout
-		switch transport := e.Runtime.Client.HTTP.Transport.(type) {
-		case *internalAuth.Transport:
-			if transport.Base != nil {
-				baseTransport = transport.Base
+		if !job.PublicRead {
+			switch transport := e.Runtime.Client.HTTP.Transport.(type) {
+			case *internalAuth.Transport:
+				if transport.Base != nil {
+					baseTransport = transport.Base
+				}
+			case nil:
+			default:
+				baseTransport = transport
 			}
-		case nil:
-		default:
-			baseTransport = transport
 		}
 	}
 	clientCopy.HTTP = &http.Client{

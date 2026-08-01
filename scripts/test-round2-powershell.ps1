@@ -54,6 +54,24 @@ try {
         throw "repository add binding contract failed"
     }
 
+    $publicRead = & (Join-Path $PSScriptRoot "set-review-public-read-policy.ps1") `
+        -Bindings $destination `
+        -Mode enabled | ConvertFrom-Json
+    $publicReadBindings = Get-Content -LiteralPath $destination -Raw | ConvertFrom-Json
+    if (-not $publicRead.public_read -or -not $publicRead.credentialless -or $publicRead.gitlink_write -or
+        -not $publicReadBindings.installations[0].allow_public_read -or
+        -not $publicReadBindings.bindings[0].allow_public_read) {
+        throw "public read opt-in contract failed"
+    }
+
+    & (Join-Path $PSScriptRoot "set-review-public-read-policy.ps1") `
+        -Bindings $destination `
+        -Mode disabled | Out-Null
+    $disabledPublicRead = Get-Content -LiteralPath $destination -Raw | ConvertFrom-Json
+    if ($disabledPublicRead.installations[0].allow_public_read -or $disabledPublicRead.bindings[0].allow_public_read) {
+        throw "public read opt-out contract failed"
+    }
+
     $writeModeRejected = $false
     try {
         & (Join-Path $PSScriptRoot "migrate-review-bindings-v2.ps1") `

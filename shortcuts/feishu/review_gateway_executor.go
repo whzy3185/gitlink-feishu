@@ -23,6 +23,7 @@ type ReviewGatewayExecutionResult struct {
 	RequestedBy        string                     `json:"requested_by"`
 	ReadOnlyGitLink    bool                       `json:"read_only_gitlink"`
 	MutatesGitLink     bool                       `json:"mutates_gitlink"`
+	PublicRead         bool                       `json:"public_read,omitempty"`
 	CompletedAt        string                     `json:"completed_at"`
 	Message            string                     `json:"message,omitempty"`
 	CollectionStatus   string                     `json:"collection_status,omitempty"`
@@ -121,6 +122,7 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		RequestedBy:     job.RequestedBy,
 		ReadOnlyGitLink: true,
 		MutatesGitLink:  false,
+		PublicRead:      job.PublicRead,
 		CompletedAt:     now().UTC().Format(time.RFC3339),
 		AttemptCount:    job.AttemptCount,
 	}
@@ -130,6 +132,12 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		result.Error = redactReviewGatewayError(ctx.Err().Error())
 		return result, ctx.Err()
 	default:
+	}
+	if job.PublicRead && !reviewGatewayActionAllowsPublicRepository(job.Action) {
+		return reviewGatewayExecutionFailure(
+			result,
+			fmt.Errorf("public repository discovery is not allowed for action %q", job.Action),
+		)
 	}
 
 	switch job.Action {
@@ -173,6 +181,7 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 			Number:          job.PRNumber,
 			VersionLimit:    100,
 			ThreadLimit:     100,
+			IncludeRepo:     true,
 			IncludePR:       true,
 			IncludeFiles:    true,
 			IncludeVersions: true,
@@ -182,10 +191,13 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		if err != nil {
 			return reviewGatewayExecutionFailure(result, err)
 		}
+		if job.PublicRead && !reviewContextRepositoryIsPublic(reviewContext) {
+			return reviewGatewayExecutionFailure(result, fmt.Errorf("public repository status could not be verified"))
+		}
 		populateReviewGatewayContextResult(&result, reviewContext)
 		plan := PlanReviewSnapshotSync(reviewContext, nil)
 		result.SnapshotPlan = &plan
-		if e.Collaboration != nil {
+		if !job.PublicRead && e.Collaboration != nil {
 			item, collaborationErr := e.Collaboration.UpsertCollaborationFacts(ctx, job, result, now().UTC())
 			if collaborationErr != nil {
 				return reviewGatewayExecutionFailure(result, collaborationErr)
@@ -195,6 +207,9 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 			e.publishCollaboration(ctx, &result, bundle)
 		}
 		result.Message = "已完成 GitLink GET-only PR 上下文读取；未执行 Review、评论、Reviewer 或合并写入。"
+		if job.PublicRead {
+			result.Message = "已完成无凭据 GitLink 公共 PR 读取；未创建协作资源，GitLink 写入 0。"
+		}
 		if job.Action == "generate_review_draft" {
 			draft := buildReviewDraftPreview(reviewContext)
 			result.Draft = &draft
@@ -341,6 +356,15 @@ func populateReviewGatewayContextResult(result *ReviewGatewayExecutionResult, re
 	result.ReviewCount = reviewContext.Summary.TotalReviews
 	result.ThreadCount = reviewContext.Summary.TotalThreads
 	result.OpenThreadCount = reviewContext.Summary.OpenThreads
+}
+
+func reviewContextRepositoryIsPublic(reviewContext workflow.ReviewContext) bool {
+	value, exists := reviewContext.RepositoryInfo["is_public"]
+	if !exists {
+		return false
+	}
+	public, ok := value.(bool)
+	return ok && public
 }
 
 func buildReviewGatewayQueueView(queue workflow.ReviewQueueResult) *ReviewGatewayQueueView {

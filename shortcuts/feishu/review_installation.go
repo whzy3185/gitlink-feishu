@@ -17,6 +17,7 @@ type GitLinkInstallation struct {
 	CredentialRef       string   `json:"credential_ref,omitempty"`
 	OperationMode       string   `json:"operation_mode"`
 	AllowedRepositories []string `json:"allowed_repositories"`
+	AllowPublicRead     bool     `json:"allow_public_read,omitempty"`
 	WebhookID           string   `json:"webhook_id,omitempty"`
 	WebhookSecretRef    string   `json:"webhook_secret_ref,omitempty"`
 	Enabled             bool     `json:"enabled"`
@@ -199,6 +200,13 @@ func validateReviewGatewayBindingsV2(input ReviewGatewayBindings) (ReviewGateway
 				)
 			}
 		}
+		if binding.AllowPublicRead && !installation.AllowPublicRead {
+			return ReviewGatewayBindings{}, fmt.Errorf(
+				"chat %q enables public read while installation %q disables it",
+				binding.ChatID,
+				binding.InstallationID,
+			)
+		}
 		binding.DefaultRepository = strings.TrimSpace(binding.DefaultRepository)
 		if binding.DefaultRepository == "" {
 			binding.DefaultRepository = strings.TrimSpace(binding.Repository)
@@ -297,21 +305,34 @@ func normalizeReviewGatewayGitLinkHost(value string) (string, error) {
 	return value, nil
 }
 
-func resolveReviewGatewayRepository(binding ReviewChatBinding, requested string) (string, string) {
+func resolveReviewGatewayRepository(
+	binding ReviewChatBinding,
+	installation GitLinkInstallation,
+	action string,
+	requested string,
+) (string, string, bool) {
 	requested = strings.TrimSpace(requested)
 	if requested != "" {
 		if containsReviewGatewayString(binding.Repositories, requested) {
-			return requested, ""
+			return requested, "", false
 		}
-		return "", "repository_not_bound"
+		if binding.AllowPublicRead && installation.AllowPublicRead &&
+			reviewGatewayActionAllowsPublicRepository(action) {
+			return requested, "", true
+		}
+		return "", "repository_not_bound", false
 	}
 	if binding.DefaultRepository != "" {
-		return binding.DefaultRepository, ""
+		return binding.DefaultRepository, "", false
 	}
 	if len(binding.Repositories) == 1 {
-		return binding.Repositories[0], ""
+		return binding.Repositories[0], "", false
 	}
-	return "", "repository_selection_required"
+	return "", "repository_selection_required", false
+}
+
+func reviewGatewayActionAllowsPublicRepository(action string) bool {
+	return action == "read_review_context"
 }
 
 func reviewGatewayActionRequiresRepository(action string) bool {

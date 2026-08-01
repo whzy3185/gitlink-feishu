@@ -140,6 +140,7 @@ CREATE TABLE IF NOT EXISTS gitlink_installations (
     owner TEXT NOT NULL DEFAULT '',
     credential_ref TEXT NOT NULL DEFAULT '',
     operation_mode TEXT NOT NULL,
+	allow_public_read INTEGER NOT NULL DEFAULT 0,
     webhook_id TEXT NOT NULL DEFAULT '',
     webhook_secret_ref TEXT NOT NULL DEFAULT '',
     enabled INTEGER NOT NULL DEFAULT 0,
@@ -161,6 +162,7 @@ CREATE TABLE IF NOT EXISTS chat_repository_bindings (
     repository TEXT NOT NULL,
     is_default INTEGER NOT NULL DEFAULT 0,
     enabled INTEGER NOT NULL DEFAULT 0,
+	allow_public_read INTEGER NOT NULL DEFAULT 0,
     admin_user_ids_json TEXT NOT NULL DEFAULT '[]',
     allowed_user_ids_json TEXT NOT NULL DEFAULT '[]',
     updated_at TEXT NOT NULL,
@@ -219,6 +221,14 @@ var reviewActionPlanMigrations = map[string]string{
 	"max_attempts":          "INTEGER NOT NULL DEFAULT 3",
 	"reconciliation_status": "TEXT NOT NULL DEFAULT 'not_required'",
 	"mutation_status":       "TEXT NOT NULL DEFAULT 'none'",
+}
+
+var reviewInstallationMigrations = map[string]string{
+	"allow_public_read": "INTEGER NOT NULL DEFAULT 0",
+}
+
+var reviewChatBindingMigrations = map[string]string{
+	"allow_public_read": "INTEGER NOT NULL DEFAULT 0",
 }
 
 var (
@@ -531,6 +541,14 @@ func OpenSQLiteReviewGatewayStore(path string) (*SQLiteReviewGatewayStore, error
 		_ = db.Close()
 		return nil, err
 	}
+	if err := ensureReviewGatewayTableColumns(db, "gitlink_installations", reviewInstallationMigrations); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := ensureReviewGatewayTableColumns(db, "chat_repository_bindings", reviewChatBindingMigrations); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	for _, statement := range []string{
 		`CREATE INDEX IF NOT EXISTS review_gateway_jobs_ready
 		 ON review_gateway_jobs(status, next_attempt_at)`,
@@ -543,6 +561,42 @@ func OpenSQLiteReviewGatewayStore(path string) (*SQLiteReviewGatewayStore, error
 		}
 	}
 	return &SQLiteReviewGatewayStore{db: db}, nil
+}
+
+func ensureReviewGatewayTableColumns(db *sql.DB, table string, migrations map[string]string) error {
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return fmt.Errorf("inspect %s schema: %w", table, err)
+	}
+	existing := map[string]bool{}
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue sql.NullString
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("read %s schema: %w", table, err)
+		}
+		existing[name] = true
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close %s schema rows: %w", table, err)
+	}
+	names := make([]string, 0, len(migrations))
+	for name := range migrations {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if existing[name] {
+			continue
+		}
+		statement := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, name, migrations[name])
+		if _, err := db.Exec(statement); err != nil {
+			return fmt.Errorf("migrate %s column %s: %w", table, name, err)
+		}
+	}
+	return nil
 }
 
 func ensureReviewGatewayJobColumns(db *sql.DB) error {

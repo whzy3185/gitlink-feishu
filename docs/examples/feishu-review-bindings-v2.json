@@ -11,6 +11,7 @@
         "Gitlink/gitlink-cli",
         "Gitlink/example-repository"
       ],
+      "allow_public_read": true,
       "webhook_id": "gitlink-production-pr-events",
       "webhook_secret_ref": "env:GITLINK_INSTALL_GITLINK_WEBHOOK_SECRET",
       "enabled": true
@@ -25,6 +26,7 @@
         "Gitlink/example-repository"
       ],
       "default_repository": "Gitlink/gitlink-cli",
+      "allow_public_read": true,
       "enabled": true,
       "admin_user_ids": [
         "ou_replace_with_owner_open_id"

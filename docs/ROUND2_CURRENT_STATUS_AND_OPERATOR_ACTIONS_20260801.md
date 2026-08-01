@@ -430,7 +430,7 @@ puygob236/KongMing-Job-Matching-Agent
 @gitlink 查看 puygob236/KongMing-Job-Matching-Agent PR #<真实测试编号>
 ```
 
-未带仓库名的 `查看 PR #431` 继续使用群绑定的默认仓库。当前绑定是三仓库验收配置，不代表产品最终只能访问三个仓库；公共仓库目标应演进为“显式 owner/repository 可 GET-only 查询”，私有仓库和任何写操作继续要求 Installation 授权。
+未带仓库名的 `查看 PR #431` 继续使用群绑定的默认仓库。当前绑定保留三个协作仓库；此外已实现 GitHub App 式公共仓库发现：Installation 和群同时显式启用 `allow_public_read` 后，任意显式 `owner/repository` 可以进行无凭据 `read_review_context`。公开状态无法由 GitLink 返回验证时拒绝，私有仓库和任何高级协作或写操作继续要求 Installation 授权。
 
 ### 10.3 参考 GitHub、Slack 与飞书的接入结构
 
@@ -445,4 +445,6 @@ puygob236/KongMing-Job-Matching-Agent
 7. Review 写回使用“预览 ActionPlan → Owner/Reviewer 二次确认 → 再校验 head SHA 与 fingerprint → 单次写入 → 对账”；
 8. Base、Doc、Task 是协作投影和审计证据，不是 GitLink Review 状态真源。
 
-当前真实运行实例只启用了上述结构中的多仓库只读和飞书资源同步。GitLink 写回仍为 0。
+当前真实运行实例启用了绑定仓库协作读取、无凭据公共仓库发现和飞书资源同步；公共发现不会创建 Base、Doc、Task，GitLink 写回仍为 0。
+
+GitHub App 安装、用户授权、仓库选择、最小权限和短期令牌的官方参考与本项目映射见：`docs/GITLINK_FEISHU_GITHUB_APP_REFERENCE_20260801.md`。

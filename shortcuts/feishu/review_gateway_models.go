@@ -41,6 +41,7 @@ type ReviewChatBinding struct {
 	Repository        string   `json:"repository,omitempty"`
 	Repositories      []string `json:"repositories,omitempty"`
 	DefaultRepository string   `json:"default_repository,omitempty"`
+	AllowPublicRead   bool     `json:"allow_public_read,omitempty"`
 	Enabled           bool     `json:"enabled"`
 	AdminUserIDs      []string `json:"admin_user_ids,omitempty"`
 	AllowedUserIDs    []string `json:"allowed_user_ids,omitempty"`
@@ -72,6 +73,7 @@ type ReviewGatewayIntent struct {
 	Repositories     []string `json:"repositories,omitempty"`
 	PRNumber         int      `json:"pr_number,omitempty"`
 	Argument         string   `json:"argument,omitempty"`
+	PublicRead       bool     `json:"public_read,omitempty"`
 }
 
 type ReviewGatewayJob struct {
@@ -87,6 +89,7 @@ type ReviewGatewayJob struct {
 	Repositories          []string `json:"repositories,omitempty"`
 	PRNumber              int      `json:"pr_number,omitempty"`
 	Argument              string   `json:"argument,omitempty"`
+	PublicRead            bool     `json:"public_read,omitempty"`
 	ChatID                string   `json:"chat_id"`
 	RequestedBy           string   `json:"requested_by"`
 	SourceEventID         string   `json:"source_event_id,omitempty"`
@@ -382,12 +385,18 @@ func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEven
 		}
 		intent.Repositories = append([]string(nil), binding.Repositories...)
 		if reviewGatewayActionRequiresRepository(intent.Name) {
-			resolved, reason := resolveReviewGatewayRepository(binding, intent.Repository)
+			resolved, reason, publicRead := resolveReviewGatewayRepository(
+				binding,
+				installation,
+				intent.Name,
+				intent.Repository,
+			)
 			if reason != "" {
 				receipt.Reason = reason
 				return receipt, nil
 			}
 			intent.Repository = resolved
+			intent.PublicRead = publicRead
 		} else if intent.Repository == "" {
 			intent.Repository = binding.DefaultRepository
 		}
@@ -519,6 +528,7 @@ func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, d
 		Repositories:          append([]string(nil), intent.Repositories...),
 		PRNumber:              intent.PRNumber,
 		Argument:              intent.Argument,
+		PublicRead:            intent.PublicRead,
 		ChatID:                event.ChatID,
 		RequestedBy:           event.UserID,
 		SourceEventID:         event.EventID,

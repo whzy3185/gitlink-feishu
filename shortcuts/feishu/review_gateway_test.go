@@ -203,6 +203,83 @@ func TestReviewGatewayUpgradesV1BindingAndResolvesV2MultiRepository(t *testing.T
 	}
 }
 
+func TestReviewGatewayPublicReadDiscoveryFollowsGitHubAppBoundary(t *testing.T) {
+	now := time.Date(2026, 8, 1, 13, 0, 0, 0, time.UTC)
+	gateway, err := NewReviewGateway(ReviewGatewayBindings{
+		SchemaVersion: reviewGatewayBindingSchema,
+		Installations: []GitLinkInstallation{{
+			InstallationID:      "main",
+			GitLinkHost:         "https://www.gitlink.org.cn",
+			CredentialRef:       "env:GITLINK_INSTALLATION_TOKEN",
+			OperationMode:       "write",
+			AllowedRepositories: []string{"owner/bound"},
+			AllowPublicRead:     true,
+			Enabled:             true,
+		}},
+		Bindings: []ReviewChatBinding{{
+			ChatID:            "oc_public",
+			InstallationID:    "main",
+			Repositories:      []string{"owner/bound"},
+			DefaultRepository: "owner/bound",
+			AllowPublicRead:   true,
+			Enabled:           true,
+		}},
+	}, ReviewGatewayConfig{Now: func() time.Time { return now }}, nil)
+	if err != nil {
+		t.Fatalf("NewReviewGateway: %v", err)
+	}
+
+	publicRead, err := gateway.Plan(ReviewGatewayEvent{
+		MessageID: "om_public", EventType: "message", ChatID: "oc_public",
+		UserID: "ou_reviewer", Content: "查看 public/repo PR #9", CreateTimeMs: now.UnixMilli(),
+	})
+	if err != nil || !publicRead.Accepted || publicRead.Job == nil ||
+		!publicRead.Job.PublicRead || publicRead.Job.MutatesGitLink ||
+		publicRead.Job.Repository != "public/repo" {
+		t.Fatalf("public read receipt = %#v, err=%v", publicRead, err)
+	}
+
+	boundRead, err := gateway.Plan(ReviewGatewayEvent{
+		MessageID: "om_bound", EventType: "message", ChatID: "oc_public",
+		UserID: "ou_reviewer", Content: "查看 owner/bound PR #9", CreateTimeMs: now.UnixMilli(),
+	})
+	if err != nil || !boundRead.Accepted || boundRead.Job == nil || boundRead.Job.PublicRead {
+		t.Fatalf("bound read receipt = %#v, err=%v", boundRead, err)
+	}
+
+	for index, content := range []string{
+		"生成 public/repo PR #9 Review 草稿",
+		"启动 public/repo PR #9 Agent 审查",
+		"领取 public/repo PR #9",
+		"准备提交 public/repo PR #9 Review",
+	} {
+		receipt, planErr := gateway.Plan(ReviewGatewayEvent{
+			MessageID: fmt.Sprintf("om_denied_%d", index), EventType: "message", ChatID: "oc_public",
+			UserID: "ou_reviewer", Content: content, CreateTimeMs: now.UnixMilli(),
+		})
+		if planErr != nil || receipt.Accepted || receipt.Reason != "repository_not_bound" {
+			t.Fatalf("public non-read command %q = %#v, err=%v", content, receipt, planErr)
+		}
+	}
+}
+
+func TestReviewGatewayPublicReadRequiresInstallationAndChatOptIn(t *testing.T) {
+	_, err := normalizeReviewGatewayBindings(ReviewGatewayBindings{
+		SchemaVersion: reviewGatewayBindingSchema,
+		Installations: []GitLinkInstallation{{
+			InstallationID: "main", OperationMode: "observe",
+			AllowedRepositories: []string{"owner/repo"}, Enabled: true,
+		}},
+		Bindings: []ReviewChatBinding{{
+			ChatID: "oc_public", InstallationID: "main",
+			Repositories: []string{"owner/repo"}, AllowPublicRead: true, Enabled: true,
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "disables it") {
+		t.Fatalf("mismatched public read policy error = %v", err)
+	}
+}
+
 func TestReviewGatewayV2DocumentationExampleIsValid(t *testing.T) {
 	payload, err := os.ReadFile("../../docs/examples/feishu-review-bindings-v2.json")
 	if err != nil {
@@ -328,6 +405,123 @@ func TestReviewGatewayRuntimeUsesInstallationCredentialInsteadOfGlobalToken(t *t
 	}
 	if baseRuntime.Client.BaseURL != "https://unused.example/api" {
 		t.Fatalf("base runtime was mutated: %q", baseRuntime.Client.BaseURL)
+	}
+}
+
+func TestReviewGatewayPublicReadRuntimeStripsInstallationCredential(t *testing.T) {
+	t.Setenv("INSTALLATION_TOKEN", "must-not-leak")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if token := request.URL.Query().Get("access_token"); token != "" {
+			t.Fatalf("public read leaked access token %q", token)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"status":0,"data":{"ok":true}}`))
+	}))
+	defer server.Close()
+	executor := &ReviewGatewayExecutor{
+		Runtime: &common.RuntimeContext{
+			Client: &client.Client{BaseURL: server.URL, HTTP: server.Client()},
+			Args:   map[string]string{},
+		},
+		Installations: map[string]GitLinkInstallation{
+			"main": {
+				InstallationID: "main", GitLinkHost: server.URL,
+				CredentialRef: "env:INSTALLATION_TOKEN", OperationMode: "write", Enabled: true,
+			},
+		},
+		RequireInstallationRuntime: true,
+	}
+	runtime, err := executor.runtimeForJob(ReviewGatewayJob{
+		InstallationID: "main", Action: "read_review_context", PublicRead: true,
+	})
+	if err != nil {
+		t.Fatalf("runtimeForJob: %v", err)
+	}
+	if _, err := runtime.CallAPI(http.MethodGet, "/test", nil); err != nil {
+		t.Fatalf("public read CallAPI: %v", err)
+	}
+	if _, err := executor.runtimeForJob(ReviewGatewayJob{
+		InstallationID: "main", Action: "generate_review_draft", PublicRead: true,
+	}); err == nil {
+		t.Fatal("public read runtime accepted a non-read action")
+	}
+}
+
+func TestReviewGatewayPublicReadRequiresVerifiedPublicRepository(t *testing.T) {
+	if reviewContextRepositoryIsPublic(workflow.ReviewContext{}) {
+		t.Fatal("missing repository visibility was treated as public")
+	}
+	if reviewContextRepositoryIsPublic(workflow.ReviewContext{
+		RepositoryInfo: map[string]interface{}{"is_public": false},
+	}) {
+		t.Fatal("private repository was treated as public")
+	}
+	if !reviewContextRepositoryIsPublic(workflow.ReviewContext{
+		RepositoryInfo: map[string]interface{}{"is_public": true},
+	}) {
+		t.Fatal("verified public repository was rejected")
+	}
+}
+
+func TestReviewGatewayPublicReadDoesNotCreateCollaborationResources(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/api/v1/public/repo.json":
+			_, _ = writer.Write([]byte(`{"is_public":true,"full_name":"public/repo"}`))
+		case "/api/public/repo/pulls/9.json":
+			_, _ = writer.Write([]byte(`{"pull_request":{"number":9,"title":"Public PR","state":"open","head_commit_sha":"head-public"}}`))
+		case "/api/v1/public/repo/pulls/9/versions.json":
+			_, _ = writer.Write([]byte(`{"versions":[{"id":1,"head_commit_sha":"head-public","files_count":1,"commits_count":1}]}`))
+		case "/api/public/repo/pulls/9/files.json":
+			_, _ = writer.Write([]byte(`{"files":[{"filename":"README.md","additions":1}]}`))
+		case "/api/v1/public/repo/pulls/9/reviews.json":
+			_, _ = writer.Write([]byte(`{"reviews":[]}`))
+		case "/api/v1/public/repo/pulls/9/journals.json":
+			_, _ = writer.Write([]byte(`{"journals":[]}`))
+		default:
+			t.Fatalf("unexpected public read request: %s", request.URL.Path)
+		}
+	}))
+	defer server.Close()
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "public-read.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	publisher := &recordingReviewCollaborationPublisher{}
+	executor := &ReviewGatewayExecutor{
+		Runtime: &common.RuntimeContext{
+			Client: &client.Client{BaseURL: server.URL + "/api", HTTP: server.Client()},
+			Args:   map[string]string{},
+		},
+		Installations: map[string]GitLinkInstallation{
+			"main": {
+				InstallationID: "main", GitLinkHost: server.URL + "/api",
+				OperationMode: "collaborate", Enabled: true,
+			},
+		},
+		RequireInstallationRuntime: true,
+		Collaboration:              store,
+		Publisher:                  publisher,
+	}
+	result, err := executor.Execute(context.Background(), ReviewGatewayJob{
+		JobID: "job-public", Action: "read_review_context", Mode: "preview",
+		InstallationID: "main", Repository: "public/repo", PRNumber: 9,
+		RequestedBy: "ou_reader", PublicRead: true,
+	})
+	if err != nil || result.Status != "completed" || !result.PublicRead || result.MutatesGitLink {
+		t.Fatalf("public read result = %#v, err=%v", result, err)
+	}
+	if publisher.calls != 0 || len(result.ResourceSync) != 0 || result.Collaboration != nil {
+		t.Fatalf("public read created collaboration projection: %#v, calls=%d", result, publisher.calls)
+	}
+	var collaborationItems int
+	if err := store.db.QueryRow("SELECT COUNT(*) FROM review_collaboration_items").Scan(&collaborationItems); err != nil {
+		t.Fatalf("count collaboration items: %v", err)
+	}
+	if collaborationItems != 0 {
+		t.Fatalf("public read persisted %d collaboration items", collaborationItems)
 	}
 }
 
@@ -509,6 +703,7 @@ func TestSQLiteReviewGatewayStoreSyncsValidatedInstallationConfiguration(t *test
 			CredentialRef:       "env:GITLINK_REVIEW_TOKEN",
 			OperationMode:       "write",
 			AllowedRepositories: []string{"owner/one", "owner/two"},
+			AllowPublicRead:     true,
 			Enabled:             true,
 		}},
 		Bindings: []ReviewChatBinding{{
@@ -516,6 +711,7 @@ func TestSQLiteReviewGatewayStoreSyncsValidatedInstallationConfiguration(t *test
 			InstallationID:    "production",
 			Repositories:      []string{"owner/two", "owner/one"},
 			DefaultRepository: "owner/one",
+			AllowPublicRead:   true,
 			Enabled:           true,
 			AdminUserIDs:      []string{"ou_admin"},
 			AllowedUserIDs:    []string{"ou_owner"},
@@ -545,18 +741,20 @@ func TestSQLiteReviewGatewayStoreSyncsValidatedInstallationConfiguration(t *test
 			installationCount, repositoryCount, bindingCount, identityCount, auditCount)
 	}
 	var credentialRef, defaultRepository, adminsJSON string
+	var installationPublicRead, bindingPublicRead int
 	if err := store.db.QueryRow(
-		"SELECT credential_ref FROM gitlink_installations WHERE installation_id = ?",
+		"SELECT credential_ref, allow_public_read FROM gitlink_installations WHERE installation_id = ?",
 		"production",
-	).Scan(&credentialRef); err != nil {
+	).Scan(&credentialRef, &installationPublicRead); err != nil {
 		t.Fatalf("read credential reference: %v", err)
 	}
 	if err := store.db.QueryRow(
-		"SELECT repository, admin_user_ids_json FROM chat_repository_bindings WHERE is_default = 1",
-	).Scan(&defaultRepository, &adminsJSON); err != nil {
+		"SELECT repository, admin_user_ids_json, allow_public_read FROM chat_repository_bindings WHERE is_default = 1",
+	).Scan(&defaultRepository, &adminsJSON, &bindingPublicRead); err != nil {
 		t.Fatalf("read default binding: %v", err)
 	}
-	if credentialRef != "env:GITLINK_REVIEW_TOKEN" || defaultRepository != "owner/one" || adminsJSON != `["ou_admin"]` {
+	if credentialRef != "env:GITLINK_REVIEW_TOKEN" || defaultRepository != "owner/one" || adminsJSON != `["ou_admin"]` ||
+		installationPublicRead != 1 || bindingPublicRead != 1 {
 		t.Fatalf("persisted configuration = credential:%q default:%q admins:%q", credentialRef, defaultRepository, adminsJSON)
 	}
 
