@@ -1,6 +1,7 @@
 package feishu
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -10,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,12 +21,22 @@ import (
 	"testing"
 	"time"
 
+	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larktypes "github.com/larksuite/oapi-sdk-go/v3/channel/types"
+	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 
 	"github.com/gitlink-org/gitlink-cli/internal/client"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
 )
+
+type reviewGatewayMockHTTPClient struct {
+	do func(*http.Request) (*http.Response, error)
+}
+
+func (c reviewGatewayMockHTTPClient) Do(request *http.Request) (*http.Response, error) {
+	return c.do(request)
+}
 
 func TestParseReviewGatewayIntent(t *testing.T) {
 	tests := []struct {
@@ -1115,6 +1127,111 @@ func TestReviewGatewayHandlerBudgetStopsLockedSQLite(t *testing.T) {
 	}
 }
 
+func TestReviewGatewayLiveHandlerLogsOnlyHashedIdentifiers(t *testing.T) {
+	store := NewMemoryReviewGatewayJobStore()
+	gateway, err := NewReviewGateway(ReviewGatewayBindings{
+		Bindings: []ReviewChatBinding{{
+			ChatID:     "oc_sensitive_chat",
+			Repository: "owner/repo",
+			Enabled:    true,
+		}},
+	}, ReviewGatewayConfig{}, nil)
+	if err != nil {
+		t.Fatalf("NewReviewGateway: %v", err)
+	}
+	queue := NewReviewGatewayQueue(gateway, store, 1, nil)
+	var outputBuffer bytes.Buffer
+	output := &reviewGatewayJSONOutput{writer: &outputBuffer}
+	replies := NewReviewGatewayReplyDispatcher(&recordingReviewGatewaySender{}, store, output, 1)
+	replies.instanceID = "instance-test"
+	event := ReviewGatewayEvent{
+		EventID:   "evt_sensitive_event",
+		MessageID: "om_sensitive_message",
+		EventType: "message",
+		ChatID:    "oc_sensitive_chat",
+		UserID:    "ou_sensitive_user",
+		Content:   "查看 PR #42",
+	}
+	if err := handleReviewGatewayInbound(
+		context.Background(),
+		event,
+		queue,
+		replies,
+		output,
+		2*time.Second,
+		500*time.Millisecond,
+	); err != nil {
+		t.Fatalf("handleReviewGatewayInbound: %v", err)
+	}
+	logged := outputBuffer.String()
+	for _, raw := range []string{event.EventID, event.MessageID, event.ChatID, event.UserID} {
+		if strings.Contains(logged, raw) {
+			t.Fatalf("raw Feishu identifier leaked to live output: %s", raw)
+		}
+	}
+	if !strings.Contains(logged, reviewGatewayHashIdentifier(event.MessageID)) {
+		t.Fatalf("hashed message ID missing from live output: %s", logged)
+	}
+}
+
+func TestReviewGatewayLiveSenderUsesDirectAPIWithoutIdentifierLogs(t *testing.T) {
+	var requestBody map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/auth/v3/tenant_access_token/internal":
+			_, _ = io.WriteString(w, `{"code":0,"msg":"ok","tenant_access_token":"tenant-test","expire":7200}`)
+		case "/im/v1/messages/om_sensitive_source/reply":
+			if got := r.Header.Get("Authorization"); got != "Bearer tenant-test" {
+				t.Errorf("authorization = %q", got)
+			}
+			if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+				t.Errorf("decode message body: %v", err)
+			}
+			_, _ = io.WriteString(w, `{"code":0,"msg":"ok","data":{"message_id":"om_result","chat_id":"oc_sensitive_chat"}}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	oldWriter := log.Writer()
+	oldFlags := log.Flags()
+	oldPrefix := log.Prefix()
+	var logBuffer bytes.Buffer
+	log.SetOutput(&logBuffer)
+	log.SetFlags(0)
+	log.SetPrefix("")
+	defer func() {
+		log.SetOutput(oldWriter)
+		log.SetFlags(oldFlags)
+		log.SetPrefix(oldPrefix)
+	}()
+
+	sender := &reviewGatewayLiveSender{
+		client:    OpenAPIClient{BaseURL: server.URL, HTTP: server.Client()},
+		appID:     "cli_test",
+		appSecret: "secret-test",
+	}
+	result, err := sender.Send(context.Background(), &larktypes.SendInput{
+		ChatID:         "oc_sensitive_chat",
+		ReplyMessageID: "om_sensitive_source",
+		MsgType:        "text",
+		Text:           "accepted",
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if result.MessageID != "om_result" || result.ChatID != "oc_sensitive_chat" {
+		t.Fatalf("unexpected send result: %#v", result)
+	}
+	if requestBody["msg_type"] != "text" || !strings.Contains(requestBody["content"], "accepted") {
+		t.Fatalf("unexpected request body: %#v", requestBody)
+	}
+	if logged := logBuffer.String(); strings.Contains(logged, "oc_sensitive_chat") || strings.Contains(logged, "om_sensitive_source") {
+		t.Fatalf("raw Feishu identifier leaked to standard logger: %s", logged)
+	}
+}
+
 func TestReviewGatewayAsyncOutputDoesNotBlockHandler(t *testing.T) {
 	writer := &blockingReviewGatewayWriter{
 		started: make(chan struct{}, 1),
@@ -1417,6 +1534,46 @@ func TestReviewGatewayChannelPolicyRequiresPreboundGroup(t *testing.T) {
 	}
 	if policy.RequireMention == nil || !*policy.RequireMention || policy.DMMode != "disabled" {
 		t.Fatalf("channel policy = %#v", policy)
+	}
+}
+
+func TestReviewGatewayBotIdentityFetchDoesNotLogRawOpenID(t *testing.T) {
+	client := lark.NewClient(
+		"app-id",
+		"app-secret",
+		lark.WithLogLevel(larkcore.LogLevelWarn),
+		lark.WithHttpClient(reviewGatewayMockHTTPClient{do: func(request *http.Request) (*http.Response, error) {
+			body := `{"code":0,"msg":"success"}`
+			switch request.URL.Path {
+			case "/open-apis/auth/v3/tenant_access_token/internal":
+				body = `{"code":0,"msg":"success","tenant_access_token":"tenant-test-token","expire":7200}`
+			case "/open-apis/bot/v3/info":
+				body = `{"code":0,"msg":"success","bot":{"open_id":"ou_sensitive_bot_id","app_name":"gitlink","activate_status":2}}`
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}}),
+	)
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	originalStdout := os.Stdout
+	os.Stdout = writePipe
+	defer func() { os.Stdout = originalStdout }()
+	identity, err := fetchReviewGatewayBotIdentity(context.Background(), client)
+	_ = writePipe.Close()
+	os.Stdout = originalStdout
+	logged, _ := io.ReadAll(readPipe)
+	_ = readPipe.Close()
+	if err != nil || identity == nil || identity.OpenID != "ou_sensitive_bot_id" {
+		t.Fatalf("identity=%#v err=%v", identity, err)
+	}
+	if strings.Contains(string(logged), "ou_sensitive_bot_id") {
+		t.Fatalf("bot open_id leaked to stdout: %s", logged)
 	}
 }
 

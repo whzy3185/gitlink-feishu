@@ -59,10 +59,16 @@ type ReviewGatewayDiscoveredChat struct {
 
 type reviewGatewayFeishuChannel struct {
 	larktypes.Channel
-	dispatcher *dispatcher.EventDispatcher
-	policy     *larksafety.PolicyGate
-	output     *reviewGatewayJSONOutput
-	instanceID string
+	dispatcher      *dispatcher.EventDispatcher
+	policy          *larksafety.PolicyGate
+	output          *reviewGatewayJSONOutput
+	instanceID      string
+	apiClient       *lark.Client
+	wsClient        *larkws.Client
+	botMu           sync.RWMutex
+	botIdentity     *larktypes.BotIdentity
+	onReadyHandlers []func()
+	onErrorHandlers []func(error)
 }
 
 func newReviewGatewayShortcut() *common.Shortcut {
@@ -297,10 +303,9 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 
 	channel := newFeishuReviewGatewayChannel(appID, appSecret, bindings, output, instanceLock.metadata.InstanceID)
 	liveSender := &reviewGatewayLiveSender{
-		reviewGatewayMessageSender: channel,
-		client:                     NewOpenAPIClient(nil),
-		appID:                      appID,
-		appSecret:                  appSecret,
+		client:    NewOpenAPIClient(nil),
+		appID:     appID,
+		appSecret: appSecret,
 	}
 	replyDispatcher := NewReviewGatewayReplyDispatcher(liveSender, store, output, queueSize)
 	replyDispatcher.instanceID = instanceLock.metadata.InstanceID
@@ -365,7 +370,6 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		AgentMaxConcurrency:        agentMaxConcurrency,
 	}
 	queue := NewReviewGatewayQueue(gateway, store, queueSize, func(outcome ReviewGatewayJobOutcome) {
-		output.TryEmit(outcome.Result)
 		resultObservation := newReviewGatewayObservation("result", instanceLock.metadata.InstanceID)
 		resultObservation.MessageIDHash = reviewGatewayHashIdentifier(outcome.Job.SourceMessageID)
 		resultObservation.ChatIDHash = reviewGatewayHashIdentifier(outcome.Job.ChatID)
@@ -550,7 +554,6 @@ func handleReviewGatewayInbound(
 		receipt.Job.HandlerLatencyMs = latencyMs
 		queue.ObserveHandlerLatency(receipt.Job.JobID, latencyMs)
 	}
-	output.TryEmit(receipt)
 	instanceID := ""
 	if replies != nil {
 		instanceID = replies.instanceID
@@ -604,7 +607,111 @@ func newFeishuReviewGatewayChannel(
 		policy:     larksafety.NewPolicyGate(&policy, nil),
 		output:     output,
 		instanceID: instanceID,
+		apiClient:  apiClient,
+		wsClient:   wsClient,
 	}
+}
+
+// Start deliberately starts the underlying WebSocket client directly instead
+// of channel.Channel.Start. Channel SDK v3.9.9 logs the raw bot open_id from a
+// hard-coded event logger during startup, even when its configured log level is
+// Warn. Fetching the identity here preserves Channel normalization and outbound
+// helpers without allowing that identifier into process logs.
+func (c *reviewGatewayFeishuChannel) Start(ctx context.Context) error {
+	if c == nil || c.wsClient == nil || c.apiClient == nil {
+		return fmt.Errorf("Feishu review gateway channel is not configured")
+	}
+	c.wsClient.SetOnReady(func() {
+		identity, err := fetchReviewGatewayBotIdentity(ctx, c.apiClient)
+		if err != nil {
+			for _, handler := range c.onErrorHandlers {
+				handler(fmt.Errorf("resolve Feishu bot identity: %w", err))
+			}
+			c.wsClient.Close()
+			return
+		}
+		c.botMu.Lock()
+		c.botIdentity = identity
+		c.botMu.Unlock()
+		c.policy.SetBotIdentity(identity)
+		for _, handler := range c.onReadyHandlers {
+			handler()
+		}
+	})
+	c.wsClient.SetOnError(func(err error) {
+		for _, handler := range c.onErrorHandlers {
+			handler(err)
+		}
+	})
+	return c.wsClient.Start(ctx)
+}
+
+func (c *reviewGatewayFeishuChannel) Stop(_ context.Context) error {
+	if c != nil && c.wsClient != nil {
+		c.wsClient.Close()
+	}
+	return nil
+}
+
+func (c *reviewGatewayFeishuChannel) OnReady(handler func()) {
+	if c != nil && handler != nil {
+		c.onReadyHandlers = append(c.onReadyHandlers, handler)
+	}
+}
+
+func (c *reviewGatewayFeishuChannel) OnError(handler func(error)) {
+	if c != nil && handler != nil {
+		c.onErrorHandlers = append(c.onErrorHandlers, handler)
+	}
+}
+
+func (c *reviewGatewayFeishuChannel) GetBotIdentity(_ context.Context) *larktypes.BotIdentity {
+	if c == nil {
+		return nil
+	}
+	c.botMu.RLock()
+	defer c.botMu.RUnlock()
+	if c.botIdentity == nil {
+		return nil
+	}
+	copy := *c.botIdentity
+	return &copy
+}
+
+func fetchReviewGatewayBotIdentity(ctx context.Context, client *lark.Client) (*larktypes.BotIdentity, error) {
+	if client == nil {
+		return nil, fmt.Errorf("Feishu API client is required")
+	}
+	response, err := client.Get(ctx, "/open-apis/bot/v3/info", nil, larkcore.AccessTokenTypeTenant)
+	if err != nil {
+		return nil, fmt.Errorf("bot info request failed")
+	}
+	if response == nil || response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("bot info returned an unexpected HTTP status")
+	}
+	var result struct {
+		Code int `json:"code"`
+		Bot  struct {
+			OpenID         string `json:"open_id"`
+			AppName        string `json:"app_name"`
+			ActivateStatus int    `json:"activate_status"`
+		} `json:"bot"`
+	}
+	if err := json.Unmarshal(response.RawBody, &result); err != nil {
+		return nil, fmt.Errorf("decode bot info response")
+	}
+	if result.Code != 0 || strings.TrimSpace(result.Bot.OpenID) == "" {
+		return nil, fmt.Errorf("bot info response is incomplete")
+	}
+	name := strings.TrimSpace(result.Bot.AppName)
+	if name == "" {
+		name = "bot"
+	}
+	return &larktypes.BotIdentity{
+		OpenID:         result.Bot.OpenID,
+		Name:           name,
+		ActivateStatus: result.Bot.ActivateStatus,
+	}, nil
 }
 
 func (c *reviewGatewayFeishuChannel) OnGatewayMessage(handler func(context.Context, *larktypes.NormalizedMessage) error) {

@@ -396,13 +396,15 @@ SQLite schema 迁移、恢复、重试、结果和回复测试
 2026-08-01
 测试群真实用户 @机器人“查看 PR #431”
 -> 收到“已接收只读 Review 请求”回复
--> SQLite 创建 job-0bb364af6b1d2be3
+-> SQLite 创建并完成 job-54c2cf80f3027985
 -> 后台完成 Gitlink/gitlink-cli PR #431 GET-only
 -> 收到阶段、决策、协作状态、负责人和截止时间的最终回复
 -> 两次回复均明确显示“GitLink 写入：0”
 ```
 
 由此确认飞书入站、Gateway、SQLite Job、GitLink GET-only 和飞书最终回复主链路已经通过。
+第二次安全回归还确认 stdout/stderr 不包含原始 open_id、chat_id、message_id 或 event_id；完整脱敏证据见
+`docs/ROUND2_FEISHU_LIVE_SMOKE_20260801.md`。
 同一 `message_id` 重投去重、执行中重启恢复以及 reply 恢复仍应作为可靠性故障演练单独保存证据，
 不与本次正常路径验收混为一项。
 

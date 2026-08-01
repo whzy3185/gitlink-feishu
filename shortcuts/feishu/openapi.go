@@ -64,6 +64,80 @@ type CreatedTask struct {
 	TaskID string `json:"task_id,omitempty"`
 }
 
+type SentMessage struct {
+	MessageID string `json:"message_id,omitempty"`
+	ChatID    string `json:"chat_id,omitempty"`
+}
+
+func (c OpenAPIClient) SendMessage(
+	ctx context.Context,
+	tenantToken,
+	receiveID,
+	receiveIDType,
+	replyMessageID,
+	msgType,
+	content string,
+) (SentMessage, error) {
+	tenantToken = strings.TrimSpace(tenantToken)
+	receiveID = strings.TrimSpace(receiveID)
+	receiveIDType = strings.TrimSpace(receiveIDType)
+	replyMessageID = strings.TrimSpace(replyMessageID)
+	msgType = strings.TrimSpace(msgType)
+	content = strings.TrimSpace(content)
+	if tenantToken == "" {
+		return SentMessage{}, fmt.Errorf("Feishu tenant token is required")
+	}
+	if msgType == "" || content == "" {
+		return SentMessage{}, fmt.Errorf("Feishu message type and content are required")
+	}
+
+	payload := map[string]string{
+		"msg_type": msgType,
+		"content":  content,
+	}
+	path := ""
+	if replyMessageID != "" {
+		path = fmt.Sprintf("/im/v1/messages/%s/reply", url.PathEscape(replyMessageID))
+	} else {
+		if receiveID == "" || receiveIDType == "" {
+			return SentMessage{}, fmt.Errorf("Feishu receive ID and type are required for a new message")
+		}
+		query := url.Values{}
+		query.Set("receive_id_type", receiveIDType)
+		path = "/im/v1/messages?" + query.Encode()
+		payload["receive_id"] = receiveID
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return SentMessage{}, fmt.Errorf("encode Feishu message: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint(path), bytes.NewReader(body))
+	if err != nil {
+		return SentMessage{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantToken)
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	var response struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			MessageID string `json:"message_id"`
+			ChatID    string `json:"chat_id"`
+		} `json:"data"`
+	}
+	if err := c.doJSON(req, &response); err != nil {
+		return SentMessage{}, err
+	}
+	if response.Code != 0 {
+		return SentMessage{}, fmt.Errorf("Feishu message send returned code %d: %s", response.Code, response.Msg)
+	}
+	if strings.TrimSpace(response.Data.MessageID) == "" {
+		return SentMessage{}, fmt.Errorf("Feishu message response missing message_id")
+	}
+	return SentMessage{MessageID: response.Data.MessageID, ChatID: response.Data.ChatID}, nil
+}
+
 func (c OpenAPIClient) PatchInteractiveMessage(
 	ctx context.Context,
 	tenantToken,

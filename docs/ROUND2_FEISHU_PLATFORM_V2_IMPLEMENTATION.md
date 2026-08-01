@@ -245,6 +245,7 @@ npm start
 已证明：
 
 - P2.1 真实飞书消息 → Gateway → GitLink GET → 最终回复链路已于 2026-08-01 通过；
+- P2.1 安全回归已确认 stdout/stderr 只保留标识符摘要，完整证据见 `docs/ROUND2_FEISHU_LIVE_SMOKE_20260801.md`；
 - 多仓库、安装隔离、卡片更新、Webhook、资源生命周期、受控写入、Agent 与企业微信合同有自动化测试；
 - 定向 Go 测试和企业微信 Node 合同测试可本地复现；
 - 全程默认 GitLink 写入为 0。

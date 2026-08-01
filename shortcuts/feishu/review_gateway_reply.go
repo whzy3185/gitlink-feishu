@@ -24,10 +24,51 @@ type reviewGatewayResourceStore interface {
 }
 
 type reviewGatewayLiveSender struct {
-	reviewGatewayMessageSender
 	client    OpenAPIClient
 	appID     string
 	appSecret string
+}
+
+func (s *reviewGatewayLiveSender) Send(
+	ctx context.Context,
+	input *larktypes.SendInput,
+) (*larktypes.SendResult, error) {
+	if input == nil {
+		return nil, fmt.Errorf("Feishu send input is required")
+	}
+	msgType := strings.TrimSpace(input.MsgType)
+	content := ""
+	switch {
+	case strings.TrimSpace(input.Card) != "":
+		msgType = "interactive"
+		content = input.Card
+	case strings.TrimSpace(input.Text) != "":
+		msgType = "text"
+		encoded, err := json.Marshal(map[string]string{"text": input.Text})
+		if err != nil {
+			return nil, fmt.Errorf("encode Feishu reply text: %w", err)
+		}
+		content = string(encoded)
+	default:
+		return nil, fmt.Errorf("review gateway only sends text or interactive messages")
+	}
+	token, err := s.client.TenantAccessToken(ctx, s.appID, s.appSecret)
+	if err != nil {
+		return nil, err
+	}
+	sent, err := s.client.SendMessage(
+		ctx,
+		token.Value,
+		input.ChatID,
+		"chat_id",
+		input.ReplyMessageID,
+		msgType,
+		content,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &larktypes.SendResult{MessageID: sent.MessageID, ChatID: sent.ChatID}, nil
 }
 
 func (s *reviewGatewayLiveSender) UpdateInteractiveMessage(
