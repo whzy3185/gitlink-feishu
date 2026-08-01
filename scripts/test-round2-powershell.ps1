@@ -43,6 +43,17 @@ try {
         throw "migration safe-mode contract failed"
     }
 
+    $added = & (Join-Path $PSScriptRoot "add-review-binding-repository.ps1") `
+        -Bindings $destination `
+        -Repositories "owner/three", "OWNER/THREE" | ConvertFrom-Json
+    if ($added.repository_count -ne 3 -or $added.gitlink_write -or $added.credential_ref -ne "not_configured") {
+        throw "repository add safe-mode contract failed"
+    }
+    $updatedBindings = Get-Content -LiteralPath $destination -Raw | ConvertFrom-Json
+    if (@($updatedBindings.bindings[0].repositories).Count -ne 3) {
+        throw "repository add binding contract failed"
+    }
+
     $writeModeRejected = $false
     try {
         & (Join-Path $PSScriptRoot "migrate-review-bindings-v2.ps1") `

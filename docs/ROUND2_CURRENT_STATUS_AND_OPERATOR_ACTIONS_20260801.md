@@ -6,9 +6,9 @@
 
 ## 1. 一句话结论
 
-P2.1 飞书消息 → SQLite → GitLink GET-only → 飞书回复已经真实跑通；P2–P5 的多仓库、Base、Doc、Task、Webhook、受控 Review 和 Agent 合同已经进入代码，但当前运行实例仍故意保持“单仓库、GitLink 零写入、飞书资源同步关闭”。
+P2.1 飞书消息 → SQLite → GitLink GET-only → 飞书回复已经真实跑通；专用 Base、每 PR Doc、Task 和 v2 多仓库绑定已在真实运行实例启用，GitLink 仍保持零写入。
 
-下一步不是继续堆功能，而是完成专用测试资源、应用版本、资源访问权和 v2 绑定配置，然后按 Base → Doc → Task 的顺序逐项启用。
+当前群绑定三个真实仓库。`Gitlink/gitlink-cli` 用于既有只读验收，`Gitlink/forgeplus` 用于 GitLink 热门公共项目的跨仓库验收，`puygob236/KongMing-Job-Matching-Agent`（孔明职配）用于后续贡献者 Review 写回验收。下一步是先验证显式 `owner/repository + PR number` 路由，再为孔明职配准备一条专用测试 PR 和最小权限身份绑定。
 
 ## 2. 当前已经确认的事实
 
@@ -57,20 +57,20 @@ GitHub Actions：Round 2 Review Collaboration Gate 成功
 ```text
 绑定 schema：feishu.review-bindings/v2
 启用群绑定：1
-绑定仓库：Gitlink/gitlink-cli
+绑定仓库：Gitlink/gitlink-cli、Gitlink/forgeplus、puygob236/KongMing-Job-Matching-Agent
 Installation：1（gitlink-public）
 Installation mode：collaborate
 Installation credential：未配置
 identity binding：0
 GitLink Token：未配置
-sync-feishu-resources：false
+sync-feishu-resources：true
 enable-gitlink-review-write：false
 Webhook：未启动
 Agent Provider：未配置
 企业微信 Sidecar：未启动
 ```
 
-因此群内目前只能看到单仓库只读 Review，而看不到 Base、Doc、Task、多 Agent 或 GitLink 写回。
+因此群内现在可以通过显式仓库名查询三个仓库，并把结果同步到 Base、每 PR Doc 和 Task；多 Agent 和 GitLink 写回仍未在真实平台启用。
 
 本机配置已由 `scripts/migrate-review-bindings-v2.ps1` 机械迁移到 `.local/review-gateway-bindings-v2.json`，该文件包含真实群绑定且受 `.gitignore` 保护，不会提交到仓库。当前 Gateway 已使用这份 v2 配置重新启动。`scripts/start-round2-feishu-gateway.ps1` 提供只读和飞书资源同步两种显式启动模式，并且有意不提供 GitLink 写入开关。
 
@@ -406,3 +406,43 @@ GitLink 写入：0
 ```
 
 真实资源 ID 仅保存在本地受忽略文件和 SQLite 映射中；文档只记录脱敏哈希或数量。下一条群内 `@gitlink 查看 PR #431` 会由已启用资源同步的 Gateway 执行完整 Publisher 链路。
+
+## 10. 多仓库真实验收与成熟集成范式
+
+### 10.1 仓库选择
+
+2026-08-01 使用 GitLink 官方项目列表按 `praises_count` 排序，`Gitlink/forgeplus` 以 577 个点赞、77 个复刻位于点赞榜首。其 PR #356 为开放状态，Review Context 读取结果为 `complete`、`partial=false`，可作为不属于 gitlink-cli 的公共只读样本。
+
+孔明职配公开页面的旧标识会重定向，真实 Git 仓库标识为：
+
+```text
+puygob236/KongMing-Job-Matching-Agent
+```
+
+该仓库可以读取，但当前开放 PR 数为 0。要验证贡献者 Review 写回，必须先由仓库协作者创建一条专用测试 PR；不能用 contributor 身份替代 Review 权限验证。
+
+### 10.2 当前群内命令
+
+多仓库查询必须带完整仓库名，避免同一个群中的 PR 编号冲突：
+
+```text
+@gitlink 查看 Gitlink/forgeplus PR #356
+@gitlink 查看 puygob236/KongMing-Job-Matching-Agent PR #<真实测试编号>
+```
+
+未带仓库名的 `查看 PR #431` 继续使用群绑定的默认仓库。当前绑定是三仓库验收配置，不代表产品最终只能访问三个仓库；公共仓库目标应演进为“显式 owner/repository 可 GET-only 查询”，私有仓库和任何写操作继续要求 Installation 授权。
+
+### 10.3 参考 GitHub、Slack 与飞书的接入结构
+
+成熟代码托管聊天集成的共同结构应用到本项目如下：
+
+1. Installation 是授权和审计边界，不把机器人进程视为全局超级账号；
+2. 群聊绑定 Installation，并保存默认仓库与可管理仓库范围；
+3. 公共仓库允许显式路径只读发现，私有仓库必须在 Installation 范围内；
+4. 飞书消息和卡片只负责触发、展示与确认，耗时 GitLink 调用进入持久异步 Job；
+5. `message_id`、业务命令和目标 patchset 共同形成幂等与 stale 门禁；
+6. 飞书 `open_id` 必须通过身份绑定映射到 GitLink 用户，Token 只保存在安全凭据存储；
+7. Review 写回使用“预览 ActionPlan → Owner/Reviewer 二次确认 → 再校验 head SHA 与 fingerprint → 单次写入 → 对账”；
+8. Base、Doc、Task 是协作投影和审计证据，不是 GitLink Review 状态真源。
+
+当前真实运行实例只启用了上述结构中的多仓库只读和飞书资源同步。GitLink 写回仍为 0。
