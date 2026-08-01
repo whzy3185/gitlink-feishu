@@ -13,6 +13,12 @@ import (
 
 const reviewActionPlanSchema = "review.action-plan/v1"
 
+const (
+	reviewMutationNone      = "none"
+	reviewMutationPossible  = "possible"
+	reviewMutationConfirmed = "confirmed"
+)
+
 type ReviewActionPlan struct {
 	SchemaVersion     string `json:"schema_version"`
 	PlanID            string `json:"plan_id"`
@@ -34,6 +40,7 @@ type ReviewActionPlan struct {
 	AttemptCount      int    `json:"attempt_count"`
 	MaxAttempts       int    `json:"max_attempts"`
 	Reconciliation    string `json:"reconciliation_status"`
+	MutationStatus    string `json:"mutation_status"`
 	CreatedAt         string `json:"created_at"`
 	ExpiresAt         string `json:"expires_at"`
 	UpdatedAt         string `json:"updated_at"`
@@ -47,6 +54,7 @@ type ReviewWriteResult struct {
 	PRNumber       int    `json:"pr_number"`
 	HeadSHA        string `json:"head_sha"`
 	ReviewStatus   string `json:"review_status"`
+	MutationStatus string `json:"mutation_status"`
 	Mutated        bool   `json:"mutated"`
 	Reconciliation string `json:"reconciliation,omitempty"`
 }
@@ -56,8 +64,8 @@ type ReviewActionPlanStore interface {
 	GetReviewActionPlan(context.Context, string) (ReviewActionPlan, error)
 	ClaimReviewActionPlan(context.Context, ReviewActionPlanClaimOptions) (ReviewActionPlan, error)
 	MarkReviewActionPlanWriteStarted(context.Context, string, string, time.Time) error
-	FinishReviewActionPlan(context.Context, string, string, string, string, time.Time) error
-	MarkReviewActionPlanUnknown(context.Context, string, string, time.Time) error
+	FinishReviewActionPlan(context.Context, string, string, string, string, string, time.Time) error
+	MarkReviewActionPlanUnknown(context.Context, string, string, string, time.Time) error
 }
 
 type ReviewActionPlanClaimOptions struct {
@@ -105,6 +113,7 @@ func NewReviewActionPlan(
 		SourceJobID:       job.JobID,
 		MaxAttempts:       3,
 		Reconciliation:    "not_required",
+		MutationStatus:    reviewMutationNone,
 		CreatedAt:         now.Format(time.RFC3339Nano),
 		ExpiresAt:         now.Add(15 * time.Minute).Format(time.RFC3339Nano),
 		UpdatedAt:         now.Format(time.RFC3339Nano),
@@ -128,12 +137,18 @@ func (s *SQLiteReviewGatewayStore) CreateReviewActionPlan(
 	if plan.Reconciliation == "" {
 		plan.Reconciliation = "not_required"
 	}
+	if plan.MutationStatus == "" {
+		plan.MutationStatus = reviewMutationNone
+	}
+	if err := validateReviewMutationStatus(plan.MutationStatus); err != nil {
+		return ReviewActionPlan{}, err
+	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO review_action_plans (
 		plan_id, repository, pr_number, actor_id, gitlink_login,
 		expected_head_sha, source_fingerprint, review_status, content, status,
-		idempotency_key, source_job_id, max_attempts, reconciliation_status,
+		idempotency_key, source_job_id, max_attempts, reconciliation_status, mutation_status,
 		created_at, expires_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(idempotency_key) DO NOTHING`,
 		plan.PlanID,
 		plan.Repository,
@@ -149,6 +164,7 @@ func (s *SQLiteReviewGatewayStore) CreateReviewActionPlan(
 		plan.SourceJobID,
 		plan.MaxAttempts,
 		plan.Reconciliation,
+		plan.MutationStatus,
 		plan.CreatedAt,
 		plan.ExpiresAt,
 		plan.UpdatedAt,
@@ -164,7 +180,7 @@ func (s *SQLiteReviewGatewayStore) GetReviewActionPlan(ctx context.Context, plan
 		plan_id, repository, pr_number, actor_id, gitlink_login,
 		expected_head_sha, source_fingerprint, review_status, content, status,
 		idempotency_key, source_job_id, review_id, error_summary,
-		lease_owner, lease_expires_at, attempt_count, max_attempts, reconciliation_status,
+		lease_owner, lease_expires_at, attempt_count, max_attempts, reconciliation_status, mutation_status,
 		created_at, expires_at, updated_at
 		FROM review_action_plans WHERE plan_id = ?`, strings.TrimSpace(planID)))
 }
@@ -177,7 +193,7 @@ func (s *SQLiteReviewGatewayStore) getReviewActionPlanByIdempotencyKey(
 		plan_id, repository, pr_number, actor_id, gitlink_login,
 		expected_head_sha, source_fingerprint, review_status, content, status,
 		idempotency_key, source_job_id, review_id, error_summary,
-		lease_owner, lease_expires_at, attempt_count, max_attempts, reconciliation_status,
+		lease_owner, lease_expires_at, attempt_count, max_attempts, reconciliation_status, mutation_status,
 		created_at, expires_at, updated_at
 		FROM review_action_plans WHERE idempotency_key = ?`, key))
 }
@@ -259,7 +275,7 @@ func (s *SQLiteReviewGatewayStore) MarkReviewActionPlanWriteStarted(
 	now time.Time,
 ) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE review_action_plans
-		SET reconciliation_status = 'remote_write_possible', updated_at = ?
+		SET reconciliation_status = 'remote_write_possible', mutation_status = 'possible', updated_at = ?
 		WHERE plan_id = ? AND status = 'executing' AND lease_owner = ?
 			AND lease_expires_at > ?`,
 		now.UTC().Format(time.RFC3339Nano),
@@ -283,12 +299,16 @@ func (s *SQLiteReviewGatewayStore) FinishReviewActionPlan(
 	status,
 	reviewID,
 	errorSummary string,
+	mutationStatus string,
 	now time.Time,
 ) error {
 	switch status {
 	case "completed", "stale", "failed", "unknown":
 	default:
 		return fmt.Errorf("unsupported review action plan terminal status %q", status)
+	}
+	if err := validateReviewMutationStatus(mutationStatus); err != nil {
+		return err
 	}
 	reconciliation := "not_required"
 	if status == "completed" {
@@ -299,12 +319,13 @@ func (s *SQLiteReviewGatewayStore) FinishReviewActionPlan(
 	result, err := s.db.ExecContext(ctx, `UPDATE review_action_plans
 		SET status = ?, review_id = ?, error_summary = ?,
 			lease_owner = '', lease_expires_at = '',
-			reconciliation_status = ?, updated_at = ?
+			reconciliation_status = ?, mutation_status = ?, updated_at = ?
 		WHERE plan_id = ? AND status = 'executing'`,
 		status,
 		reviewID,
 		redactReviewGatewayError(errorSummary),
 		reconciliation,
+		mutationStatus,
 		now.UTC().Format(time.RFC3339Nano),
 		planID,
 	)
@@ -322,14 +343,19 @@ func (s *SQLiteReviewGatewayStore) MarkReviewActionPlanUnknown(
 	ctx context.Context,
 	planID,
 	errorSummary string,
+	mutationStatus string,
 	now time.Time,
 ) error {
+	if err := validateReviewMutationStatus(mutationStatus); err != nil {
+		return err
+	}
 	result, err := s.db.ExecContext(ctx, `UPDATE review_action_plans
 		SET status = 'unknown', error_summary = ?,
 			lease_owner = '', lease_expires_at = '',
-			reconciliation_status = 'required', updated_at = ?
+			reconciliation_status = 'required', mutation_status = ?, updated_at = ?
 		WHERE plan_id = ? AND status = 'executing'`,
 		redactReviewGatewayError(errorSummary),
+		mutationStatus,
 		now.UTC().Format(time.RFC3339Nano),
 		strings.TrimSpace(planID),
 	)
@@ -365,6 +391,7 @@ func scanReviewActionPlan(scanner reviewCollaborationScanner) (ReviewActionPlan,
 		&plan.AttemptCount,
 		&plan.MaxAttempts,
 		&plan.Reconciliation,
+		&plan.MutationStatus,
 		&plan.CreatedAt,
 		&plan.ExpiresAt,
 		&plan.UpdatedAt,
@@ -372,11 +399,25 @@ func scanReviewActionPlan(scanner reviewCollaborationScanner) (ReviewActionPlan,
 	return plan, err
 }
 
-func findReviewIdentity(bindings []ReviewIdentityBinding, feishuUserID string) (ReviewIdentityBinding, bool) {
+func validateReviewMutationStatus(value string) error {
+	switch strings.TrimSpace(value) {
+	case reviewMutationNone, reviewMutationPossible, reviewMutationConfirmed:
+		return nil
+	default:
+		return fmt.Errorf("unsupported Review mutation status %q", value)
+	}
+}
+
+func findReviewIdentity(bindings []ReviewIdentityBinding, feishuUserID, installationID string) (ReviewIdentityBinding, bool) {
+	var match ReviewIdentityBinding
+	matches := 0
 	for _, binding := range bindings {
-		if binding.Enabled && strings.TrimSpace(binding.FeishuUserID) == strings.TrimSpace(feishuUserID) {
-			return binding, strings.TrimSpace(binding.GitLinkLogin) != ""
+		bindingInstallation := strings.TrimSpace(binding.InstallationID)
+		if binding.Enabled && strings.TrimSpace(binding.FeishuUserID) == strings.TrimSpace(feishuUserID) &&
+			(bindingInstallation == "" || strings.TrimSpace(installationID) == "" || bindingInstallation == strings.TrimSpace(installationID)) {
+			match = binding
+			matches++
 		}
 	}
-	return ReviewIdentityBinding{}, false
+	return match, matches == 1 && strings.TrimSpace(match.GitLinkLogin) != ""
 }

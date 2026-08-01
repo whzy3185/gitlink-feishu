@@ -16,10 +16,14 @@ func (e *ReviewGatewayExecutor) prepareCommonReview(
 	result ReviewGatewayExecutionResult,
 	now time.Time,
 ) (ReviewGatewayExecutionResult, error) {
-	if e.Runtime == nil || e.ActionPlans == nil {
+	if e.ActionPlans == nil {
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("review action plan runtime and store are required"))
 	}
-	identity, ok := findReviewIdentity(e.IdentityBindings, job.RequestedBy)
+	runtime, runtimeErr := e.runtimeForJob(job)
+	if runtimeErr != nil {
+		return reviewGatewayExecutionFailure(result, runtimeErr)
+	}
+	identity, ok := findReviewIdentity(e.IdentityBindings, job.RequestedBy, job.InstallationID)
 	if !ok {
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("Feishu account is not bound to a GitLink account"))
 	}
@@ -27,7 +31,7 @@ func (e *ReviewGatewayExecutor) prepareCommonReview(
 	if err != nil {
 		return reviewGatewayExecutionFailure(result, err)
 	}
-	reviewContext, err := workflow.FetchReviewContext(e.Runtime, workflow.ReviewContextOptions{
+	reviewContext, err := workflow.FetchReviewContext(runtime, workflow.ReviewContextOptions{
 		Owner:           owner,
 		Repo:            repo,
 		Number:          job.PRNumber,
@@ -87,7 +91,7 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 	result ReviewGatewayExecutionResult,
 	now time.Time,
 ) (ReviewGatewayExecutionResult, error) {
-	if e.Runtime == nil || e.ActionPlans == nil {
+	if e.ActionPlans == nil {
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("review action plan runtime and store are required"))
 	}
 	plan, err := e.ActionPlans.GetReviewActionPlan(ctx, job.Argument)
@@ -105,7 +109,12 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 	if plan.ReviewStatus != "common" {
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("only common Review writes are enabled"))
 	}
-	identity, ok := findReviewIdentity(e.IdentityBindings, job.RequestedBy)
+	if job.InstallationMode != "write" {
+		return reviewGatewayExecutionFailure(result, fmt.Errorf(
+			"GitLink installation does not allow Review writes",
+		))
+	}
+	identity, ok := findReviewIdentity(e.IdentityBindings, job.RequestedBy, job.InstallationID)
 	if !ok || identity.GitLinkLogin != plan.GitLinkLogin {
 		return reviewGatewayExecutionFailure(result, fmt.Errorf(
 			"GitLink identity binding changed; create a new action plan",
@@ -113,16 +122,21 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 	}
 	if !e.EnableGitLinkWrite {
 		result.WriteResult = &ReviewWriteResult{
-			PlanID:       plan.PlanID,
-			Status:       "write_disabled",
-			Repository:   plan.Repository,
-			PRNumber:     plan.PRNumber,
-			HeadSHA:      plan.ExpectedHeadSHA,
-			ReviewStatus: plan.ReviewStatus,
-			Mutated:      false,
+			PlanID:         plan.PlanID,
+			Status:         "write_disabled",
+			Repository:     plan.Repository,
+			PRNumber:       plan.PRNumber,
+			HeadSHA:        plan.ExpectedHeadSHA,
+			ReviewStatus:   plan.ReviewStatus,
+			MutationStatus: reviewMutationNone,
+			Mutated:        false,
 		}
 		result.Message = "ActionPlan 校验通过，但启动参数未显式启用 GitLink common Review 写入；GitLink 写入为 0。"
 		return result, nil
+	}
+	runtime, runtimeErr := e.runtimeForJob(job)
+	if runtimeErr != nil {
+		return reviewGatewayExecutionFailure(result, runtimeErr)
 	}
 	leaseOwner := "review-write:" + job.JobID
 	plan, err = e.ActionPlans.ClaimReviewActionPlan(ctx, ReviewActionPlanClaimOptions{
@@ -138,10 +152,10 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 	result.ActionPlan = &plan
 	owner, repo, err := splitReviewGatewayRepository(plan.Repository)
 	if err != nil {
-		_ = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "failed", "", err.Error(), now)
+		_ = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "failed", "", err.Error(), reviewMutationNone, now)
 		return reviewGatewayExecutionFailure(result, err)
 	}
-	reviewContext, err := workflow.FetchReviewContext(e.Runtime, workflow.ReviewContextOptions{
+	reviewContext, err := workflow.FetchReviewContext(runtime, workflow.ReviewContextOptions{
 		Owner:           owner,
 		Repo:            repo,
 		Number:          plan.PRNumber,
@@ -154,7 +168,7 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 		IncludeThreads:  true,
 	})
 	if err != nil {
-		_ = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "failed", "", err.Error(), now)
+		_ = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "failed", "", err.Error(), reviewMutationNone, now)
 		return reviewGatewayExecutionFailure(result, err)
 	}
 	populateReviewGatewayContextResult(&result, reviewContext)
@@ -167,31 +181,33 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 			"stale",
 			"",
 			"PR head, source fingerprint, or completeness changed",
+			reviewMutationNone,
 			now,
 		)
 		result.WriteResult = &ReviewWriteResult{
-			PlanID:       plan.PlanID,
-			Status:       "stale",
-			Repository:   plan.Repository,
-			PRNumber:     plan.PRNumber,
-			HeadSHA:      reviewContext.CurrentHeadSHA,
-			ReviewStatus: plan.ReviewStatus,
-			Mutated:      false,
+			PlanID:         plan.PlanID,
+			Status:         "stale",
+			Repository:     plan.Repository,
+			PRNumber:       plan.PRNumber,
+			HeadSHA:        reviewContext.CurrentHeadSHA,
+			ReviewStatus:   plan.ReviewStatus,
+			MutationStatus: reviewMutationNone,
+			Mutated:        false,
 		}
 		result.Message = "PR head、Review 事实指纹或数据完整性已变化，ActionPlan 已失效；GitLink 写入为 0。"
 		return result, nil
 	}
-	runtimeCopy := *e.Runtime
+	runtimeCopy := *runtime
 	runtimeCopy.Owner = owner
 	runtimeCopy.Repo = repo
 	userEnvelope, err := runtimeCopy.CallAPI("GET", "/users/me", nil)
 	if err != nil {
-		_ = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "failed", "", err.Error(), now)
+		_ = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "failed", "", err.Error(), reviewMutationNone, now)
 		return reviewGatewayExecutionFailure(result, err)
 	}
 	if currentGitLinkLogin(userEnvelope.Data) != plan.GitLinkLogin {
 		err = fmt.Errorf("active GitLink token identity does not match the bound GitLink account")
-		_ = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "failed", "", err.Error(), now)
+		_ = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "failed", "", err.Error(), reviewMutationNone, now)
 		return reviewGatewayExecutionFailure(result, err)
 	}
 	if err := e.ActionPlans.MarkReviewActionPlanWriteStarted(
@@ -221,6 +237,7 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 			"unknown",
 			"",
 			writeErr.Error(),
+			reviewMutationPossible,
 			now,
 		)
 		if finishErr != nil {
@@ -228,6 +245,7 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 				ctx,
 				plan.PlanID,
 				"GitLink POST result and local reconciliation persistence are both uncertain",
+				reviewMutationPossible,
 				now,
 			)
 		}
@@ -238,6 +256,7 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 			PRNumber:       plan.PRNumber,
 			HeadSHA:        plan.ExpectedHeadSHA,
 			ReviewStatus:   plan.ReviewStatus,
+			MutationStatus: reviewMutationPossible,
 			Mutated:        false,
 			Reconciliation: "query current reviews by head and content before retrying; automatic retry is disabled",
 		}
@@ -257,12 +276,14 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 		terminalStatus,
 		reviewID,
 		reconciliation,
+		reviewMutationConfirmed,
 		now,
 	); err != nil {
 		_ = e.ActionPlans.MarkReviewActionPlanUnknown(
 			ctx,
 			plan.PlanID,
 			"GitLink Review may exist but local completion state was not persisted",
+			reviewMutationConfirmed,
 			now,
 		)
 		result.ReadOnlyGitLink = false
@@ -275,6 +296,7 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 			PRNumber:       plan.PRNumber,
 			HeadSHA:        plan.ExpectedHeadSHA,
 			ReviewStatus:   "common",
+			MutationStatus: reviewMutationConfirmed,
 			Mutated:        true,
 			Reconciliation: "GitLink POST succeeded; verify Review ID/content before any retry",
 		}
@@ -291,6 +313,7 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 		PRNumber:       plan.PRNumber,
 		HeadSHA:        plan.ExpectedHeadSHA,
 		ReviewStatus:   "common",
+		MutationStatus: reviewMutationConfirmed,
 		Mutated:        true,
 		Reconciliation: reconciliation,
 	}

@@ -43,6 +43,7 @@ type ReviewGatewayExecutionResult struct {
 	ActionPlan         *ReviewActionPlan          `json:"action_plan,omitempty"`
 	WriteResult        *ReviewWriteResult         `json:"write_result,omitempty"`
 	ResourceSync       []ReviewResourceSyncResult `json:"resource_sync,omitempty"`
+	AgentRun           *workflow.ReviewAgentRun   `json:"agent_run,omitempty"`
 	Warnings           []string                   `json:"warnings,omitempty"`
 	Error              string                     `json:"error,omitempty"`
 	AttemptCount       int                        `json:"attempt_count,omitempty"`
@@ -90,13 +91,18 @@ type ReviewDraftThread struct {
 }
 
 type ReviewGatewayExecutor struct {
-	Runtime            *common.RuntimeContext
-	Now                func() time.Time
-	Collaboration      ReviewCollaborationStore
-	ActionPlans        ReviewActionPlanStore
-	IdentityBindings   []ReviewIdentityBinding
-	EnableGitLinkWrite bool
-	Publisher          ReviewCollaborationPublisher
+	Runtime                    *common.RuntimeContext
+	Now                        func() time.Time
+	Collaboration              ReviewCollaborationStore
+	ActionPlans                ReviewActionPlanStore
+	IdentityBindings           []ReviewIdentityBinding
+	EnableGitLinkWrite         bool
+	Publisher                  ReviewCollaborationPublisher
+	Installations              map[string]GitLinkInstallation
+	RequireInstallationRuntime bool
+	AgentProvider              workflow.ReviewAgentProvider
+	AgentTaskTimeout           time.Duration
+	AgentMaxConcurrency        int
 }
 
 func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {
@@ -128,14 +134,15 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 
 	switch job.Action {
 	case "read_review_queue":
-		if e.Runtime == nil {
-			return reviewGatewayExecutionFailure(result, fmt.Errorf("GitLink runtime is required"))
+		runtime, runtimeErr := e.runtimeForJob(job)
+		if runtimeErr != nil {
+			return reviewGatewayExecutionFailure(result, runtimeErr)
 		}
 		owner, repo, err := splitReviewGatewayRepository(job.Repository)
 		if err != nil {
 			return reviewGatewayExecutionFailure(result, err)
 		}
-		queue, err := workflow.FetchReviewQueue(e.Runtime, workflow.ReviewQueueFetchOptions{
+		queue, err := workflow.FetchReviewQueue(runtime, workflow.ReviewQueueFetchOptions{
 			Owner:     owner,
 			Repo:      repo,
 			State:     "open",
@@ -151,15 +158,16 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		result.Message = "已完成 GitLink GET-only Review Queue 读取。"
 		return result, nil
 
-	case "read_review_context", "refresh_review_context", "generate_review_draft":
-		if e.Runtime == nil {
-			return reviewGatewayExecutionFailure(result, fmt.Errorf("GitLink runtime is required"))
+	case "read_review_context", "refresh_review_context", "generate_review_draft", "run_agent_review":
+		runtime, runtimeErr := e.runtimeForJob(job)
+		if runtimeErr != nil {
+			return reviewGatewayExecutionFailure(result, runtimeErr)
 		}
 		owner, repo, err := splitReviewGatewayRepository(job.Repository)
 		if err != nil {
 			return reviewGatewayExecutionFailure(result, err)
 		}
-		reviewContext, err := workflow.FetchReviewContext(e.Runtime, workflow.ReviewContextOptions{
+		reviewContext, err := workflow.FetchReviewContext(runtime, workflow.ReviewContextOptions{
 			Owner:           owner,
 			Repo:            repo,
 			Number:          job.PRNumber,
@@ -192,6 +200,31 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 			result.Draft = &draft
 			result.Message = "已生成确定性 Review 草稿模板；草稿不会写回 GitLink。"
 		}
+		if job.Action == "run_agent_review" {
+			if e.AgentProvider == nil {
+				return reviewGatewayExecutionFailure(result, fmt.Errorf("Review Agent runner is not enabled"))
+			}
+			maxConcurrency := e.AgentMaxConcurrency
+			if maxConcurrency <= 0 {
+				maxConcurrency = 3
+			}
+			plan := workflow.BuildReviewAgentPlan(reviewContext, nil, maxConcurrency, now().UTC())
+			run := workflow.RunReviewAgentPlan(
+				ctx,
+				plan,
+				e.AgentProvider,
+				e.AgentTaskTimeout,
+				now,
+			)
+			result.AgentRun = &run
+			result.Message = fmt.Sprintf(
+				"Agent Review %s；收到 %d/%d 份有效评估；最终决定仍由仓库 Owner 完成；GitLink 写入 0。",
+				run.Status,
+				run.Synthesis.AssessmentsReceived,
+				run.Synthesis.AssessmentsExpected,
+			)
+			return result, nil
+		}
 		return result, nil
 
 	case "prepare_common_review":
@@ -201,9 +234,11 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		return e.confirmCommonReview(ctx, job, result, now().UTC())
 
 	case "help":
-		result.Message = "支持：查看待审查、查看 PR #编号、刷新 PR #编号、生成 PR #编号 Review 草稿、查看绑定、领取/释放 PR、设置截止时间、准备提交 PR #编号 Review。GitLink 默认 GET-only；common Review 必须经过账号绑定、ActionPlan 和同一用户二次确认。"
+		result.Message = "支持：仓库列表、查看待审查、查看 [owner/repo] PR #编号、刷新 PR、生成 Review 草稿、查看绑定、领取/释放 PR、设置截止时间、准备提交 common Review。多仓库群可在命令中显式指定 owner/repo；GitLink 默认 GET-only。"
 	case "show_binding":
-		result.Message = fmt.Sprintf("当前群已绑定仓库 %s；绑定来源是受控配置文件。", job.Repository)
+		result.Message = formatReviewGatewayRepositoryBindings(job.Repositories, job.Repository)
+	case "list_repositories":
+		result.Message = formatReviewGatewayRepositoryBindings(job.Repositories, job.Repository)
 	case "read_my_review_tasks":
 		if e.Collaboration == nil {
 			return reviewGatewayExecutionFailure(result, fmt.Errorf("review collaboration store is required"))
@@ -238,6 +273,22 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 	return result, nil
 }
 
+func formatReviewGatewayRepositoryBindings(repositories []string, defaultRepository string) string {
+	if len(repositories) == 0 {
+		return "当前群没有可用仓库绑定。"
+	}
+	lines := []string{"当前群已绑定仓库："}
+	for _, repository := range repositories {
+		suffix := ""
+		if repository == defaultRepository {
+			suffix = "（默认）"
+		}
+		lines = append(lines, "- "+repository+suffix)
+	}
+	lines = append(lines, "多仓库命令示例：查看 owner/repo PR #编号。")
+	return strings.Join(lines, "\n")
+}
+
 func (e *ReviewGatewayExecutor) publishCollaboration(
 	ctx context.Context,
 	result *ReviewGatewayExecutionResult,
@@ -245,6 +296,10 @@ func (e *ReviewGatewayExecutor) publishCollaboration(
 ) {
 	if e.Publisher == nil || result == nil {
 		return
+	}
+	switch result.Action {
+	case "claim_review", "release_review", "set_review_deadline":
+		bundle.HumanFieldsAuthoritative = true
 	}
 	syncResults, err := e.Publisher.Publish(ctx, bundle)
 	result.ResourceSync = syncResults

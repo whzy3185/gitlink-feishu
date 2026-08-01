@@ -20,7 +20,8 @@ import (
 const (
 	reviewGatewaySchemaVersion = "feishu.review-gateway/v1"
 	reviewGatewayJobSchema     = "feishu.review-job/v1"
-	reviewGatewayBindingSchema = "feishu.review-bindings/v1"
+	reviewGatewayBindingSchema = "feishu.review-bindings/v2"
+	reviewGatewayBindingV1     = "feishu.review-bindings/v1"
 )
 
 type ReviewGatewayEvent struct {
@@ -35,58 +36,72 @@ type ReviewGatewayEvent struct {
 }
 
 type ReviewChatBinding struct {
-	ChatID          string   `json:"chat_id"`
-	Repository      string   `json:"repository"`
-	Enabled         bool     `json:"enabled"`
-	AdminUserIDs    []string `json:"admin_user_ids,omitempty"`
-	AllowedUserIDs  []string `json:"allowed_user_ids,omitempty"`
-	DeadlineHours   int      `json:"deadline_hours,omitempty"`
-	BindingRevision string   `json:"binding_revision,omitempty"`
+	ChatID            string   `json:"chat_id"`
+	InstallationID    string   `json:"installation_id,omitempty"`
+	Repository        string   `json:"repository,omitempty"`
+	Repositories      []string `json:"repositories,omitempty"`
+	DefaultRepository string   `json:"default_repository,omitempty"`
+	Enabled           bool     `json:"enabled"`
+	AdminUserIDs      []string `json:"admin_user_ids,omitempty"`
+	AllowedUserIDs    []string `json:"allowed_user_ids,omitempty"`
+	DeadlineHours     int      `json:"deadline_hours,omitempty"`
+	BindingRevision   string   `json:"binding_revision,omitempty"`
 }
 
 type ReviewGatewayBindings struct {
 	SchemaVersion    string                  `json:"schema_version"`
+	Installations    []GitLinkInstallation   `json:"installations,omitempty"`
 	Bindings         []ReviewChatBinding     `json:"bindings"`
 	IdentityBindings []ReviewIdentityBinding `json:"identity_bindings,omitempty"`
 }
 
 type ReviewIdentityBinding struct {
-	FeishuUserID string `json:"feishu_user_id"`
-	GitLinkLogin string `json:"gitlink_login"`
-	Enabled      bool   `json:"enabled"`
+	InstallationID     string `json:"installation_id,omitempty"`
+	FeishuUserID       string `json:"feishu_user_id"`
+	GitLinkLogin       string `json:"gitlink_login"`
+	VerificationMethod string `json:"verification_method,omitempty"`
+	VerifiedAt         string `json:"verified_at,omitempty"`
+	Enabled            bool   `json:"enabled"`
 }
 
 type ReviewGatewayIntent struct {
-	Name       string `json:"name"`
-	Repository string `json:"repository,omitempty"`
-	PRNumber   int    `json:"pr_number,omitempty"`
-	Argument   string `json:"argument,omitempty"`
+	Name             string   `json:"name"`
+	InstallationID   string   `json:"installation_id,omitempty"`
+	InstallationMode string   `json:"installation_mode,omitempty"`
+	Repository       string   `json:"repository,omitempty"`
+	Repositories     []string `json:"repositories,omitempty"`
+	PRNumber         int      `json:"pr_number,omitempty"`
+	Argument         string   `json:"argument,omitempty"`
 }
 
 type ReviewGatewayJob struct {
-	SchemaVersion         string `json:"schema_version"`
-	JobID                 string `json:"job_id"`
-	DedupeKey             string `json:"dedupe_key"`
-	Status                string `json:"status"`
-	Mode                  string `json:"mode"`
-	Action                string `json:"action"`
-	Repository            string `json:"repository,omitempty"`
-	PRNumber              int    `json:"pr_number,omitempty"`
-	Argument              string `json:"argument,omitempty"`
-	ChatID                string `json:"chat_id"`
-	RequestedBy           string `json:"requested_by"`
-	SourceEventID         string `json:"source_event_id,omitempty"`
-	SourceMessageID       string `json:"source_message_id,omitempty"`
-	CreatedAt             string `json:"created_at"`
-	MutatesGitLink        bool   `json:"mutates_gitlink"`
-	CollaborationMutation bool   `json:"collaboration_mutation"`
-	RequiresAdmin         bool   `json:"requires_admin"`
-	AttemptCount          int    `json:"attempt_count"`
-	MaxAttempts           int    `json:"max_attempts"`
-	NextAttemptAt         string `json:"next_attempt_at,omitempty"`
-	LeaseOwner            string `json:"lease_owner,omitempty"`
-	LeaseExpiresAt        string `json:"lease_expires_at,omitempty"`
-	HandlerLatencyMs      int64  `json:"handler_latency_ms,omitempty"`
+	SchemaVersion         string   `json:"schema_version"`
+	JobID                 string   `json:"job_id"`
+	DedupeKey             string   `json:"dedupe_key"`
+	Status                string   `json:"status"`
+	Mode                  string   `json:"mode"`
+	Action                string   `json:"action"`
+	InstallationID        string   `json:"installation_id,omitempty"`
+	InstallationMode      string   `json:"installation_mode,omitempty"`
+	Repository            string   `json:"repository,omitempty"`
+	Repositories          []string `json:"repositories,omitempty"`
+	PRNumber              int      `json:"pr_number,omitempty"`
+	Argument              string   `json:"argument,omitempty"`
+	ChatID                string   `json:"chat_id"`
+	RequestedBy           string   `json:"requested_by"`
+	SourceEventID         string   `json:"source_event_id,omitempty"`
+	SourceMessageID       string   `json:"source_message_id,omitempty"`
+	NotifyChat            bool     `json:"notify_chat,omitempty"`
+	CreatedAt             string   `json:"created_at"`
+	MutatesGitLink        bool     `json:"mutates_gitlink"`
+	CollaborationMutation bool     `json:"collaboration_mutation"`
+	RequiresAdmin         bool     `json:"requires_admin"`
+	AttemptCount          int      `json:"attempt_count"`
+	MaxAttempts           int      `json:"max_attempts"`
+	NextAttemptAt         string   `json:"next_attempt_at,omitempty"`
+	LeaseOwner            string   `json:"lease_owner,omitempty"`
+	LeaseExpiresAt        string   `json:"lease_expires_at,omitempty"`
+	HandlerLatencyMs      int64    `json:"handler_latency_ms,omitempty"`
 }
 
 type ReviewGatewayEventRef struct {
@@ -150,25 +165,29 @@ type MemoryReviewGatewayDeduper struct {
 }
 
 type ReviewGateway struct {
-	bindings map[string]ReviewChatBinding
-	admins   map[string]bool
-	deduper  ReviewGatewayDeduper
-	now      func() time.Time
-	stale    time.Duration
+	bindings      map[string]ReviewChatBinding
+	installations map[string]GitLinkInstallation
+	admins        map[string]bool
+	deduper       ReviewGatewayDeduper
+	now           func() time.Time
+	stale         time.Duration
 }
 
 var (
-	reviewGatewayRepositoryPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
-	reviewGatewayPRPattern         = regexp.MustCompile(`(?i)^查看\s*PR\s*#?(\d+)$`)
-	reviewGatewayClaimPattern      = regexp.MustCompile(`(?i)^领取\s*PR\s*#?(\d+)$`)
-	reviewGatewayReleasePattern    = regexp.MustCompile(`(?i)^释放\s*PR\s*#?(\d+)$`)
-	reviewGatewayDeadlinePattern   = regexp.MustCompile(`(?i)^设置\s*PR\s*#?(\d+)\s*截止\s*(\d{4}-\d{2}-\d{2})$`)
-	reviewGatewayPreparePattern    = regexp.MustCompile(`(?i)^准备提交\s*PR\s*#?(\d+)\s*Review$`)
-	reviewGatewayConfirmPattern    = regexp.MustCompile(`(?i)^确认\s*Review\s+([A-Za-z0-9:_-]+)$`)
-	reviewGatewayDraftPattern      = regexp.MustCompile(`(?i)^生成\s*PR\s*#?(\d+)\s*Review\s*草稿$`)
-	reviewGatewayRefreshPattern    = regexp.MustCompile(`(?i)^刷新\s*PR\s*#?(\d+)$`)
-	reviewGatewayBindPattern       = regexp.MustCompile(`(?i)^绑定仓库\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$`)
-	reviewGatewayIntentPatterns    = []struct {
+	reviewGatewayRepositoryPattern        = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+	reviewGatewaySecretReferencePattern   = regexp.MustCompile(`^env:[A-Za-z_][A-Za-z0-9_]*$`)
+	reviewGatewayPRPattern                = regexp.MustCompile(`(?i)^查看\s*PR\s*#?(\d+)$`)
+	reviewGatewayClaimPattern             = regexp.MustCompile(`(?i)^领取\s*PR\s*#?(\d+)$`)
+	reviewGatewayReleasePattern           = regexp.MustCompile(`(?i)^释放\s*PR\s*#?(\d+)$`)
+	reviewGatewayDeadlinePattern          = regexp.MustCompile(`(?i)^设置\s*PR\s*#?(\d+)\s*截止\s*(\d{4}-\d{2}-\d{2})$`)
+	reviewGatewayQualifiedDeadlinePattern = regexp.MustCompile(`(?i)^设置\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s*截止\s*(\d{4}-\d{2}-\d{2})$`)
+	reviewGatewayPreparePattern           = regexp.MustCompile(`(?i)^准备提交\s*PR\s*#?(\d+)\s*Review$`)
+	reviewGatewayConfirmPattern           = regexp.MustCompile(`(?i)^确认\s*Review\s+([A-Za-z0-9:_-]+)$`)
+	reviewGatewayDraftPattern             = regexp.MustCompile(`(?i)^生成\s*PR\s*#?(\d+)\s*Review\s*草稿$`)
+	reviewGatewayRefreshPattern           = regexp.MustCompile(`(?i)^刷新\s*PR\s*#?(\d+)$`)
+	reviewGatewayAgentPattern             = regexp.MustCompile(`(?i)^启动\s*PR\s*#?(\d+)\s*Agent\s*审查$`)
+	reviewGatewayBindPattern              = regexp.MustCompile(`(?i)^绑定仓库\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$`)
+	reviewGatewayIntentPatterns           = []struct {
 		pattern *regexp.Regexp
 		name    string
 	}{
@@ -179,6 +198,19 @@ var (
 		{pattern: reviewGatewayPreparePattern, name: "prepare_common_review"},
 		{pattern: reviewGatewayDraftPattern, name: "generate_review_draft"},
 		{pattern: reviewGatewayRefreshPattern, name: "refresh_review_context"},
+		{pattern: reviewGatewayAgentPattern, name: "run_agent_review"},
+	}
+	reviewGatewayQualifiedIntentPatterns = []struct {
+		pattern *regexp.Regexp
+		name    string
+	}{
+		{regexp.MustCompile(`(?i)^查看\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`), "read_review_context"},
+		{regexp.MustCompile(`(?i)^领取\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`), "claim_review"},
+		{regexp.MustCompile(`(?i)^释放\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`), "release_review"},
+		{regexp.MustCompile(`(?i)^准备提交\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s*Review$`), "prepare_common_review"},
+		{regexp.MustCompile(`(?i)^生成\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s*Review\s*草稿$`), "generate_review_draft"},
+		{regexp.MustCompile(`(?i)^刷新\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`), "refresh_review_context"},
+		{regexp.MustCompile(`(?i)^启动\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s*Agent\s*审查$`), "run_agent_review"},
 	}
 )
 
@@ -214,12 +246,9 @@ func (d *MemoryReviewGatewayDeduper) Release(key string) {
 }
 
 func NewReviewGateway(bindings ReviewGatewayBindings, config ReviewGatewayConfig, deduper ReviewGatewayDeduper) (*ReviewGateway, error) {
-	if bindings.SchemaVersion != "" && bindings.SchemaVersion != reviewGatewayBindingSchema {
-		return nil, fmt.Errorf(
-			"unsupported review gateway bindings schema %q, want %q",
-			bindings.SchemaVersion,
-			reviewGatewayBindingSchema,
-		)
+	bindings, err := normalizeReviewGatewayBindings(bindings)
+	if err != nil {
+		return nil, err
 	}
 	if config.Now == nil {
 		config.Now = time.Now
@@ -231,20 +260,21 @@ func NewReviewGateway(bindings ReviewGatewayBindings, config ReviewGatewayConfig
 		deduper = NewMemoryReviewGatewayDeduper()
 	}
 	result := &ReviewGateway{
-		bindings: map[string]ReviewChatBinding{},
-		admins:   stringSet(config.AdminUserIDs),
-		deduper:  deduper,
-		now:      config.Now,
-		stale:    config.StaleWindow,
+		bindings:      map[string]ReviewChatBinding{},
+		installations: map[string]GitLinkInstallation{},
+		admins:        stringSet(config.AdminUserIDs),
+		deduper:       deduper,
+		now:           config.Now,
+		stale:         config.StaleWindow,
+	}
+	for _, installation := range bindings.Installations {
+		result.installations[installation.InstallationID] = installation
 	}
 	for _, binding := range bindings.Bindings {
 		binding.ChatID = strings.TrimSpace(binding.ChatID)
-		binding.Repository = strings.TrimSpace(binding.Repository)
+		binding.Repository = strings.TrimSpace(binding.DefaultRepository)
 		if binding.ChatID == "" {
 			return nil, fmt.Errorf("review gateway binding chat_id is required")
-		}
-		if !reviewGatewayRepositoryPattern.MatchString(binding.Repository) {
-			return nil, fmt.Errorf("review gateway binding repository %q must use owner/repo", binding.Repository)
 		}
 		if _, exists := result.bindings[binding.ChatID]; exists {
 			return nil, fmt.Errorf("duplicate review gateway binding for chat %q", binding.ChatID)
@@ -263,10 +293,11 @@ func NewReviewGateway(bindings ReviewGatewayBindings, config ReviewGatewayConfig
 		if userID == "" || login == "" {
 			return nil, fmt.Errorf("enabled Review identity bindings require feishu_user_id and gitlink_login")
 		}
-		if identityUsers[userID] {
-			return nil, fmt.Errorf("duplicate Review identity binding for Feishu user %q", userID)
+		key := identity.InstallationID + "\x00" + userID
+		if identityUsers[key] {
+			return nil, fmt.Errorf("duplicate Review identity binding for Feishu user %q in installation %q", userID, identity.InstallationID)
 		}
-		identityUsers[userID] = true
+		identityUsers[key] = true
 	}
 	return result, nil
 }
@@ -338,7 +369,28 @@ func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEven
 			receipt.Reason = "sender_not_allowed"
 			return receipt, nil
 		}
-		intent.Repository = binding.Repository
+		installation, exists := g.installations[binding.InstallationID]
+		if !exists || !installation.Enabled {
+			receipt.Reason = "installation_disabled"
+			return receipt, nil
+		}
+		intent.InstallationID = installation.InstallationID
+		intent.InstallationMode = installation.OperationMode
+		if intent.Name == "confirm_common_review" && installation.OperationMode != "write" {
+			receipt.Reason = "installation_write_disabled"
+			return receipt, nil
+		}
+		intent.Repositories = append([]string(nil), binding.Repositories...)
+		if reviewGatewayActionRequiresRepository(intent.Name) {
+			resolved, reason := resolveReviewGatewayRepository(binding, intent.Repository)
+			if reason != "" {
+				receipt.Reason = reason
+				return receipt, nil
+			}
+			intent.Repository = resolved
+		} else if intent.Repository == "" {
+			intent.Repository = binding.DefaultRepository
+		}
 		receipt.Intent = intent
 	}
 	if intent.Name == "plan_bind_repository" && !g.isAdmin(binding, event.UserID) {
@@ -393,6 +445,8 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 		return ReviewGatewayIntent{Name: "help"}
 	case "查看绑定", "show binding":
 		return ReviewGatewayIntent{Name: "show_binding"}
+	case "仓库列表", "查看仓库", "repository list":
+		return ReviewGatewayIntent{Name: "list_repositories"}
 	case "查看待 review", "查看待审查", "review queue":
 		return ReviewGatewayIntent{Name: "read_review_queue"}
 	case "查看我的 review 任务", "我的 review 任务", "my review tasks":
@@ -402,8 +456,20 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 		number, _ := strconv.Atoi(match[1])
 		return ReviewGatewayIntent{Name: "set_review_deadline", PRNumber: number, Argument: match[2]}
 	}
+	if match := reviewGatewayQualifiedDeadlinePattern.FindStringSubmatch(content); len(match) == 4 {
+		number, _ := strconv.Atoi(match[2])
+		return ReviewGatewayIntent{Name: "set_review_deadline", Repository: match[1], PRNumber: number, Argument: match[3]}
+	}
 	if match := reviewGatewayConfirmPattern.FindStringSubmatch(content); len(match) == 2 {
 		return ReviewGatewayIntent{Name: "confirm_common_review", Argument: match[1]}
+	}
+	for _, rule := range reviewGatewayQualifiedIntentPatterns {
+		match := rule.pattern.FindStringSubmatch(content)
+		if len(match) != 3 {
+			continue
+		}
+		number, _ := strconv.Atoi(match[2])
+		return ReviewGatewayIntent{Name: rule.name, Repository: match[1], PRNumber: number}
 	}
 	for _, rule := range reviewGatewayIntentPatterns {
 		match := rule.pattern.FindStringSubmatch(content)
@@ -447,7 +513,10 @@ func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, d
 		Status:                "queued",
 		Mode:                  mode,
 		Action:                intent.Name,
+		InstallationID:        intent.InstallationID,
+		InstallationMode:      intent.InstallationMode,
 		Repository:            intent.Repository,
+		Repositories:          append([]string(nil), intent.Repositories...),
 		PRNumber:              intent.PRNumber,
 		Argument:              intent.Argument,
 		ChatID:                event.ChatID,
@@ -532,9 +601,6 @@ func readReviewGatewayBindings(path string) (ReviewGatewayBindings, error) {
 	var bindings ReviewGatewayBindings
 	if err := json.Unmarshal(data, &bindings); err != nil {
 		return ReviewGatewayBindings{}, fmt.Errorf("parse review gateway bindings: %w", err)
-	}
-	if bindings.SchemaVersion == "" {
-		bindings.SchemaVersion = reviewGatewayBindingSchema
 	}
 	return bindings, nil
 }

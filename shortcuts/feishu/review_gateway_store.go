@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS review_action_plans (
     attempt_count INTEGER NOT NULL DEFAULT 0,
     max_attempts INTEGER NOT NULL DEFAULT 3,
     reconciliation_status TEXT NOT NULL DEFAULT 'not_required',
+    mutation_status TEXT NOT NULL DEFAULT 'none',
     created_at TEXT NOT NULL,
     expires_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -132,6 +133,66 @@ CREATE TABLE IF NOT EXISTS review_collaboration_resources (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (work_item_key, resource_type)
 );
+
+CREATE TABLE IF NOT EXISTS gitlink_installations (
+    installation_id TEXT PRIMARY KEY,
+    gitlink_host TEXT NOT NULL,
+    owner TEXT NOT NULL DEFAULT '',
+    credential_ref TEXT NOT NULL DEFAULT '',
+    operation_mode TEXT NOT NULL,
+    webhook_id TEXT NOT NULL DEFAULT '',
+    webhook_secret_ref TEXT NOT NULL DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS installation_repositories (
+    installation_id TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (installation_id, repository),
+    FOREIGN KEY (installation_id) REFERENCES gitlink_installations(installation_id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS chat_repository_bindings (
+    chat_id TEXT NOT NULL,
+    installation_id TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    is_default INTEGER NOT NULL DEFAULT 0,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    admin_user_ids_json TEXT NOT NULL DEFAULT '[]',
+    allowed_user_ids_json TEXT NOT NULL DEFAULT '[]',
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (chat_id, installation_id, repository),
+    FOREIGN KEY (installation_id) REFERENCES gitlink_installations(installation_id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS review_identity_bindings (
+    installation_id TEXT NOT NULL,
+    feishu_user_id TEXT NOT NULL,
+    gitlink_login TEXT NOT NULL,
+    verification_method TEXT NOT NULL,
+    verified_at TEXT NOT NULL DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (installation_id, feishu_user_id),
+    FOREIGN KEY (installation_id) REFERENCES gitlink_installations(installation_id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS review_gateway_configuration_audit (
+    audit_id TEXT PRIMARY KEY,
+    config_fingerprint TEXT NOT NULL,
+    source TEXT NOT NULL,
+    installation_count INTEGER NOT NULL,
+    binding_count INTEGER NOT NULL,
+    repository_count INTEGER NOT NULL,
+    applied_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS review_gateway_configuration_audit_applied
+    ON review_gateway_configuration_audit(applied_at);
 `
 
 var reviewGatewayJobMigrations = map[string]string{
@@ -157,6 +218,7 @@ var reviewActionPlanMigrations = map[string]string{
 	"attempt_count":         "INTEGER NOT NULL DEFAULT 0",
 	"max_attempts":          "INTEGER NOT NULL DEFAULT 3",
 	"reconciliation_status": "TEXT NOT NULL DEFAULT 'not_required'",
+	"mutation_status":       "TEXT NOT NULL DEFAULT 'none'",
 }
 
 var (
@@ -323,7 +385,7 @@ func (s *MemoryReviewGatewayJobStore) CompleteJob(_ context.Context, job ReviewG
 	job.LeaseOwner = ""
 	job.LeaseExpiresAt = ""
 	s.Jobs[job.JobID] = job
-	if job.SourceMessageID != "" {
+	if job.SourceMessageID != "" || job.NotifyChat {
 		s.ReplyStatus[job.JobID] = "pending"
 	}
 	return nil
@@ -344,7 +406,7 @@ func (s *MemoryReviewGatewayJobStore) RetryOrFailJob(_ context.Context, job Revi
 	} else {
 		job.Status = "failed"
 		s.Status[job.JobID] = "failed"
-		if job.SourceMessageID != "" {
+		if job.SourceMessageID != "" || job.NotifyChat {
 			s.ReplyStatus[job.JobID] = "pending"
 		}
 	}
@@ -849,7 +911,7 @@ func (s *SQLiteReviewGatewayStore) CompleteJob(ctx context.Context, job ReviewGa
 	}
 	replyStatus := "none"
 	replyNext := ""
-	if job.SourceMessageID != "" {
+	if job.SourceMessageID != "" || job.NotifyChat {
 		replyStatus = "pending"
 		replyNext = reviewGatewayTimestamp(time.Now())
 	}
@@ -888,7 +950,7 @@ func (s *SQLiteReviewGatewayStore) RetryOrFailJob(ctx context.Context, job Revie
 	if willRetry {
 		status = "queued"
 		nextAttempt = reviewGatewayTimestamp(now.Add(reviewGatewayRetryDelay(job.AttemptCount)))
-	} else if job.SourceMessageID != "" {
+	} else if job.SourceMessageID != "" || job.NotifyChat {
 		replyStatus = "pending"
 		replyNext = reviewGatewayTimestamp(now)
 	}
@@ -1186,6 +1248,36 @@ func (q *ReviewGatewayQueue) Enqueue(ctx context.Context, event ReviewGatewayEve
 	}
 	q.Wake()
 	return receipt
+}
+
+func (q *ReviewGatewayQueue) EnqueuePreparedJob(ctx context.Context, job ReviewGatewayJob) (bool, error) {
+	if q == nil || q.gateway == nil || q.store == nil {
+		return false, fmt.Errorf("review gateway queue is not configured")
+	}
+	if strings.TrimSpace(job.JobID) == "" || strings.TrimSpace(job.DedupeKey) == "" {
+		return false, fmt.Errorf("prepared review gateway job identity is required")
+	}
+	now := q.now().UTC()
+	if sqliteStore, ok := q.store.(*SQLiteReviewGatewayStore); ok {
+		if dedupeStore, sameStore := q.gateway.deduper.(*SQLiteReviewGatewayStore); sameStore && dedupeStore == sqliteStore {
+			saved, err := sqliteStore.ReserveAndSaveJob(ctx, job, now, 24*time.Hour)
+			if err != nil || !saved {
+				return saved, err
+			}
+			q.Wake()
+			return true, nil
+		}
+	}
+	reserved, err := q.gateway.deduper.Reserve(job.DedupeKey, now, 24*time.Hour)
+	if err != nil || !reserved {
+		return reserved, err
+	}
+	if err := q.store.SaveJob(ctx, job); err != nil {
+		q.gateway.deduper.Release(job.DedupeKey)
+		return false, err
+	}
+	q.Wake()
+	return true, nil
 }
 
 func (q *ReviewGatewayQueue) Wake() {

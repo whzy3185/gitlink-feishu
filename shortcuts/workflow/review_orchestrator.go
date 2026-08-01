@@ -18,7 +18,7 @@ import (
 
 const (
 	reviewAgentPlanSchema       = "review.agent-plan/v1"
-	reviewAgentAssessmentSchema = "review.agent-assessment/v1"
+	reviewAgentAssessmentSchema = "review.agent-assessment/v2"
 	reviewWarroomSchema         = "review.warroom/v1"
 )
 
@@ -61,15 +61,18 @@ type ReviewCapability struct {
 }
 
 type ReviewAgentAssessment struct {
-	SchemaVersion string               `json:"schema_version"`
-	RunID         string               `json:"run_id"`
-	TaskID        string               `json:"task_id"`
-	Role          string               `json:"role"`
-	HeadSHA       string               `json:"head_sha"`
-	Status        string               `json:"status"`
-	Findings      []ReviewAgentFinding `json:"findings"`
-	Unknowns      []string             `json:"unknowns,omitempty"`
-	CompletedAt   string               `json:"completed_at"`
+	SchemaVersion     string               `json:"schema_version"`
+	RunID             string               `json:"run_id"`
+	TaskID            string               `json:"task_id"`
+	Role              string               `json:"role"`
+	HeadSHA           string               `json:"head_sha"`
+	Status            string               `json:"status"`
+	Findings          []ReviewAgentFinding `json:"findings"`
+	Unknowns          []string             `json:"unknowns,omitempty"`
+	AssessmentSummary string               `json:"assessment_summary"`
+	Coverage          []string             `json:"coverage"`
+	EvidenceChecked   []string             `json:"evidence_checked"`
+	CompletedAt       string               `json:"completed_at"`
 }
 
 type ReviewAgentFinding struct {
@@ -144,7 +147,7 @@ func newReviewSynthesizeShortcut() *common.Shortcut {
 		Description: "Validate and synthesize specialist assessments without making the owner decision",
 		Flags: []common.Flag{
 			{Name: "plan", Usage: "review.agent-plan/v1 JSON", Required: true},
-			{Name: "assessments", Usage: "Comma-separated review.agent-assessment/v1 JSON files", Required: true},
+			{Name: "assessments", Usage: "Comma-separated review.agent-assessment/v2 JSON files", Required: true},
 		},
 		Run: func(runtime *common.RuntimeContext) error {
 			plan, err := readReviewAgentPlan(runtime.Arg("plan"))
@@ -325,6 +328,28 @@ func validateReviewAgentAssessment(assessment ReviewAgentAssessment) string {
 	}
 	if _, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(assessment.CompletedAt)); err != nil {
 		return "completed_at must be an RFC3339 timestamp"
+	}
+	if strings.TrimSpace(assessment.AssessmentSummary) == "" {
+		return "assessment_summary is required"
+	}
+	if len(assessment.Coverage) == 0 {
+		return "coverage is required"
+	}
+	if len(assessment.EvidenceChecked) == 0 {
+		return "evidence_checked is required"
+	}
+	if len(assessment.Findings) == 0 && len(assessment.Unknowns) == 0 {
+		return "at least one finding or unknown is required"
+	}
+	for _, coverage := range assessment.Coverage {
+		if strings.TrimSpace(coverage) == "" {
+			return "coverage entries cannot be empty"
+		}
+	}
+	for _, evidence := range assessment.EvidenceChecked {
+		if strings.TrimSpace(evidence) == "" {
+			return "evidence_checked entries cannot be empty"
+		}
 	}
 	for _, finding := range assessment.Findings {
 		if reviewSeverityRank(finding.Severity) == 0 {

@@ -1,11 +1,76 @@
 package workflow
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gitlink-org/gitlink-cli/internal/collab"
 )
+
+func TestRunReviewAgentPlanUsesBoundedValidatedHTTPContract(t *testing.T) {
+	t.Setenv("AGENT_TEST_TOKEN", "agent-secret")
+	var mu sync.Mutex
+	invocations := []ReviewAgentInvocation{}
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer agent-secret" {
+			t.Fatalf("authorization = %q", request.Header.Get("Authorization"))
+		}
+		var invocation ReviewAgentInvocation
+		if err := json.NewDecoder(request.Body).Decode(&invocation); err != nil {
+			t.Fatalf("decode invocation: %v", err)
+		}
+		mu.Lock()
+		invocations = append(invocations, invocation)
+		mu.Unlock()
+		writer.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(writer).Encode(ReviewAgentAssessment{
+			SchemaVersion: reviewAgentAssessmentSchema,
+			RunID:         invocation.RunID, TaskID: invocation.Task.TaskID,
+			Role: invocation.Task.Role, HeadSHA: invocation.HeadSHA,
+			Status: "completed", AssessmentSummary: "Reviewed assigned scope.",
+			Coverage:        []string{"assigned_file_scopes"},
+			EvidenceChecked: []string{"review_context", "changed_files"},
+			Unknowns:        []string{"No blocking finding in the supplied evidence."},
+			CompletedAt:     "2026-08-01T15:00:00Z",
+		})
+	}))
+	defer server.Close()
+	provider, err := NewHTTPReviewAgentProvider(server.URL, "env:AGENT_TEST_TOKEN", server.Client())
+	if err != nil {
+		t.Fatalf("NewHTTPReviewAgentProvider: %v", err)
+	}
+	plan := ReviewAgentPlan{
+		SchemaVersion: reviewAgentPlanSchema, RunID: "run-agent-42",
+		Repository: "owner/repo", PRNumber: 42, HeadSHA: "head-42",
+		SourceFingerprint: "fingerprint-42", Mode: "incremental",
+		MaxConcurrency: 2, HumanDecisionRequired: true, GitLinkWrites: 0,
+		Tasks: []ReviewAgentTask{
+			{TaskID: "task-correctness", Role: "correctness", ReadOnly: true},
+			{TaskID: "task-tests", Role: "tests", ReadOnly: true},
+		},
+	}
+	now := time.Date(2026, 8, 1, 15, 0, 0, 0, time.UTC)
+	run := RunReviewAgentPlan(context.Background(), plan, provider, time.Second, func() time.Time { return now })
+	if run.Status != "ready_for_owner_review" || run.GitLinkWrites != 0 ||
+		run.Synthesis.AssessmentsReceived != 2 || !run.Synthesis.HumanDecisionRequired {
+		t.Fatalf("Agent run = %#v", run)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(invocations) != 2 {
+		t.Fatalf("invocation count = %d", len(invocations))
+	}
+	for _, invocation := range invocations {
+		if invocation.GitLinkWrites != 0 || !invocation.Task.ReadOnly || invocation.HeadSHA != "head-42" {
+			t.Fatalf("unsafe invocation = %#v", invocation)
+		}
+	}
+}
 
 func TestBuildReviewAgentPlanRoutesIncrementalScopesAndKeepsOwnerDecision(t *testing.T) {
 	previous := ReviewContext{
@@ -69,13 +134,16 @@ func TestSynthesizeReviewAssessmentsRejectsStaleAndNeverApproves(t *testing.T) {
 	}
 	assessments := []ReviewAgentAssessment{
 		{
-			SchemaVersion: reviewAgentAssessmentSchema,
-			RunID:         plan.RunID,
-			TaskID:        "task-correctness",
-			Role:          "correctness",
-			HeadSHA:       plan.HeadSHA,
-			Status:        "completed",
-			CompletedAt:   "2026-07-31T08:10:00Z",
+			SchemaVersion:     reviewAgentAssessmentSchema,
+			RunID:             plan.RunID,
+			TaskID:            "task-correctness",
+			Role:              "correctness",
+			HeadSHA:           plan.HeadSHA,
+			Status:            "completed",
+			AssessmentSummary: "Found a persistence risk in the reviewed patchset.",
+			Coverage:          []string{"changed_files", "review_threads"},
+			EvidenceChecked:   []string{"patchset", "existing_reviews"},
+			CompletedAt:       "2026-07-31T08:10:00Z",
 			Findings: []ReviewAgentFinding{{
 				Severity:   "high",
 				Path:       "main.go",
@@ -99,6 +167,30 @@ func TestSynthesizeReviewAssessmentsRejectsStaleAndNeverApproves(t *testing.T) {
 		result.Recommendation != "human_decision_required" ||
 		!result.HumanDecisionRequired || result.GitLinkWrites != 0 {
 		t.Fatalf("synthesis = %#v", result)
+	}
+}
+
+func TestSynthesizeReviewAssessmentsRejectsEmptyCompletedAssessment(t *testing.T) {
+	plan := ReviewAgentPlan{
+		SchemaVersion: reviewAgentPlanSchema,
+		RunID:         "run-empty",
+		HeadSHA:       "head-empty",
+		Tasks:         []ReviewAgentTask{{TaskID: "task-empty", Role: "correctness"}},
+	}
+	result := SynthesizeReviewAssessments(plan, []ReviewAgentAssessment{{
+		SchemaVersion:     reviewAgentAssessmentSchema,
+		RunID:             plan.RunID,
+		TaskID:            "task-empty",
+		Role:              "correctness",
+		HeadSHA:           plan.HeadSHA,
+		Status:            "completed",
+		AssessmentSummary: "No issues reported.",
+		Coverage:          []string{"changed_files"},
+		EvidenceChecked:   []string{"patchset"},
+		CompletedAt:       "2026-07-31T08:10:00Z",
+	}})
+	if result.Status != "incomplete" || result.AssessmentsReceived != 0 || len(result.Conflicts) != 1 {
+		t.Fatalf("empty completed assessment was accepted: %#v", result)
 	}
 }
 

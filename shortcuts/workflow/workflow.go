@@ -29,6 +29,7 @@ func Shortcuts() []*common.Shortcut {
 		newReviewQueueShortcut(),
 		newReviewOrchestrateShortcut(),
 		newReviewSynthesizeShortcut(),
+		newReviewAgentRunShortcut(),
 		newReviewWarroomShortcut(),
 		newReleaseNotesShortcut(),
 		newDependencyAuditShortcut(),

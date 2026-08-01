@@ -14,6 +14,34 @@ type reviewGatewayMessageSender interface {
 	Send(ctx context.Context, input *larktypes.SendInput) (*larktypes.SendResult, error)
 }
 
+type reviewGatewayMessageUpdater interface {
+	UpdateInteractiveMessage(ctx context.Context, messageID string, card Card) error
+}
+
+type reviewGatewayResourceStore interface {
+	GetReviewResourceState(context.Context, string, string) (ReviewResourceState, error)
+	SaveReviewResourceState(context.Context, string, string, string, string, time.Time) error
+}
+
+type reviewGatewayLiveSender struct {
+	reviewGatewayMessageSender
+	client    OpenAPIClient
+	appID     string
+	appSecret string
+}
+
+func (s *reviewGatewayLiveSender) UpdateInteractiveMessage(
+	ctx context.Context,
+	messageID string,
+	card Card,
+) error {
+	token, err := s.client.TenantAccessToken(ctx, s.appID, s.appSecret)
+	if err != nil {
+		return err
+	}
+	return s.client.PatchInteractiveMessage(ctx, token.Value, messageID, card)
+}
+
 type ReviewGatewayReplyEvent struct {
 	SchemaVersion string `json:"schema_version"`
 	Type          string `json:"type"`
@@ -206,14 +234,46 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 			MsgType:        "text",
 			Text:           formatReviewGatewayResultReply(item.Job, item.Result),
 		}
+		var cardState ReviewResourceState
+		var cardStateErr error
+		cardFingerprint := ""
+		cardResourceStore, hasCardResourceStore := d.store.(reviewGatewayResourceStore)
 		if item.Result.Collaboration != nil {
 			if cardJSON, marshalErr := json.Marshal(item.Result.Collaboration.Card); marshalErr == nil {
 				sendInput.MsgType = "interactive"
 				sendInput.Text = ""
 				sendInput.Card = string(cardJSON)
 			}
+			cardFingerprint = reviewCollaborationBundleFingerprint(*item.Result.Collaboration)
+			if hasCardResourceStore {
+				cardState, cardStateErr = cardResourceStore.GetReviewResourceState(
+					sendCtx,
+					item.Result.Collaboration.UniqueKey,
+					"feishu_card",
+				)
+			}
 		}
-		sendResult, sendErr := d.sender.Send(sendCtx, sendInput)
+		var sendResult *larktypes.SendResult
+		var sendErr error
+		replyAction := "created"
+		switch {
+		case cardStateErr != nil:
+			sendErr = fmt.Errorf("load fixed card resource mapping: %w", cardStateErr)
+		case item.Result.Collaboration != nil && cardState.RemoteID != "" && cardState.ContentFingerprint == cardFingerprint:
+			replyAction = "unchanged"
+			sendResult = &larktypes.SendResult{MessageID: cardState.RemoteID, ChatID: item.Job.ChatID}
+		case item.Result.Collaboration != nil && cardState.RemoteID != "":
+			replyAction = "updated"
+			updater, ok := d.sender.(reviewGatewayMessageUpdater)
+			if !ok {
+				sendErr = fmt.Errorf("review gateway sender cannot update an existing interactive card")
+				break
+			}
+			sendErr = updater.UpdateInteractiveMessage(sendCtx, cardState.RemoteID, item.Result.Collaboration.Card)
+			sendResult = &larktypes.SendResult{MessageID: cardState.RemoteID, ChatID: item.Job.ChatID}
+		default:
+			sendResult, sendErr = d.sender.Send(sendCtx, sendInput)
+		}
 		sendCancel()
 		event := ReviewGatewayReplyEvent{
 			SchemaVersion: reviewGatewaySchemaVersion,
@@ -221,6 +281,9 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 			JobID:         item.Job.JobID,
 			Status:        "sent",
 			ObservedAt:    d.now().UTC().Format(time.RFC3339),
+		}
+		if sendErr == nil {
+			event.Status = replyAction
 		}
 		persistCtx, persistCancel := context.WithTimeout(ctx, 500*time.Millisecond)
 		if sendErr != nil {
@@ -234,6 +297,21 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 				event.MessageIDHash = reviewGatewayHashIdentifier(messageID)
 			}
 			_ = d.store.MarkReplySent(persistCtx, item.Job.JobID, messageID, d.now().UTC())
+			if item.Result.Collaboration != nil && hasCardResourceStore && messageID != "" {
+				if persistErr := cardResourceStore.SaveReviewResourceState(
+					persistCtx,
+					item.Result.Collaboration.UniqueKey,
+					"feishu_card",
+					messageID,
+					cardFingerprint,
+					d.now().UTC(),
+				); persistErr != nil {
+					event.Status = "unknown"
+					event.Error = redactReviewGatewayError(
+						fmt.Sprintf("card write completed but local resource mapping failed: %v", persistErr),
+					)
+				}
+			}
 		}
 		persistCancel()
 		d.output.TryEmit(event)
@@ -277,6 +355,31 @@ func formatReviewGatewayResultReply(job ReviewGatewayJob, result ReviewGatewayEx
 			job.PRNumber,
 			firstNonEmpty(result.Error, "unknown"),
 		), 3000)
+	}
+	if result.WriteResult != nil {
+		write := result.WriteResult
+		lines := []string{
+			fmt.Sprintf("%s PR #%d common Review", write.Repository, write.PRNumber),
+			"状态：" + write.Status,
+		}
+		switch write.MutationStatus {
+		case reviewMutationConfirmed:
+			lines = append(lines, "GitLink 写入：已确认")
+			if write.ReviewID != "" {
+				lines = append(lines, "Review ID："+write.ReviewID)
+			}
+		case reviewMutationPossible:
+			lines = append(lines,
+				"GitLink 写入：结果不确定",
+				"禁止自动重试；请先回读当前 Review 完成对账。",
+			)
+		default:
+			lines = append(lines, "GitLink 写入：0")
+		}
+		if write.Reconciliation != "" {
+			lines = append(lines, "对账："+write.Reconciliation)
+		}
+		return truncateReviewGatewayText(strings.Join(lines, "\n"), 3000)
 	}
 	if result.Queue != nil {
 		lines := []string{

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -25,6 +27,7 @@ import (
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
+	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
 )
 
 type reviewGatewayJSONOutput struct {
@@ -90,7 +93,16 @@ func newReviewGatewayShortcut() *common.Shortcut {
 			{Name: "base-app-token", Usage: "Feishu Base app token. Defaults to FEISHU_BASE_APP_TOKEN"},
 			{Name: "review-table-id", Usage: "Feishu Base table for Review WorkItems. Defaults to FEISHU_REVIEW_TABLE_ID"},
 			{Name: "review-document-id", Usage: "Feishu DocX receiving Review snapshots. Defaults to FEISHU_REVIEW_DOCUMENT_ID"},
+			{Name: "review-document-folder-token", Usage: "Feishu folder for one durable Review document per PR. Defaults to FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN"},
 			{Name: "sync-feishu-task", Usage: "Create at most one Feishu Task for each active Review WorkItem", Bool: true, Default: "false"},
+			{Name: "webhook-listen-address", Usage: "Optional local address for signed GitLink webhook ingress, for example 127.0.0.1:8787"},
+			{Name: "webhook-path", Usage: "HTTP path for signed GitLink PR webhook ingress", Default: "/gitlink/events"},
+			{Name: "allow-public-webhook-listen", Usage: "Allow webhook listener to bind a non-loopback address; use only behind TLS and a trusted reverse proxy", Bool: true, Default: "false"},
+			{Name: "enable-agent-runner", Usage: "Enable provider-neutral read-only Agent review requests", Bool: true, Default: "false"},
+			{Name: "agent-endpoint", Usage: "HTTPS endpoint implementing review.agent-invocation/v1"},
+			{Name: "agent-credential-ref", Usage: "Optional Agent bearer credential as env:VARIABLE"},
+			{Name: "agent-task-timeout-seconds", Usage: "Timeout per Agent specialist", Default: "120"},
+			{Name: "agent-max-concurrency", Usage: "Maximum parallel Agent specialists", Default: "3"},
 		},
 		Run: runReviewGateway,
 	}
@@ -118,6 +130,10 @@ func runReviewGateway(runtime *common.RuntimeContext) error {
 		return fmt.Errorf("feishu +review-gateway requires --from-event for offline preview or --listen")
 	}
 	bindings, err := readReviewGatewayBindings(strings.TrimSpace(runtime.Arg("bindings")))
+	if err != nil {
+		return err
+	}
+	bindings, err = normalizeReviewGatewayBindings(bindings)
 	if err != nil {
 		return err
 	}
@@ -262,6 +278,14 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		return err
 	}
 	defer store.Close()
+	if err := store.SyncReviewGatewayConfiguration(
+		context.Background(),
+		bindings,
+		"bindings_file",
+		time.Now(),
+	); err != nil {
+		return err
+	}
 
 	gateway, err := NewReviewGateway(bindings, config, store)
 	if err != nil {
@@ -272,23 +296,33 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 	output.Start(liveCtx, queueSize)
 
 	channel := newFeishuReviewGatewayChannel(appID, appSecret, bindings, output, instanceLock.metadata.InstanceID)
-	replyDispatcher := NewReviewGatewayReplyDispatcher(channel, store, output, queueSize)
+	liveSender := &reviewGatewayLiveSender{
+		reviewGatewayMessageSender: channel,
+		client:                     NewOpenAPIClient(nil),
+		appID:                      appID,
+		appSecret:                  appSecret,
+	}
+	replyDispatcher := NewReviewGatewayReplyDispatcher(liveSender, store, output, queueSize)
 	replyDispatcher.instanceID = instanceLock.metadata.InstanceID
 	var publisher ReviewCollaborationPublisher
 	syncFeishuResources := parseBool(runtime.Arg("sync-feishu-resources"))
 	if syncFeishuResources {
 		publisherConfig := ReviewCollaborationPublisherConfig{
-			AppID:         appID,
-			AppSecret:     appSecret,
-			BaseAppToken:  firstNonEmpty(runtime.Arg("base-app-token"), os.Getenv("FEISHU_BASE_APP_TOKEN")),
-			ReviewTableID: firstNonEmpty(runtime.Arg("review-table-id"), os.Getenv("FEISHU_REVIEW_TABLE_ID")),
-			DocumentID:    firstNonEmpty(runtime.Arg("review-document-id"), os.Getenv("FEISHU_REVIEW_DOCUMENT_ID")),
-			EnableTask:    parseBool(runtime.Arg("sync-feishu-task")),
+			AppID:               appID,
+			AppSecret:           appSecret,
+			BaseAppToken:        firstNonEmpty(runtime.Arg("base-app-token"), os.Getenv("FEISHU_BASE_APP_TOKEN")),
+			ReviewTableID:       firstNonEmpty(runtime.Arg("review-table-id"), os.Getenv("FEISHU_REVIEW_TABLE_ID")),
+			DocumentID:          firstNonEmpty(runtime.Arg("review-document-id"), os.Getenv("FEISHU_REVIEW_DOCUMENT_ID")),
+			DocumentFolderToken: firstNonEmpty(runtime.Arg("review-document-folder-token"), os.Getenv("FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN")),
+			EnableTask:          parseBool(runtime.Arg("sync-feishu-task")),
+		}
+		if publisherConfig.DocumentID != "" && publisherConfig.DocumentFolderToken != "" {
+			return fmt.Errorf("configure either --review-document-id or --review-document-folder-token, not both")
 		}
 		if (publisherConfig.BaseAppToken == "") != (publisherConfig.ReviewTableID == "") {
 			return fmt.Errorf("Base Review sync requires both --base-app-token and --review-table-id")
 		}
-		if publisherConfig.BaseAppToken == "" && publisherConfig.DocumentID == "" && !publisherConfig.EnableTask {
+		if publisherConfig.BaseAppToken == "" && publisherConfig.DocumentID == "" && publisherConfig.DocumentFolderToken == "" && !publisherConfig.EnableTask {
 			return fmt.Errorf("--sync-feishu-resources requires at least one Base, Doc, or Task target")
 		}
 		publisher = &FeishuReviewCollaborationPublisher{
@@ -297,13 +331,38 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 			Config: publisherConfig,
 		}
 	}
+	var agentProvider workflow.ReviewAgentProvider
+	agentTaskTimeoutSeconds, err := boundedReviewGatewayInt(runtime.Arg("agent-task-timeout-seconds"), 120, 1, 900, "agent-task-timeout-seconds")
+	if err != nil {
+		return err
+	}
+	agentMaxConcurrency, err := boundedReviewGatewayInt(runtime.Arg("agent-max-concurrency"), 3, 1, 8, "agent-max-concurrency")
+	if err != nil {
+		return err
+	}
+	if parseBool(runtime.Arg("enable-agent-runner")) {
+		provider, providerErr := workflow.NewHTTPReviewAgentProvider(
+			runtime.Arg("agent-endpoint"),
+			runtime.Arg("agent-credential-ref"),
+			nil,
+		)
+		if providerErr != nil {
+			return providerErr
+		}
+		agentProvider = provider
+	}
 	executor := &ReviewGatewayExecutor{
-		Runtime:            runtime,
-		Collaboration:      store,
-		ActionPlans:        store,
-		IdentityBindings:   bindings.IdentityBindings,
-		EnableGitLinkWrite: parseBool(runtime.Arg("enable-gitlink-review-write")),
-		Publisher:          publisher,
+		Runtime:                    runtime,
+		Collaboration:              store,
+		ActionPlans:                store,
+		IdentityBindings:           bindings.IdentityBindings,
+		EnableGitLinkWrite:         parseBool(runtime.Arg("enable-gitlink-review-write")),
+		Publisher:                  publisher,
+		Installations:              reviewGatewayInstallationMap(bindings),
+		RequireInstallationRuntime: true,
+		AgentProvider:              agentProvider,
+		AgentTaskTimeout:           time.Duration(agentTaskTimeoutSeconds) * time.Second,
+		AgentMaxConcurrency:        agentMaxConcurrency,
 	}
 	queue := NewReviewGatewayQueue(gateway, store, queueSize, func(outcome ReviewGatewayJobOutcome) {
 		output.TryEmit(outcome.Result)
@@ -324,6 +383,59 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		defer cancel()
 		return executor.Execute(jobCtx, job)
 	})
+	webhookAddress := strings.TrimSpace(runtime.Arg("webhook-listen-address"))
+	var webhookServer *http.Server
+	var webhookListener net.Listener
+	if webhookAddress != "" {
+		if err := validateReviewWebhookListenAddress(
+			webhookAddress,
+			parseBool(runtime.Arg("allow-public-webhook-listen")),
+		); err != nil {
+			return err
+		}
+		webhookPath := strings.TrimSpace(runtime.Arg("webhook-path"))
+		if !strings.HasPrefix(webhookPath, "/") || strings.Contains(webhookPath, "?") {
+			return fmt.Errorf("--webhook-path must be an absolute HTTP path without a query")
+		}
+		ingress, err := NewGitLinkWebhookIngress(bindings, queue)
+		if err != nil {
+			return err
+		}
+		webhookListener, err = net.Listen("tcp", webhookAddress)
+		if err != nil {
+			return fmt.Errorf("listen for GitLink webhooks: %w", err)
+		}
+		mux := http.NewServeMux()
+		mux.Handle(webhookPath, ingress)
+		webhookServer = &http.Server{
+			Handler:           mux,
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       5 * time.Second,
+			WriteTimeout:      5 * time.Second,
+			IdleTimeout:       30 * time.Second,
+		}
+		go func() {
+			if serveErr := webhookServer.Serve(webhookListener); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+				output.TryEmit(reviewGatewayLifecycleEvent{
+					SchemaVersion: reviewGatewaySchemaVersion,
+					Type:          "webhook_error",
+					Message:       redactReviewGatewayError(serveErr.Error()),
+					ObservedAt:    time.Now().UTC().Format(time.RFC3339),
+				})
+			}
+		}()
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = webhookServer.Shutdown(shutdownCtx)
+		}()
+		output.TryEmit(reviewGatewayLifecycleEvent{
+			SchemaVersion: reviewGatewaySchemaVersion,
+			Type:          "webhook_ready",
+			Message:       fmt.Sprintf("signed GitLink PR webhook ingress listening on %s%s", webhookAddress, webhookPath),
+			ObservedAt:    time.Now().UTC().Format(time.RFC3339),
+		})
+	}
 	output.TryEmit(reviewGatewayLifecycleEvent{
 		SchemaVersion: reviewGatewaySchemaVersion,
 		Type:          "preflight",
@@ -394,6 +506,25 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 	defer channel.Stop(context.Background())
 	if err := channel.Start(liveCtx); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("Feishu review gateway channel stopped: %s", redactReviewGatewayError(err.Error()))
+	}
+	return nil
+}
+
+func validateReviewWebhookListenAddress(address string, allowPublic bool) error {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(address))
+	if err != nil {
+		return fmt.Errorf("invalid --webhook-listen-address: %w", err)
+	}
+	if allowPublic {
+		return nil
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return nil
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		return fmt.Errorf("public webhook listen address requires --allow-public-webhook-listen")
 	}
 	return nil
 }

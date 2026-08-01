@@ -24,12 +24,13 @@ type ReviewCollaborationPublisher interface {
 }
 
 type ReviewCollaborationPublisherConfig struct {
-	AppID         string
-	AppSecret     string
-	BaseAppToken  string
-	ReviewTableID string
-	DocumentID    string
-	EnableTask    bool
+	AppID               string
+	AppSecret           string
+	BaseAppToken        string
+	ReviewTableID       string
+	DocumentID          string
+	DocumentFolderToken string
+	EnableTask          bool
 }
 
 type FeishuReviewCollaborationPublisher struct {
@@ -60,25 +61,67 @@ func (p *FeishuReviewCollaborationPublisher) Publish(
 	results := []ReviewResourceSyncResult{}
 	if p.Config.BaseAppToken != "" && p.Config.ReviewTableID != "" {
 		result := ReviewResourceSyncResult{Resource: "feishu_bitable"}
-		search, searchErr := p.Client.SearchBitableRecord(
-			ctx,
-			token.Value,
-			p.Config.BaseAppToken,
-			p.Config.ReviewTableID,
-			bundle.UniqueKey,
-		)
-		fields := normalizeBitableWriteFields(bundle.BitableRecord.Fields)
-		fields["unique_key"] = bundle.UniqueKey
-		if searchErr != nil {
+		state, stateErr := p.Store.GetReviewResourceState(ctx, bundle.UniqueKey, result.Resource)
+		remoteID := state.RemoteID
+		switch {
+		case stateErr != nil:
 			result.Action = "failed"
-			result.Error = redactReviewGatewayError(searchErr.Error())
-		} else if search.Found {
+			result.Error = redactReviewGatewayError(stateErr.Error())
+		case state.ContentFingerprint == fingerprint && remoteID != "":
+			result.Action = "unchanged"
+			result.RemoteID = remoteID
+		default:
+			if remoteID == "" {
+				search, searchErr := p.Client.SearchBitableRecord(
+					ctx,
+					token.Value,
+					p.Config.BaseAppToken,
+					p.Config.ReviewTableID,
+					bundle.UniqueKey,
+				)
+				switch {
+				case searchErr != nil:
+					result.Action = "failed"
+					result.Error = redactReviewGatewayError(searchErr.Error())
+				case search.Matches > 1:
+					result.Action = "failed"
+					result.Error = "multiple Feishu Base records share the same unique_key; manual reconciliation is required"
+				case search.Found:
+					remoteID = search.RecordID
+				}
+			}
+			if result.Action == "failed" {
+				break
+			}
+			if remoteID == "" {
+				fields := reviewCollaborationBitableFields(bundle, true)
+				created, createErr := p.Client.CreateBitableRecord(
+					ctx,
+					token.Value,
+					p.Config.BaseAppToken,
+					p.Config.ReviewTableID,
+					fields,
+				)
+				if createErr != nil || strings.TrimSpace(created.RecordID) == "" {
+					result.Action = "failed"
+					if createErr != nil {
+						result.Error = redactReviewGatewayError(createErr.Error())
+					} else {
+						result.Error = "Feishu Base create response missing record_id"
+					}
+				} else {
+					result.Action = "created"
+					result.RemoteID = created.RecordID
+				}
+				break
+			}
+			fields := reviewCollaborationBitableFields(bundle, bundle.HumanFieldsAuthoritative)
 			updated, updateErr := p.Client.UpdateBitableRecord(
 				ctx,
 				token.Value,
 				p.Config.BaseAppToken,
 				p.Config.ReviewTableID,
-				search.RecordID,
+				remoteID,
 				fields,
 			)
 			if updateErr != nil {
@@ -88,23 +131,8 @@ func (p *FeishuReviewCollaborationPublisher) Publish(
 				result.Action = "updated"
 				result.RemoteID = updated.RecordID
 			}
-		} else {
-			created, createErr := p.Client.CreateBitableRecord(
-				ctx,
-				token.Value,
-				p.Config.BaseAppToken,
-				p.Config.ReviewTableID,
-				fields,
-			)
-			if createErr != nil {
-				result.Action = "failed"
-				result.Error = redactReviewGatewayError(createErr.Error())
-			} else {
-				result.Action = "created"
-				result.RemoteID = created.RecordID
-			}
 		}
-		if result.Action != "failed" {
+		if result.Action != "failed" && result.Action != "unchanged" {
 			p.persistRemoteWrite(
 				ctx,
 				&result,
@@ -114,30 +142,58 @@ func (p *FeishuReviewCollaborationPublisher) Publish(
 		}
 		results = append(results, result)
 	}
-	if p.Config.DocumentID != "" {
+	if p.Config.DocumentID != "" || p.Config.DocumentFolderToken != "" {
 		result := ReviewResourceSyncResult{Resource: "feishu_doc"}
 		state, stateErr := p.Store.GetReviewResourceState(ctx, bundle.UniqueKey, result.Resource)
+		documentID := state.RemoteID
+		if documentID == "" {
+			documentID = strings.TrimSpace(p.Config.DocumentID)
+		}
 		switch {
 		case stateErr != nil:
 			result.Action = "failed"
 			result.Error = redactReviewGatewayError(stateErr.Error())
-		case state.ContentFingerprint == fingerprint:
+		case state.ContentFingerprint == fingerprint && documentID != "":
 			result.Action = "unchanged"
-			result.RemoteID = p.Config.DocumentID
+			result.RemoteID = documentID
 		default:
+			if documentID == "" {
+				created, createErr := p.Client.CreateDocument(
+					ctx,
+					token.Value,
+					p.Config.DocumentFolderToken,
+					fmt.Sprintf("%s PR #%d Review", bundle.Item.Repository, bundle.Item.PRNumber),
+				)
+				if createErr != nil {
+					result.Action = "failed"
+					result.Error = redactReviewGatewayError(createErr.Error())
+					break
+				}
+				documentID = created.DocumentID
+				result.Action = "created"
+				result.RemoteID = documentID
+				p.persistRemoteWrite(ctx, &result, bundle.UniqueKey, "")
+				if result.Action == "unknown" {
+					break
+				}
+			}
 			_, appendErr := p.Client.CreateBlocks(
 				ctx,
 				token.Value,
-				p.Config.DocumentID,
-				p.Config.DocumentID,
+				documentID,
+				documentID,
 				[]DocBlock{textBlock(bundle.DocMarkdown)},
 			)
 			if appendErr != nil {
 				result.Action = "failed"
 				result.Error = redactReviewGatewayError(appendErr.Error())
 			} else {
-				result.Action = "appended"
-				result.RemoteID = p.Config.DocumentID
+				if result.Action == "created" {
+					result.Action = "created_and_appended"
+				} else {
+					result.Action = "appended"
+				}
+				result.RemoteID = documentID
 				p.persistRemoteWrite(
 					ctx,
 					&result,
@@ -148,21 +204,27 @@ func (p *FeishuReviewCollaborationPublisher) Publish(
 		}
 		results = append(results, result)
 	}
-	if p.Config.EnableTask && bundle.Task != nil {
+	if p.Config.EnableTask && (bundle.Task != nil || bundle.Item.Archived) {
 		result := ReviewResourceSyncResult{Resource: "feishu_task"}
 		state, stateErr := p.Store.GetReviewResourceState(ctx, bundle.UniqueKey, result.Resource)
 		switch {
 		case stateErr != nil:
 			result.Action = "failed"
 			result.Error = redactReviewGatewayError(stateErr.Error())
-		case state.RemoteID != "":
-			result.Action = "existing"
+		case state.ContentFingerprint == fingerprint && state.RemoteID != "":
+			result.Action = "unchanged"
 			result.RemoteID = state.RemoteID
-		default:
+		case state.RemoteID == "" && bundle.Task == nil:
+			result.Action = "not_created"
+		case state.RemoteID == "":
 			created, createErr := p.Client.CreateTask(ctx, token.Value, *bundle.Task)
-			if createErr != nil {
+			if createErr != nil || strings.TrimSpace(created.TaskID) == "" {
 				result.Action = "failed"
-				result.Error = redactReviewGatewayError(createErr.Error())
+				if createErr != nil {
+					result.Error = redactReviewGatewayError(createErr.Error())
+				} else {
+					result.Error = "Feishu Task create response missing task GUID"
+				}
 			} else {
 				result.Action = "created"
 				result.RemoteID = created.TaskID
@@ -173,10 +235,60 @@ func (p *FeishuReviewCollaborationPublisher) Publish(
 					fingerprint,
 				)
 			}
+		default:
+			task := bundle.Task
+			completedAt := "0"
+			if bundle.Item.Archived {
+				archived := reviewCollaborationArchivedTask(bundle)
+				task = &archived
+				completedAt = fmt.Sprintf("%d", p.Now().UTC().UnixMilli())
+			}
+			patchErr := p.Client.PatchTask(ctx, token.Value, state.RemoteID, *task, completedAt)
+			if patchErr != nil {
+				result.Action = "failed"
+				result.Error = redactReviewGatewayError(patchErr.Error())
+			} else {
+				result.Action = "updated"
+				if bundle.Item.Archived {
+					result.Action = "completed"
+				}
+				result.RemoteID = state.RemoteID
+				p.persistRemoteWrite(ctx, &result, bundle.UniqueKey, fingerprint)
+			}
 		}
 		results = append(results, result)
 	}
 	return results, nil
+}
+
+func reviewCollaborationBitableFields(bundle ReviewCollaborationBundle, includeHuman bool) map[string]interface{} {
+	manual := map[string]bool{
+		"assigned_to":          true,
+		"collaboration_status": true,
+		"due_at":               true,
+	}
+	selected := map[string]interface{}{}
+	for key, value := range bundle.BitableRecord.Fields {
+		if !includeHuman && manual[key] {
+			continue
+		}
+		selected[key] = value
+	}
+	fields := normalizeBitableWriteFields(selected)
+	fields["unique_key"] = bundle.UniqueKey
+	return fields
+}
+
+func reviewCollaborationArchivedTask(bundle ReviewCollaborationBundle) TaskCandidate {
+	return TaskCandidate{
+		UniqueKey:   bundle.UniqueKey,
+		Title:       fmt.Sprintf("Review %s PR #%d", bundle.Item.Repository, bundle.Item.PRNumber),
+		Description: "GitLink PR is closed or merged; collaboration task archived by the Review gateway.",
+		SourceType:  "gitlink_pr_review",
+		SourceKey:   bundle.Item.PRKey,
+		Repository:  bundle.Item.Repository,
+		GitLinkURL:  fmt.Sprintf("https://www.gitlink.org.cn/%s/pulls/%d", bundle.Item.Repository, bundle.Item.PRNumber),
+	}
 }
 
 func (p *FeishuReviewCollaborationPublisher) persistRemoteWrite(

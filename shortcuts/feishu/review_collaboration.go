@@ -38,16 +38,17 @@ type ReviewCollaborationItem struct {
 }
 
 type ReviewCollaborationBundle struct {
-	SchemaVersion string                      `json:"schema_version"`
-	UniqueKey     string                      `json:"unique_key"`
-	Item          ReviewCollaborationItem     `json:"item"`
-	BitableRecord BitableRecord               `json:"bitable_record"`
-	DocMarkdown   string                      `json:"doc_markdown"`
-	Card          Card                        `json:"card"`
-	Task          *TaskCandidate              `json:"task,omitempty"`
-	SyncTargets   []ReviewCollaborationTarget `json:"sync_targets"`
-	GitLinkWrites int                         `json:"gitlink_writes"`
-	Canonical     collab.WorkItem             `json:"canonical"`
+	SchemaVersion            string                      `json:"schema_version"`
+	UniqueKey                string                      `json:"unique_key"`
+	Item                     ReviewCollaborationItem     `json:"item"`
+	BitableRecord            BitableRecord               `json:"bitable_record"`
+	DocMarkdown              string                      `json:"doc_markdown"`
+	Card                     Card                        `json:"card"`
+	Task                     *TaskCandidate              `json:"task,omitempty"`
+	SyncTargets              []ReviewCollaborationTarget `json:"sync_targets"`
+	GitLinkWrites            int                         `json:"gitlink_writes"`
+	HumanFieldsAuthoritative bool                        `json:"human_fields_authoritative,omitempty"`
+	Canonical                collab.WorkItem             `json:"canonical"`
 }
 
 type ReviewCollaborationTarget struct {

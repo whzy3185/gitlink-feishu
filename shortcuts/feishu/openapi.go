@@ -51,6 +51,7 @@ type CreatedBlocks struct {
 type BitableSearchResult struct {
 	RecordID string `json:"record_id,omitempty"`
 	Found    bool   `json:"found"`
+	Matches  int    `json:"matches"`
 }
 
 type BitableWriteResult struct {
@@ -61,6 +62,44 @@ type BitableWriteResult struct {
 
 type CreatedTask struct {
 	TaskID string `json:"task_id,omitempty"`
+}
+
+func (c OpenAPIClient) PatchInteractiveMessage(
+	ctx context.Context,
+	tenantToken,
+	messageID string,
+	card Card,
+) error {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return fmt.Errorf("Feishu message_id is required")
+	}
+	cardJSON, err := json.Marshal(card)
+	if err != nil {
+		return fmt.Errorf("encode Feishu interactive card: %w", err)
+	}
+	body, err := json.Marshal(map[string]string{"content": string(cardJSON)})
+	if err != nil {
+		return fmt.Errorf("encode Feishu message patch: %w", err)
+	}
+	path := fmt.Sprintf("/im/v1/messages/%s", url.PathEscape(messageID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.endpoint(path), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantToken)
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	var response struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+	}
+	if err := c.doJSON(req, &response); err != nil {
+		return err
+	}
+	if response.Code != 0 {
+		return fmt.Errorf("Feishu message patch returned code %d: %s", response.Code, response.Msg)
+	}
+	return nil
 }
 
 func NewOpenAPIClient(httpClient *http.Client) OpenAPIClient {
@@ -219,7 +258,7 @@ func (c OpenAPIClient) SearchBitableRecord(ctx context.Context, tenantToken stri
 	if err != nil {
 		return BitableSearchResult{}, err
 	}
-	path := fmt.Sprintf("/bitable/v1/apps/%s/tables/%s/records/search?page_size=1", url.PathEscape(appToken), url.PathEscape(tableID))
+	path := fmt.Sprintf("/bitable/v1/apps/%s/tables/%s/records/search?page_size=2", url.PathEscape(appToken), url.PathEscape(tableID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint(path), bytes.NewReader(reqBody))
 	if err != nil {
 		return BitableSearchResult{}, err
@@ -243,9 +282,9 @@ func (c OpenAPIClient) SearchBitableRecord(ctx context.Context, tenantToken stri
 		return BitableSearchResult{}, fmt.Errorf("Feishu bitable search returned code %d: %s", resp.Code, resp.Msg)
 	}
 	if len(resp.Data.Items) == 0 || strings.TrimSpace(resp.Data.Items[0].RecordID) == "" {
-		return BitableSearchResult{Found: false}, nil
+		return BitableSearchResult{Found: false, Matches: 0}, nil
 	}
-	return BitableSearchResult{RecordID: resp.Data.Items[0].RecordID, Found: true}, nil
+	return BitableSearchResult{RecordID: resp.Data.Items[0].RecordID, Found: true, Matches: len(resp.Data.Items)}, nil
 }
 
 func (c OpenAPIClient) CreateBitableRecord(ctx context.Context, tenantToken string, appToken string, tableID string, fields map[string]interface{}) (BitableWriteResult, error) {
@@ -350,6 +389,62 @@ func (c OpenAPIClient) CreateTask(ctx context.Context, tenantToken string, task 
 		return CreatedTask{}, fmt.Errorf("Feishu task create returned code %d: %s", resp.Code, resp.Msg)
 	}
 	return CreatedTask{TaskID: firstNonEmpty(resp.Data.Task.GUID, resp.Data.Task.TaskID, resp.Data.GUID, resp.Data.TaskID)}, nil
+}
+
+func (c OpenAPIClient) PatchTask(
+	ctx context.Context,
+	tenantToken,
+	taskID string,
+	task TaskCandidate,
+	completedAt string,
+) error {
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return fmt.Errorf("Feishu task GUID is required")
+	}
+	description := task.Description + taskLinkSuffix(task)
+	taskBody := map[string]interface{}{
+		"summary":      task.Title,
+		"description":  description,
+		"completed_at": completedAt,
+	}
+	updateFields := []string{"summary", "description", "completed_at"}
+	if dueDate := strings.TrimSpace(task.DueDate); dueDate != "" {
+		parsed, err := time.Parse("2006-01-02", dueDate)
+		if err != nil {
+			return fmt.Errorf("invalid Feishu task due_date %q: expected YYYY-MM-DD", dueDate)
+		}
+		taskBody["due"] = map[string]interface{}{
+			"timestamp":  fmt.Sprintf("%d", parsed.UTC().UnixMilli()),
+			"is_all_day": true,
+		}
+		updateFields = append(updateFields, "due")
+	}
+	body, err := json.Marshal(map[string]interface{}{
+		"task":          taskBody,
+		"update_fields": updateFields,
+	})
+	if err != nil {
+		return err
+	}
+	path := fmt.Sprintf("/task/v2/tasks/%s?user_id_type=open_id", url.PathEscape(taskID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.endpoint(path), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantToken)
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	var response struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+	}
+	if err := c.doJSON(req, &response); err != nil {
+		return err
+	}
+	if response.Code != 0 {
+		return fmt.Errorf("Feishu task patch returned code %d: %s", response.Code, response.Msg)
+	}
+	return nil
 }
 
 func buildTaskCreateBody(task TaskCandidate) (map[string]interface{}, error) {
