@@ -145,7 +145,33 @@ gitlink-cli feishu +review-gateway --discover-chats --format json
 - installation 与群两级仓库 allowlist。
 
 多仓库群可使用 `查看 owner/repo PR #编号`。没有默认仓库时，未限定仓库的命令会要求用户
-先选择仓库；不在 installation 或群 allowlist 中的仓库不会进入 Job。
+先选择仓库。绑定仓库进入完整协作 Job；未绑定仓库只有在 Installation 和群同时启用
+`allow_public_read` 时，才能进入无凭据公共只读 Job。
+
+#### 3.3.1 暂定公共仓库边界
+
+当前比赛版本把以下规则作为正式边界：
+
+```text
+群必须已经启用
+命令必须显式包含 owner/repository 和 PR 编号
+仓库可以不绑定
+GitLink 必须返回 is_public=true
+只允许 read_review_context
+请求强制不携带 GitLink Token
+只回复当前飞书消息
+不创建 Base、Doc、Task 或协作 WorkItem
+不允许 Agent、草稿、认领、截止时间和 GitLink 写入
+```
+
+示例：
+
+```text
+@gitlink 查看 other-owner/public-repository PR #123
+```
+
+如果需要进入 Review Queue、认领、进度同步、Base、Doc、Task 或受控 Review 写回，管理员
+必须先把仓库加入 Installation 和群绑定。公开仓库不等于协作仓库，也不等于可写仓库。
 
 首次绑定必须由管理员预配置。尚未绑定的群不在机器人 `GroupAllowlist` 内，不能
 依靠该群中的聊天命令绕过准入策略完成自助绑定。

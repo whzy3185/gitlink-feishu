@@ -432,6 +432,19 @@ puygob236/KongMing-Job-Matching-Agent
 
 未带仓库名的 `查看 PR #431` 继续使用群绑定的默认仓库。当前绑定保留三个协作仓库；此外已实现 GitHub App 式公共仓库发现：Installation 和群同时显式启用 `allow_public_read` 后，任意显式 `owner/repository` 可以进行无凭据 `read_review_context`。公开状态无法由 GitLink 返回验证时拒绝，私有仓库和任何高级协作或写操作继续要求 Installation 授权。
 
+当前暂定产品边界：
+
+| 场景 | 是否需要仓库绑定 | 能力 |
+|---|---:|---|
+| 显式公开 PR 查看 | 否 | 无凭据 GET，回复消息 |
+| 未限定仓库的 PR 查看 | 是 | 使用群默认仓库 |
+| Review Queue、认领、截止时间 | 是 | 更新协作状态 |
+| Base、Doc、Task 投影 | 是 | 创建或幂等更新飞书资源 |
+| Agent、草稿、Review ActionPlan | 是 | 只对协作仓库开放 |
+| GitLink Review 写回 | 是 | 还需身份、凭据、head/fingerprint 和二次确认 |
+
+“不绑定也能查看”只免除仓库绑定，不免除群准入、完整仓库名、公开状态验证、消息幂等和频率控制。
+
 ### 10.3 参考 GitHub、Slack 与飞书的接入结构
 
 成熟代码托管聊天集成的共同结构应用到本项目如下：
