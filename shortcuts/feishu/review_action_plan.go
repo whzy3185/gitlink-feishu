@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const reviewActionPlanSchema = "review.action-plan/v1"
+const reviewActionPlanSchema = "review.action-plan/v2"
 
 const (
 	reviewMutationNone      = "none"
@@ -22,6 +22,8 @@ const (
 type ReviewActionPlan struct {
 	SchemaVersion     string `json:"schema_version"`
 	PlanID            string `json:"plan_id"`
+	InstallationID    string `json:"installation_id"`
+	SourceChatID      string `json:"source_chat_id"`
 	Repository        string `json:"repository"`
 	PRNumber          int    `json:"pr_number"`
 	ActorID           string `json:"actor_id"`
@@ -86,6 +88,8 @@ func NewReviewActionPlan(
 ) ReviewActionPlan {
 	now = now.UTC()
 	idempotencySeed := strings.Join([]string{
+		job.InstallationID,
+		job.ChatID,
 		job.Repository,
 		fmt.Sprintf("%d", job.PRNumber),
 		job.RequestedBy,
@@ -100,6 +104,8 @@ func NewReviewActionPlan(
 	return ReviewActionPlan{
 		SchemaVersion:     reviewActionPlanSchema,
 		PlanID:            "review-plan-" + key[:16],
+		InstallationID:    strings.TrimSpace(job.InstallationID),
+		SourceChatID:      strings.TrimSpace(job.ChatID),
 		Repository:        job.Repository,
 		PRNumber:          job.PRNumber,
 		ActorID:           job.RequestedBy,
@@ -127,9 +133,10 @@ func (s *SQLiteReviewGatewayStore) CreateReviewActionPlan(
 	if plan.ReviewStatus != "common" {
 		return ReviewActionPlan{}, fmt.Errorf("only common Review action plans are allowed")
 	}
-	if plan.ExpectedHeadSHA == "" || plan.SourceFingerprint == "" ||
+	if plan.InstallationID == "" || plan.SourceChatID == "" || plan.Repository == "" ||
+		plan.ExpectedHeadSHA == "" || plan.SourceFingerprint == "" ||
 		plan.Content == "" || plan.ActorID == "" || plan.GitLinkLogin == "" {
-		return ReviewActionPlan{}, fmt.Errorf("review action plan identity, head, fingerprint, and content are required")
+		return ReviewActionPlan{}, fmt.Errorf("review action plan scope, identity, head, fingerprint, and content are required")
 	}
 	if plan.MaxAttempts <= 0 {
 		plan.MaxAttempts = 3
@@ -144,13 +151,15 @@ func (s *SQLiteReviewGatewayStore) CreateReviewActionPlan(
 		return ReviewActionPlan{}, err
 	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO review_action_plans (
-		plan_id, repository, pr_number, actor_id, gitlink_login,
+		plan_id, installation_id, source_chat_id, repository, pr_number, actor_id, gitlink_login,
 		expected_head_sha, source_fingerprint, review_status, content, status,
 		idempotency_key, source_job_id, max_attempts, reconciliation_status, mutation_status,
 		created_at, expires_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(idempotency_key) DO NOTHING`,
 		plan.PlanID,
+		plan.InstallationID,
+		plan.SourceChatID,
 		plan.Repository,
 		plan.PRNumber,
 		plan.ActorID,
@@ -177,7 +186,7 @@ func (s *SQLiteReviewGatewayStore) CreateReviewActionPlan(
 
 func (s *SQLiteReviewGatewayStore) GetReviewActionPlan(ctx context.Context, planID string) (ReviewActionPlan, error) {
 	return scanReviewActionPlan(s.db.QueryRowContext(ctx, `SELECT
-		plan_id, repository, pr_number, actor_id, gitlink_login,
+		plan_id, installation_id, source_chat_id, repository, pr_number, actor_id, gitlink_login,
 		expected_head_sha, source_fingerprint, review_status, content, status,
 		idempotency_key, source_job_id, review_id, error_summary,
 		lease_owner, lease_expires_at, attempt_count, max_attempts, reconciliation_status, mutation_status,
@@ -190,7 +199,7 @@ func (s *SQLiteReviewGatewayStore) getReviewActionPlanByIdempotencyKey(
 	key string,
 ) (ReviewActionPlan, error) {
 	return scanReviewActionPlan(s.db.QueryRowContext(ctx, `SELECT
-		plan_id, repository, pr_number, actor_id, gitlink_login,
+		plan_id, installation_id, source_chat_id, repository, pr_number, actor_id, gitlink_login,
 		expected_head_sha, source_fingerprint, review_status, content, status,
 		idempotency_key, source_job_id, review_id, error_summary,
 		lease_owner, lease_expires_at, attempt_count, max_attempts, reconciliation_status, mutation_status,
@@ -373,6 +382,8 @@ func scanReviewActionPlan(scanner reviewCollaborationScanner) (ReviewActionPlan,
 	plan := ReviewActionPlan{SchemaVersion: reviewActionPlanSchema}
 	err := scanner.Scan(
 		&plan.PlanID,
+		&plan.InstallationID,
+		&plan.SourceChatID,
 		&plan.Repository,
 		&plan.PRNumber,
 		&plan.ActorID,

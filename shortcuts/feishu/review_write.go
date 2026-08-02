@@ -109,6 +109,9 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 	if plan.ReviewStatus != "common" {
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("only common Review writes are enabled"))
 	}
+	if err := e.validateReviewActionPlanScope(job, plan); err != nil {
+		return reviewGatewayExecutionFailure(result, err)
+	}
 	if job.InstallationMode != "write" {
 		return reviewGatewayExecutionFailure(result, fmt.Errorf(
 			"GitLink installation does not allow Review writes",
@@ -322,6 +325,38 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 		firstNonEmpty(reviewID, "待回读"),
 	)
 	return result, nil
+}
+
+func (e *ReviewGatewayExecutor) validateReviewActionPlanScope(
+	job ReviewGatewayJob,
+	plan ReviewActionPlan,
+) error {
+	installationID := strings.TrimSpace(plan.InstallationID)
+	sourceChatID := strings.TrimSpace(plan.SourceChatID)
+	repository := strings.TrimSpace(plan.Repository)
+	if installationID == "" || sourceChatID == "" || repository == "" {
+		return fmt.Errorf("review action plan is missing its original installation, chat, or repository scope")
+	}
+	if strings.TrimSpace(job.InstallationID) != installationID {
+		return fmt.Errorf("review action plan belongs to another GitLink installation")
+	}
+	if strings.TrimSpace(job.ChatID) != sourceChatID {
+		return fmt.Errorf("review action plan must be confirmed in its source chat")
+	}
+	installation, exists := e.Installations[installationID]
+	if !exists || !installation.Enabled {
+		return fmt.Errorf("review action plan GitLink installation is unavailable")
+	}
+	if strings.TrimSpace(installation.OperationMode) != "write" {
+		return fmt.Errorf("review action plan GitLink installation no longer allows writes")
+	}
+	if !containsReviewGatewayString(installation.AllowedRepositories, repository) {
+		return fmt.Errorf("review action plan repository is outside its GitLink installation allowlist")
+	}
+	if !containsReviewGatewayString(job.Repositories, repository) {
+		return fmt.Errorf("review action plan repository is no longer bound to its source chat")
+	}
+	return nil
 }
 
 func currentGitLinkLogin(data interface{}) string {

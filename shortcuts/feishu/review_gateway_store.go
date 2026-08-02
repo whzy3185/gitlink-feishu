@@ -99,6 +99,8 @@ CREATE INDEX IF NOT EXISTS review_collaboration_audit_pr
 
 CREATE TABLE IF NOT EXISTS review_action_plans (
     plan_id TEXT PRIMARY KEY,
+	installation_id TEXT NOT NULL,
+	source_chat_id TEXT NOT NULL,
     repository TEXT NOT NULL,
     pr_number INTEGER NOT NULL,
     actor_id TEXT NOT NULL,
@@ -215,6 +217,8 @@ var reviewGatewayJobMigrations = map[string]string{
 }
 
 var reviewActionPlanMigrations = map[string]string{
+	"installation_id":       "TEXT NOT NULL DEFAULT ''",
+	"source_chat_id":        "TEXT NOT NULL DEFAULT ''",
 	"lease_owner":           "TEXT NOT NULL DEFAULT ''",
 	"lease_expires_at":      "TEXT NOT NULL DEFAULT ''",
 	"attempt_count":         "INTEGER NOT NULL DEFAULT 0",

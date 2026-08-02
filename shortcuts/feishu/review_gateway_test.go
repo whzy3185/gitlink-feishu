@@ -1261,6 +1261,8 @@ func TestSQLiteReviewGatewayStoreMigratesP20Schema(t *testing.T) {
 		t.Fatalf("result_json migration missing: %v", err)
 	}
 	for _, column := range []string{
+		"installation_id",
+		"source_chat_id",
 		"lease_owner",
 		"lease_expires_at",
 		"attempt_count",
@@ -2298,6 +2300,29 @@ func TestReviewActionPlanIsIdempotentCommonOnlyAndActorBound(t *testing.T) {
 		first.MutationStatus != reviewMutationNone {
 		t.Fatalf("idempotent plans = %#v / %#v", first, second)
 	}
+	differentInstallation := job
+	differentInstallation.InstallationID = "other"
+	installationPlan := NewReviewActionPlan(
+		differentInstallation,
+		"gitlink-reviewer",
+		"head-431",
+		"fingerprint-431",
+		"Review summary",
+		now,
+	)
+	differentChat := job
+	differentChat.ChatID = "oc_other"
+	chatPlan := NewReviewActionPlan(
+		differentChat,
+		"gitlink-reviewer",
+		"head-431",
+		"fingerprint-431",
+		"Review summary",
+		now,
+	)
+	if installationPlan.IdempotencyKey == plan.IdempotencyKey || chatPlan.IdempotencyKey == plan.IdempotencyKey {
+		t.Fatal("ActionPlan idempotency must include installation and source chat scope")
+	}
 	approved := plan
 	approved.PlanID = "approved-plan"
 	approved.IdempotencyKey = "approved-key"
@@ -2428,8 +2453,9 @@ func TestReviewWriteRemainsDisabledWithoutExplicitStartupFlag(t *testing.T) {
 	confirmJob.Argument = plan.PlanID
 	confirmJob.Mode = "controlled_write"
 	executor := &ReviewGatewayExecutor{
-		Runtime:     &common.RuntimeContext{},
-		ActionPlans: store,
+		Runtime:       &common.RuntimeContext{},
+		ActionPlans:   store,
+		Installations: testReviewGatewayInstallations(),
 		IdentityBindings: []ReviewIdentityBinding{{
 			FeishuUserID: confirmJob.RequestedBy,
 			GitLinkLogin: "gitlink-reviewer",
@@ -2451,6 +2477,181 @@ func TestReviewWriteRemainsDisabledWithoutExplicitStartupFlag(t *testing.T) {
 	}
 	if stored.Status != "pending_confirmation" {
 		t.Fatalf("disabled confirmation changed plan state to %q", stored.Status)
+	}
+}
+
+func TestConfirmedCommonReviewRejectsScopeMismatchBeforePOST(t *testing.T) {
+	state := &commonReviewTestServerState{}
+	server := newCommonReviewTestServer(t, state)
+	defer server.Close()
+
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "action-plan-scope.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 8, 2, 8, 0, 0, 0, time.UTC)
+	sourceJob := testReviewGatewayJob(now, "scope-plan")
+	plan, err := store.CreateReviewActionPlan(context.Background(), NewReviewActionPlan(
+		sourceJob,
+		"gitlink-reviewer",
+		"head-431",
+		"fingerprint-431",
+		"Evidence-backed Review summary",
+		now,
+	))
+	if err != nil {
+		t.Fatalf("CreateReviewActionPlan: %v", err)
+	}
+	runtime := &common.RuntimeContext{
+		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+		Owner:  "owner",
+		Repo:   "repo",
+	}
+
+	tests := []struct {
+		name      string
+		configure func(*ReviewGatewayJob, map[string]GitLinkInstallation)
+	}{
+		{
+			name: "cross installation with the same login",
+			configure: func(job *ReviewGatewayJob, installations map[string]GitLinkInstallation) {
+				job.InstallationID = "other"
+				installations["other"] = GitLinkInstallation{
+					InstallationID:      "other",
+					OperationMode:       "write",
+					AllowedRepositories: []string{"owner/repo"},
+					Enabled:             true,
+				}
+			},
+		},
+		{
+			name: "cross chat",
+			configure: func(job *ReviewGatewayJob, _ map[string]GitLinkInstallation) {
+				job.ChatID = "oc_other"
+			},
+		},
+		{
+			name: "repository removed from source chat",
+			configure: func(job *ReviewGatewayJob, _ map[string]GitLinkInstallation) {
+				job.Repositories = []string{"owner/other"}
+			},
+		},
+		{
+			name: "repository removed from installation allowlist",
+			configure: func(_ *ReviewGatewayJob, installations map[string]GitLinkInstallation) {
+				installation := installations["test"]
+				installation.AllowedRepositories = []string{"owner/other"}
+				installations["test"] = installation
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			confirmJob := testReviewGatewayJob(now.Add(time.Minute), "confirm-"+strings.ReplaceAll(test.name, " ", "-"))
+			confirmJob.Action = "confirm_common_review"
+			confirmJob.Argument = plan.PlanID
+			confirmJob.Mode = "controlled_write"
+			installations := testReviewGatewayInstallations()
+			test.configure(&confirmJob, installations)
+			executor := &ReviewGatewayExecutor{
+				Runtime:       runtime,
+				ActionPlans:   store,
+				Installations: installations,
+				IdentityBindings: []ReviewIdentityBinding{
+					{InstallationID: "test", FeishuUserID: sourceJob.RequestedBy, GitLinkLogin: "gitlink-reviewer", Enabled: true},
+					{InstallationID: "other", FeishuUserID: sourceJob.RequestedBy, GitLinkLogin: "gitlink-reviewer", Enabled: true},
+				},
+				EnableGitLinkWrite: true,
+				Now:                func() time.Time { return now.Add(time.Minute) },
+			}
+			if _, err := executor.Execute(context.Background(), confirmJob); err == nil {
+				t.Fatal("scope mismatch must be rejected")
+			}
+			if writes := state.writes(); writes != 0 {
+				t.Fatalf("scope mismatch created %d Reviews", writes)
+			}
+			stored, err := store.GetReviewActionPlan(context.Background(), plan.PlanID)
+			if err != nil {
+				t.Fatalf("GetReviewActionPlan: %v", err)
+			}
+			if stored.Status != "pending_confirmation" || stored.MutationStatus != reviewMutationNone {
+				t.Fatalf("scope rejection changed ActionPlan: %#v", stored)
+			}
+		})
+	}
+}
+
+func TestCardConfirmationCannotCrossSourceChat(t *testing.T) {
+	state := &commonReviewTestServerState{}
+	server := newCommonReviewTestServer(t, state)
+	defer server.Close()
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "action-plan-card-scope.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 8, 2, 8, 0, 0, 0, time.UTC)
+	sourceJob := testReviewGatewayJob(now, "card-scope-plan")
+	plan, err := store.CreateReviewActionPlan(context.Background(), NewReviewActionPlan(
+		sourceJob, "gitlink-reviewer", "head-431", "fingerprint-431", "Review summary", now,
+	))
+	if err != nil {
+		t.Fatalf("CreateReviewActionPlan: %v", err)
+	}
+	bindings := ReviewGatewayBindings{
+		SchemaVersion: reviewGatewayBindingSchema,
+		Installations: []GitLinkInstallation{{
+			InstallationID:      "test",
+			GitLinkHost:         server.URL,
+			CredentialRef:       "env:TEST_GITLINK_TOKEN",
+			OperationMode:       "write",
+			AllowedRepositories: []string{"owner/repo"},
+			Enabled:             true,
+		}},
+		Bindings: []ReviewChatBinding{
+			{ChatID: "oc_review", InstallationID: "test", Repositories: []string{"owner/repo"}, Enabled: true},
+			{ChatID: "oc_other", InstallationID: "test", Repositories: []string{"owner/repo"}, Enabled: true},
+		},
+	}
+	gateway, err := NewReviewGateway(bindings, ReviewGatewayConfig{}, store)
+	if err != nil {
+		t.Fatalf("NewReviewGateway: %v", err)
+	}
+	event, ok := reviewGatewayEventFromCardAction(&larktypes.CardActionEvent{
+		EventID:   "evt_cross_chat_confirm",
+		MessageID: "om_cross_chat_confirm",
+		ChatID:    "oc_other",
+		Operator:  larktypes.CardActionOperator{OpenID: sourceJob.RequestedBy},
+		Action: larktypes.CardActionPayload{Value: map[string]interface{}{
+			"command": fmt.Sprintf("确认 Review %s", plan.PlanID),
+		}},
+	})
+	if !ok {
+		t.Fatal("card confirmation was not normalized")
+	}
+	receipt, err := gateway.Plan(event)
+	if err != nil || !receipt.Accepted || receipt.Job == nil {
+		t.Fatalf("cross-chat card plan = %#v, err=%v", receipt, err)
+	}
+	executor := &ReviewGatewayExecutor{
+		Runtime:       &common.RuntimeContext{Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL}},
+		ActionPlans:   store,
+		Installations: testReviewGatewayInstallations(),
+		IdentityBindings: []ReviewIdentityBinding{{
+			InstallationID: "test",
+			FeishuUserID:   sourceJob.RequestedBy,
+			GitLinkLogin:   "gitlink-reviewer",
+			Enabled:        true,
+		}},
+		EnableGitLinkWrite: true,
+		Now:                func() time.Time { return now.Add(time.Minute) },
+	}
+	if _, err := executor.Execute(context.Background(), *receipt.Job); err == nil {
+		t.Fatal("cross-chat card confirmation must be rejected")
+	}
+	if writes := state.writes(); writes != 0 {
+		t.Fatalf("cross-chat card confirmation created %d Reviews", writes)
 	}
 }
 
@@ -2527,8 +2728,9 @@ func TestConfirmedCommonReviewWritesExactlyOnceAndReadsReviewID(t *testing.T) {
 		t.Fatalf("CreateReviewActionPlan: %v", err)
 	}
 	executor := &ReviewGatewayExecutor{
-		Runtime:     runtime,
-		ActionPlans: store,
+		Runtime:       runtime,
+		ActionPlans:   store,
+		Installations: testReviewGatewayInstallations(),
 		IdentityBindings: []ReviewIdentityBinding{{
 			FeishuUserID: job.RequestedBy,
 			GitLinkLogin: "gitlink-reviewer",
@@ -2605,8 +2807,9 @@ func TestConfirmedCommonReviewRejectsChangedSourceFingerprint(t *testing.T) {
 	state.reviewChanged = true
 	state.mu.Unlock()
 	executor := &ReviewGatewayExecutor{
-		Runtime:     runtime,
-		ActionPlans: store,
+		Runtime:       runtime,
+		ActionPlans:   store,
+		Installations: testReviewGatewayInstallations(),
 		IdentityBindings: []ReviewIdentityBinding{{
 			FeishuUserID: job.RequestedBy,
 			GitLinkLogin: "gitlink-reviewer",
@@ -2673,8 +2876,9 @@ func TestReviewWriteCompletionPersistenceFailureRequiresReconciliation(t *testin
 	}
 	actionPlans := &failingFinishReviewActionPlanStore{ReviewActionPlanStore: store}
 	executor := &ReviewGatewayExecutor{
-		Runtime:     runtime,
-		ActionPlans: actionPlans,
+		Runtime:       runtime,
+		ActionPlans:   actionPlans,
+		Installations: testReviewGatewayInstallations(),
 		IdentityBindings: []ReviewIdentityBinding{{
 			FeishuUserID: job.RequestedBy,
 			GitLinkLogin: "gitlink-reviewer",
@@ -2719,6 +2923,7 @@ func testReviewGatewayJob(now time.Time, id string) ReviewGatewayJob {
 		InstallationID:   "test",
 		InstallationMode: "write",
 		Repository:       "owner/repo",
+		Repositories:     []string{"owner/repo"},
 		PRNumber:         42,
 		ChatID:           "oc_review",
 		RequestedBy:      "ou_owner",
@@ -2728,6 +2933,17 @@ func testReviewGatewayJob(now time.Time, id string) ReviewGatewayJob {
 		MutatesGitLink:   false,
 		MaxAttempts:      3,
 		NextAttemptAt:    now.Format(time.RFC3339Nano),
+	}
+}
+
+func testReviewGatewayInstallations() map[string]GitLinkInstallation {
+	return map[string]GitLinkInstallation{
+		"test": {
+			InstallationID:      "test",
+			OperationMode:       "write",
+			AllowedRepositories: []string{"owner/repo"},
+			Enabled:             true,
+		},
 	}
 }
 
