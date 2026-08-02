@@ -461,3 +461,8 @@ puygob236/KongMing-Job-Matching-Agent
 当前真实运行实例启用了绑定仓库协作读取、无凭据公共仓库发现和飞书资源同步；公共发现不会创建 Base、Doc、Task，GitLink 写回仍为 0。
 
 GitHub App 安装、用户授权、仓库选择、最小权限和短期令牌的官方参考与本项目映射见：`docs/GITLINK_FEISHU_GITHUB_APP_REFERENCE_20260801.md`。
+
+2026-08-02 之后的剩余差距和执行顺序分别见：
+
+- `docs/ROUND2_REMAINING_GAPS_20260802.md`
+- `docs/ROUND2_REMAINING_IMPLEMENTATION_PLAN_20260802.md`
