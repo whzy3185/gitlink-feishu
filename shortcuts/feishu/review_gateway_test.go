@@ -2655,8 +2655,9 @@ func TestCardConfirmationCannotCrossSourceChat(t *testing.T) {
 	}
 }
 
-func TestConfirmedCommonReviewWritesExactlyOnceAndReadsReviewID(t *testing.T) {
-	var writeCount int
+func TestConfirmedCommonReviewWritesExactlyOnceAndVerifiesReadBack(t *testing.T) {
+	var writeCount, readbackCount int
+	var writeMu sync.Mutex
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -2667,13 +2668,22 @@ func TestConfirmedCommonReviewWritesExactlyOnceAndReadsReviewID(t *testing.T) {
 		case request.Method == http.MethodGet && request.URL.Path == "/owner/repo/pulls/42/files.json":
 			_, _ = writer.Write([]byte(`{"files":[{"filename":"main.go","additions":3}]}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/owner/repo/pulls/42/reviews.json":
-			_, _ = writer.Write([]byte(`{"reviews":[]}`))
+			writeMu.Lock()
+			written := writeCount > 0
+			if written {
+				readbackCount++
+			}
+			writeMu.Unlock()
+			if written {
+				_, _ = writer.Write([]byte(`{"reviews":[{"id":901,"status":"common","commit_id":"head-431","content":"Evidence-backed Review summary","user":{"login":"gitlink-reviewer"}}]}`))
+			} else {
+				_, _ = writer.Write([]byte(`{"reviews":[]}`))
+			}
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/owner/repo/pulls/42/journals.json":
 			_, _ = writer.Write([]byte(`{"journals":[]}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/users/me.json":
 			_, _ = writer.Write([]byte(`{"login":"gitlink-reviewer","id":71}`))
 		case request.Method == http.MethodPost && request.URL.Path == "/v1/owner/repo/pulls/42/reviews.json":
-			writeCount++
 			var payload map[string]interface{}
 			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 				t.Fatalf("decode Review payload: %v", err)
@@ -2681,6 +2691,9 @@ func TestConfirmedCommonReviewWritesExactlyOnceAndReadsReviewID(t *testing.T) {
 			if payload["status"] != "common" || payload["commit_id"] != "head-431" {
 				t.Fatalf("Review payload = %#v", payload)
 			}
+			writeMu.Lock()
+			writeCount++
+			writeMu.Unlock()
 			_, _ = writer.Write([]byte(`{"review":{"id":901}}`))
 		default:
 			t.Fatalf("unexpected request: %s %s", request.Method, request.URL.Path)
@@ -2747,17 +2760,116 @@ func TestConfirmedCommonReviewWritesExactlyOnceAndReadsReviewID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("confirm common Review: %v", err)
 	}
+	writeMu.Lock()
+	writes, readbacks := writeCount, readbackCount
+	writeMu.Unlock()
 	if result.WriteResult == nil || !result.WriteResult.Mutated ||
 		result.WriteResult.MutationStatus != reviewMutationConfirmed ||
 		result.WriteResult.Status != "completed" || result.WriteResult.ReviewID != "901" ||
-		!result.MutatesGitLink || writeCount != 1 {
-		t.Fatalf("write result = %#v, writes=%d", result, writeCount)
+		result.WriteResult.Reconciliation != "verified by GitLink GET read-back" ||
+		!result.MutatesGitLink || writes != 1 || readbacks != 1 {
+		t.Fatalf("write result = %#v, writes=%d, readbacks=%d", result, writes, readbacks)
 	}
 	if _, err := executor.Execute(context.Background(), confirmJob); err == nil {
 		t.Fatal("completed ActionPlan must reject a second confirmation")
 	}
-	if writeCount != 1 {
-		t.Fatalf("duplicate confirmation created %d Reviews", writeCount)
+	writeMu.Lock()
+	writes = writeCount
+	writeMu.Unlock()
+	if writes != 1 {
+		t.Fatalf("duplicate confirmation created %d Reviews", writes)
+	}
+}
+
+func TestConfirmedCommonReviewRequiresStrictReadBack(t *testing.T) {
+	for _, mode := range []string{"missing_id", "missing", "wrong_status", "wrong_head", "wrong_content", "wrong_actor", "error"} {
+		t.Run(mode, func(t *testing.T) {
+			state := &commonReviewTestServerState{readbackMode: mode}
+			server := newCommonReviewTestServer(t, state)
+			defer server.Close()
+			runtime := &common.RuntimeContext{
+				Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
+				Owner:  "owner",
+				Repo:   "repo",
+			}
+			initialContext, err := workflow.FetchReviewContext(runtime, workflow.ReviewContextOptions{
+				Owner:           "owner",
+				Repo:            "repo",
+				Number:          42,
+				VersionLimit:    100,
+				ThreadLimit:     100,
+				IncludePR:       true,
+				IncludeFiles:    true,
+				IncludeVersions: true,
+				IncludeReviews:  true,
+				IncludeThreads:  true,
+			})
+			if err != nil {
+				t.Fatalf("FetchReviewContext for plan: %v", err)
+			}
+			store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "readback-"+mode+".db"))
+			if err != nil {
+				t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+			}
+			defer store.Close()
+			now := time.Date(2026, 8, 2, 9, 0, 0, 0, time.UTC)
+			job := testReviewGatewayJob(now, "readback-plan-"+mode)
+			plan, err := store.CreateReviewActionPlan(context.Background(), NewReviewActionPlan(
+				job,
+				"gitlink-reviewer",
+				"head-431",
+				initialContext.WorkItem.SourceFingerprint,
+				"Evidence-backed Review summary",
+				now,
+			))
+			if err != nil {
+				t.Fatalf("CreateReviewActionPlan: %v", err)
+			}
+			executor := &ReviewGatewayExecutor{
+				Runtime:       runtime,
+				ActionPlans:   store,
+				Installations: testReviewGatewayInstallations(),
+				IdentityBindings: []ReviewIdentityBinding{{
+					InstallationID: "test",
+					FeishuUserID:   job.RequestedBy,
+					GitLinkLogin:   "gitlink-reviewer",
+					Enabled:        true,
+				}},
+				EnableGitLinkWrite: true,
+				Now:                func() time.Time { return now.Add(time.Minute) },
+			}
+			confirmJob := testReviewGatewayJob(now.Add(time.Minute), "confirm-readback-"+mode)
+			confirmJob.Action = "confirm_common_review"
+			confirmJob.Argument = plan.PlanID
+			confirmJob.Mode = "controlled_write"
+			result, err := executor.Execute(context.Background(), confirmJob)
+			if err != nil {
+				t.Fatalf("confirm common Review: %v", err)
+			}
+			expectedReviewID := "902"
+			if mode == "missing_id" {
+				expectedReviewID = ""
+			}
+			if result.WriteResult == nil || result.WriteResult.Status != "unknown_needs_reconciliation" ||
+				result.WriteResult.MutationStatus != reviewMutationConfirmed || !result.WriteResult.Mutated ||
+				result.WriteResult.ReviewID != expectedReviewID || !result.MutatesGitLink {
+				t.Fatalf("read-back mismatch result = %#v", result)
+			}
+			stored, err := store.GetReviewActionPlan(context.Background(), plan.PlanID)
+			if err != nil {
+				t.Fatalf("GetReviewActionPlan: %v", err)
+			}
+			if stored.Status != "unknown" || stored.Reconciliation != "required" ||
+				stored.MutationStatus != reviewMutationConfirmed || stored.ReviewID != expectedReviewID {
+				t.Fatalf("read-back mismatch ActionPlan = %#v", stored)
+			}
+			if _, err := executor.Execute(context.Background(), confirmJob); err == nil {
+				t.Fatal("unreconciled confirmed write must not be retried")
+			}
+			if writes := state.writes(); writes != 1 {
+				t.Fatalf("read-back mismatch created %d Reviews", writes)
+			}
+		})
 	}
 }
 
@@ -2948,9 +3060,13 @@ func testReviewGatewayInstallations() map[string]GitLinkInstallation {
 }
 
 type commonReviewTestServerState struct {
-	mu            sync.Mutex
-	reviewChanged bool
-	writeCount    int
+	mu             sync.Mutex
+	reviewChanged  bool
+	readbackMode   string
+	writeCount     int
+	postedContent  string
+	postedCommitID string
+	postedStatus   string
 }
 
 func (s *commonReviewTestServerState) writes() int {
@@ -2973,21 +3089,65 @@ func newCommonReviewTestServer(t *testing.T, state *commonReviewTestServerState)
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/owner/repo/pulls/42/reviews.json":
 			state.mu.Lock()
 			changed := state.reviewChanged
+			mode := state.readbackMode
+			written := state.writeCount > 0
+			content := state.postedContent
+			commitID := state.postedCommitID
+			status := state.postedStatus
 			state.mu.Unlock()
 			if changed {
 				_, _ = writer.Write([]byte(`{"reviews":[{"id":88,"status":"common","commit_id":"head-431","content":"new fact","created_at":"2026-07-31T08:00:30Z"}]}`))
-			} else {
-				_, _ = writer.Write([]byte(`{"reviews":[]}`))
+				break
 			}
+			if !written || mode == "missing" {
+				_, _ = writer.Write([]byte(`{"reviews":[]}`))
+				break
+			}
+			if mode == "error" {
+				http.Error(writer, `{"message":"read-back unavailable"}`, http.StatusServiceUnavailable)
+				break
+			}
+			actor := "gitlink-reviewer"
+			switch mode {
+			case "wrong_status":
+				status = "approved"
+			case "wrong_head":
+				commitID = "another-head"
+			case "wrong_content":
+				content = "different content"
+			case "wrong_actor":
+				actor = "another-reviewer"
+			}
+			_ = json.NewEncoder(writer).Encode(map[string]interface{}{
+				"reviews": []map[string]interface{}{{
+					"id":        902,
+					"status":    status,
+					"commit_id": commitID,
+					"content":   content,
+					"user":      map[string]interface{}{"login": actor},
+				}},
+			})
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/owner/repo/pulls/42/journals.json":
 			_, _ = writer.Write([]byte(`{"journals":[]}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/users/me.json":
 			_, _ = writer.Write([]byte(`{"login":"gitlink-reviewer","id":71}`))
 		case request.Method == http.MethodPost && request.URL.Path == "/v1/owner/repo/pulls/42/reviews.json":
+			var payload map[string]interface{}
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode Review payload: %v", err)
+			}
 			state.mu.Lock()
 			state.writeCount++
+			mode := state.readbackMode
+			state.postedContent, _ = payload["content"].(string)
+			state.postedCommitID, _ = payload["commit_id"].(string)
+			state.postedStatus, _ = payload["status"].(string)
 			state.mu.Unlock()
-			_, _ = writer.Write([]byte(`{"review":{"id":902}}`))
+			if mode == "missing_id" {
+				_, _ = writer.Write([]byte(`{"review":{}}`))
+			} else {
+				_, _ = writer.Write([]byte(`{"review":{"id":902}}`))
+			}
 		default:
 			t.Fatalf("unexpected request: %s %s", request.Method, request.URL.Path)
 		}

@@ -2,6 +2,8 @@ package feishu
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -267,18 +269,47 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 		return result, nil
 	}
 	reviewID := extractReviewWriteID(envelope.Data)
-	terminalStatus := "completed"
-	reconciliation := ""
 	if reviewID == "" {
-		terminalStatus = "unknown"
-		reconciliation = "write returned success without Review ID; query current reviews"
+		return e.finishConfirmedReviewNeedsReconciliation(
+			ctx,
+			result,
+			plan,
+			"",
+			"GitLink POST succeeded without a Review ID",
+			now,
+		)
+	}
+	readback, readbackErr := runtimeCopy.CallAPI(
+		"GET",
+		fmt.Sprintf("/v1/%s/%s/pulls/%d/reviews", owner, repo, plan.PRNumber),
+		nil,
+	)
+	if readbackErr != nil {
+		return e.finishConfirmedReviewNeedsReconciliation(
+			ctx,
+			result,
+			plan,
+			reviewID,
+			"GitLink Review read-back failed after a confirmed POST: "+readbackErr.Error(),
+			now,
+		)
+	}
+	if verified, reason := verifyReviewWriteReadback(readback.Data, reviewID, plan); !verified {
+		return e.finishConfirmedReviewNeedsReconciliation(
+			ctx,
+			result,
+			plan,
+			reviewID,
+			"GitLink Review read-back did not match the confirmed write: "+reason,
+			now,
+		)
 	}
 	if err := e.ActionPlans.FinishReviewActionPlan(
 		ctx,
 		plan.PlanID,
-		terminalStatus,
+		"completed",
 		reviewID,
-		reconciliation,
+		"",
 		reviewMutationConfirmed,
 		now,
 	); err != nil {
@@ -310,7 +341,7 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 	result.MutatesGitLink = true
 	result.WriteResult = &ReviewWriteResult{
 		PlanID:         plan.PlanID,
-		Status:         terminalStatus,
+		Status:         "completed",
 		ReviewID:       reviewID,
 		Repository:     plan.Repository,
 		PRNumber:       plan.PRNumber,
@@ -318,13 +349,150 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(
 		ReviewStatus:   "common",
 		MutationStatus: reviewMutationConfirmed,
 		Mutated:        true,
-		Reconciliation: reconciliation,
+		Reconciliation: "verified by GitLink GET read-back",
 	}
 	result.Message = fmt.Sprintf(
-		"GitLink common Review 已提交；Review ID：%s。",
-		firstNonEmpty(reviewID, "待回读"),
+		"GitLink common Review 已提交并回读验证；Review ID：%s。",
+		reviewID,
 	)
 	return result, nil
+}
+
+func (e *ReviewGatewayExecutor) finishConfirmedReviewNeedsReconciliation(
+	ctx context.Context,
+	result ReviewGatewayExecutionResult,
+	plan ReviewActionPlan,
+	reviewID,
+	errorSummary string,
+	now time.Time,
+) (ReviewGatewayExecutionResult, error) {
+	finishErr := e.ActionPlans.FinishReviewActionPlan(
+		ctx,
+		plan.PlanID,
+		"unknown",
+		reviewID,
+		errorSummary,
+		reviewMutationConfirmed,
+		now,
+	)
+	if finishErr != nil {
+		_ = e.ActionPlans.MarkReviewActionPlanUnknown(
+			ctx,
+			plan.PlanID,
+			"GitLink POST is confirmed but read-back reconciliation state could not be persisted",
+			reviewMutationConfirmed,
+			now,
+		)
+	}
+	result.ReadOnlyGitLink = false
+	result.MutatesGitLink = true
+	result.WriteResult = &ReviewWriteResult{
+		PlanID:         plan.PlanID,
+		Status:         "unknown_needs_reconciliation",
+		ReviewID:       reviewID,
+		Repository:     plan.Repository,
+		PRNumber:       plan.PRNumber,
+		HeadSHA:        plan.ExpectedHeadSHA,
+		ReviewStatus:   "common",
+		MutationStatus: reviewMutationConfirmed,
+		Mutated:        true,
+		Reconciliation: "POST confirmed; verify Review ID, status, head, content, and actor before any retry",
+	}
+	result.Message = "GitLink POST 已确认，但写后回读未完成严格对账；ActionPlan 标记 unknown，禁止自动重试。"
+	return result, nil
+}
+
+func verifyReviewWriteReadback(
+	data interface{},
+	reviewID string,
+	plan ReviewActionPlan,
+) (bool, string) {
+	reviewID = strings.TrimSpace(reviewID)
+	if reviewID == "" {
+		return false, "Review ID is empty"
+	}
+	records := reviewWriteReadbackRecords(data)
+	for _, record := range records {
+		if reviewWriteScalarString(record, "id", "review_id") != reviewID {
+			continue
+		}
+		if !strings.EqualFold(reviewWriteScalarString(record, "status", "state", "review_status"), "common") {
+			return false, "Review status is not common"
+		}
+		if reviewWriteScalarString(record, "commit_id", "commit_sha", "sha") != strings.TrimSpace(plan.ExpectedHeadSHA) {
+			return false, "Review commit does not match the planned head"
+		}
+		content := reviewWriteScalarString(record, "content", "body", "note", "notes")
+		if reviewWriteContentFingerprint(content) != reviewWriteContentFingerprint(plan.Content) {
+			return false, "Review content fingerprint does not match"
+		}
+		if actor := reviewWriteActorLogin(record); actor != "" && actor != strings.TrimSpace(plan.GitLinkLogin) {
+			return false, "Review actor does not match the bound GitLink login"
+		}
+		return true, ""
+	}
+	return false, "Review ID was not present in the read-back response"
+}
+
+func reviewWriteReadbackRecords(data interface{}) []map[string]interface{} {
+	switch typed := data.(type) {
+	case []interface{}:
+		result := make([]map[string]interface{}, 0, len(typed))
+		for _, item := range typed {
+			if record, ok := item.(map[string]interface{}); ok {
+				result = append(result, record)
+			}
+		}
+		return result
+	case []map[string]interface{}:
+		return typed
+	case map[string]interface{}:
+		for _, key := range []string{"reviews", "items", "data"} {
+			if records := reviewWriteReadbackRecords(typed[key]); len(records) > 0 {
+				return records
+			}
+		}
+		if reviewWriteScalarString(typed, "id", "review_id") != "" {
+			return []map[string]interface{}{typed}
+		}
+	}
+	return nil
+}
+
+func reviewWriteScalarString(item map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		switch value := item[key].(type) {
+		case string:
+			if value = strings.TrimSpace(value); value != "" {
+				return value
+			}
+		case float64:
+			return strconv.FormatInt(int64(value), 10)
+		case int:
+			return strconv.Itoa(value)
+		case int64:
+			return strconv.FormatInt(value, 10)
+		}
+	}
+	return ""
+}
+
+func reviewWriteActorLogin(item map[string]interface{}) string {
+	for _, key := range []string{"user", "actor", "reviewer", "author"} {
+		if actor, ok := item[key].(map[string]interface{}); ok {
+			if login := reviewWriteScalarString(actor, "login", "username"); login != "" {
+				return login
+			}
+		}
+	}
+	return reviewWriteScalarString(item, "login", "username")
+}
+
+func reviewWriteContentFingerprint(content string) string {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.TrimSpace(content)
+	digest := sha256.Sum256([]byte(content))
+	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
 func (e *ReviewGatewayExecutor) validateReviewActionPlanScope(
