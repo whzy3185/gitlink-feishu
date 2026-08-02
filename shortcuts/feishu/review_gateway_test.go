@@ -516,6 +516,11 @@ func TestReviewGatewayPublicReadDoesNotCreateCollaborationResources(t *testing.T
 	if publisher.calls != 0 || len(result.ResourceSync) != 0 || result.Collaboration != nil {
 		t.Fatalf("public read created collaboration projection: %#v, calls=%d", result, publisher.calls)
 	}
+	cardJSON, cardOK := safeReviewGatewayCardJSON(result.ResultCard)
+	if !cardOK || !strings.Contains(cardJSON, "Public PR") ||
+		strings.Contains(cardJSON, "Base / Doc / Task") || strings.Contains(cardJSON, "负责人") {
+		t.Fatalf("public read card boundary = %s, ok=%t", cardJSON, cardOK)
+	}
 	var collaborationItems int
 	if err := store.db.QueryRow("SELECT COUNT(*) FROM review_collaboration_items").Scan(&collaborationItems); err != nil {
 		t.Fatalf("count collaboration items: %v", err)
@@ -1515,8 +1520,9 @@ func TestReviewGatewayReplyDispatcherRepliesOnceToOriginalMessage(t *testing.T) 
 	if sender.inputs[0].ReplyMessageID != job.SourceMessageID {
 		t.Fatalf("reply target = %q", sender.inputs[0].ReplyMessageID)
 	}
-	if !strings.Contains(sender.inputs[0].Text, "GitLink 写入：0") {
-		t.Fatalf("reply boundary missing: %s", sender.inputs[0].Text)
+	if sender.inputs[0].MsgType != "interactive" ||
+		!strings.Contains(sender.inputs[0].Card, "GitLink 写入：0") {
+		t.Fatalf("reply card boundary missing: %#v", sender.inputs[0])
 	}
 	store.mu.Lock()
 	replyStatus := store.ReplyStatus[job.JobID]

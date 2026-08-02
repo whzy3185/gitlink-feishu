@@ -1,0 +1,98 @@
+# Round 2 M1：PR 结果卡片实施记录
+
+日期：2026-08-02
+分支：`feat/round2-platform-v2-m1-pr-result-card`
+基线：`5c4c1b01a0ebb66c55c55c6bbee88fcbca11bac9`
+
+## 1. 阶段定位
+
+M1 只完善 PR 查询结果的飞书展示层，不扩大 GitLink 写入范围。Owner 在群内查看 PR 后，可以直接看到当前 patchset、Review 状态、风险和下一步，不需要先打开 Doc。
+
+本阶段仍保持：
+
+```text
+approve / reject / merge：不支持
+行级评论：不支持
+GitLink 默认写入：0
+公开未绑定仓库：只读、无协作资源入口
+```
+
+## 2. 完成的结构
+
+### 2.1 有界展示合同
+
+`feishu.review-result/v2` 新增 `ReviewGatewayPullRequestView`，只保存卡片需要的确定性字段：
+
+- 标题、作者、base/head 分支；
+- GitLink PR URL、短 head、patchset；
+- 文件、提交、增删行；
+- GitLink 状态、Review 阶段和决定；
+- Reviewer 摘要、线程数量；
+- collection status、partial、风险；
+- unknowns 和建议下一步。
+
+不把原始 API payload、飞书消息 ID、用户 OpenID、Token、Cookie 或未截断错误放入展示合同。
+
+### 2.2 固定卡片 schema
+
+complete、partial、failed 共用同一构造入口：
+
+```text
+GitLink Review Context
+-> ReviewGatewayPullRequestView
+-> bounded result card
+-> interactive reply
+-> oversized 时 text fallback
+```
+
+complete 卡片显示完整事实；partial 卡片以黄色告警强调不能覆盖已有完整快照；failed 卡片以红色显示脱敏错误和重试建议。
+
+### 2.3 公开仓库边界
+
+公开、未绑定仓库也可以收到 PR 结果卡片，但卡片只包含 GitLink PR 跳转，不包含：
+
+- Base、Doc、Task 协作资源；
+- 负责人和截止时间；
+- 领取、释放、设置截止日期；
+- GitLink 写入动作。
+
+### 2.4 安全降级
+
+- 标题、分支、Reviewer、unknowns 和下一步均有 rune 级上限；
+- Reviewer 最多展示 8 人，unknowns 最多展示 5 项；
+- 卡片只显示 12 位 head；
+- 飞书 OpenID 在卡片中只显示为“已认领（飞书成员）”；
+- 卡片 JSON 安全预算为 28,000 字节；超限或编码失败时退回 3,000 字符以内的文本；
+- 公共卡片的 URL 固定从标准 GitLink owner/repo/PR 地址构造。
+
+## 3. 测试证据
+
+新增或更新的代码门禁包括：
+
+- complete、partial、failed 三种卡片 golden；
+- open、merged、closed 模板；
+- Reviewer 和 unknowns 数量/长度上限；
+- 完整 SHA、额外 Reviewer 和额外 unknown 不进入卡片；
+- 公开仓库卡片不包含绑定协作字段；
+- 超长卡片自动降级为文本；
+- 原结果回复测试改为验证 interactive 卡片中的 `GitLink 写入：0`；
+- 原有单卡更新、资源幂等、partial 快照保护和受控写回测试继续执行。
+
+本地门禁命令：
+
+```powershell
+go clean -testcache
+./scripts/verify-round2-p5.ps1
+```
+
+## 4. 尚未宣称完成的内容
+
+- 尚未在真实飞书群对 #356 保存 M1 卡片截图；
+- 尚未取得本分支精确 SHA 的 GitHub Actions 结果；
+- Doc、Base、Task 的真实可点击链接需要 M3 在资源创建和回读后补入；
+- 领取、释放、刷新和截止日期按钮属于 M2；
+- 本阶段没有执行真实 GitLink POST。
+
+因此当前状态应写为：
+
+> M1 代码实现完成并通过本地门禁后，可推送获取精确 SHA CI；真实飞书卡片截图通过后才关闭 M1 平台验收。

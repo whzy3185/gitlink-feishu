@@ -279,12 +279,24 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 		var cardStateErr error
 		cardFingerprint := ""
 		cardResourceStore, hasCardResourceStore := d.store.(reviewGatewayResourceStore)
+		resultCard := item.Result.ResultCard
 		if item.Result.Collaboration != nil {
-			if cardJSON, marshalErr := json.Marshal(item.Result.Collaboration.Card); marshalErr == nil {
+			resultCard = item.Result.Collaboration.Card
+		}
+		if len(resultCard) == 0 && item.Result.Collaboration == nil && item.Job.PRNumber > 0 {
+			resultCard = buildReviewGatewayResultCard(item.Job, item.Result, nil)
+		}
+		interactiveCardReady := false
+		if len(resultCard) > 0 {
+			if cardJSON, ok := safeReviewGatewayCardJSON(resultCard); ok {
 				sendInput.MsgType = "interactive"
 				sendInput.Text = ""
-				sendInput.Card = string(cardJSON)
+				sendInput.Card = cardJSON
+				interactiveCardReady = true
 			}
+		}
+		fixedCardReady := item.Result.Collaboration != nil && interactiveCardReady
+		if fixedCardReady {
 			cardFingerprint = reviewCollaborationBundleFingerprint(*item.Result.Collaboration)
 			if hasCardResourceStore {
 				cardState, cardStateErr = cardResourceStore.GetReviewResourceState(
@@ -300,10 +312,10 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 		switch {
 		case cardStateErr != nil:
 			sendErr = fmt.Errorf("load fixed card resource mapping: %w", cardStateErr)
-		case item.Result.Collaboration != nil && cardState.RemoteID != "" && cardState.ContentFingerprint == cardFingerprint:
+		case fixedCardReady && cardState.RemoteID != "" && cardState.ContentFingerprint == cardFingerprint:
 			replyAction = "unchanged"
 			sendResult = &larktypes.SendResult{MessageID: cardState.RemoteID, ChatID: item.Job.ChatID}
-		case item.Result.Collaboration != nil && cardState.RemoteID != "":
+		case fixedCardReady && cardState.RemoteID != "":
 			replyAction = "updated"
 			updater, ok := d.sender.(reviewGatewayMessageUpdater)
 			if !ok {
@@ -338,7 +350,7 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 				event.MessageIDHash = reviewGatewayHashIdentifier(messageID)
 			}
 			_ = d.store.MarkReplySent(persistCtx, item.Job.JobID, messageID, d.now().UTC())
-			if item.Result.Collaboration != nil && hasCardResourceStore && messageID != "" {
+			if fixedCardReady && hasCardResourceStore && messageID != "" {
 				if persistErr := cardResourceStore.SaveReviewResourceState(
 					persistCtx,
 					item.Result.Collaboration.UniqueKey,
@@ -444,6 +456,44 @@ func formatReviewGatewayResultReply(job ReviewGatewayJob, result ReviewGatewayEx
 			if len(lines) >= 8 {
 				break
 			}
+		}
+		lines = append(lines, "GitLink 写入：0")
+		return truncateReviewGatewayText(strings.Join(lines, "\n"), 3000)
+	}
+	if result.PullRequest != nil {
+		view := result.PullRequest
+		lines := []string{
+			fmt.Sprintf("%s PR #%d · %s", job.Repository, job.PRNumber, firstNonEmpty(view.Title, "无标题")),
+			fmt.Sprintf("作者：%s；分支：%s ← %s", firstNonEmpty(view.Author, "unknown"), firstNonEmpty(view.BaseBranch, "unknown"), firstNonEmpty(view.HeadBranch, "unknown")),
+			fmt.Sprintf("状态：%s；阶段：%s；决定：%s", firstNonEmpty(result.GitLinkState, "unknown"), firstNonEmpty(result.ReviewStage, "unknown"), firstNonEmpty(result.Decision, "unknown")),
+			fmt.Sprintf("变更：%d 文件，+%d/-%d，%d commits；patchset=%s", view.FilesCount, view.Additions, view.Deletions, view.CommitsCount, firstNonEmpty(view.PatchsetID, "unknown")),
+			fmt.Sprintf("Review：%d；线程：%d；未解决：%d", result.ReviewCount, result.ThreadCount, result.OpenThreadCount),
+			fmt.Sprintf("数据：%s；partial=%t；风险=%s", firstNonEmpty(result.CollectionStatus, "unknown"), result.Partial, firstNonEmpty(view.RiskLevel, "unknown")),
+		}
+		if len(view.Reviewers) > 0 {
+			reviewers := make([]string, 0, len(view.Reviewers))
+			for _, reviewer := range view.Reviewers {
+				reviewers = append(reviewers, reviewer.Reviewer+"="+reviewer.Decision)
+			}
+			lines = append(lines, "Reviewer："+strings.Join(reviewers, "；"))
+		}
+		if len(view.Unknowns) > 0 {
+			lines = append(lines, "待确认："+strings.Join(view.Unknowns, "；"))
+		}
+		if view.RecommendedNextStep != "" {
+			lines = append(lines, "建议下一步："+view.RecommendedNextStep)
+		}
+		if result.Collaboration != nil {
+			item := result.Collaboration.Item
+			lines = append(lines, fmt.Sprintf(
+				"协作：%s；负责人：%s；截止：%s",
+				item.CollaborationStatus,
+				reviewGatewayAssigneeLabel(item.AssignedTo),
+				firstNonEmpty(item.DueAt, "未设置"),
+			))
+		}
+		if view.GitLinkURL != "" {
+			lines = append(lines, "GitLink："+view.GitLinkURL)
 		}
 		lines = append(lines, "GitLink 写入：0")
 		return truncateReviewGatewayText(strings.Join(lines, "\n"), 3000)

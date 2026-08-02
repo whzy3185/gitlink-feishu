@@ -8,6 +8,7 @@ on:
       - feat/round2-review-collaboration-p2-p5
       - feat/round2-feishu-platform-v2
       - fix/round2-platform-v2-m0-write-scope
+      - feat/round2-platform-v2-m1-pr-result-card
 
 permissions:
   contents: read

@@ -89,6 +89,8 @@ resource ids not present in process args
 
 ## 5. M1：完善 PR 结果卡片
 
+当前代码状态（2026-08-02）：有界展示合同、complete/partial/failed 固定卡片、公开只读边界、短 SHA、OpenID 隐藏、长度预算和文本降级已实现；本地与 CI 结果以 `docs/ROUND2_M1_PR_RESULT_CARD_IMPLEMENTATION_20260802.md` 为准。真实 #356 卡片截图仍是退出条件。
+
 ### 5.1 用户结果
 
 Owner 在群里查看 PR 后，应看到：
