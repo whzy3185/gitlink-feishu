@@ -1,11 +1,13 @@
 name: Round 2 Review Collaboration Gate
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
       - feat/round2-review-collaboration-p2-p5
       - feat/round2-feishu-platform-v2
+      - fix/round2-platform-v2-m0-write-scope
 
 permissions:
   contents: read

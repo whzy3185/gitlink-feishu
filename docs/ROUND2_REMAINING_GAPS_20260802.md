@@ -2,7 +2,9 @@
 
 日期：2026-08-02
 
-适用分支：`feat/round2-feishu-platform-v2`
+规划基线分支：`feat/round2-feishu-platform-v2`
+
+M0.1 实施分支：`fix/round2-platform-v2-m0-write-scope`
 
 ## 1. 结论
 
@@ -17,7 +19,12 @@
 -> 飞书最终回复
 ```
 
-`Gitlink/gitlink-cli#431` 和 `Gitlink/forgeplus#356` 已通过真实主链路。当前剩余工作不再是证明机器人能够接收消息，而是补齐以下四个产品闭环：
+真实平台证据按 PR 区分如下，不能把两条链路合并描述：
+
+- `Gitlink/gitlink-cli#431`：GitLink GET、飞书最终回复和 Base 业务幂等已验证；
+- `Gitlink/forgeplus#356`：GitLink GET、飞书最终回复以及 Base、Doc、Task 首次创建已验证。
+
+当前剩余工作不再是证明机器人能够接收消息，而是补齐以下四个产品闭环：
 
 1. 群内可操作的 Review 控制台；
 2. 飞书身份到 GitLink 用户的可信绑定；
@@ -38,7 +45,7 @@ GitLink 写入当前保持关闭。approve、reject、merge、行级评论和 Re
 | 未实现 | 尚无可执行代码或平台配置 |
 | 暂不纳入 | 明确排除在当前比赛范围之外 |
 
-## 3. 当前已完成基线
+## 3. 当前真实完成与代码完成的共同基线
 
 ### 3.1 飞书入站与可靠性
 
@@ -66,7 +73,7 @@ GitLink 写入当前保持关闭。approve、reject、merge、行级评论和 Re
 - 群绑定多个协作仓库；
 - 明确默认仓库；
 - `owner/repository + PR number` 限定命令；
-- 未绑定公开仓库的无凭据读取；
+- 未绑定公开仓库的无凭据读取（代码完成，真实平台待验收）；
 - 公共读取必须确认 `is_public=true`；
 - 公共读取不创建 Base、Doc、Task 或协作 WorkItem。
 
@@ -214,7 +221,9 @@ puygob236/KongMing-Job-Matching-Agent
 
 ### 5.4 common Review 真实写回
 
-状态：代码门禁完成，真实平台未执行。
+状态：M0.1 安全门禁代码完成，真实平台未执行。
+
+ActionPlan 现已绑定原始 `installation_id` 和 `source_chat_id`；确认时会在任何远程调用和 POST 之前校验同 Installation、同群、Installation allowlist 与原始群当前仓库绑定。POST 成功后必须再次 GET Review，并匹配 Review ID、`status=common`、预期 head、内容指纹以及 API 提供时的 actor/login。只有完全匹配才标记 `verified`；否则进入 `unknown_needs_reconciliation`，且禁止自动重试。
 
 必须保存：
 
@@ -272,7 +281,7 @@ close
 
 ## 7. P5 多 Agent 仍未完成
 
-状态：协议、验证和离线编排完成，真实 Agent 未接入。
+状态：协议、验证和离线编排完成；证据输入合同不完整，真实 Agent 未接入。
 
 已有：
 
@@ -285,6 +294,8 @@ close
 
 仍缺：
 
+- Invocation 内的受限 canonical Review Context、diff/文件片段或可验证 evidence reference；
+- untrusted-content 标记、最大输入大小以及同 head 的证据约束；
 - 真实 Agent Provider endpoint；
 - 鉴权和凭据轮换；
 - 至少一个代码 Review Agent；
@@ -303,6 +314,9 @@ close
 - GitLink 可配置的 Webhook；
 - HTTPS 公网入口或可信反向代理；
 - secret 配置；
+- 事件时间戳和请求时间窗；
+- 过期请求拒绝；
+- 代理后的时间戳与签名版本合同；
 - PR 更新、合并、关闭事件真实投递；
 - 同一 delivery 去重；
 - 新 patchset 自动标记旧结果 stale；
@@ -346,7 +360,7 @@ close
 
 当前准确介绍应为：
 
-> GitLink 飞书 Review Gateway 已经完成真实多仓库 PR 读取、可靠异步执行以及 Base、Doc、Task 协作投影；公开仓库可免绑定查看。受控 Review 写回、多 Agent、企业微信、Webhook 和生产部署已有代码框架，但仍需真实平台验收。
+> GitLink 飞书 Review Gateway 已经完成真实多仓库 PR 读取、可靠异步执行以及 Base、Doc、Task 协作投影；代码支持未绑定公开仓库的无凭据只读，但仍待真实群验收。受控 common Review 已完成 M0.1 范围绑定和写后回读门禁，多 Agent、企业微信、Webhook 和生产部署已有代码框架，但这些能力仍需真实平台验收。
 
 不应表述为：
 

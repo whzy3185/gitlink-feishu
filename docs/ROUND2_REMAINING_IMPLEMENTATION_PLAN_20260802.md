@@ -4,7 +4,9 @@
 
 基线分支：`feat/round2-feishu-platform-v2`
 
-基线提交：`edcaf60`
+代码基线：`edcaf609b5c8be3a67943ce1f7bcb543861af71e`
+
+计划修订：`b12c664113f46a1096e3bc7d33e1c876d4bcad3e`
 
 配套差距清单：`docs/ROUND2_REMAINING_GAPS_20260802.md`
 
@@ -30,7 +32,7 @@ Owner 是最终决策者；Agent 是证据生产者；飞书是协作和控制�
 2. 只读默认，写入必须显式开启；
 3. 公开仓库查看不要求仓库绑定，但不创建协作资源；
 4. Base、Doc、Task 只投影已绑定协作仓库；
-5. 所有写操作绑定用户、仓库、PR、head 和 fingerprint；
+5. 所有写操作绑定用户、Installation、原始群、仓库、PR、head 和 fingerprint；
 6. 网络不确定写入不得自动重试；
 7. 平台能力没有真实证据时只标记“代码完成”；
 8. 每一阶段单独提交、单独 CI、单独回滚；
@@ -41,21 +43,26 @@ Owner 是最终决策者；Agent 是证据生产者；飞书是协作和控制�
 
 | 里程碑 | 目标 | 比赛优先级 | 退出条件 |
 |---|---|---:|---|
-| M0 | 冻结基线与证据 | P0 | 当前能力、配置和证据可复现 |
+| M0.1 | 写入范围、写后对账与当前 SHA CI | P0 | 跨 Installation/群 POST=0，严格回读，专项 CI 绿色 |
 | M1 | 完善 PR 结果卡片 | P0 | 群内一眼看懂 PR 和下一步 |
 | M2 | 卡片协作动作与幂等 | P0 | 领取、刷新、截止时间真实可用 |
 | M3 | Base 看板、Doc、Task 闭环 | P0 | Owner 团队能共享进度与审计 |
-| M4 | 身份绑定和 common Review | P0 | 孔明职配真实写入一次并完成对账 |
-| M5 | 单 Agent 真实评估 | P1 | 一份有证据 Assessment 进入卡片与 Doc |
-| M6 | Webhook 和常驻部署 | P1 | PR 更新自动刷新，Gateway 可长期运行 |
+| M4a | Gateway 常驻、健康检查、备份和回滚 | P0 | 关闭终端与重启机器后仍可靠运行 |
+| M4b | 身份绑定和一次受控 common Review | P1，可选展示 | 孔明职配真实写入一次并完成对账 |
+| M5 | 单 Agent 真实评估 | P1，可选展示 | 一份同 head、有证据 Assessment 进入卡片与 Doc |
+| M6 | 公网 Webhook | P2 | 具备时间窗的真实事件自动刷新 |
 | M7 | 企业微信真实适配 | P2 | 一条企业微信只读链路跑通 |
-| M8 | OAuth、多 Agent、生产 HA | P2 | 赛后演进，不阻塞复赛演示 |
+| M8 | OAuth、多 Agent、生产 HA | 赛后 | 不阻塞复赛演示 |
 
-## 4. M0：冻结基线与证据
+## 4. M0.1：安全收口与冻结基线
 
 ### 4.1 工作内容
 
 - 保存当前 Git SHA、Go 版本和构建命令；
+- ActionPlan 保存 Installation 和原始群，并将两者纳入幂等键；
+- 确认前校验同 Installation、同群、Installation allowlist 和原始群仓库绑定；
+- POST 成功后新增 Review read-back matcher 和 unknown/verified 状态处理；
+- 为当前精确 SHA 运行独立 Round 2 专项 CI；
 - 导出不含 ID 和密钥的 v2 配置摘要；
 - 记录 Gateway 进程、长连接和 GitLink 写入关闭状态；
 - 保存 #431 和 #356 的 Job 摘要；
@@ -74,7 +81,7 @@ Owner 是最终决策者；Agent 是证据生产者；飞书是协作和控制�
 
 ```text
 git status clean
-P2-P5 gate success
+Round 2 Review Collaboration gate success on the exact SHA
 Gateway online
 GitLink write flag false
 resource ids not present in process args
@@ -212,7 +219,7 @@ card action
 
 - `pr_key` 是业务唯一标识，不宣称为 Base 唯一索引；
 - SQLite 保存 record ID 和内容指纹；
-- 单写者串行化查找和创建；
+- 待实现 Publisher 自身的远端创建租约或 SQLite 临界区；当前单实例 Gateway 和串行 Job 只降低冲突概率，不构成独立的单写者保证；
 - 重复同步只更新同一记录；
 - 人工字段不被 GitLink 刷新覆盖；
 - 删除远端资源时记录 missing 并进入显式恢复流程。
@@ -237,7 +244,7 @@ Task creates = 1
 人工负责人和截止日期被保留
 ```
 
-## 8. M4：身份绑定与 common Review 写回
+## 8. M4b：身份绑定与一次受控 common Review 写回
 
 ### 8.1 测试前置
 
@@ -274,12 +281,15 @@ enabled
 -> 创建 ActionPlan
 -> 卡片展示 actor、head、fingerprint、内容和过期时间
 -> 用户二次确认 plan_id
+-> 校验原始 Installation、原始群和两级仓库范围
 -> 再次 GET PR 和 patchset
 -> 校验 actor、repository、PR、head、fingerprint
 -> 获取单次 lease
 -> POST common Review
 -> 保存 Review ID
--> 再次 GET Review 对账
+-> 再次 GET Review
+-> read-back matcher 校验 ID、common、head、内容指纹和可用 actor
+-> 匹配时 verified；缺失、失败或不匹配时 unknown_needs_reconciliation
 -> 关闭写入开关
 ```
 
@@ -292,6 +302,13 @@ enabled
 - `review_gateway_store.go`
 - `review_gateway_reply.go`
 
+必须新增并保持独立测试的代码合同：
+
+- Review read-back matcher；
+- reconciliation result；
+- GET 失败、Review 缺失和字段不匹配的 unknown handling；
+- POST 已确认后的所有 unknown 路径禁止自动重试。
+
 ### 8.5 停止条件
 
 以下任一发生，POST 必须为 0：
@@ -301,6 +318,8 @@ enabled
 - head 变化；
 - fingerprint 变化；
 - actor 未绑定；
+- 确认 Job 与 ActionPlan 的 Installation 不一致；
+- 确认 Job 与 ActionPlan 的原始群不一致；
 - Installation 不是 write；
 - 仓库不在 allowlist；
 - 启动开关未开启；
@@ -323,7 +342,7 @@ status=unknown_needs_reconciliation
 - POST count=1；
 - Review ID；
 - after Review；
-- reconciliation=confirmed；
+- reconciliation=verified，且来源为 POST 后的 GitLink GET；
 - 写入开关关闭；
 - Token 从环境移除。
 
@@ -331,7 +350,7 @@ status=unknown_needs_reconciliation
 
 ### 9.1 范围
 
-先接一个只读代码 Review Agent，不立即做多 Agent Warroom。Agent 只能读取 canonical Review Context，输出结构化 Assessment：
+先接一个只读代码 Review Agent，不立即做多 Agent Warroom。当前 Invocation 尚未携带 canonical Review Context、diff 或文件证据，因此 M5 不能直接进入真实验收。必须先在 Invocation 内提供受限证据，或提供能证明同 head 的独立只读获取合同，然后才能输出结构化 Assessment：
 
 ```text
 summary
@@ -347,6 +366,8 @@ evidence_checked
 ### 9.2 安全
 
 - 仓库内容视为不可信输入；
+- Invocation 标记 untrusted content 并限制最大输入大小；
+- Provider 必须读取同一 head 的 patch/文件证据，并回传 SourceFingerprint；
 - 不允许 PR 文本改变系统指令或工具权限；
 - Agent 无 GitLink 写工具；
 - Agent 输出不能直接成为 Review 写入；
@@ -372,19 +393,20 @@ evidence_checked
 - GitLink 写入 0；
 - Owner 明确选择采用、修改或忽略。
 
-## 10. M6：Webhook 与常驻部署
+## 10. M4a 常驻部署与 M6 公网 Webhook
 
-### 10.1 Webhook
+### 10.1 M6 公网 Webhook
 
 - 配置 HTTPS 入口；
 - 校验签名、时间窗、body size；
+- 拒绝过期事件，并定义代理后的时间戳与签名版本合同；
 - delivery 幂等；
 - 只接受绑定仓库；
 - PR update 自动刷新；
 - merged/closed 自动归档；
 - 新 patchset 使旧 Agent/ActionPlan stale。
 
-### 10.2 常驻部署
+### 10.2 M4a 常驻部署
 
 优先选择一种：
 
@@ -464,6 +486,7 @@ Linux systemd
 feat/round2-review-card
 feat/round2-card-actions
 feat/round2-collaboration-views
+fix/round2-platform-v2-m0-write-scope
 feat/round2-common-review-live
 feat/round2-agent-live
 feat/round2-webhook-deployment
@@ -485,13 +508,14 @@ feat/round2-wecom-live
 比赛前按下列顺序推进：
 
 ```text
-M0 基线证据
+M0.1 写入范围、回读对账与精确 SHA CI
 -> M1 丰富卡片
 -> M2 卡片协作动作
 -> M3 Base/Doc/Task 幂等和视图
--> M4 孔明职配 common Review
--> M5 单 Agent 真实评估
--> M6 常驻部署
+-> M4a 常驻部署、健康检查、备份和回滚
+-> 可选 M4b 孔明职配 common Review
+-> 可选 M5 单 Agent 真实评估
+-> P2 M6 公网 Webhook
 ```
 
 M7 企业微信可以并行准备，但不应阻塞飞书主链路。M8 不进入当前复赛关键路径。
@@ -511,6 +535,6 @@ M7 企业微信可以并行准备，但不应阻塞飞书主链路。M8 不进�
 9. 强调 approve、reject、merge 仍被禁止；
 10. 展示进程重启后任务恢复。
 
-完成 M0–M6 后，项目才达到本轮预期的完整表述：
+完成 M0.1、M1–M3 和 M4a 后，项目即可形成比赛主链路；M4b common Review、M5 Agent 与 M6 Webhook 只有在各自真实验收后才能进入展示表述：
 
 > 面向 GitLink 仓库 Owner 的飞书 PR Review 工作台，以 GitLink 为状态真源，通过可靠任务、共享协作资源、Agent 证据和受控二次确认，提高海量 PR 的分诊、协作和正式 Review 效率。
