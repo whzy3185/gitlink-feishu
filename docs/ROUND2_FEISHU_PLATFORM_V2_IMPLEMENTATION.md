@@ -68,7 +68,7 @@ GitLink 写入不再使用容易误导的单一布尔值：
 配置 schema 为 `feishu.review-bindings/v2`。它把平台账号、GitLink 安装、仓库授权和飞书群绑定分开建模：
 
 - `GitLinkInstallation`：主机、Owner、凭据引用、运行模式、仓库 allowlist、Webhook 标识；
-- `ReviewChatBinding`：群、安装、多仓库、默认仓库、管理员和允许用户；
+- `ReviewChatBinding`：群、安装、多仓库、管理员和允许用户；旧 schema 中的默认仓库字段不参与 PR 命令路由；
 - `ReviewIdentityBinding`：某个安装内的飞书用户与 GitLink login 映射。
 
 运行模式：
@@ -86,7 +86,7 @@ GitLink 写入不再使用容易误导的单一布尔值：
 一个群可以绑定同一 GitLink installation 中的多个明确仓库。解析规则：
 
 - 所有仓库均为平等作用域，PR 级命令必须显式携带 `owner/repo`，例如 `查看 Gitlink/gitlink-cli PR #431`；
-- 多仓库且无默认仓库时，必须使用 `查看 owner/repo PR #431`；
+- 不存在默认仓库；所有 PR 级命令都必须使用 `查看 owner/repo PR #431`；
 - 请求仓库不在群绑定或 installation allowlist 中时直接拒绝；
 - `查看绑定` 和帮助信息会展示可用仓库与选择方式。
 
@@ -104,14 +104,16 @@ GitLink 写入不再使用容易误导的单一布尔值：
 
 ## 6. M3：固定卡片而非消息洪泛
 
-每个 WorkItem 在一个群中最多维护一条飞书交互卡片。资源映射保存：
+每个 WorkItem 在一个群中最多维护一条长期飞书交互卡片；同时每次用户查询都会在当前消息下重新回复完整结果卡片。资源映射保存：
 
 ```text
 platform + chat_id + pr_key + resource_type
 -> remote message_id + content fingerprint
 ```
 
-首次同步创建卡片；内容变化时 PATCH 原卡片；指纹未变时跳过。已有映射但缺少更新器时会受控失败，不会悄悄再发一条重复卡片。
+首次同步创建长期卡片；内容变化时 PATCH 原卡片；指纹未变时跳过长期更新。无论长期卡片是创建、更新还是未变化，当前查询线程都会得到完整卡片，而不是文本摘要。已有映射但缺少更新器时会受控失败，不会悄悄再发一条重复长期卡片。
+
+PR 事实按 `installation + repository + PR` 保存；认领、截止时间以及卡片/Base/Doc/Task 映射按 `installation + chat + repository + PR` 隔离。不同群不会共享负责人或远端资源 ID。
 
 ## 7. M4：GitLink Webhook 主动刷新
 
@@ -206,8 +208,8 @@ Agent endpoint 使用 provider-neutral HTTP 合同，不要求在 `gitlink-cli` 
 - chat/user allowlist 默认 fail-closed；
 - 写操作意图在 Sidecar 层即被拒绝；
 - 事件 ID 以完整 SHA-256 持久去重，日志中只显示短哈希；
-- 支持显式多仓库 allowlist、默认仓库和限定仓库命令；
-- 多仓库无默认值时，未限定仓库的命令受控失败；
+- 支持显式多仓库 allowlist 和限定仓库命令；
+- 未限定仓库的 PR 命令始终受控失败，不从配置推断默认仓库；
 - 使用流式回复返回只读 Review 结果。
 
 启动示例：

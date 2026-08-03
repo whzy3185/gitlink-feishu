@@ -437,7 +437,7 @@ puygob236/KongMing-Job-Matching-Agent
 | 场景 | 是否需要仓库绑定 | 能力 |
 |---|---:|---|
 | 显式公开 PR 查看 | 否 | 无凭据 GET，回复消息 |
-| 未限定仓库的 PR 查看 | 是 | 使用群默认仓库 |
+| 未限定仓库的 PR 查看 | 不适用 | 受控拒绝，要求显式 `owner/repository` |
 | Review Queue、认领、截止时间 | 是 | 更新协作状态 |
 | Base、Doc、Task 投影 | 是 | 创建或幂等更新飞书资源 |
 | Agent、草稿、Review ActionPlan | 是 | 只对协作仓库开放 |
@@ -450,11 +450,11 @@ puygob236/KongMing-Job-Matching-Agent
 成熟代码托管聊天集成的共同结构应用到本项目如下：
 
 1. Installation 是授权和审计边界，不把机器人进程视为全局超级账号；
-2. 群聊绑定 Installation，并保存默认仓库与可管理仓库范围；
+2. 群聊绑定 Installation，并保存一组平等的可管理仓库范围；PR 命令始终显式选择仓库；
 3. 公共仓库允许显式路径只读发现，私有仓库必须在 Installation 范围内；
 4. 飞书消息和卡片只负责触发、展示与确认，耗时 GitLink 调用进入持久异步 Job；
 5. `message_id`、业务命令和目标 patchset 共同形成幂等与 stale 门禁；
-6. 飞书 `open_id` 必须通过身份绑定映射到 GitLink 用户，Token 只保存在安全凭据存储；
+6. 飞书 `open_id` 可直接用于飞书成员 mention；只有 GitLink 身份动作才必须绑定到 GitLink 用户，Token 只保存在安全凭据存储；
 7. Review 写回使用“预览 ActionPlan → Owner/Reviewer 二次确认 → 再校验 head SHA 与 fingerprint → 单次写入 → 对账”；
 8. Base、Doc、Task 是协作投影和审计证据，不是 GitLink Review 状态真源。
 

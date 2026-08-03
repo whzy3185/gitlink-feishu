@@ -89,6 +89,27 @@ func TestReviewGatewayResultCardHandlesUnreviewedPR(t *testing.T) {
 	}
 }
 
+func TestReviewGatewayResultCardUsesResolvableAssigneeIdentity(t *testing.T) {
+	job, result, item := reviewGatewayCardFixture()
+	card := buildReviewGatewayResultCard(job, result, &item)
+	cardJSON, ok := safeReviewGatewayCardJSON(card)
+	cardSnapshot := reviewGatewayCardSnapshot(card)
+	if !ok || !strings.Contains(cardSnapshot, "<at id=ou_secret></at>") || strings.Contains(cardJSON, "已认领（飞书成员）") {
+		t.Fatalf("assignee mention card = %s, ok=%t", cardJSON, ok)
+	}
+	item.AssignedDisplayName = "测试负责人"
+	cardJSON, ok = safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, result, &item))
+	if !ok || !strings.Contains(cardJSON, "测试负责人") || strings.Contains(cardJSON, "ou_secret") {
+		t.Fatalf("resolved assignee card = %s, ok=%t", cardJSON, ok)
+	}
+	item.AssignedDisplayName = ""
+	item.AssignedTo = "not-an-open-id"
+	cardJSON, ok = safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, result, &item))
+	if !ok || !strings.Contains(cardJSON, "负责人身份待解析") || strings.Contains(cardJSON, item.AssignedTo) {
+		t.Fatalf("unresolved assignee card = %s, ok=%t", cardJSON, ok)
+	}
+}
+
 func TestPopulateReviewGatewayResultBoundsPresentationData(t *testing.T) {
 	contextInput := workflow.ReviewContext{
 		Repository:       "owner/repo",
@@ -246,6 +267,6 @@ func reviewGatewayCardSnapshot(card Card) string {
 	return strings.Join(lines, "\n")
 }
 
-const completeReviewGatewayCardGolden = "sha256:54db14e937f887f00b54ce6aeab119b467ce275f1243ba056e2b88537c4fe4c8"
-const partialReviewGatewayCardGolden = "sha256:89f709dceca7a7f70f5dd288a6bc2069d1c67944f4dfad3e5dac0a4c9098afe8"
+const completeReviewGatewayCardGolden = "sha256:9e7dfc3c484d997ec8fdd4143e964b7efeaeed128e76a2d8d8cd5ca3dd10a676"
+const partialReviewGatewayCardGolden = "sha256:0ce54710a141a5fc12c0f0b7e6137cdc8bcfac5c40fd2c17386752a9ae5d1d03"
 const failedReviewGatewayCardGolden = "sha256:4ccc58ff3193eea4d7540b1ecef75f67c63c616a57cccabb8c9b14555206e1e4"

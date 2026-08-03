@@ -84,6 +84,41 @@ CREATE TABLE IF NOT EXISTS review_collaboration_items (
 CREATE INDEX IF NOT EXISTS review_collaboration_items_assignee
     ON review_collaboration_items(assigned_to, archived);
 
+CREATE TABLE IF NOT EXISTS review_pr_snapshots (
+    snapshot_key TEXT PRIMARY KEY,
+    installation_id TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    pr_number INTEGER NOT NULL,
+    review_stage TEXT NOT NULL DEFAULT 'unreviewed',
+    decision TEXT NOT NULL DEFAULT 'pending',
+    collection_status TEXT NOT NULL DEFAULT 'pending',
+    head_sha TEXT NOT NULL DEFAULT '',
+    source_fingerprint TEXT NOT NULL DEFAULT '',
+    gitlink_state TEXT NOT NULL DEFAULT '',
+    archived INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    UNIQUE (installation_id, repository, pr_number)
+);
+CREATE INDEX IF NOT EXISTS review_pr_snapshots_repository
+    ON review_pr_snapshots(installation_id, repository, updated_at);
+
+CREATE TABLE IF NOT EXISTS review_collaboration_states (
+    collaboration_key TEXT PRIMARY KEY,
+    installation_id TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    pr_number INTEGER NOT NULL,
+    assigned_to TEXT NOT NULL DEFAULT '',
+    assigned_display_name TEXT NOT NULL DEFAULT '',
+    collaboration_status TEXT NOT NULL DEFAULT 'unassigned',
+    due_at TEXT NOT NULL DEFAULT '',
+    updated_by TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    UNIQUE (installation_id, chat_id, repository, pr_number)
+);
+CREATE INDEX IF NOT EXISTS review_collaboration_states_assignee
+    ON review_collaboration_states(installation_id, chat_id, assigned_to, collaboration_status);
+
 CREATE TABLE IF NOT EXISTS review_collaboration_audit (
     audit_id TEXT PRIMARY KEY,
     pr_key TEXT NOT NULL,
@@ -233,6 +268,13 @@ var reviewInstallationMigrations = map[string]string{
 
 var reviewChatBindingMigrations = map[string]string{
 	"allow_public_read": "INTEGER NOT NULL DEFAULT 0",
+}
+
+var reviewCollaborationAuditMigrations = map[string]string{
+	"installation_id": "TEXT NOT NULL DEFAULT ''",
+	"chat_id":         "TEXT NOT NULL DEFAULT ''",
+	"repository":      "TEXT NOT NULL DEFAULT ''",
+	"pr_number":       "INTEGER NOT NULL DEFAULT 0",
 }
 
 var (
@@ -550,6 +592,14 @@ func OpenSQLiteReviewGatewayStore(path string) (*SQLiteReviewGatewayStore, error
 		return nil, err
 	}
 	if err := ensureReviewGatewayTableColumns(db, "chat_repository_bindings", reviewChatBindingMigrations); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := ensureReviewGatewayTableColumns(db, "review_collaboration_audit", reviewCollaborationAuditMigrations); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := migrateLegacyReviewCollaborationScope(db); err != nil {
 		_ = db.Close()
 		return nil, err
 	}

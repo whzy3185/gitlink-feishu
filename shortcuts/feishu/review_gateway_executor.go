@@ -288,7 +288,7 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		if e.Collaboration == nil {
 			return reviewGatewayExecutionFailure(result, fmt.Errorf("review collaboration store is required"))
 		}
-		items, err := e.Collaboration.ListCollaborationItems(ctx, job.Repository, job.RequestedBy)
+		items, err := e.Collaboration.ListCollaborationItems(ctx, job.InstallationID, job.ChatID, job.Repository, job.RequestedBy)
 		if err != nil {
 			return reviewGatewayExecutionFailure(result, err)
 		}

@@ -3,6 +3,7 @@ package feishu
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -108,7 +109,7 @@ func buildReviewGatewayResultCard(
 	if item != nil && !result.PublicRead {
 		elements = append(elements, fields([]fieldValue{
 			{Label: "协作状态", Value: firstNonEmpty(item.CollaborationStatus, "unassigned")},
-			{Label: "负责人", Value: reviewGatewayAssigneeLabel(item.AssignedTo)},
+			{Label: "负责人", Value: reviewGatewayAssigneeLabel(*item)},
 			{Label: "截止时间", Value: firstNonEmpty(item.DueAt, "未设置")},
 			{Label: "协作资源", Value: "Base / Doc / Task 按配置同步"},
 		}))
@@ -146,11 +147,32 @@ func reviewItemValue(item *ReviewCollaborationItem, selector func(ReviewCollabor
 	return selector(*item)
 }
 
-func reviewGatewayAssigneeLabel(value string) string {
-	if strings.TrimSpace(value) == "" {
+var reviewGatewayFeishuOpenIDPattern = regexp.MustCompile(`^ou_[A-Za-z0-9_-]+$`)
+
+func reviewGatewayAssigneeLabel(item ReviewCollaborationItem) string {
+	if strings.TrimSpace(item.AssignedTo) == "" {
 		return "未认领"
 	}
-	return "已认领（飞书成员）"
+	if strings.TrimSpace(item.AssignedDisplayName) != "" {
+		return truncateReviewGatewayText(item.AssignedDisplayName, 80)
+	}
+	userID := strings.TrimSpace(item.AssignedTo)
+	if reviewGatewayFeishuOpenIDPattern.MatchString(userID) {
+		// Lark markdown resolves this opaque open_id to the tenant-visible member
+		// name. The card no longer invents a generic assignee label.
+		return fmt.Sprintf("<at id=%s></at>", userID)
+	}
+	return "负责人身份待解析"
+}
+
+func reviewGatewayAssigneePlainLabel(item ReviewCollaborationItem) string {
+	if strings.TrimSpace(item.AssignedTo) == "" {
+		return "未认领"
+	}
+	if strings.TrimSpace(item.AssignedDisplayName) != "" {
+		return truncateReviewGatewayText(item.AssignedDisplayName, 80)
+	}
+	return "飞书成员 " + reviewGatewayHashIdentifier(item.AssignedTo)
 }
 
 func shortReviewGatewaySHA(value string) string {

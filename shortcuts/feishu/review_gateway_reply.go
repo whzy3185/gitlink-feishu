@@ -506,7 +506,7 @@ func formatReviewGatewayResultReply(job ReviewGatewayJob, result ReviewGatewayEx
 			lines = append(lines, fmt.Sprintf(
 				"协作：%s；负责人：%s；截止：%s",
 				item.CollaborationStatus,
-				reviewGatewayAssigneeLabel(item.AssignedTo),
+				reviewGatewayAssigneePlainLabel(item),
 				firstNonEmpty(item.DueAt, "未设置"),
 			))
 		}

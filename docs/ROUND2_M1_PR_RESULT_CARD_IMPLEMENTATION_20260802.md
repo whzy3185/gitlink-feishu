@@ -61,7 +61,7 @@ complete 卡片显示完整事实；partial 卡片以黄色告警强调不能覆
 - 标题、分支、Reviewer、unknowns 和下一步均有 rune 级上限；
 - Reviewer 最多展示 8 人，unknowns 最多展示 5 项；
 - 卡片只显示 12 位 head；
-- 飞书 OpenID 在卡片中只显示为“已认领（飞书成员）”；
+- 飞书 OpenID 在交互卡片中使用 `<at id=OPEN_ID></at>` 由飞书解析为真实成员名称；纯文本、Doc 和日志只使用已解析名称或不可逆短哈希；
 - 卡片 JSON 安全预算为 28,000 字节；超限或编码失败时退回 3,000 字符以内的文本；
 - 公共卡片的 URL 固定从标准 GitLink owner/repo/PR 地址构造。
 
@@ -113,3 +113,9 @@ go clean -testcache
 对应回归测试覆盖固定卡片“创建一次、更新一次、当前消息可见通知一次”和标题降级行为。
 
 仓库作用域规则同步收紧：所有 PR 级命令必须显式指定 `owner/repo`，绑定列表只定义授权范围，不再选择所谓默认仓库。未限定仓库的命令不会创建 Job，并会返回带正确示例的提示。
+
+## 6. 2026-08-04 数据作用域修正
+
+PR 快照现按 `installation + repository + PR` 保存；认领、截止日期和卡片/Base/Doc/Task 资源映射按 `installation + chat + repository + PR` 保存。同一 PR 在不同群中可以独立协作，不会互相继承负责人。旧映射只在 installation 可唯一确定时幂等迁移。
+
+此前“已认领（飞书成员）”是写死的占位文案，现已删除。交互卡片使用飞书成员 mention 展示真实负责人；未解析身份不会伪造姓名。详细实现和后续任务见 [作用域隔离实施记录](./ROUND2_GITHUB_LARK_SCOPE_ISOLATION_IMPLEMENTATION_20260804.md)。

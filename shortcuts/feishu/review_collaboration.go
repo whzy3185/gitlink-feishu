@@ -21,6 +21,7 @@ const (
 type ReviewCollaborationItem struct {
 	SchemaVersion       string `json:"schema_version"`
 	PRKey               string `json:"pr_key"`
+	InstallationID      string `json:"installation_id"`
 	Repository          string `json:"repository"`
 	PRNumber            int    `json:"pr_number"`
 	ChatID              string `json:"chat_id,omitempty"`
@@ -30,6 +31,7 @@ type ReviewCollaborationItem struct {
 	HeadSHA             string `json:"head_sha,omitempty"`
 	SourceFingerprint   string `json:"source_fingerprint,omitempty"`
 	AssignedTo          string `json:"assigned_to,omitempty"`
+	AssignedDisplayName string `json:"assigned_display_name,omitempty"`
 	CollaborationStatus string `json:"collaboration_status"`
 	DueAt               string `json:"due_at,omitempty"`
 	Archived            bool   `json:"archived"`
@@ -60,7 +62,7 @@ type ReviewCollaborationTarget struct {
 type ReviewCollaborationStore interface {
 	ApplyCollaborationAction(context.Context, ReviewGatewayJob, time.Time) (ReviewCollaborationItem, error)
 	UpsertCollaborationFacts(context.Context, ReviewGatewayJob, ReviewGatewayExecutionResult, time.Time) (ReviewCollaborationItem, error)
-	ListCollaborationItems(context.Context, string, string) ([]ReviewCollaborationItem, error)
+	ListCollaborationItems(context.Context, string, string, string, string) ([]ReviewCollaborationItem, error)
 }
 
 func (s *SQLiteReviewGatewayStore) ApplyCollaborationAction(
@@ -68,68 +70,7 @@ func (s *SQLiteReviewGatewayStore) ApplyCollaborationAction(
 	job ReviewGatewayJob,
 	now time.Time,
 ) (ReviewCollaborationItem, error) {
-	if s == nil || s.db == nil {
-		return ReviewCollaborationItem{}, fmt.Errorf("review collaboration store is unavailable")
-	}
-	if job.Repository == "" || job.PRNumber <= 0 {
-		return ReviewCollaborationItem{}, fmt.Errorf("review collaboration target is required")
-	}
-	now = now.UTC()
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return ReviewCollaborationItem{}, err
-	}
-	defer tx.Rollback()
-	item, err := readReviewCollaborationItem(ctx, tx, reviewCollaborationPRKey(job.Repository, job.PRNumber))
-	if err != nil {
-		return ReviewCollaborationItem{}, err
-	}
-	if item.PRKey == "" {
-		item = newReviewCollaborationItem(job, now)
-	}
-	before := item
-	switch job.Action {
-	case "claim_review":
-		if item.AssignedTo != "" && item.AssignedTo != job.RequestedBy {
-			return ReviewCollaborationItem{}, fmt.Errorf("PR #%d is already claimed by another reviewer", job.PRNumber)
-		}
-		item.AssignedTo = job.RequestedBy
-		item.CollaborationStatus = "reviewing"
-	case "release_review":
-		if item.AssignedTo == "" {
-			return ReviewCollaborationItem{}, fmt.Errorf("PR #%d is not currently claimed", job.PRNumber)
-		}
-		if item.AssignedTo != job.RequestedBy {
-			return ReviewCollaborationItem{}, fmt.Errorf("only the current reviewer can release PR #%d", job.PRNumber)
-		}
-		item.AssignedTo = ""
-		item.CollaborationStatus = "unassigned"
-		item.DueAt = ""
-	case "set_review_deadline":
-		if item.AssignedTo == "" || item.AssignedTo != job.RequestedBy {
-			return ReviewCollaborationItem{}, fmt.Errorf("claim PR #%d before setting its deadline", job.PRNumber)
-		}
-		due, parseErr := time.Parse("2006-01-02", strings.TrimSpace(job.Argument))
-		if parseErr != nil {
-			return ReviewCollaborationItem{}, fmt.Errorf("deadline must use YYYY-MM-DD")
-		}
-		item.DueAt = due.Format("2006-01-02")
-	default:
-		return ReviewCollaborationItem{}, fmt.Errorf("unsupported collaboration action %q", job.Action)
-	}
-	item.ChatID = job.ChatID
-	item.UpdatedBy = job.RequestedBy
-	item.UpdatedAt = now.Format(time.RFC3339Nano)
-	if err := writeReviewCollaborationItem(ctx, tx, item); err != nil {
-		return ReviewCollaborationItem{}, err
-	}
-	if err := writeReviewCollaborationAudit(ctx, tx, before, item, job, now); err != nil {
-		return ReviewCollaborationItem{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return ReviewCollaborationItem{}, err
-	}
-	return item, nil
+	return s.applyScopedCollaborationAction(ctx, job, now)
 }
 
 func (s *SQLiteReviewGatewayStore) UpsertCollaborationFacts(
@@ -138,81 +79,17 @@ func (s *SQLiteReviewGatewayStore) UpsertCollaborationFacts(
 	result ReviewGatewayExecutionResult,
 	now time.Time,
 ) (ReviewCollaborationItem, error) {
-	if s == nil || s.db == nil {
-		return ReviewCollaborationItem{}, fmt.Errorf("review collaboration store is unavailable")
-	}
-	now = now.UTC()
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return ReviewCollaborationItem{}, err
-	}
-	defer tx.Rollback()
-	key := reviewCollaborationPRKey(job.Repository, job.PRNumber)
-	item, err := readReviewCollaborationItem(ctx, tx, key)
-	if err != nil {
-		return ReviewCollaborationItem{}, err
-	}
-	if item.PRKey == "" {
-		item = newReviewCollaborationItem(job, now)
-	}
-	if result.CollectionStatus == "complete" && !result.Partial {
-		item.ReviewStage = firstNonEmpty(result.ReviewStage, item.ReviewStage)
-		item.Decision = firstNonEmpty(result.Decision, item.Decision)
-		item.CollectionStatus = result.CollectionStatus
-		item.HeadSHA = result.HeadSHA
-		item.SourceFingerprint = result.SourceFingerprint
-		if result.GitLinkState == "merged" || result.GitLinkState == "closed" {
-			item.Archived = true
-			item.CollaborationStatus = "archived"
-		}
-	} else if item.CollectionStatus == "pending" {
-		item.CollectionStatus = firstNonEmpty(result.CollectionStatus, "partial")
-	}
-	item.ChatID = job.ChatID
-	item.UpdatedBy = job.RequestedBy
-	item.UpdatedAt = now.Format(time.RFC3339Nano)
-	if err := writeReviewCollaborationItem(ctx, tx, item); err != nil {
-		return ReviewCollaborationItem{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return ReviewCollaborationItem{}, err
-	}
-	return item, nil
+	return s.upsertScopedCollaborationFacts(ctx, job, result, now)
 }
 
 func (s *SQLiteReviewGatewayStore) ListCollaborationItems(
 	ctx context.Context,
+	installationID,
+	chatID,
 	repository,
 	assignedTo string,
 ) ([]ReviewCollaborationItem, error) {
-	query := `SELECT pr_key, repository, pr_number, chat_id, review_stage, decision,
-		collection_status, head_sha, source_fingerprint, assigned_to,
-		collaboration_status, due_at, archived, updated_by, updated_at
-		FROM review_collaboration_items WHERE archived = 0`
-	args := []interface{}{}
-	if strings.TrimSpace(repository) != "" {
-		query += " AND repository = ?"
-		args = append(args, strings.TrimSpace(repository))
-	}
-	if strings.TrimSpace(assignedTo) != "" {
-		query += " AND assigned_to = ?"
-		args = append(args, strings.TrimSpace(assignedTo))
-	}
-	query += " ORDER BY due_at = '', due_at, updated_at DESC"
-	rows, err := s.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ReviewCollaborationItem{}
-	for rows.Next() {
-		item, scanErr := scanReviewCollaborationItem(rows)
-		if scanErr != nil {
-			return nil, scanErr
-		}
-		items = append(items, item)
-	}
-	return items, rows.Err()
+	return s.listScopedCollaborationItems(ctx, installationID, chatID, repository, assignedTo)
 }
 
 type reviewCollaborationScanner interface {
@@ -305,10 +182,15 @@ func writeReviewCollaborationAudit(
 	afterJSON, _ := json.Marshal(after)
 	auditID := stableKey("review-audit", job.JobID, job.Action)
 	_, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO review_collaboration_audit (
-		audit_id, pr_key, action, actor_id, before_json, after_json, source_job_id, created_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		audit_id, pr_key, installation_id, chat_id, repository, pr_number,
+		action, actor_id, before_json, after_json, source_job_id, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		auditID,
 		after.PRKey,
+		after.InstallationID,
+		after.ChatID,
+		after.Repository,
+		after.PRNumber,
 		job.Action,
 		job.RequestedBy,
 		string(beforeJSON),
@@ -348,20 +230,34 @@ func boolToReviewCollaborationInt(value bool) int {
 
 func BuildReviewCollaborationBundle(item ReviewCollaborationItem) ReviewCollaborationBundle {
 	uniqueKey := stableKey("review-work-item", item.Repository, fmt.Sprintf("%d", item.PRNumber))
+	if strings.TrimSpace(item.InstallationID) != "" && strings.TrimSpace(item.ChatID) != "" {
+		item.PRKey = reviewCollaborationScopeKey(
+			item.InstallationID,
+			item.ChatID,
+			item.Repository,
+			item.PRNumber,
+		)
+		uniqueKey = stableKey("review-work-item", item.PRKey)
+	} else {
+		item.PRKey = firstNonEmpty(item.PRKey, reviewCollaborationPRKey(item.Repository, item.PRNumber))
+	}
 	fields := map[string]interface{}{
-		"pr_key":               item.PRKey,
-		"repository":           item.Repository,
-		"pr_number":            item.PRNumber,
-		"review_stage":         item.ReviewStage,
-		"decision":             item.Decision,
-		"collection_status":    item.CollectionStatus,
-		"head_sha":             item.HeadSHA,
-		"source_fingerprint":   item.SourceFingerprint,
-		"assigned_to":          item.AssignedTo,
-		"collaboration_status": item.CollaborationStatus,
-		"due_at":               item.DueAt,
-		"archived":             item.Archived,
-		"updated_at":           item.UpdatedAt,
+		"pr_key":                item.PRKey,
+		"installation_id":       item.InstallationID,
+		"chat_id":               item.ChatID,
+		"repository":            item.Repository,
+		"pr_number":             item.PRNumber,
+		"review_stage":          item.ReviewStage,
+		"decision":              item.Decision,
+		"collection_status":     item.CollectionStatus,
+		"head_sha":              item.HeadSHA,
+		"source_fingerprint":    item.SourceFingerprint,
+		"assigned_to":           item.AssignedTo,
+		"assigned_display_name": item.AssignedDisplayName,
+		"collaboration_status":  item.CollaborationStatus,
+		"due_at":                item.DueAt,
+		"archived":              item.Archived,
+		"updated_at":            item.UpdatedAt,
 	}
 	lines := []string{
 		fmt.Sprintf("# %s PR #%d Review 协作", item.Repository, item.PRNumber),
@@ -369,7 +265,7 @@ func BuildReviewCollaborationBundle(item ReviewCollaborationItem) ReviewCollabor
 		fmt.Sprintf("- Review 阶段：%s", item.ReviewStage),
 		fmt.Sprintf("- GitLink 决策：%s", item.Decision),
 		fmt.Sprintf("- 协作状态：%s", item.CollaborationStatus),
-		fmt.Sprintf("- 负责人：%s", firstNonEmpty(item.AssignedTo, "未认领")),
+		fmt.Sprintf("- 负责人：%s", reviewGatewayAssigneePlainLabel(item)),
 		fmt.Sprintf("- 截止时间：%s", firstNonEmpty(item.DueAt, "未设置")),
 		fmt.Sprintf("- 数据完整性：%s", item.CollectionStatus),
 		"- GitLink 写入：0",

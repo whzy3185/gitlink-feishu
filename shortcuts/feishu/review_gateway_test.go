@@ -1936,6 +1936,182 @@ func TestReviewCollaborationClaimDeadlineReleaseAndAudit(t *testing.T) {
 	}
 }
 
+func TestReviewCollaborationScopesStateByInstallationAndChat(t *testing.T) {
+	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "collaboration-scope.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLiteReviewGatewayStore: %v", err)
+	}
+	defer store.Close()
+	now := time.Date(2026, 8, 4, 8, 0, 0, 0, time.UTC)
+	result := ReviewGatewayExecutionResult{
+		CollectionStatus: "complete", HeadSHA: "head-installation-a",
+		SourceFingerprint: "fingerprint-a", ReviewStage: "human_reviewing", Decision: "pending",
+	}
+	jobA := testReviewGatewayJob(now, "scope-a")
+	jobA.InstallationID = "installation-a"
+	jobA.ChatID = "chat-a"
+	jobA.RequestedBy = "ou_reviewer_a"
+	if _, err := store.UpsertCollaborationFacts(context.Background(), jobA, result, now); err != nil {
+		t.Fatalf("upsert chat A facts: %v", err)
+	}
+	jobA.Action = "claim_review"
+	itemA, err := store.ApplyCollaborationAction(context.Background(), jobA, now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("claim chat A: %v", err)
+	}
+
+	jobB := jobA
+	jobB.JobID = "job-scope-b"
+	jobB.ChatID = "chat-b"
+	jobB.RequestedBy = "ou_reviewer_b"
+	jobB.Action = "read_review_context"
+	itemB, err := store.UpsertCollaborationFacts(context.Background(), jobB, result, now.Add(2*time.Minute))
+	if err != nil {
+		t.Fatalf("upsert chat B facts: %v", err)
+	}
+	if itemB.AssignedTo != "" || itemB.CollaborationStatus != "unassigned" {
+		t.Fatalf("chat B inherited chat A collaboration: %#v", itemB)
+	}
+	jobB.Action = "claim_review"
+	itemB, err = store.ApplyCollaborationAction(context.Background(), jobB, now.Add(3*time.Minute))
+	if err != nil {
+		t.Fatalf("claim chat B: %v", err)
+	}
+	if itemA.PRKey == itemB.PRKey || BuildReviewCollaborationBundle(itemA).UniqueKey == BuildReviewCollaborationBundle(itemB).UniqueKey {
+		t.Fatalf("chat-scoped identities collided: A=%#v B=%#v", itemA, itemB)
+	}
+
+	jobC := jobA
+	jobC.JobID = "job-scope-installation-b"
+	jobC.InstallationID = "installation-b"
+	jobC.Action = "read_review_context"
+	result.HeadSHA = "head-installation-b"
+	result.SourceFingerprint = "fingerprint-b"
+	itemC, err := store.UpsertCollaborationFacts(context.Background(), jobC, result, now.Add(4*time.Minute))
+	if err != nil {
+		t.Fatalf("upsert installation B facts: %v", err)
+	}
+	if itemC.HeadSHA != "head-installation-b" || itemC.PRKey == itemA.PRKey || itemC.AssignedTo != "" {
+		t.Fatalf("installation B inherited installation A state: %#v", itemC)
+	}
+
+	itemsA, err := store.ListCollaborationItems(context.Background(), "installation-a", "chat-a", jobA.Repository, "")
+	if err != nil || len(itemsA) != 1 || itemsA[0].AssignedTo != "ou_reviewer_a" {
+		t.Fatalf("chat A list = %#v, %v", itemsA, err)
+	}
+	itemsB, err := store.ListCollaborationItems(context.Background(), "installation-a", "chat-b", jobB.Repository, "")
+	if err != nil || len(itemsB) != 1 || itemsB[0].AssignedTo != "ou_reviewer_b" {
+		t.Fatalf("chat B list = %#v, %v", itemsB, err)
+	}
+}
+
+func TestReviewCollaborationLegacyMigrationIsIdempotent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy-collaboration.db")
+	store, err := OpenSQLiteReviewGatewayStore(path)
+	if err != nil {
+		t.Fatalf("create legacy store: %v", err)
+	}
+	_, err = store.db.Exec(`INSERT INTO chat_repository_bindings (
+		chat_id, installation_id, repository, enabled, updated_at
+	) VALUES ('chat-legacy', 'installation-legacy', 'owner/repo', 1, '2026-08-04T00:00:00Z')`)
+	if err != nil {
+		t.Fatalf("insert legacy binding: %v", err)
+	}
+	_, err = store.db.Exec(`INSERT INTO review_collaboration_items (
+		pr_key, repository, pr_number, chat_id, review_stage, decision,
+		collection_status, head_sha, source_fingerprint, assigned_to,
+		collaboration_status, due_at, archived, updated_by, updated_at
+	) VALUES (
+		'owner/repo#42', 'owner/repo', 42, 'chat-legacy', 'human_reviewing', 'pending',
+		'complete', 'head-legacy', 'fingerprint-legacy', 'ou_legacy',
+		'reviewing', '2026-08-05', 0, 'ou_legacy', '2026-08-04T00:00:00Z'
+	)`)
+	if err != nil {
+		t.Fatalf("insert legacy item: %v", err)
+	}
+	legacyResourceKey := stableKey("review-work-item", "owner/repo", "42")
+	_, err = store.db.Exec(`INSERT INTO review_collaboration_resources (
+		work_item_key, resource_type, remote_id, content_fingerprint, updated_at
+	) VALUES (?, 'feishu_card', 'om_existing_card', 'fingerprint-card', '2026-08-04T00:00:00Z')`, legacyResourceKey)
+	if err != nil {
+		t.Fatalf("insert legacy resource mapping: %v", err)
+	}
+	_ = store.Close()
+
+	for pass := 0; pass < 2; pass++ {
+		store, err = OpenSQLiteReviewGatewayStore(path)
+		if err != nil {
+			t.Fatalf("migration pass %d: %v", pass+1, err)
+		}
+		var snapshots, states int
+		if err := store.db.QueryRow(`SELECT COUNT(*) FROM review_pr_snapshots`).Scan(&snapshots); err != nil {
+			t.Fatalf("count snapshots: %v", err)
+		}
+		if err := store.db.QueryRow(`SELECT COUNT(*) FROM review_collaboration_states`).Scan(&states); err != nil {
+			t.Fatalf("count states: %v", err)
+		}
+		if snapshots != 1 || states != 1 {
+			t.Fatalf("migration pass %d counts = snapshots:%d states:%d", pass+1, snapshots, states)
+		}
+		scopedKey := stableKey(
+			"review-work-item",
+			reviewCollaborationScopeKey("installation-legacy", "chat-legacy", "owner/repo", 42),
+		)
+		resource, err := store.GetReviewResourceState(context.Background(), scopedKey, "feishu_card")
+		if err != nil || resource.RemoteID != "om_existing_card" {
+			t.Fatalf("migration pass %d resource = %#v, %v", pass+1, resource, err)
+		}
+		_ = store.Close()
+	}
+}
+
+func TestReviewCollaborationAmbiguousLegacyStateDoesNotLeakAcrossInstallations(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ambiguous-legacy-collaboration.db")
+	store, err := OpenSQLiteReviewGatewayStore(path)
+	if err != nil {
+		t.Fatalf("create legacy store: %v", err)
+	}
+	for _, installationID := range []string{"installation-a", "installation-b"} {
+		if _, err := store.db.Exec(`INSERT INTO chat_repository_bindings (
+			chat_id, installation_id, repository, enabled, updated_at
+		) VALUES ('chat-shared', ?, 'owner/repo', 1, '2026-08-04T00:00:00Z')`, installationID); err != nil {
+			t.Fatalf("insert %s binding: %v", installationID, err)
+		}
+	}
+	if _, err := store.db.Exec(`INSERT INTO review_collaboration_items (
+		pr_key, repository, pr_number, chat_id, review_stage, decision,
+		collection_status, head_sha, source_fingerprint, assigned_to,
+		collaboration_status, due_at, archived, updated_by, updated_at
+	) VALUES (
+		'owner/repo#42', 'owner/repo', 42, 'chat-shared', 'human_reviewing', 'pending',
+		'complete', 'head-legacy', 'fingerprint-legacy', 'ou_legacy',
+		'reviewing', '2026-08-05', 0, 'ou_legacy', '2026-08-04T00:00:00Z'
+	)`); err != nil {
+		t.Fatalf("insert legacy item: %v", err)
+	}
+	_ = store.Close()
+
+	store, err = OpenSQLiteReviewGatewayStore(path)
+	if err != nil {
+		t.Fatalf("open ambiguous legacy store: %v", err)
+	}
+	defer store.Close()
+	job := testReviewGatewayJob(time.Date(2026, 8, 4, 8, 0, 0, 0, time.UTC), "ambiguous")
+	job.InstallationID = "installation-a"
+	job.ChatID = "chat-shared"
+	result := ReviewGatewayExecutionResult{
+		CollectionStatus: "complete", HeadSHA: "head-current",
+		SourceFingerprint: "fingerprint-current", ReviewStage: "human_reviewing", Decision: "pending",
+	}
+	item, err := store.UpsertCollaborationFacts(context.Background(), job, result, time.Date(2026, 8, 4, 8, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("upsert scoped item: %v", err)
+	}
+	if item.AssignedTo != "" || item.CollaborationStatus != "unassigned" || item.DueAt != "" {
+		t.Fatalf("ambiguous legacy state leaked into installation A: %#v", item)
+	}
+}
+
 func TestReviewCollaborationPartialSnapshotPreservesCompleteFacts(t *testing.T) {
 	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "collaboration.db"))
 	if err != nil {
