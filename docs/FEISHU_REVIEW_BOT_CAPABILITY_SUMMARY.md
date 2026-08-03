@@ -254,12 +254,14 @@ GitLink 写入：0
 |---|---|---:|
 | `帮助` | 返回支持命令和安全边界 | 否 |
 | `查看绑定` | 查看当前群预绑定仓库 | 否 |
-| `查看待 Review` / `查看待审查` | 读取开放 PR 并生成 Review Queue 摘要 | 否 |
+| `查看 Gitlink/gitlink-cli 待 Review` / `查看 Gitlink/gitlink-cli 待审查` | 读取指定仓库的开放 PR 并生成 Review Queue 摘要 | 否 |
 | `查看 Gitlink/gitlink-cli PR #431` | 读取 PR、文件、versions、Reviews 和线程 | 否 |
 | `刷新 Gitlink/gitlink-cli PR #431` | 重新读取当前 PR Context | 否 |
 | `生成 Gitlink/gitlink-cli PR #431 Review 草稿` | 读取 Context 并生成确定性草稿模板 | 否 |
-| `查看我的 Review 任务` | 返回当前阶段说明，真实个人任务视图尚未落地 | 否 |
-| `领取 Gitlink/gitlink-cli PR #431` | 只生成认领计划，不写飞书 Base、Task 或 GitLink | 否 |
+| `查看我的 Review 任务` | 只列出当前 installation、当前群中由当前飞书账号认领的任务 | 否 |
+| `领取 Gitlink/gitlink-cli PR #431` | 更新当前群的 SQLite 协作状态；显式启用资源同步时幂等同步 Base/Doc/Task，但不写 GitLink | 否 |
+| `释放 Gitlink/gitlink-cli PR #431` | 只释放当前群中由本人认领的任务，并按配置同步飞书资源 | 否 |
+| `设置 Gitlink/gitlink-cli PR #431 截止 2026-08-10` | 本人认领后设置当前群的截止日期；过去日期受控拒绝 | 否 |
 | `绑定仓库 owner/repo` | 只生成离线计划，在线首次绑定必须由管理员配置 | 否 |
 
 明确禁止识别或执行：
@@ -271,7 +273,7 @@ GitLink 写入：0
 创建或解决行级评论
 请求或移除 Reviewer
 保存 GitLink 用户 Token
-执行任意 shell 或任意 API
+执行任意 shell 或未列入合同的任意 API
 ```
 
 ## 5. GitLink Review 能力
