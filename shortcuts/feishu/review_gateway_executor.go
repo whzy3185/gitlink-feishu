@@ -389,7 +389,11 @@ func populateReviewGatewayContextResult(result *ReviewGatewayExecutionResult, re
 	result.ThreadCount = reviewContext.Summary.TotalThreads
 	result.OpenThreadCount = reviewContext.Summary.OpenThreads
 	view := ReviewGatewayPullRequestView{
-		Title:               truncateReviewGatewayText(reviewContext.WorkItem.Title, 160),
+		Title: truncateReviewGatewayText(firstNonEmpty(
+			reviewContext.WorkItem.Title,
+			reviewContext.WorkItem.HeadBranch,
+			fmt.Sprintf("PR #%d", reviewContext.PullRequest),
+		), 160),
 		Author:              truncateReviewGatewayText(reviewContext.WorkItem.Author, 80),
 		BaseBranch:          truncateReviewGatewayText(reviewContext.WorkItem.BaseBranch, 100),
 		HeadBranch:          truncateReviewGatewayText(reviewContext.WorkItem.HeadBranch, 100),

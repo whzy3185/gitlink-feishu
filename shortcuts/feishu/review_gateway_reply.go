@@ -308,24 +308,43 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 		}
 		var sendResult *larktypes.SendResult
 		var sendErr error
+		fixedCardMessageID := ""
 		replyAction := "created"
+		notifyCurrentMessage := func() (*larktypes.SendResult, error) {
+			return d.sender.Send(sendCtx, &larktypes.SendInput{
+				ChatID:         item.Job.ChatID,
+				ReplyMessageID: item.Job.SourceMessageID,
+				MsgType:        "text",
+				Text: truncateReviewGatewayText(
+					"PR 结果已更新到群内固定卡片。\n"+formatReviewGatewayResultReply(item.Job, item.Result),
+					3000,
+				),
+			})
+		}
 		switch {
 		case cardStateErr != nil:
 			sendErr = fmt.Errorf("load fixed card resource mapping: %w", cardStateErr)
 		case fixedCardReady && cardState.RemoteID != "" && cardState.ContentFingerprint == cardFingerprint:
-			replyAction = "unchanged"
-			sendResult = &larktypes.SendResult{MessageID: cardState.RemoteID, ChatID: item.Job.ChatID}
+			replyAction = "unchanged_and_notified"
+			fixedCardMessageID = cardState.RemoteID
+			sendResult, sendErr = notifyCurrentMessage()
 		case fixedCardReady && cardState.RemoteID != "":
-			replyAction = "updated"
+			replyAction = "updated_and_notified"
 			updater, ok := d.sender.(reviewGatewayMessageUpdater)
 			if !ok {
 				sendErr = fmt.Errorf("review gateway sender cannot update an existing interactive card")
 				break
 			}
 			sendErr = updater.UpdateInteractiveMessage(sendCtx, cardState.RemoteID, item.Result.Collaboration.Card)
-			sendResult = &larktypes.SendResult{MessageID: cardState.RemoteID, ChatID: item.Job.ChatID}
+			if sendErr == nil {
+				fixedCardMessageID = cardState.RemoteID
+				sendResult, sendErr = notifyCurrentMessage()
+			}
 		default:
 			sendResult, sendErr = d.sender.Send(sendCtx, sendInput)
+			if sendErr == nil && fixedCardReady && sendResult != nil {
+				fixedCardMessageID = sendResult.MessageID
+			}
 		}
 		sendCancel()
 		event := ReviewGatewayReplyEvent{
@@ -350,12 +369,12 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 				event.MessageIDHash = reviewGatewayHashIdentifier(messageID)
 			}
 			_ = d.store.MarkReplySent(persistCtx, item.Job.JobID, messageID, d.now().UTC())
-			if fixedCardReady && hasCardResourceStore && messageID != "" {
+			if fixedCardReady && hasCardResourceStore && fixedCardMessageID != "" {
 				if persistErr := cardResourceStore.SaveReviewResourceState(
 					persistCtx,
 					item.Result.Collaboration.UniqueKey,
 					"feishu_card",
-					messageID,
+					fixedCardMessageID,
 					cardFingerprint,
 					d.now().UTC(),
 				); persistErr != nil {

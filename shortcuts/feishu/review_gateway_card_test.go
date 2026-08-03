@@ -135,6 +135,20 @@ func TestPopulateReviewGatewayResultBoundsPresentationData(t *testing.T) {
 	}
 }
 
+func TestPopulateReviewGatewayResultFallsBackToHeadBranchTitle(t *testing.T) {
+	result := ReviewGatewayExecutionResult{}
+	populateReviewGatewayContextResult(&result, workflow.ReviewContext{
+		Repository:  "Gitlink/forgeplus",
+		PullRequest: 356,
+		WorkItem: workflow.ReviewWorkItem{
+			HeadBranch: "fix/issue-142546-identifier-reserved-hint",
+		},
+	})
+	if result.PullRequest == nil || result.PullRequest.Title != "fix/issue-142546-identifier-reserved-hint" {
+		t.Fatalf("fallback title = %#v", result.PullRequest)
+	}
+}
+
 func TestReviewGatewayOversizedCardFallsBackToText(t *testing.T) {
 	now := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
 	store := NewMemoryReviewGatewayJobStore()
