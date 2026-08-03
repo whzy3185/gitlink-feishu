@@ -1606,9 +1606,9 @@ func TestReviewGatewayReplyDispatcherMaintainsOneCardPerWorkItem(t *testing.T) {
 	if sendCount != 2 || updateCount != 1 || updatedMessageID != "om_reply" {
 		t.Fatalf("fixed card calls = send:%d update:%d message:%q", sendCount, updateCount, updatedMessageID)
 	}
-	if notification.MsgType != "text" || notification.ReplyMessageID != "om_card-second" ||
-		!strings.Contains(notification.Text, "PR 结果已更新到群内固定卡片") ||
-		!strings.Contains(notification.Text, "GitLink 写入：0") {
+	if notification.MsgType != "interactive" || notification.ReplyMessageID != "om_card-second" ||
+		notification.Text != "" || notification.Card == "" ||
+		!strings.Contains(notification.Card, "GitLink 写入") {
 		t.Fatalf("fixed card current-message notification = %#v", notification)
 	}
 	state, err := store.GetReviewResourceState(context.Background(), latest.UniqueKey, "feishu_card")

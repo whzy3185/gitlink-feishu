@@ -314,11 +314,8 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 			return d.sender.Send(sendCtx, &larktypes.SendInput{
 				ChatID:         item.Job.ChatID,
 				ReplyMessageID: item.Job.SourceMessageID,
-				MsgType:        "text",
-				Text: truncateReviewGatewayText(
-					"PR 结果已更新到群内固定卡片。\n"+formatReviewGatewayResultReply(item.Job, item.Result),
-					3000,
-				),
+				MsgType:        "interactive",
+				Card:           sendInput.Card,
 			})
 		}
 		switch {
