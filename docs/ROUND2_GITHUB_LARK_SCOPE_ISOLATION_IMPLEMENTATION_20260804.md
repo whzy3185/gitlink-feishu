@@ -159,7 +159,12 @@ installation_id + chat_id + repository + pr_number
 - complete、partial、failed 卡片 golden 继续成立；
 - 飞书模块定向测试通过。
 
-本轮没有执行飞书、GitLink、Base、Doc 或 Task 的真实写入。部署后需要用同一 PR 在两个群分别认领，保存截图和数据库作用域证据，才能关闭真实平台门禁。
+本轮完整专项门禁已经通过，包括飞书、企业微信、Review Core、全仓生产构建和专项 vet。代码提交
+`f6f3d374059848bbf1fc57bfc787a66d5dfeb72e` 对应的
+[GitHub Actions run 30832374540](https://github.com/whzy3185/gitlink-feishu/actions/runs/30832374540)
+状态为 `success`。
+
+本轮没有执行 GitLink POST；服务激活时只发生本地 SQLite 迁移。部署后仍需要用同一 PR 在两个群分别认领，保存卡片截图和数据库作用域证据，才能关闭真实平台门禁。Base、Doc、Task 的旧 remote ID 已完成本地映射迁移，但尚未在本轮主动触发新的远端写入。
 
 ## 5. 后续实施任务
 
@@ -268,4 +273,4 @@ Base、Doc、Task、长期卡片分别执行；某个资源失败不阻断其他
 
 不能因为代码测试通过就声称两个群的真实平台隔离已经验收；也不能把尚未实现的订阅表、Outbox 和多实例部署写成当前能力。当前可准确表述为：
 
-> Installation/Chat/Repository/PR 作用域隔离、旧资源映射迁移和飞书负责人真实 mention 已完成代码实现；待专项 CI 与双群真实 smoke 通过后关闭本阶段平台门禁。
+> Installation/Chat/Repository/PR 作用域隔离、旧资源映射迁移和飞书负责人真实 mention 已完成代码实现，专项 CI 已通过；待双群真实 smoke 通过后关闭本阶段平台门禁。
