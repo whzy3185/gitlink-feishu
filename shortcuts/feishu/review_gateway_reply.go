@@ -408,8 +408,10 @@ func formatReviewGatewayNotice(reason string) string {
 		return "当前账号没有操作本群 GitLink Review 助手的权限，请联系群管理员加入允许名单。"
 	case "binding_requires_admin":
 		return "仓库绑定只能由已配置的管理员执行；当前请求没有修改任何绑定。"
+	case "repository_qualification_required":
+		return "请明确指定仓库，所有仓库均为平等作用域。示例：查看 Gitlink/gitlink-cli PR #431。"
 	case "unsupported_read_only_command":
-		return "暂不支持该指令。当前可用：查看/刷新 PR、生成 Review 草稿、领取/释放 PR、设置截止时间、准备提交 common Review。批准、拒绝、评论、Reviewer 变更和合并始终禁用。"
+		return "暂不支持该指令。PR 级命令必须包含 owner/repo，例如：查看 Gitlink/gitlink-cli PR #431。批准、拒绝、评论、Reviewer 变更和合并始终禁用。"
 	default:
 		return ""
 	}

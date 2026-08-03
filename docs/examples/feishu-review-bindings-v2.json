@@ -25,7 +25,6 @@
         "Gitlink/gitlink-cli",
         "Gitlink/example-repository"
       ],
-      "default_repository": "Gitlink/gitlink-cli",
       "allow_public_read": true,
       "enabled": true,
       "admin_user_ids": [

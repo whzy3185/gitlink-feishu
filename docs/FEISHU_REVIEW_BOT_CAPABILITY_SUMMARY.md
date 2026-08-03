@@ -252,11 +252,11 @@ GitLink 写入：0
 | `帮助` | 返回支持命令和安全边界 | 否 |
 | `查看绑定` | 查看当前群预绑定仓库 | 否 |
 | `查看待 Review` / `查看待审查` | 读取开放 PR 并生成 Review Queue 摘要 | 否 |
-| `查看 PR #431` | 读取 PR、文件、versions、Reviews 和线程 | 否 |
-| `刷新 PR #431` | 重新读取当前 PR Context | 否 |
-| `生成 PR #431 Review 草稿` | 读取 Context 并生成确定性草稿模板 | 否 |
+| `查看 Gitlink/gitlink-cli PR #431` | 读取 PR、文件、versions、Reviews 和线程 | 否 |
+| `刷新 Gitlink/gitlink-cli PR #431` | 重新读取当前 PR Context | 否 |
+| `生成 Gitlink/gitlink-cli PR #431 Review 草稿` | 读取 Context 并生成确定性草稿模板 | 否 |
 | `查看我的 Review 任务` | 返回当前阶段说明，真实个人任务视图尚未落地 | 否 |
-| `领取 PR #431` | 只生成认领计划，不写飞书 Base、Task 或 GitLink | 否 |
+| `领取 Gitlink/gitlink-cli PR #431` | 只生成认领计划，不写飞书 Base、Task 或 GitLink | 否 |
 | `绑定仓库 owner/repo` | 只生成离线计划，在线首次绑定必须由管理员配置 | 否 |
 
 明确禁止识别或执行：
@@ -420,7 +420,7 @@ SQLite schema 迁移、恢复、重试、结果和回复测试
 
 ```text
 2026-08-01
-测试群真实用户 @机器人“查看 PR #431”
+测试群真实用户 @机器人“查看 Gitlink/gitlink-cli PR #431”
 -> 收到“已接收只读 Review 请求”回复
 -> SQLite 创建并完成 job-54c2cf80f3027985
 -> 后台完成 Gitlink/gitlink-cli PR #431 GET-only
@@ -595,7 +595,7 @@ Agent：提供证据和草稿
 ### 场景二：单个 PR 快速取证
 
 ```text
-Reviewer：@gitlink 查看 PR #431
+Reviewer：@gitlink 查看 Gitlink/gitlink-cli PR #431
 机器人：立即回执
 机器人：异步读取当前 patchset、Reviews 和线程
 机器人：在原消息下回复状态、阻塞项和证据链接

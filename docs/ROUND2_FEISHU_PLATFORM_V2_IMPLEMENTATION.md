@@ -85,7 +85,7 @@ GitLink 写入不再使用容易误导的单一布尔值：
 
 一个群可以绑定同一 GitLink installation 中的多个明确仓库。解析规则：
 
-- 单仓库或配置了默认仓库时，允许 `查看 PR #431`；
+- 所有仓库均为平等作用域，PR 级命令必须显式携带 `owner/repo`，例如 `查看 Gitlink/gitlink-cli PR #431`；
 - 多仓库且无默认仓库时，必须使用 `查看 owner/repo PR #431`；
 - 请求仓库不在群绑定或 installation allowlist 中时直接拒绝；
 - `查看绑定` 和帮助信息会展示可用仓库与选择方式。

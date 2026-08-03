@@ -805,7 +805,7 @@ func shouldNotifyReviewGatewayRejection(receipt ReviewGatewayReceipt) bool {
 		return false
 	}
 	switch receipt.Reason {
-	case "sender_not_allowed", "unsupported_read_only_command", "binding_requires_admin":
+	case "sender_not_allowed", "unsupported_read_only_command", "binding_requires_admin", "repository_qualification_required":
 		return true
 	default:
 		return false

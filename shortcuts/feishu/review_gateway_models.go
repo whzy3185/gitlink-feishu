@@ -190,6 +190,7 @@ var (
 	reviewGatewayRefreshPattern           = regexp.MustCompile(`(?i)^刷新\s*PR\s*#?(\d+)$`)
 	reviewGatewayAgentPattern             = regexp.MustCompile(`(?i)^启动\s*PR\s*#?(\d+)\s*Agent\s*审查$`)
 	reviewGatewayBindPattern              = regexp.MustCompile(`(?i)^绑定仓库\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$`)
+	reviewGatewayQualifiedQueuePattern    = regexp.MustCompile(`(?i)^查看\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+(待\s*Review|待审查|Review\s*Queue)$`)
 	reviewGatewayIntentPatterns           = []struct {
 		pattern *regexp.Regexp
 		name    string
@@ -397,8 +398,6 @@ func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEven
 			}
 			intent.Repository = resolved
 			intent.PublicRead = publicRead
-		} else if intent.Repository == "" {
-			intent.Repository = binding.DefaultRepository
 		}
 		receipt.Intent = intent
 	}
@@ -471,6 +470,9 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 	}
 	if match := reviewGatewayConfirmPattern.FindStringSubmatch(content); len(match) == 2 {
 		return ReviewGatewayIntent{Name: "confirm_common_review", Argument: match[1]}
+	}
+	if match := reviewGatewayQualifiedQueuePattern.FindStringSubmatch(content); len(match) == 3 {
+		return ReviewGatewayIntent{Name: "read_review_queue", Repository: match[1]}
 	}
 	for _, rule := range reviewGatewayQualifiedIntentPatterns {
 		match := rule.pattern.FindStringSubmatch(content)

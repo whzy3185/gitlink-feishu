@@ -312,23 +312,17 @@ func resolveReviewGatewayRepository(
 	requested string,
 ) (string, string, bool) {
 	requested = strings.TrimSpace(requested)
-	if requested != "" {
-		if containsReviewGatewayString(binding.Repositories, requested) {
-			return requested, "", false
-		}
-		if binding.AllowPublicRead && installation.AllowPublicRead &&
-			reviewGatewayActionAllowsPublicRepository(action) {
-			return requested, "", true
-		}
-		return "", "repository_not_bound", false
+	if requested == "" {
+		return "", "repository_qualification_required", false
 	}
-	if binding.DefaultRepository != "" {
-		return binding.DefaultRepository, "", false
+	if containsReviewGatewayString(binding.Repositories, requested) {
+		return requested, "", false
 	}
-	if len(binding.Repositories) == 1 {
-		return binding.Repositories[0], "", false
+	if binding.AllowPublicRead && installation.AllowPublicRead &&
+		reviewGatewayActionAllowsPublicRepository(action) {
+		return requested, "", true
 	}
-	return "", "repository_selection_required", false
+	return "", "repository_not_bound", false
 }
 
 func reviewGatewayActionAllowsPublicRepository(action string) bool {

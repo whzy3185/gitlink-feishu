@@ -48,6 +48,7 @@ func TestParseReviewGatewayIntent(t *testing.T) {
 		{input: "帮助", wantName: "help"},
 		{input: "查看绑定", wantName: "show_binding"},
 		{input: "查看待 Review", wantName: "read_review_queue"},
+		{input: "查看 owner/repo 待 Review", wantName: "read_review_queue", wantRepo: "owner/repo"},
 		{input: "查看 PR #431", wantName: "read_review_context", wantNumber: 431},
 		{input: "查看 owner/repo PR #431", wantName: "read_review_context", wantRepo: "owner/repo", wantNumber: 431},
 		{input: "仓库列表", wantName: "list_repositories"},
@@ -100,7 +101,7 @@ func TestReviewGatewayPlansBoundReadOnlyJobAndDeduplicatesMessage(t *testing.T) 
 		EventType:    "message",
 		ChatID:       "oc_review",
 		UserID:       "ou_owner",
-		Content:      "查看 PR #431",
+		Content:      "查看 gitlink-org/gitlink-cli PR #431",
 		CreateTimeMs: now.Add(-time.Minute).UnixMilli(),
 	}
 	receipt, err := gateway.Plan(event)
@@ -153,7 +154,7 @@ func TestReviewGatewayUpgradesV1BindingAndResolvesV2MultiRepository(t *testing.T
 	}
 	legacyReceipt, err := legacy.Plan(ReviewGatewayEvent{
 		MessageID: "om_legacy", EventType: "message", ChatID: "oc_legacy",
-		UserID: "ou_owner", Content: "查看 PR #1", CreateTimeMs: now.UnixMilli(),
+		UserID: "ou_owner", Content: "查看 owner/legacy PR #1", CreateTimeMs: now.UnixMilli(),
 	})
 	if err != nil || !legacyReceipt.Accepted || legacyReceipt.Job.Repository != "owner/legacy" {
 		t.Fatalf("legacy receipt = %#v, err=%v", legacyReceipt, err)
@@ -183,7 +184,7 @@ func TestReviewGatewayUpgradesV1BindingAndResolvesV2MultiRepository(t *testing.T
 		MessageID: "om_default", EventType: "message", ChatID: "oc_multi",
 		UserID: "ou_owner", Content: "查看 PR #12", CreateTimeMs: now.UnixMilli(),
 	})
-	if err != nil || !defaultReceipt.Accepted || defaultReceipt.Job.Repository != "owner/one" {
+	if err != nil || defaultReceipt.Accepted || defaultReceipt.Reason != "repository_qualification_required" {
 		t.Fatalf("default multi receipt = %#v, err=%v", defaultReceipt, err)
 	}
 	explicitReceipt, err := multi.Plan(ReviewGatewayEvent{
@@ -301,7 +302,7 @@ func TestReviewGatewayV2DocumentationExampleIsValid(t *testing.T) {
 	}
 }
 
-func TestReviewGatewayV2RequiresExplicitRepositoryWhenNoDefault(t *testing.T) {
+func TestReviewGatewayRequiresExplicitRepositoryForEveryScopedAction(t *testing.T) {
 	now := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
 	gateway, err := NewReviewGateway(ReviewGatewayBindings{
 		SchemaVersion: reviewGatewayBindingSchema,
@@ -319,12 +320,31 @@ func TestReviewGatewayV2RequiresExplicitRepositoryWhenNoDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewReviewGateway: %v", err)
 	}
-	receipt, err := gateway.Plan(ReviewGatewayEvent{
-		MessageID: "om_ambiguous", EventType: "message", ChatID: "oc_multi",
-		UserID: "ou_owner", Content: "查看 PR #12", CreateTimeMs: now.UnixMilli(),
+	for index, command := range []string{
+		"查看待审查",
+		"查看 PR #12",
+		"刷新 PR #12",
+		"生成 PR #12 Review 草稿",
+		"启动 PR #12 Agent 审查",
+		"领取 PR #12",
+		"释放 PR #12",
+		"设置 PR #12 截止 2026-08-05",
+		"准备提交 PR #12 Review",
+	} {
+		receipt, planErr := gateway.Plan(ReviewGatewayEvent{
+			MessageID: fmt.Sprintf("om_unqualified_%d", index), EventType: "message", ChatID: "oc_multi",
+			UserID: "ou_owner", Content: command, CreateTimeMs: now.UnixMilli(),
+		})
+		if planErr != nil || receipt.Accepted || receipt.Job != nil || receipt.Reason != "repository_qualification_required" {
+			t.Fatalf("unqualified command %q = %#v, err=%v", command, receipt, planErr)
+		}
+	}
+	qualifiedQueue, err := gateway.Plan(ReviewGatewayEvent{
+		MessageID: "om_qualified_queue", EventType: "message", ChatID: "oc_multi",
+		UserID: "ou_owner", Content: "查看 owner/two 待审查", CreateTimeMs: now.UnixMilli(),
 	})
-	if err != nil || receipt.Accepted || receipt.Reason != "repository_selection_required" {
-		t.Fatalf("ambiguous receipt = %#v, err=%v", receipt, err)
+	if err != nil || !qualifiedQueue.Accepted || qualifiedQueue.Job == nil || qualifiedQueue.Job.Repository != "owner/two" {
+		t.Fatalf("qualified queue receipt = %#v, err=%v", qualifiedQueue, err)
 	}
 }
 
@@ -580,7 +600,7 @@ func TestReviewGatewayRejectsStaleUnauthorizedAndUnsupportedEvents(t *testing.T)
 		EventType:    "message",
 		ChatID:       "oc_review",
 		UserID:       "ou_owner",
-		Content:      "查看待审查",
+		Content:      "查看 owner/repo 待审查",
 		CreateTimeMs: now.UnixMilli(),
 	}
 
@@ -810,7 +830,7 @@ func TestReviewGatewayQueueRunsAsynchronously(t *testing.T) {
 		EventType:    "message",
 		ChatID:       "oc_review",
 		UserID:       "ou_owner",
-		Content:      "查看待审查",
+		Content:      "查看 owner/repo 待审查",
 		CreateTimeMs: now.UnixMilli(),
 	})
 	if !receipt.Accepted || receipt.Job == nil {
@@ -873,10 +893,10 @@ func TestReviewGatewaySDKEventNormalizationExcludesCardToken(t *testing.T) {
 		ChatID:       "oc_review",
 		ChatType:     "group",
 		UserID:       "ou_owner",
-		Content:      "查看 PR #42",
+		Content:      "查看 owner/repo PR #42",
 		CreateTimeMs: 123,
 	})
-	if message.EventType != "message" || message.MessageID != "om_message" || message.Content != "查看 PR #42" {
+	if message.EventType != "message" || message.MessageID != "om_message" || message.Content != "查看 owner/repo PR #42" {
 		t.Fatalf("normalized message = %#v", message)
 	}
 
@@ -886,12 +906,12 @@ func TestReviewGatewaySDKEventNormalizationExcludesCardToken(t *testing.T) {
 		ChatID:    "oc_review",
 		ChatType:  "group",
 		UserID:    "ou_owner",
-		Content:   "@_user_1  查看 PR #42",
+		Content:   "@_user_1  查看 owner/repo PR #42",
 		Mentions: []larktypes.Mention{
 			{Key: "@_user_1", OpenID: "ou_bot", IsBot: true},
 		},
 	})
-	if mentioned.Content != "查看 PR #42" {
+	if mentioned.Content != "查看 owner/repo PR #42" {
 		t.Fatalf("bot mention was not removed from command: %#v", mentioned)
 	}
 
@@ -902,10 +922,10 @@ func TestReviewGatewaySDKEventNormalizationExcludesCardToken(t *testing.T) {
 		Token:     "must-not-be-copied",
 		Operator:  larktypes.CardActionOperator{OpenID: "ou_owner"},
 		Action: larktypes.CardActionPayload{
-			Value: map[string]interface{}{"command": "刷新 PR #42"},
+			Value: map[string]interface{}{"command": "刷新 owner/repo PR #42"},
 		},
 	})
-	if !ok || card.EventType != "card_action" || card.Content != "刷新 PR #42" {
+	if !ok || card.EventType != "card_action" || card.Content != "刷新 owner/repo PR #42" {
 		t.Fatalf("normalized card action = %#v, %v", card, ok)
 	}
 	encoded, err := json.Marshal(card)
@@ -1047,7 +1067,7 @@ func TestSQLiteReviewGatewayQueueAtomicallyDeduplicatesAndRecoversOrphanReservat
 		ChatID:    "oc_review",
 		ChatType:  "group",
 		UserID:    "ou_owner",
-		Content:   "查看 PR #42",
+		Content:   "查看 owner/repo PR #42",
 	}
 	first := queue.Enqueue(context.Background(), event)
 	if !first.Accepted || first.Job == nil {
@@ -1315,7 +1335,7 @@ func TestReviewGatewayHandlerBudgetStopsLockedSQLite(t *testing.T) {
 			EventType: "message",
 			ChatID:    "oc_review",
 			UserID:    "ou_owner",
-			Content:   "查看 PR #42",
+			Content:   "查看 owner/repo PR #42",
 		},
 		queue,
 		nil,
@@ -1355,7 +1375,7 @@ func TestReviewGatewayLiveHandlerLogsOnlyHashedIdentifiers(t *testing.T) {
 		EventType: "message",
 		ChatID:    "oc_sensitive_chat",
 		UserID:    "ou_sensitive_user",
-		Content:   "查看 PR #42",
+		Content:   "查看 owner/repo PR #42",
 	}
 	if err := handleReviewGatewayInbound(
 		context.Background(),
@@ -1855,7 +1875,7 @@ func TestReviewGatewayObservationHashesIdentityAndOmitsContent(t *testing.T) {
 }
 
 func TestReviewGatewayRejectionNoticeIsSafeAndBounded(t *testing.T) {
-	for _, reason := range []string{"sender_not_allowed", "binding_requires_admin", "unsupported_read_only_command"} {
+	for _, reason := range []string{"sender_not_allowed", "binding_requires_admin", "repository_qualification_required", "unsupported_read_only_command"} {
 		text := formatReviewGatewayNotice(reason)
 		if text == "" {
 			t.Fatalf("empty notice for %s", reason)

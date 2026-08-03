@@ -279,7 +279,7 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		return e.confirmCommonReview(ctx, job, result, now().UTC())
 
 	case "help":
-		result.Message = "支持：仓库列表、查看待审查、查看 [owner/repo] PR #编号、刷新 PR、生成 Review 草稿、查看绑定、领取/释放 PR、设置截止时间、准备提交 common Review。多仓库群可在命令中显式指定 owner/repo；GitLink 默认 GET-only。"
+		result.Message = "支持：仓库列表、查看 [owner/repo] 待审查、查看 [owner/repo] PR #编号、刷新、生成 Review 草稿、领取/释放、设置截止时间、准备提交 common Review。所有仓库均为平等作用域，PR 级命令必须显式指定 owner/repo；GitLink 默认 GET-only。"
 	case "show_binding":
 		result.Message = formatReviewGatewayRepositoryBindings(job.Repositories, job.Repository)
 	case "list_repositories":
