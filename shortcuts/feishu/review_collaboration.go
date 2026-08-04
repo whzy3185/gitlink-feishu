@@ -63,6 +63,8 @@ type ReviewCollaborationStore interface {
 	ApplyCollaborationAction(context.Context, ReviewGatewayJob, time.Time) (ReviewCollaborationItem, error)
 	UpsertCollaborationFacts(context.Context, ReviewGatewayJob, ReviewGatewayExecutionResult, time.Time) (ReviewCollaborationItem, error)
 	ListCollaborationItems(context.Context, string, string, string, string) ([]ReviewCollaborationItem, error)
+	SaveReviewPRPresentation(context.Context, ReviewGatewayJob, ReviewGatewayExecutionResult, time.Time) (ReviewPRPresentation, error)
+	GetReviewPRPresentation(context.Context, ReviewGatewayJob) (ReviewPRPresentation, error)
 }
 
 func (s *SQLiteReviewGatewayStore) ApplyCollaborationAction(

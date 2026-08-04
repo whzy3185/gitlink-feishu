@@ -25,6 +25,12 @@ const (
 )
 
 const reviewGatewayStateSchema = `
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    applied_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS review_gateway_events (
     dedupe_key TEXT PRIMARY KEY,
     received_at TEXT NOT NULL,
@@ -59,7 +65,8 @@ CREATE TABLE IF NOT EXISTS review_gateway_jobs (
     reply_lease_owner TEXT NOT NULL DEFAULT '',
     reply_lease_expires_at TEXT NOT NULL DEFAULT '',
     reply_message_id TEXT NOT NULL DEFAULT '',
-    reply_error_summary TEXT NOT NULL DEFAULT ''
+    reply_error_summary TEXT NOT NULL DEFAULT '',
+    reply_requires_reconciliation INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS review_gateway_jobs_status
     ON review_gateway_jobs(status);
@@ -101,6 +108,66 @@ CREATE TABLE IF NOT EXISTS review_pr_snapshots (
 );
 CREATE INDEX IF NOT EXISTS review_pr_snapshots_repository
     ON review_pr_snapshots(installation_id, repository, updated_at);
+
+CREATE TABLE IF NOT EXISTS review_pr_presentations (
+    presentation_key TEXT PRIMARY KEY,
+    installation_id TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    pr_number INTEGER NOT NULL,
+    schema_version TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    author TEXT NOT NULL DEFAULT '',
+    base_branch TEXT NOT NULL DEFAULT '',
+    head_branch TEXT NOT NULL DEFAULT '',
+    head_sha TEXT NOT NULL DEFAULT '',
+    patchset_id TEXT NOT NULL DEFAULT '',
+    gitlink_state TEXT NOT NULL DEFAULT '',
+    files_count INTEGER NOT NULL DEFAULT 0,
+    commits_count INTEGER NOT NULL DEFAULT 0,
+    additions INTEGER NOT NULL DEFAULT 0,
+    deletions INTEGER NOT NULL DEFAULT 0,
+    review_stage TEXT NOT NULL DEFAULT '',
+    decision TEXT NOT NULL DEFAULT '',
+    review_count INTEGER NOT NULL DEFAULT 0,
+    thread_count INTEGER NOT NULL DEFAULT 0,
+    open_thread_count INTEGER NOT NULL DEFAULT 0,
+    risk_level TEXT NOT NULL DEFAULT '',
+    collection_status TEXT NOT NULL DEFAULT '',
+    partial INTEGER NOT NULL DEFAULT 0,
+    reviewers_json TEXT NOT NULL DEFAULT '[]',
+    unknowns_json TEXT NOT NULL DEFAULT '[]',
+    recommended_next_step TEXT NOT NULL DEFAULT '',
+    gitlink_url TEXT NOT NULL DEFAULT '',
+    source_fingerprint TEXT NOT NULL DEFAULT '',
+    content_fingerprint TEXT NOT NULL DEFAULT '',
+    source_completed_at TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    UNIQUE (installation_id, repository, pr_number)
+);
+CREATE INDEX IF NOT EXISTS review_pr_presentations_repository
+    ON review_pr_presentations(installation_id, repository, updated_at);
+
+CREATE TABLE IF NOT EXISTS chat_pr_presentations (
+    presentation_key TEXT PRIMARY KEY,
+    app_scope TEXT NOT NULL,
+    installation_id TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    pr_number INTEGER NOT NULL,
+    canonical_message_id TEXT NOT NULL DEFAULT '',
+    content_fingerprint TEXT NOT NULL DEFAULT '',
+    presentation_version INTEGER NOT NULL DEFAULT 1,
+    card_status TEXT NOT NULL DEFAULT 'pending',
+    last_operation_id TEXT NOT NULL DEFAULT '',
+    last_patch_at TEXT NOT NULL DEFAULT '',
+    requires_reconciliation INTEGER NOT NULL DEFAULT 0,
+    last_error_summary TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (app_scope, installation_id, chat_id, repository, pr_number)
+);
+CREATE INDEX IF NOT EXISTS chat_pr_presentations_status
+    ON chat_pr_presentations(card_status, requires_reconciliation, updated_at);
 
 CREATE TABLE IF NOT EXISTS review_collaboration_states (
     collaboration_key TEXT PRIMARY KEY,
@@ -235,20 +302,21 @@ CREATE INDEX IF NOT EXISTS review_gateway_configuration_audit_applied
 `
 
 var reviewGatewayJobMigrations = map[string]string{
-	"attempt_count":          "INTEGER NOT NULL DEFAULT 0",
-	"max_attempts":           "INTEGER NOT NULL DEFAULT 3",
-	"next_attempt_at":        "TEXT NOT NULL DEFAULT ''",
-	"lease_owner":            "TEXT NOT NULL DEFAULT ''",
-	"lease_expires_at":       "TEXT NOT NULL DEFAULT ''",
-	"result_json":            "TEXT NOT NULL DEFAULT ''",
-	"handler_latency_ms":     "INTEGER NOT NULL DEFAULT 0",
-	"reply_status":           "TEXT NOT NULL DEFAULT 'none'",
-	"reply_attempt_count":    "INTEGER NOT NULL DEFAULT 0",
-	"reply_next_attempt_at":  "TEXT NOT NULL DEFAULT ''",
-	"reply_lease_owner":      "TEXT NOT NULL DEFAULT ''",
-	"reply_lease_expires_at": "TEXT NOT NULL DEFAULT ''",
-	"reply_message_id":       "TEXT NOT NULL DEFAULT ''",
-	"reply_error_summary":    "TEXT NOT NULL DEFAULT ''",
+	"attempt_count":                 "INTEGER NOT NULL DEFAULT 0",
+	"max_attempts":                  "INTEGER NOT NULL DEFAULT 3",
+	"next_attempt_at":               "TEXT NOT NULL DEFAULT ''",
+	"lease_owner":                   "TEXT NOT NULL DEFAULT ''",
+	"lease_expires_at":              "TEXT NOT NULL DEFAULT ''",
+	"result_json":                   "TEXT NOT NULL DEFAULT ''",
+	"handler_latency_ms":            "INTEGER NOT NULL DEFAULT 0",
+	"reply_status":                  "TEXT NOT NULL DEFAULT 'none'",
+	"reply_attempt_count":           "INTEGER NOT NULL DEFAULT 0",
+	"reply_next_attempt_at":         "TEXT NOT NULL DEFAULT ''",
+	"reply_lease_owner":             "TEXT NOT NULL DEFAULT ''",
+	"reply_lease_expires_at":        "TEXT NOT NULL DEFAULT ''",
+	"reply_message_id":              "TEXT NOT NULL DEFAULT ''",
+	"reply_error_summary":           "TEXT NOT NULL DEFAULT ''",
+	"reply_requires_reconciliation": "INTEGER NOT NULL DEFAULT 0",
 }
 
 var reviewActionPlanMigrations = map[string]string{
@@ -268,6 +336,15 @@ var reviewInstallationMigrations = map[string]string{
 
 var reviewChatBindingMigrations = map[string]string{
 	"allow_public_read": "INTEGER NOT NULL DEFAULT 0",
+}
+
+var reviewPRPresentationMigrations = map[string]string{
+	"source_completed_at": "TEXT NOT NULL DEFAULT ''",
+}
+
+var reviewChatPresentationMigrations = map[string]string{
+	"last_operation_id":  "TEXT NOT NULL DEFAULT ''",
+	"last_error_summary": "TEXT NOT NULL DEFAULT ''",
 }
 
 var reviewCollaborationAuditMigrations = map[string]string{
@@ -326,6 +403,7 @@ type ReviewGatewayJobStore interface {
 	RecordHandlerLatency(ctx context.Context, jobID string, latencyMs int64) error
 	ClaimPendingReplies(ctx context.Context, opts ReviewGatewayClaimOptions) ([]ReviewGatewayPendingReply, error)
 	MarkReplySent(ctx context.Context, jobID, messageID string, now time.Time) error
+	MarkReplyUnknown(ctx context.Context, jobID, messageID, errorSummary string, now time.Time) error
 	MarkReplyFailed(ctx context.Context, pending ReviewGatewayPendingReply, errorSummary string, now time.Time) (bool, error)
 	UpdateJobStatus(ctx context.Context, jobID, status, errorSummary string) error
 }
@@ -354,6 +432,36 @@ type SQLiteReviewGatewayStore struct {
 type reviewGatewayLatencyObservation struct {
 	JobID     string
 	LatencyMs int64
+}
+
+type reviewGatewaySchemaMigration struct {
+	Version    int
+	Name       string
+	Statements []string
+}
+
+var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
+	{
+		Version: 1,
+		Name:    "review_pr_presentations_v1",
+		Statements: []string{
+			`SELECT presentation_key, source_completed_at FROM review_pr_presentations LIMIT 0`,
+		},
+	},
+	{
+		Version: 2,
+		Name:    "chat_pr_presentations_v1",
+		Statements: []string{
+			`SELECT presentation_key, last_operation_id, last_error_summary FROM chat_pr_presentations LIMIT 0`,
+		},
+	},
+	{
+		Version: 3,
+		Name:    "reply_unknown_state_v1",
+		Statements: []string{
+			`SELECT reply_requires_reconciliation FROM review_gateway_jobs LIMIT 0`,
+		},
+	},
 }
 
 type ReviewGatewayQueue struct {
@@ -525,6 +633,15 @@ func (s *MemoryReviewGatewayJobStore) MarkReplySent(_ context.Context, jobID, _ 
 	return nil
 }
 
+func (s *MemoryReviewGatewayJobStore) MarkReplyUnknown(_ context.Context, jobID, _ string, errorSummary string, _ time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ReplyStatus[jobID] = "unknown"
+	s.ReplyLeases[jobID] = ""
+	s.Errors[jobID] = redactReviewGatewayError(errorSummary)
+	return nil
+}
+
 func (s *MemoryReviewGatewayJobStore) MarkReplyFailed(_ context.Context, pending ReviewGatewayPendingReply, errorSummary string, _ time.Time) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -599,6 +716,18 @@ func OpenSQLiteReviewGatewayStore(path string) (*SQLiteReviewGatewayStore, error
 		_ = db.Close()
 		return nil, err
 	}
+	if err := ensureReviewGatewayTableColumns(db, "review_pr_presentations", reviewPRPresentationMigrations); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := ensureReviewGatewayTableColumns(db, "chat_pr_presentations", reviewChatPresentationMigrations); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := applyReviewGatewaySchemaMigrations(db, reviewGatewaySchemaMigrations); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	if err := migrateLegacyReviewCollaborationScope(db); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -615,6 +744,45 @@ func OpenSQLiteReviewGatewayStore(path string) (*SQLiteReviewGatewayStore, error
 		}
 	}
 	return &SQLiteReviewGatewayStore{db: db}, nil
+}
+
+func applyReviewGatewaySchemaMigrations(db *sql.DB, migrations []reviewGatewaySchemaMigration) error {
+	for _, migration := range migrations {
+		var applied int
+		err := db.QueryRow(`SELECT 1 FROM schema_migrations WHERE version=?`, migration.Version).Scan(&applied)
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("inspect review gateway schema migration %d: %w", migration.Version, err)
+		}
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("begin review gateway schema migration %d: %w", migration.Version, err)
+		}
+		failed := false
+		for _, statement := range migration.Statements {
+			if _, err := tx.Exec(statement); err != nil {
+				_ = tx.Rollback()
+				failed = true
+				return fmt.Errorf("apply review gateway schema migration %d (%s): %w", migration.Version, migration.Name, err)
+			}
+		}
+		if failed {
+			continue
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO schema_migrations(version, name, applied_at) VALUES(?, ?, ?)`,
+			migration.Version, migration.Name, reviewGatewayTimestamp(time.Now().UTC()),
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("record review gateway schema migration %d: %w", migration.Version, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit review gateway schema migration %d: %w", migration.Version, err)
+		}
+	}
+	return nil
 }
 
 func ensureReviewGatewayTableColumns(db *sql.DB, table string, migrations map[string]string) error {
@@ -1217,6 +1385,7 @@ func (s *SQLiteReviewGatewayStore) MarkReplySent(ctx context.Context, jobID, mes
 		 SET reply_status='sent',
 		     reply_message_id=?,
 		     reply_error_summary='',
+		     reply_requires_reconciliation=0,
 		     reply_lease_owner='',
 		     reply_lease_expires_at='',
 		     updated_at=?
@@ -1226,6 +1395,32 @@ func (s *SQLiteReviewGatewayStore) MarkReplySent(ctx context.Context, jobID, mes
 		jobID,
 	)
 	return requireReviewGatewayJobUpdate(update, err, jobID, "mark reply sent")
+}
+
+func (s *SQLiteReviewGatewayStore) MarkReplyUnknown(
+	ctx context.Context,
+	jobID,
+	messageID,
+	errorSummary string,
+	now time.Time,
+) error {
+	update, err := s.db.ExecContext(
+		ctx,
+		`UPDATE review_gateway_jobs
+		 SET reply_status='unknown',
+		     reply_message_id=?,
+		     reply_error_summary=?,
+		     reply_requires_reconciliation=1,
+		     reply_lease_owner='',
+		     reply_lease_expires_at='',
+		     updated_at=?
+		 WHERE job_id=? AND reply_status='sending'`,
+		messageID,
+		redactReviewGatewayError(errorSummary),
+		reviewGatewayTimestamp(now),
+		jobID,
+	)
+	return requireReviewGatewayJobUpdate(update, err, jobID, "mark reply unknown")
 }
 
 func (s *SQLiteReviewGatewayStore) MarkReplyFailed(ctx context.Context, pending ReviewGatewayPendingReply, errorSummary string, now time.Time) (bool, error) {
@@ -1242,6 +1437,7 @@ func (s *SQLiteReviewGatewayStore) MarkReplyFailed(ctx context.Context, pending 
 		 SET reply_status=?,
 		     reply_next_attempt_at=?,
 		     reply_error_summary=?,
+		     reply_requires_reconciliation=0,
 		     reply_lease_owner='',
 		     reply_lease_expires_at='',
 		     updated_at=?

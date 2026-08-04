@@ -2,6 +2,7 @@ package feishu
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -235,6 +236,10 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 			result.Collaboration = &bundle
 			result.ResultCard = bundle.Card
 			e.publishCollaboration(ctx, &result, bundle)
+		} else if job.PublicRead && e.Collaboration != nil {
+			if _, presentationErr := e.Collaboration.SaveReviewPRPresentation(ctx, job, result, now().UTC()); presentationErr != nil {
+				return reviewGatewayExecutionFailure(result, presentationErr)
+			}
 		}
 		result.Message = "已完成 GitLink GET-only PR 上下文读取；未执行 Review、评论、Reviewer 或合并写入。"
 		if job.PublicRead {
@@ -299,6 +304,20 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 	case "claim_review", "release_review", "set_review_deadline":
 		if e.Collaboration == nil {
 			return reviewGatewayExecutionFailure(result, fmt.Errorf("review collaboration store is required"))
+		}
+		presentation, err := e.Collaboration.GetReviewPRPresentation(ctx, job)
+		if err != nil {
+			if errors.Is(err, ErrReviewPRPresentationNotFound) {
+				return reviewGatewayExecutionFailure(result, ErrCompleteReviewPRPresentationRequired)
+			}
+			return reviewGatewayExecutionFailure(result, err)
+		}
+		if !presentation.Complete() || !presentation.Matches(job) {
+			return reviewGatewayExecutionFailure(result, ErrCompleteReviewPRPresentationRequired)
+		}
+		result, err = reviewGatewayResultFromPresentation(job, presentation)
+		if err != nil {
+			return reviewGatewayExecutionFailure(result, err)
 		}
 		item, err := e.Collaboration.ApplyCollaborationAction(ctx, job, now().UTC())
 		if err != nil {

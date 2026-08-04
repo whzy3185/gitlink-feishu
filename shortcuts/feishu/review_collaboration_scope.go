@@ -106,13 +106,20 @@ func (s *SQLiteReviewGatewayStore) applyScopedCollaborationAction(
 		return ReviewCollaborationItem{}, err
 	}
 	defer tx.Rollback()
+	presentation, err := readReviewPRPresentationTx(ctx, tx, job)
+	if err != nil {
+		return ReviewCollaborationItem{}, err
+	}
+	if !presentation.Complete() || !presentation.Matches(job) {
+		return ReviewCollaborationItem{}, ErrCompleteReviewPRPresentationRequired
+	}
 
 	snapshot, err := readScopedReviewSnapshot(ctx, tx, job)
 	if err != nil {
 		return ReviewCollaborationItem{}, err
 	}
 	if snapshot.SnapshotKey == "" {
-		snapshot = newScopedReviewSnapshot(job, now)
+		snapshot = reviewSnapshotFromPresentation(presentation, now)
 	}
 	state, err := readScopedReviewCollaboration(ctx, tx, job)
 	if err != nil {
@@ -198,6 +205,9 @@ func (s *SQLiteReviewGatewayStore) upsertScopedCollaborationFacts(
 		return ReviewCollaborationItem{}, err
 	}
 	defer tx.Rollback()
+	if _, err := upsertReviewPRPresentationTx(ctx, tx, job, result, now); err != nil {
+		return ReviewCollaborationItem{}, err
+	}
 
 	snapshot, err := readScopedReviewSnapshot(ctx, tx, job)
 	if err != nil {
@@ -249,6 +259,23 @@ func (s *SQLiteReviewGatewayStore) upsertScopedCollaborationFacts(
 		return ReviewCollaborationItem{}, err
 	}
 	return mergeScopedReviewItem(snapshot, state), nil
+}
+
+func reviewSnapshotFromPresentation(presentation ReviewPRPresentation, now time.Time) reviewPRSnapshot {
+	return reviewPRSnapshot{
+		SnapshotKey:       reviewSnapshotScopeKey(presentation.InstallationID, presentation.Repository, presentation.PRNumber),
+		InstallationID:    presentation.InstallationID,
+		Repository:        presentation.Repository,
+		PRNumber:          presentation.PRNumber,
+		ReviewStage:       firstNonEmpty(presentation.ReviewStage, "unreviewed"),
+		Decision:          firstNonEmpty(presentation.Decision, "pending"),
+		CollectionStatus:  presentation.CollectionStatus,
+		HeadSHA:           presentation.HeadSHA,
+		SourceFingerprint: presentation.SourceFingerprint,
+		GitLinkState:      presentation.GitLinkState,
+		Archived:          presentation.GitLinkState == "merged" || presentation.GitLinkState == "closed",
+		UpdatedAt:         now.UTC().Format(time.RFC3339Nano),
+	}
 }
 
 func (s *SQLiteReviewGatewayStore) listScopedCollaborationItems(
