@@ -341,7 +341,8 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 	if err != nil {
 		return err
 	}
-	if parseBool(runtime.Arg("enable-agent-runner")) {
+	agentRunnerEnabled := parseBool(runtime.Arg("enable-agent-runner"))
+	if agentRunnerEnabled {
 		provider, providerErr := workflow.NewHTTPReviewAgentProvider(
 			runtime.Arg("agent-endpoint"),
 			runtime.Arg("agent-credential-ref"),
@@ -389,11 +390,12 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		TokenProvider: tokenProvider, Config: publisherConfig, Now: time.Now,
 	}
 	operationPlanner := &ReviewOperationPlanner{Store: store, Config: publisherConfig, Now: time.Now}
-	operationWorkers := []*ReviewOperationWorker{
-		NewReviewOperationWorker(store, operationHandler, "canonical_card", instanceLock.metadata.InstanceID+"-card"),
-		NewReviewOperationWorker(store, operationHandler, "reply", instanceLock.metadata.InstanceID+"-reply"),
-		NewReviewOperationWorker(store, operationHandler, "resource", instanceLock.metadata.InstanceID+"-resource"),
+	workerConcurrency := DefaultReviewWorkerConcurrency()
+	if agentRunnerEnabled {
+		workerConcurrency.Agent = 1
 	}
+	operationWorkers := NewReviewOperationWorkerPool(store, operationHandler, workerConcurrency, instanceLock.metadata.InstanceID)
+	workerManager := &ReviewWorkerManager{Queue: queue, Concurrency: workerConcurrency, InstanceID: instanceLock.metadata.InstanceID}
 	operationReconciler := &ReviewOperationReconciler{
 		Store: store, Client: operationClient, TokenProvider: tokenProvider, Config: publisherConfig,
 		LeaseOwner: instanceLock.metadata.InstanceID + "-operation-reconciliation", Now: time.Now,
@@ -418,15 +420,18 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		Store: store, Queue: queue, Interval: reconciliationInterval, Now: time.Now,
 	}
 	go replyDispatcher.Run(liveCtx)
+	go func() { _ = operationPlanner.Run(liveCtx, instanceLock.metadata.InstanceID, workerConcurrency.Planner) }()
 	for _, worker := range operationWorkers {
 		go func(current *ReviewOperationWorker) { _ = current.Run(liveCtx) }(worker)
 	}
 	go operationReconciler.Run(liveCtx)
-	go queue.Run(liveCtx, func(_ context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {
-		jobCtx, cancel := context.WithTimeout(liveCtx, time.Duration(jobTimeoutSeconds)*time.Second)
-		defer cancel()
-		return executor.Execute(jobCtx, job)
-	})
+	go func() {
+		_ = workerManager.Run(liveCtx, func(_ context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {
+			jobCtx, cancel := context.WithTimeout(liveCtx, time.Duration(jobTimeoutSeconds)*time.Second)
+			defer cancel()
+			return executor.Execute(jobCtx, job)
+		})
+	}()
 	go eventProcessor.Run(liveCtx)
 	if reconciliationInterval > 0 {
 		go reconciliation.Run(liveCtx)

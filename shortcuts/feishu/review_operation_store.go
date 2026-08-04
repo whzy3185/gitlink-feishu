@@ -400,6 +400,20 @@ func (s *SQLiteReviewGatewayStore) FinishReviewOperation(ctx context.Context, op
 			return fmt.Errorf("create review operation dead letter: %w", err)
 		}
 	}
+	if updated.ConsumerID != "" {
+		consumerStatus := "pending"
+		switch updated.Status {
+		case ReviewOperationSucceeded, ReviewOperationUnchanged:
+			consumerStatus = "sent"
+		case ReviewOperationUnknown, ReviewOperationNeedsReconciliation:
+			consumerStatus = "unknown"
+		case ReviewOperationFailedTerminal, ReviewOperationDeadLetter, ReviewOperationCancelled:
+			consumerStatus = "failed"
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE review_job_consumers SET status=?,updated_at=? WHERE consumer_id=?`, consumerStatus, reviewGatewayTimestamp(now), updated.ConsumerID); err != nil {
+			return fmt.Errorf("update review job consumer: %w", err)
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}

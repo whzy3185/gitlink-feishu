@@ -18,6 +18,15 @@ type reviewOperationAdminResult struct {
 	Operations      []reviewOperationAdminView          `json:"operations,omitempty"`
 	DeadLetters     []ReviewDeadLetter                  `json:"dead_letters,omitempty"`
 	Reconciliations []ReviewOperationReconciliationTask `json:"reconciliations,omitempty"`
+	QueueStatus     *ReviewQueueStatus                  `json:"queue_status,omitempty"`
+}
+
+type ReviewQueueStatus struct {
+	Jobs                   map[string]int `json:"jobs"`
+	Operations             map[string]int `json:"operations"`
+	Consumers              map[string]int `json:"consumers"`
+	OpenDeadLetters        int            `json:"open_dead_letters"`
+	PendingReconciliations int            `json:"pending_reconciliations"`
 }
 
 type reviewOperationAdminView struct {
@@ -57,6 +66,70 @@ func newReviewOperationReconciliationShortcut() *common.Shortcut {
 		Name: "review-operation-reconciliation", Description: "Inspect or manually resolve external side-effect reconciliation tasks",
 		Flags: []common.Flag{{Name: "action", Usage: "list, inspect, or resolve", Required: true}, {Name: "state-db", Usage: "SQLite state database", Default: ".local/review-gateway.db"}, {Name: "id", Usage: "Reconciliation ID"}, {Name: "status", Usage: "Status filter"}, {Name: "reason", Usage: "Required resolution summary"}, {Name: "actor", Usage: "Local operator; stored only as a hash"}, {Name: "success", Usage: "Mark manually verified success", Bool: true, Default: "false"}, {Name: "yes", Usage: "Explicit confirmation", Bool: true, Default: "false"}}, Run: runReviewOperationReconciliationAdmin,
 	}
+}
+
+func newReviewQueueStatusShortcut() *common.Shortcut {
+	return &common.Shortcut{Name: "review-queue-status", Description: "Show bounded local Review job and operation queue counts", Flags: []common.Flag{{Name: "state-db", Usage: "SQLite state database", Default: ".local/review-gateway.db"}}, Run: func(runtime *common.RuntimeContext) error {
+		store, err := OpenSQLiteReviewGatewayStore(runtime.Arg("state-db"))
+		if err != nil {
+			return err
+		}
+		defer store.Close()
+		status, err := store.ReviewQueueStatus(context.Background())
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(reviewOperationAdminResult{SchemaVersion: "feishu.review-queue-status/v1", Action: "status", ReadOnly: true, QueueStatus: &status})
+	}}
+}
+
+func (s *SQLiteReviewGatewayStore) ReviewQueueStatus(ctx context.Context) (ReviewQueueStatus, error) {
+	result := ReviewQueueStatus{Jobs: map[string]int{}, Operations: map[string]int{}, Consumers: map[string]int{}}
+	rows, err := s.db.QueryContext(ctx, `SELECT queue_class||':'||status,COUNT(*) FROM review_gateway_jobs GROUP BY queue_class,status`)
+	if err != nil {
+		return result, err
+	}
+	for rows.Next() {
+		var key string
+		var count int
+		if err := rows.Scan(&key, &count); err != nil {
+			_ = rows.Close()
+			return result, err
+		}
+		result.Jobs[key] = count
+	}
+	_ = rows.Close()
+	rows, err = s.db.QueryContext(ctx, `SELECT queue_class||':'||status,COUNT(*) FROM review_operations GROUP BY queue_class,status`)
+	if err != nil {
+		return result, err
+	}
+	for rows.Next() {
+		var key string
+		var count int
+		if err := rows.Scan(&key, &count); err != nil {
+			_ = rows.Close()
+			return result, err
+		}
+		result.Operations[key] = count
+	}
+	_ = rows.Close()
+	rows, err = s.db.QueryContext(ctx, `SELECT status,COUNT(*) FROM review_job_consumers GROUP BY status`)
+	if err != nil {
+		return result, err
+	}
+	for rows.Next() {
+		var key string
+		var count int
+		if err := rows.Scan(&key, &count); err != nil {
+			_ = rows.Close()
+			return result, err
+		}
+		result.Consumers[key] = count
+	}
+	_ = rows.Close()
+	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM review_dead_letters WHERE status='open'`).Scan(&result.OpenDeadLetters)
+	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM review_operation_reconciliation_tasks WHERE status IN ('pending','checking')`).Scan(&result.PendingReconciliations)
+	return result, nil
 }
 
 func runReviewOperationAdmin(runtime *common.RuntimeContext) error {

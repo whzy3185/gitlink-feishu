@@ -13,6 +13,10 @@ type ReviewPreparedJobEnqueuer interface {
 	EnqueuePreparedJob(context.Context, ReviewGatewayJob) (bool, error)
 }
 
+type ReviewPreparedJobAdmissionEnqueuer interface {
+	EnqueuePreparedJobWithAdmission(context.Context, ReviewGatewayJob, string) (ReviewJobAdmissionResult, error)
+}
+
 type ReviewEventRoute struct {
 	EventID              string `json:"event_id"`
 	SubscriptionID       string `json:"subscription_id"`
@@ -122,19 +126,30 @@ func (p *ReviewEventInboxProcessor) ProcessOne(ctx context.Context) (bool, error
 			_ = p.Store.retryReviewEventInbox(ctx, record, owner, err, now)
 			return true, err
 		}
-		if !created && (route.RouteStatus == "queued" || route.RouteStatus == "duplicate") {
+		if !created && (route.RouteStatus == "queued" || route.RouteStatus == "coalesced" || route.RouteStatus == "duplicate") {
 			continue
 		}
 		job := buildReviewEventRouteJob(record.Event, subscription, now)
-		saved, enqueueErr := p.Queue.EnqueuePreparedJob(ctx, job)
+		saved := false
+		admission := ReviewJobAdmissionResult{}
+		var enqueueErr error
+		if admissionQueue, ok := p.Queue.(ReviewPreparedJobAdmissionEnqueuer); ok {
+			admission, enqueueErr = admissionQueue.EnqueuePreparedJobWithAdmission(ctx, job, "event_route")
+			saved = admission.Created
+		} else {
+			saved, enqueueErr = p.Queue.EnqueuePreparedJob(ctx, job)
+			admission = ReviewJobAdmissionResult{Created: saved, JobID: job.JobID}
+		}
 		status := "queued"
 		reason := ""
 		if enqueueErr != nil {
 			status, reason = "failed", "enqueue_failed"
+		} else if admission.Coalesced {
+			status = "coalesced"
 		} else if !saved {
 			status = "duplicate"
 		}
-		if updateErr := p.Store.updateReviewEventRoute(ctx, route, job.JobID, status, reason, now); updateErr != nil {
+		if updateErr := p.Store.updateReviewEventRoute(ctx, route, firstNonEmpty(admission.JobID, job.JobID), status, reason, now); updateErr != nil {
 			_ = p.Store.retryReviewEventInbox(ctx, record, owner, updateErr, now)
 			return true, updateErr
 		}

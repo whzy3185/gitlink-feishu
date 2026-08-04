@@ -570,6 +570,8 @@ func formatReviewGatewayNotice(reason string) string {
 		return "请明确指定仓库，所有仓库均为平等作用域。示例：查看 Gitlink/gitlink-cli PR #431。"
 	case "unsupported_read_only_command":
 		return "暂不支持该指令。PR 级命令必须包含 owner/repo，例如：查看 Gitlink/gitlink-cli PR #431。批准、拒绝、评论、Reviewer 变更和合并始终禁用。"
+	case "review_queue_busy", "review_rate_limited":
+		return "当前群的 Review 请求较多，请稍后重试。"
 	default:
 		return ""
 	}

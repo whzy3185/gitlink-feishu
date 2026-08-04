@@ -525,6 +525,7 @@ type ReviewGatewayClaimOptions struct {
 	Now           time.Time
 	LeaseDuration time.Duration
 	Limit         int
+	QueueClass    string
 }
 
 type ReviewGatewayJobOutcome struct {
@@ -840,6 +841,62 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 			 ON review_operation_reconciliation_tasks(status, next_attempt_at, created_at)`,
 		},
 	},
+	{
+		Version: 14,
+		Name:    "review_job_queue_classes_coalescing_v1",
+		Columns: map[string]map[string]string{
+			"review_gateway_jobs": {
+				"queue_class":                     "TEXT NOT NULL DEFAULT 'gitlink_read'",
+				"priority":                        "INTEGER NOT NULL DEFAULT 50",
+				"coalesce_key":                    "TEXT NOT NULL DEFAULT ''",
+				"coalesce_until":                  "TEXT NOT NULL DEFAULT ''",
+				"operation_plan_status":           "TEXT NOT NULL DEFAULT 'none'",
+				"operation_plan_attempt_count":    "INTEGER NOT NULL DEFAULT 0",
+				"operation_plan_next_attempt_at":  "TEXT NOT NULL DEFAULT ''",
+				"operation_plan_lease_owner":      "TEXT NOT NULL DEFAULT ''",
+				"operation_plan_lease_expires_at": "TEXT NOT NULL DEFAULT ''",
+				"operation_plan_error_summary":    "TEXT NOT NULL DEFAULT ''",
+			},
+		},
+		Statements: []string{
+			`CREATE TABLE IF NOT EXISTS review_job_consumers (
+				consumer_id TEXT PRIMARY KEY,
+				job_id TEXT NOT NULL,
+				source_type TEXT NOT NULL,
+				chat_id TEXT NOT NULL,
+				source_message_id TEXT NOT NULL DEFAULT '',
+				requested_by_hash TEXT NOT NULL DEFAULT '',
+				notification_mode TEXT NOT NULL DEFAULT 'canonical_only',
+				status TEXT NOT NULL DEFAULT 'pending',
+				created_at TEXT NOT NULL,
+				updated_at TEXT NOT NULL,
+				UNIQUE(job_id, source_type, chat_id, source_message_id, notification_mode)
+			)`,
+			`CREATE INDEX IF NOT EXISTS review_gateway_jobs_queue_ready
+			 ON review_gateway_jobs(queue_class, status, priority, next_attempt_at, created_at)`,
+			`CREATE INDEX IF NOT EXISTS review_gateway_jobs_coalesce
+			 ON review_gateway_jobs(coalesce_key, status, coalesce_until)`,
+			`CREATE INDEX IF NOT EXISTS review_job_consumers_job
+			 ON review_job_consumers(job_id, status, created_at)`,
+		},
+	},
+	{
+		Version: 15,
+		Name:    "review_rate_limit_buckets_v1",
+		Statements: []string{
+			`CREATE TABLE IF NOT EXISTS review_rate_limit_buckets (
+				bucket_key TEXT PRIMARY KEY,
+				bucket_type TEXT NOT NULL,
+				subject_hash TEXT NOT NULL,
+				window_started_at TEXT NOT NULL,
+				request_count INTEGER NOT NULL DEFAULT 0,
+				updated_at TEXT NOT NULL,
+				UNIQUE(bucket_type, subject_hash, window_started_at)
+			)`,
+			`CREATE INDEX IF NOT EXISTS review_rate_limit_buckets_window
+			 ON review_rate_limit_buckets(bucket_type, window_started_at, updated_at)`,
+		},
+	},
 }
 
 type ReviewGatewayQueue struct {
@@ -854,6 +911,7 @@ type ReviewGatewayQueue struct {
 	now              func() time.Time
 	operationPlanner *ReviewOperationPlanner
 	operationWake    func()
+	limits           ReviewQueueLimits
 }
 
 func NewMemoryReviewGatewayJobStore() *MemoryReviewGatewayJobStore {
@@ -901,6 +959,9 @@ func (s *MemoryReviewGatewayJobStore) ClaimReadyJobs(_ context.Context, opts Rev
 			break
 		}
 		job := s.Jobs[id]
+		if opts.QueueClass != "" && job.QueueClass != opts.QueueClass {
+			continue
+		}
 		status := s.Status[id]
 		if status == "running" && reviewGatewayTimeDue(job.LeaseExpiresAt, opts.Now) {
 			status = "queued"
@@ -1521,10 +1582,13 @@ func (s *SQLiteReviewGatewayStore) ClaimReadyJobs(ctx context.Context, opts Revi
 		`SELECT job_id, payload_json, attempt_count, max_attempts
 		 FROM review_gateway_jobs
 		 WHERE status='queued'
+		   AND (?='' OR queue_class=? )
 		   AND (next_attempt_at='' OR next_attempt_at <= ?)
 		   AND attempt_count < max_attempts
-		 ORDER BY created_at, job_id
+		 ORDER BY priority, created_at, job_id
 		 LIMIT ?`,
+		opts.QueueClass,
+		opts.QueueClass,
 		nowText,
 		opts.Limit,
 	)
@@ -1611,6 +1675,10 @@ func (s *SQLiteReviewGatewayStore) completeJob(ctx context.Context, job ReviewGa
 	}
 	replyStatus := "none"
 	replyNext := ""
+	planStatus := "none"
+	if !legacyReply {
+		planStatus = "pending"
+	}
 	completedAt := reviewGatewayResultCompletionTime(result)
 	if legacyReply && shouldDispatchReviewGatewayResult(job) {
 		replyStatus = "pending"
@@ -1626,11 +1694,15 @@ func (s *SQLiteReviewGatewayStore) completeJob(ctx context.Context, job ReviewGa
 		     lease_expires_at='',
 		     reply_status=?,
 		     reply_next_attempt_at=?,
+		     operation_plan_status=?,
+		     operation_plan_next_attempt_at=?,
 		     updated_at=?
 		 WHERE job_id=? AND status='running' AND lease_owner=?`,
 		string(resultJSON),
 		replyStatus,
 		replyNext,
+		planStatus,
+		reviewGatewayTimestamp(completedAt),
 		reviewGatewayTimestamp(completedAt),
 		job.JobID,
 		job.LeaseOwner,
@@ -1925,6 +1997,13 @@ func NewReviewGatewayQueue(gateway *ReviewGateway, store ReviewGatewayJobStore, 
 		pollInterval:  time.Second,
 		onResult:      onResult,
 		now:           time.Now,
+		limits:        DefaultReviewQueueLimits(),
+	}
+}
+
+func (q *ReviewGatewayQueue) ConfigureAdmission(limits ReviewQueueLimits) {
+	if q != nil {
+		q.limits = limits.normalized()
 	}
 }
 
@@ -1934,6 +2013,13 @@ func (q *ReviewGatewayQueue) UseOperationOutbox(planner *ReviewOperationPlanner,
 	}
 	q.operationPlanner = planner
 	q.operationWake = wake
+	if planner != nil {
+		planner.OnPlanned = func([]ReviewOperation) {
+			if wake != nil {
+				wake()
+			}
+		}
+	}
 }
 
 func (q *ReviewGatewayQueue) Enqueue(ctx context.Context, event ReviewGatewayEvent) ReviewGatewayReceipt {
@@ -1955,20 +2041,21 @@ func (q *ReviewGatewayQueue) Enqueue(ctx context.Context, event ReviewGatewayEve
 			if !receipt.Accepted || receipt.Job == nil {
 				return receipt
 			}
-			saved, err := sqliteStore.ReserveAndSaveJob(ctx, *receipt.Job, q.now().UTC(), 24*time.Hour)
+			admission, err := sqliteStore.AdmitReviewGatewayJob(ctx, *receipt.Job, "user_command", q.now().UTC(), q.limits)
 			if err != nil {
 				receipt.Accepted = false
-				receipt.Reason = "state_store_failed"
+				receipt.Reason = reviewQueueAdmissionReason(err)
 				receipt.Job = nil
 				return receipt
 			}
-			if !saved {
+			if admission.Duplicate {
 				receipt.Accepted = false
 				receipt.Duplicate = true
 				receipt.Reason = "duplicate_event"
 				receipt.Job = nil
 				return receipt
 			}
+			receipt.Job.JobID = admission.JobID
 			q.Wake()
 			return receipt
 		}
@@ -1995,33 +2082,53 @@ func (q *ReviewGatewayQueue) Enqueue(ctx context.Context, event ReviewGatewayEve
 }
 
 func (q *ReviewGatewayQueue) EnqueuePreparedJob(ctx context.Context, job ReviewGatewayJob) (bool, error) {
+	result, err := q.EnqueuePreparedJobWithAdmission(ctx, job, normalizeReviewConsumerSourceType("", job))
+	return result.Created, err
+}
+
+func (q *ReviewGatewayQueue) EnqueuePreparedJobWithAdmission(ctx context.Context, job ReviewGatewayJob, sourceType string) (ReviewJobAdmissionResult, error) {
 	if q == nil || q.gateway == nil || q.store == nil {
-		return false, fmt.Errorf("review gateway queue is not configured")
+		return ReviewJobAdmissionResult{}, fmt.Errorf("review gateway queue is not configured")
 	}
 	if strings.TrimSpace(job.JobID) == "" || strings.TrimSpace(job.DedupeKey) == "" {
-		return false, fmt.Errorf("prepared review gateway job identity is required")
+		return ReviewJobAdmissionResult{}, fmt.Errorf("prepared review gateway job identity is required")
 	}
 	now := q.now().UTC()
 	if sqliteStore, ok := q.store.(*SQLiteReviewGatewayStore); ok {
 		if dedupeStore, sameStore := q.gateway.deduper.(*SQLiteReviewGatewayStore); sameStore && dedupeStore == sqliteStore {
-			saved, err := sqliteStore.ReserveAndSaveJob(ctx, job, now, 24*time.Hour)
-			if err != nil || !saved {
-				return saved, err
+			result, err := sqliteStore.AdmitReviewGatewayJob(ctx, job, sourceType, now, q.limits)
+			if err != nil || result.Duplicate {
+				return result, err
 			}
 			q.Wake()
-			return true, nil
+			return result, nil
 		}
 	}
 	reserved, err := q.gateway.deduper.Reserve(job.DedupeKey, now, 24*time.Hour)
 	if err != nil || !reserved {
-		return reserved, err
+		return ReviewJobAdmissionResult{Created: reserved, Duplicate: !reserved, JobID: job.JobID}, err
 	}
 	if err := q.store.SaveJob(ctx, job); err != nil {
 		q.gateway.deduper.Release(job.DedupeKey)
-		return false, err
+		return ReviewJobAdmissionResult{}, err
 	}
 	q.Wake()
-	return true, nil
+	return ReviewJobAdmissionResult{Created: true, JobID: job.JobID}, nil
+}
+
+func reviewQueueAdmissionReason(err error) string {
+	var admission *ReviewQueueAdmissionError
+	if errors.As(err, &admission) {
+		switch admission.Code {
+		case "global_job_capacity", "chat_job_capacity", "user_job_capacity", "global_operation_capacity", "chat_operation_capacity":
+			return "review_queue_busy"
+		case "user_rate_limited", "chat_rate_limited":
+			return "review_rate_limited"
+		default:
+			return admission.Code
+		}
+	}
+	return "state_store_failed"
 }
 
 func (q *ReviewGatewayQueue) Wake() {
@@ -2075,13 +2182,18 @@ func (q *ReviewGatewayQueue) runLatencyWriter(ctx context.Context) {
 }
 
 func (q *ReviewGatewayQueue) runReadyJobs(ctx context.Context, handler func(context.Context, ReviewGatewayJob) (ReviewGatewayExecutionResult, error)) {
+	q.runReadyJobsForClass(ctx, handler, "", q.leaseOwner)
+}
+
+func (q *ReviewGatewayQueue) runReadyJobsForClass(ctx context.Context, handler func(context.Context, ReviewGatewayJob) (ReviewGatewayExecutionResult, error), queueClass, leaseOwner string) {
 	for {
 		claimCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 		jobs, err := q.store.ClaimReadyJobs(claimCtx, ReviewGatewayClaimOptions{
-			LeaseOwner:    q.leaseOwner,
+			LeaseOwner:    leaseOwner,
 			Now:           q.now().UTC(),
 			LeaseDuration: q.leaseDuration,
 			Limit:         1,
+			QueueClass:    queueClass,
 		})
 		cancel()
 		if err != nil || len(jobs) == 0 {
@@ -2125,14 +2237,7 @@ func (q *ReviewGatewayQueue) runReadyJobs(ctx context.Context, handler func(cont
 		}
 		persistCancel()
 		if executeErr == nil && q.operationPlanner != nil {
-			planCtx, planCancel := context.WithTimeout(ctx, 2*time.Second)
-			_, planErr := q.operationPlanner.Plan(planCtx, job, result)
-			planCancel()
-			if planErr != nil {
-				outcome.Err = planErr
-			} else if q.operationWake != nil {
-				q.operationWake()
-			}
+			q.operationPlanner.Wake()
 		}
 		if q.onResult != nil {
 			q.onResult(outcome)

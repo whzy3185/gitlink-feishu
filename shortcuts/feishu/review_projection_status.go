@@ -76,13 +76,21 @@ func (s *SQLiteReviewGatewayStore) GetReviewResourceProjectionStatus(ctx context
 }
 
 func (s *SQLiteReviewGatewayStore) EnsureReviewProjectionConfiguration(ctx context.Context, job ReviewGatewayJob, resourceType string, targetScope ReviewResourceScope, status ReviewResourceProjectionStatusValue, now time.Time) error {
+	return ensureReviewProjectionConfigurationExec(ctx, s.db, job, resourceType, targetScope, status, now)
+}
+
+type reviewProjectionExecer interface {
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+}
+
+func ensureReviewProjectionConfigurationExec(ctx context.Context, execer reviewProjectionExecer, job ReviewGatewayJob, resourceType string, targetScope ReviewResourceScope, status ReviewResourceProjectionStatusValue, now time.Time) error {
 	operation := ReviewOperation{
 		InstallationID: job.InstallationID, ChatID: job.ChatID, Repository: job.Repository,
 		PRNumber: job.PRNumber, ResourceType: resourceType,
 		DesiredJSON: fmt.Sprintf(`{"target_scope":%q}`, targetScope),
 	}
 	key := reviewProjectionKey(operation, string(targetScope))
-	_, err := s.db.ExecContext(ctx, `INSERT INTO review_resource_projection_status (
+	_, err := execer.ExecContext(ctx, `INSERT INTO review_resource_projection_status (
 		projection_key, installation_id, chat_id, repository, pr_number,
 		resource_type, target_scope, status, updated_at
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)

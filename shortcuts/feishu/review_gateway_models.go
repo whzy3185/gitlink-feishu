@@ -77,35 +77,45 @@ type ReviewGatewayIntent struct {
 }
 
 type ReviewGatewayJob struct {
-	SchemaVersion         string   `json:"schema_version"`
-	JobID                 string   `json:"job_id"`
-	DedupeKey             string   `json:"dedupe_key"`
-	Status                string   `json:"status"`
-	Mode                  string   `json:"mode"`
-	Action                string   `json:"action"`
-	InstallationID        string   `json:"installation_id,omitempty"`
-	InstallationMode      string   `json:"installation_mode,omitempty"`
-	Repository            string   `json:"repository,omitempty"`
-	Repositories          []string `json:"repositories,omitempty"`
-	PRNumber              int      `json:"pr_number,omitempty"`
-	Argument              string   `json:"argument,omitempty"`
-	PublicRead            bool     `json:"public_read,omitempty"`
-	ChatID                string   `json:"chat_id"`
-	RequestedBy           string   `json:"requested_by"`
-	SourceEventID         string   `json:"source_event_id,omitempty"`
-	SourceMessageID       string   `json:"source_message_id,omitempty"`
-	NotifyChat            bool     `json:"notify_chat,omitempty"`
-	NotificationMode      string   `json:"notification_mode,omitempty"`
-	CreatedAt             string   `json:"created_at"`
-	MutatesGitLink        bool     `json:"mutates_gitlink"`
-	CollaborationMutation bool     `json:"collaboration_mutation"`
-	RequiresAdmin         bool     `json:"requires_admin"`
-	AttemptCount          int      `json:"attempt_count"`
-	MaxAttempts           int      `json:"max_attempts"`
-	NextAttemptAt         string   `json:"next_attempt_at,omitempty"`
-	LeaseOwner            string   `json:"lease_owner,omitempty"`
-	LeaseExpiresAt        string   `json:"lease_expires_at,omitempty"`
-	HandlerLatencyMs      int64    `json:"handler_latency_ms,omitempty"`
+	SchemaVersion               string   `json:"schema_version"`
+	JobID                       string   `json:"job_id"`
+	DedupeKey                   string   `json:"dedupe_key"`
+	Status                      string   `json:"status"`
+	Mode                        string   `json:"mode"`
+	Action                      string   `json:"action"`
+	InstallationID              string   `json:"installation_id,omitempty"`
+	InstallationMode            string   `json:"installation_mode,omitempty"`
+	Repository                  string   `json:"repository,omitempty"`
+	Repositories                []string `json:"repositories,omitempty"`
+	PRNumber                    int      `json:"pr_number,omitempty"`
+	Argument                    string   `json:"argument,omitempty"`
+	PublicRead                  bool     `json:"public_read,omitempty"`
+	ChatID                      string   `json:"chat_id"`
+	RequestedBy                 string   `json:"requested_by"`
+	SourceEventID               string   `json:"source_event_id,omitempty"`
+	SourceMessageID             string   `json:"source_message_id,omitempty"`
+	NotifyChat                  bool     `json:"notify_chat,omitempty"`
+	NotificationMode            string   `json:"notification_mode,omitempty"`
+	CreatedAt                   string   `json:"created_at"`
+	MutatesGitLink              bool     `json:"mutates_gitlink"`
+	CollaborationMutation       bool     `json:"collaboration_mutation"`
+	RequiresAdmin               bool     `json:"requires_admin"`
+	AttemptCount                int      `json:"attempt_count"`
+	MaxAttempts                 int      `json:"max_attempts"`
+	NextAttemptAt               string   `json:"next_attempt_at,omitempty"`
+	LeaseOwner                  string   `json:"lease_owner,omitempty"`
+	LeaseExpiresAt              string   `json:"lease_expires_at,omitempty"`
+	HandlerLatencyMs            int64    `json:"handler_latency_ms,omitempty"`
+	QueueClass                  string   `json:"queue_class,omitempty"`
+	Priority                    int      `json:"priority,omitempty"`
+	CoalesceKey                 string   `json:"coalesce_key,omitempty"`
+	CoalesceUntil               string   `json:"coalesce_until,omitempty"`
+	OperationPlanStatus         string   `json:"operation_plan_status,omitempty"`
+	OperationPlanAttempts       int      `json:"operation_plan_attempt_count,omitempty"`
+	OperationPlanNextAt         string   `json:"operation_plan_next_attempt_at,omitempty"`
+	OperationPlanLeaseOwner     string   `json:"operation_plan_lease_owner,omitempty"`
+	OperationPlanLeaseExpiresAt string   `json:"operation_plan_lease_expires_at,omitempty"`
+	OperationPlanErrorSummary   string   `json:"operation_plan_error_summary,omitempty"`
 }
 
 func shouldDispatchReviewGatewayResult(job ReviewGatewayJob) bool {
@@ -531,6 +541,7 @@ func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, d
 	if mutatesGitLink {
 		mode = "controlled_write"
 	}
+	queueClass, _ := reviewGatewayQueueClassForAction(intent.Name)
 	return ReviewGatewayJob{
 		SchemaVersion:         reviewGatewayJobSchema,
 		JobID:                 "job-" + hex.EncodeToString(digest[:8]),
@@ -555,6 +566,9 @@ func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, d
 		RequiresAdmin:         requiresAdmin,
 		MaxAttempts:           3,
 		NextAttemptAt:         now.Format(time.RFC3339Nano),
+		QueueClass:            queueClass,
+		Priority:              reviewGatewayDefaultPriority(queueClass),
+		OperationPlanStatus:   "none",
 	}
 }
 

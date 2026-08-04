@@ -41,6 +41,7 @@ type ReviewReconciliationRunResult struct {
 	Candidates []ReviewReconciliationCandidate `json:"candidates"`
 	Enqueued   int                             `json:"enqueued"`
 	Duplicates int                             `json:"duplicates"`
+	Skipped    int                             `json:"skipped"`
 }
 
 type ReviewReconciliationScheduler struct {
@@ -148,15 +149,25 @@ func (s *ReviewReconciliationScheduler) RunOnce(ctx context.Context, dryRun bool
 			CreatedAt:        reviewGatewayTimestamp(now), MutatesGitLink: false,
 			MaxAttempts: reviewGatewayDefaultMaxAttempts, NextAttemptAt: reviewGatewayTimestamp(now),
 		}
-		saved, enqueueErr := s.Queue.EnqueuePreparedJob(ctx, job)
+		saved := false
+		admission := ReviewJobAdmissionResult{}
+		var enqueueErr error
+		if queue, ok := s.Queue.(ReviewPreparedJobAdmissionEnqueuer); ok {
+			admission, enqueueErr = queue.EnqueuePreparedJobWithAdmission(ctx, job, "reconciliation")
+			saved = admission.Created
+		} else {
+			saved, enqueueErr = s.Queue.EnqueuePreparedJob(ctx, job)
+		}
 		if enqueueErr != nil {
 			_ = s.Store.saveReviewReconciliationCursor(ctx, candidate, cursor, "failed", enqueueErr.Error(), "", now, interval)
 			return result, enqueueErr
 		}
 		if saved {
 			result.Enqueued++
-		} else {
+		} else if admission.Coalesced || admission.Duplicate {
 			result.Duplicates++
+		} else {
+			result.Skipped++
 		}
 		if err := s.Store.saveReviewReconciliationCursor(ctx, candidate, cursor, "scheduled", "", bucketText, now, interval); err != nil {
 			return result, err
