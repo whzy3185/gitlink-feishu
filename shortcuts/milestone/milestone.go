@@ -21,6 +21,7 @@ func Shortcuts() []*common.Shortcut {
 				{Name: "sort-direction", Usage: "Sort direction: asc or desc"},
 				{Name: "page", Short: "p", Usage: "Page number", Default: "1"},
 				{Name: "limit", Short: "l", Usage: "Items per page", Default: "20"},
+				{Name: "all", Usage: "Fetch all pages automatically (ignores --page)", Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -34,6 +35,13 @@ func Shortcuts() []*common.Shortcut {
 				setQueryIfPresent(q, "only_name", ctx.Arg("only-name"))
 				setQueryIfPresent(q, "sort_by", ctx.Arg("sort-by"))
 				setQueryIfPresent(q, "sort_direction", ctx.Arg("sort-direction"))
+				if ctx.Arg("all") == "true" {
+					items, err := ctx.PaginateAllKey(milestonePath(ctx), q, "milestones")
+					if err != nil {
+						return err
+					}
+					return ctx.Output(common.NewListEnvelope("milestones", items))
+				}
 				env, err := ctx.CallAPIWithQuery("GET", milestonePath(ctx), q)
 				if err != nil {
 					return err
@@ -46,8 +54,8 @@ func Shortcuts() []*common.Shortcut {
 			Description: "Create a milestone",
 			Flags: []common.Flag{
 				{Name: "name", Short: "n", Usage: "Milestone name", Required: true},
-				{Name: "description", Short: "d", Usage: "Milestone description"},
-				{Name: "due-date", Usage: "Due date in YYYY-MM-DD format"},
+				{Name: "description", Short: "d", Usage: "Milestone description", Required: true},
+				{Name: "due-date", Usage: "Due date in YYYY-MM-DD format", Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -153,6 +161,7 @@ func Shortcuts() []*common.Shortcut {
 		},
 		newStatusShortcut("close", "Close a milestone", "closed"),
 		newStatusShortcut("reopen", "Reopen a milestone", "open"),
+		newMilestoneReportShortcut(),
 	}
 }
 
@@ -165,10 +174,10 @@ func milestoneItemPath(ctx *common.RuntimeContext, id string) string {
 }
 
 func milestoneStatusPath(ctx *common.RuntimeContext, id string) string {
-	return fmt.Sprintf("%s/milestones/%s/update_status", ctx.RepoPath(), url.PathEscape(id))
+	return fmt.Sprintf("%s/%s/update_status", milestonePath(ctx), url.PathEscape(id))
 }
 
-func milestonePayload(ctx *common.RuntimeContext, requireName bool) (map[string]interface{}, error) {
+func milestonePayload(ctx *common.RuntimeContext, requireAll bool) (map[string]interface{}, error) {
 	payload := map[string]interface{}{}
 	if name := ctx.Arg("name"); name != "" {
 		payload["name"] = name
@@ -180,9 +189,11 @@ func milestonePayload(ctx *common.RuntimeContext, requireName bool) (map[string]
 		payload["effective_date"] = dueDate
 	}
 
-	if requireName {
-		if _, err := ctx.RequireArg("name"); err != nil {
-			return nil, err
+	if requireAll {
+		for _, name := range []string{"name", "description", "due-date"} {
+			if _, err := ctx.RequireArg(name); err != nil {
+				return nil, err
+			}
 		}
 		return payload, nil
 	}

@@ -1,5 +1,10 @@
 ---
 name: gitlink-pr-topology
+version: 1.0.0
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli pr --help"
 description: "开源社区 PR 队列关系图谱：面向一个仓库的多条 open Pull Request，识别它们之间的依赖链、功能重叠、替代/超越关系、冲突热点、可打包评审分组和建议处理顺序。用于维护者需要批量梳理 open PR 为什么互相卡住、哪几条其实在做同一件事、哪一条实现更完整、哪些 PR 应该先合并或先关闭，以及如何把复杂队列整理成可执行决策时。"
 ---
 

@@ -1,5 +1,10 @@
 ---
 name: gitlink-cli-contract-guard
+version: 1.0.0
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli --help"
 description: "CLI 契约守卫：审查 GitLink CLI 改动是否破坏既有命令契约，重点检查 flags 与默认值、命令层级与帮助文本、`--format json` 输出结构、错误提示与编码质量、README/示例命令和实际行为是否漂移。用于用户需要判断某个 PR 或本地改动会不会破坏旧用法、引入不兼容输出、造成帮助文档失真，或在合并前补做兼容性审查时。"
 ---
 

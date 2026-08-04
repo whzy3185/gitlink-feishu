@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -53,7 +54,11 @@ func printYAML(w io.Writer, envelope *Envelope) error {
 func printTable(w io.Writer, envelope *Envelope) error {
 	if !envelope.OK {
 		if envelope.Error != nil {
-			fmt.Fprintf(w, "%s %s\n", red("Error:"), envelope.Error.Message)
+			if envelope.Error.Code != nil {
+				fmt.Fprintf(w, "%s %s\n", red(fmt.Sprintf("Error [%v]:", envelope.Error.Code)), envelope.Error.Message)
+			} else {
+				fmt.Fprintf(w, "%s %s\n", red("Error:"), envelope.Error.Message)
+			}
 			if envelope.Error.Suggestion != "" {
 				fmt.Fprintf(w, "%s %s\n", yellow("Suggestion:"), envelope.Error.Suggestion)
 			}
@@ -71,6 +76,14 @@ func printTable(w io.Writer, envelope *Envelope) error {
 	case []interface{}:
 		return printSliceTable(w, data)
 	case map[string]interface{}:
+		if key, items, ok := resourceWrappedList(data); ok {
+			for _, summaryKey := range collectKeys(data) {
+				if summaryKey != key {
+					fmt.Fprintf(w, "%s: %s\n", summaryKey, formatValue(data[summaryKey]))
+				}
+			}
+			return printSliceTable(w, items)
+		}
 		// For maps with nested structures, prefer JSON
 		if hasComplexValues(data) {
 			return printJSON(w, envelope)
@@ -141,7 +154,8 @@ func printMapTable(w io.Writer, m map[string]interface{}) error {
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(tw, "KEY\tVALUE")
 	fmt.Fprintln(tw, "---\t-----")
-	for k, v := range m {
+	for _, k := range collectKeys(m) {
+		v := m[k]
 		fmt.Fprintf(tw, "%s\t%s\n", k, formatValue(v))
 	}
 	return tw.Flush()
@@ -150,7 +164,7 @@ func printMapTable(w io.Writer, m map[string]interface{}) error {
 func collectKeys(m map[string]interface{}) []string {
 	keys := make([]string, 0, len(m))
 	// Prefer common keys first
-	priority := []string{"id", "name", "login", "title", "status", "state", "created_at", "updated_at"}
+	priority := []string{"number", "id", "name", "login", "title", "status", "state", "created_at", "updated_at"}
 	seen := map[string]bool{}
 	for _, k := range priority {
 		if _, ok := m[k]; ok {
@@ -158,12 +172,39 @@ func collectKeys(m map[string]interface{}) []string {
 			seen[k] = true
 		}
 	}
+	remaining := make([]string, 0, len(m)-len(keys))
 	for k := range m {
 		if !seen[k] {
-			keys = append(keys, k)
+			remaining = append(remaining, k)
 		}
 	}
+	sort.Strings(remaining)
+	keys = append(keys, remaining...)
 	return keys
+}
+
+func resourceWrappedList(data map[string]interface{}) (string, []interface{}, bool) {
+	var listKey string
+	var items []interface{}
+	for key, value := range data {
+		if _, nested := value.(map[string]interface{}); nested {
+			return "", nil, false
+		}
+		candidate, ok := value.([]interface{})
+		if !ok {
+			continue
+		}
+		if listKey != "" {
+			return "", nil, false
+		}
+		for _, item := range candidate {
+			if _, ok := item.(map[string]interface{}); !ok {
+				return "", nil, false
+			}
+		}
+		listKey, items = key, candidate
+	}
+	return listKey, items, listKey != ""
 }
 
 func formatValue(v interface{}) string {

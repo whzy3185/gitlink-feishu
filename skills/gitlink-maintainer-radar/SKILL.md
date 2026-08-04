@@ -1,5 +1,10 @@
 ---
 name: gitlink-maintainer-radar
+version: 1.0.0
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli pr --help"
 description: "维护者雷达：面向 GitLink 仓库维护者，联合扫描 open Pull Request、open Issue、消息提醒、review 分配和等待时长，识别响应超时、review 负载失衡、负责人长期停滞等协作瓶颈，生成按优先级排序的处置清单、催办建议和责任调整建议。用于用户需要值班巡检待办、判断哪些事项被晾着了、找出 reviewer 瓶颈、发现有负责人但无进展的条目，或生成维护者今日工作面板时。"
 ---
 

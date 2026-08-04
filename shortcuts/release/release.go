@@ -2,7 +2,11 @@ package release
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -13,7 +17,7 @@ import (
 
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
-	return []*common.Shortcut{
+	shortcuts := []*common.Shortcut{
 		{
 			Name:        "list",
 			Description: tr.T("cmd.release.list.short"),
@@ -215,6 +219,78 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "include-issues", Usage: "Include closed issues in notes", Default: "true"},
 			},
 			Run: runAutoNotes,
+		},
+	}
+	shortcuts = append(shortcuts, releaseDownloadShortcut())
+	shortcuts = append(shortcuts, releaseAssetShortcuts(tr)...)
+	return shortcuts
+}
+
+func releaseDownloadShortcut() *common.Shortcut {
+	return &common.Shortcut{
+		Name:  "download",
+		Flags: []common.Flag{{Name: "id", Required: true}, {Name: "output", Default: "."}},
+		Run: func(ctx *common.RuntimeContext) error {
+			if err := ctx.ResolveOwnerRepo(); err != nil {
+				return err
+			}
+			id, err := ctx.RequireArg("id")
+			if err != nil {
+				return err
+			}
+			env, err := ctx.CallAPI("GET", fmt.Sprintf("%s/releases/%s", ctx.RepoPath(), id), nil)
+			if err != nil {
+				return err
+			}
+			data, ok := env.Data.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("unexpected release response format")
+			}
+			assets, _ := data["assets"].([]interface{})
+			outputDir := ctx.Arg("output")
+			if outputDir == "" {
+				outputDir = "."
+			}
+			if err := os.MkdirAll(outputDir, 0o755); err != nil {
+				return err
+			}
+			downloaded := []string{}
+			for _, raw := range assets {
+				asset, _ := raw.(map[string]interface{})
+				assetURL, _ := asset["url"].(string)
+				name, _ := asset["filename"].(string)
+				if assetURL == "" || name == "" {
+					continue
+				}
+				if strings.HasPrefix(assetURL, "/") {
+					assetURL = ctx.Client.BaseURL + assetURL
+				}
+				resp, err := ctx.Client.HTTP.Get(assetURL)
+				if err != nil {
+					return err
+				}
+				if resp.StatusCode != http.StatusOK {
+					resp.Body.Close()
+					return fmt.Errorf("download %s: HTTP %d", name, resp.StatusCode)
+				}
+				path := filepath.Join(outputDir, filepath.Base(name))
+				file, err := os.Create(path)
+				if err != nil {
+					resp.Body.Close()
+					return err
+				}
+				_, copyErr := io.Copy(file, resp.Body)
+				closeErr := file.Close()
+				resp.Body.Close()
+				if copyErr != nil {
+					return copyErr
+				}
+				if closeErr != nil {
+					return closeErr
+				}
+				downloaded = append(downloaded, name)
+			}
+			return ctx.OutputData(map[string]interface{}{"downloaded": downloaded})
 		},
 	}
 }

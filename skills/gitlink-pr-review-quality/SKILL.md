@@ -3,9 +3,9 @@ name: gitlink-pr-review-quality
 version: 1.0.0
 description: "PR 审查效率看板：分析 PR 审查响应时间、审查者分布、沉默 PR 识别和审查健康度评分，输出优化建议。当用户需要了解 PR 审查是否成为瓶颈、审查响应速度、审查者覆盖度时触发。"
 metadata:
-requires:
-bins: ["gitlink-cli"]
-cliHelp: "gitlink-cli pr --help"
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli pr --help"
 ---
 
 # gitlink-pr-review-quality（PR 审查效率看板）

@@ -117,9 +117,9 @@ func TestAliasListSubcommand(t *testing.T) {
 
 	// 无别名时运行
 	buf := new(bytes.Buffer)
-	listCmd.SetOut(buf)
-	listCmd.SetArgs([]string{})
-	if err := listCmd.Execute(); err != nil {
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"+list"})
+	if err := cmd.Execute(); err != nil {
 		t.Fatalf("list failed: %v", err)
 	}
 	if !strings.Contains(buf.String(), "未定义任何别名") {
@@ -143,10 +143,13 @@ func TestAliasSetAndDeleteSubcommands(t *testing.T) {
 			deleteCmd = sub
 		}
 	}
+	if setCmd == nil || deleteCmd == nil {
+		t.Fatal("alias set/delete subcommands not found")
+	}
 
 	// +set
-	setCmd.SetArgs([]string{"rl", "repo +list"})
-	if err := setCmd.Execute(); err != nil {
+	cmd.SetArgs([]string{"+set", "rl", "repo +list"})
+	if err := cmd.Execute(); err != nil {
 		t.Fatalf("set failed: %v", err)
 	}
 
@@ -157,8 +160,8 @@ func TestAliasSetAndDeleteSubcommands(t *testing.T) {
 	}
 
 	// +delete
-	deleteCmd.SetArgs([]string{"rl"})
-	if err := deleteCmd.Execute(); err != nil {
+	cmd.SetArgs([]string{"+delete", "rl"})
+	if err := cmd.Execute(); err != nil {
 		t.Fatalf("delete failed: %v", err)
 	}
 
@@ -181,9 +184,12 @@ func TestAliasDeleteNonExistent(t *testing.T) {
 			break
 		}
 	}
+	if deleteCmd == nil {
+		t.Fatal("alias delete subcommand not found")
+	}
 
-	deleteCmd.SetArgs([]string{"nonexistent"})
-	err := deleteCmd.Execute()
+	cmd.SetArgs([]string{"+delete", "nonexistent"})
+	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected error when deleting nonexistent alias")
 	}

@@ -1,5 +1,10 @@
 ---
 name: gitlink-research-trust
+version: 1.0.0
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli repo --help"
 description: "科研开源可信度评估：面向论文代码、数据集、实验复现仓库，使用 gitlink-cli 采集仓库信息、目录树、README 和协作指标，生成复现性、可追踪性、协作健康、合规风险和文档可用性报告。当用户需要评估科研仓库可信度、复现准备度或开源治理风险时触发。"
 ---
 

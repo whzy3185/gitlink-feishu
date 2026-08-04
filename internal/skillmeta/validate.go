@@ -86,7 +86,7 @@ func validateSkill(root, name string) []Problem {
 	if utf8.RuneCountInString(fm.Description) < minDescriptionRunes {
 		add("description", fmt.Sprintf("must be at least %d characters; it is the router's only routing signal", minDescriptionRunes))
 	}
-	if !containsString(fm.Metadata.Requires.Bins, "gitlink-cli") {
+	if !containsString(fm.Metadata.Requires.Bins, "gitlink-cli") && !containsString(fm.Metadata.Requires.BinsAny, "gitlink-cli") {
 		add("metadata.requires.bins", `must contain "gitlink-cli"`)
 	}
 	if strings.TrimSpace(fm.Metadata.CLIHelp) == "" {

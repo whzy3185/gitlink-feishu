@@ -1,5 +1,10 @@
 ---
 name: gitlink-pr-assessor
+version: 1.0.0
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli pr --help"
 description: "开源社区 Pull Request 队列评估与执行验证：面向 open 且尚未形成维护者结论的 PR，批量拉取 GitLink Pull Request 的描述、diff、review、CI 与仓库上下文，评估贡献价值、实现可行性、代码质量、安全性、维护成本、协作质量和回归风险，并在项目规定环境下验证 PR 声明是否与实际行为一致。用于维护者需要自动筛查待审 PR、生成逐条管理报告、给出 review 建议，或为 webhook/定时任务/Agent runner 提供结构化决策结果时。"
 ---
 

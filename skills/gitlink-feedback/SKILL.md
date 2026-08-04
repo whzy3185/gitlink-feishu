@@ -1,7 +1,10 @@
 ---
 name: gitlink-feedback
+version: 1.0.0
 description: "GitLink 反馈建议提交：从命令行提交平台问题、改进建议或 CLI 使用反馈，支持文件、stdin、dry-run 和上下文元数据。"
 metadata:
+  requires:
+    bins: ["gitlink-cli"]
   cliHelp: "gitlink-cli feedback --help"
 ---
 

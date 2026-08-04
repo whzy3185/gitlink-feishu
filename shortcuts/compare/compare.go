@@ -49,6 +49,9 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
+				if _, err := parsePositiveIntArg(ctx.Arg("limit"), 20, "limit"); err != nil {
+					return err
+				}
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
@@ -72,6 +75,26 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}
 				return ctx.Output(env)
 			},
+		},
+		{
+			Name:        "commits",
+			Description: "Summarize commits between two refs",
+			Flags: []common.Flag{
+				{Name: "head", Required: true}, {Name: "base", Required: true},
+				{Name: "author"}, {Name: "keyword"}, {Name: "limit", Default: "20"},
+				{Name: "reverse", Bool: true, Default: "false"},
+			},
+			Run: runCompareCommits,
+		},
+		{
+			Name:        "summary",
+			Description: "Aggregate commits and changed files between two refs",
+			Flags: []common.Flag{
+				{Name: "head", Required: true}, {Name: "base", Required: true},
+				{Name: "max-files", Default: "200"}, {Name: "top-files", Default: "10"},
+				{Name: "commit-limit", Default: "10"},
+			},
+			Run: runCompareSummary,
 		},
 	}
 }

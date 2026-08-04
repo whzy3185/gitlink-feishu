@@ -12,21 +12,31 @@ import (
 
 // Frontmatter is the metadata block every SKILL.md carries.
 type Frontmatter struct {
-	Name        string   `yaml:"name"`
-	Version     string   `yaml:"version"`
-	Description string   `yaml:"description"`
-	Metadata    Metadata `yaml:"metadata"`
+	Name         string      `yaml:"name"`
+	Version      string      `yaml:"version"`
+	Description  string      `yaml:"description"`
+	Metadata     Metadata    `yaml:"metadata"`
+	AgentCreated interface{} `yaml:"agent_created"`
+	License      interface{} `yaml:"license"`
 }
 
 // Metadata holds the nested metadata fields of a skill.
 type Metadata struct {
-	Requires Requires `yaml:"requires"`
-	CLIHelp  string   `yaml:"cliHelp"`
+	Requires     Requires    `yaml:"requires"`
+	CLIHelp      string      `yaml:"cliHelp"`
+	Orchestrates []string    `yaml:"orchestrates"`
+	Scenario     interface{} `yaml:"scenario"`
+	Platforms    interface{} `yaml:"platforms"`
+	Shortcuts    interface{} `yaml:"shortcuts"`
 }
 
 // Requires lists what a skill needs to run.
 type Requires struct {
-	Bins []string `yaml:"bins"`
+	Bins         []string    `yaml:"bins"`
+	OptionalBins []string    `yaml:"optional_bins"`
+	BinsAny      []string    `yaml:"bins_any"`
+	BinsNote     interface{} `yaml:"bins_note"`
+	Python       interface{} `yaml:"python"`
 }
 
 var errNoFrontmatter = errors.New("no `---` delimited frontmatter block")

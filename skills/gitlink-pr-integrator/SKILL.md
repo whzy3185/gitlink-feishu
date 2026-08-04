@@ -1,5 +1,10 @@
 ---
 name: gitlink-pr-integrator
+version: 1.0.0
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli pr --help"
 description: 评估 GitLink Pull Request 是否已经具备集成到主线的条件，输出合并态验证、与其他 open PR 的冲突风险、集成影响面、发布与回移建议以及合并后动作清单。用于维护者需要决定某个 PR 是否可以进入 merge queue、为一批待合并 PR 排顺序、在合并前验证 rebase 或 merge 后是否仍能构建测试通过，或为自动化队列生成集成就绪报告时。
 ---
 

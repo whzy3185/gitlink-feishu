@@ -2,6 +2,7 @@ package user
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
@@ -356,9 +357,9 @@ func TestUserStatsHTTPError(t *testing.T) {
 	}
 }
 
-// --- trends ---
+// --- legacy trends contract ---
 
-func TestUserTrends(t *testing.T) {
+func TestUserTrendsLegacyContract(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/users/alice/project_trends.json" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)

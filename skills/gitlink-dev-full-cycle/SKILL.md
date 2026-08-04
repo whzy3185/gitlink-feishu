@@ -1,5 +1,10 @@
 ---
 name: gitlink-dev-full-cycle
+version: 1.0.0
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli --help"
 description: "需求开发测试发布全流程。触发词：新需求开发、全流程推进、从需求到上线、启动需求、开发测试发布、feature全流程、需求落地、需求闭环、从0到1交付、从零开始开发、新建项目开发。6阶段：项目初始化→需求分析→技术设计→编码开发→测试验证→发布上线。集成gitlink-cli，分支三分支模型：master主分支/feature-xxx开发分支/release-xxx发布分支，每阶段输出标准文档。"
 agent_created: true
 ---

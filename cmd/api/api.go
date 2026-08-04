@@ -7,23 +7,14 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
 	"github.com/gitlink-org/gitlink-cli/internal/client"
-	"github.com/gitlink-org/gitlink-cli/internal/context"
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/internal/output"
-)
-
-// apiOwnerPlaceholder and apiRepoPlaceholder match the REST-style :owner / :repo
-// path placeholders used throughout the GitLink API docs and shortcut commands.
-var (
-	apiOwnerPlaceholder = regexp.MustCompile(`:owner\b`)
-	apiRepoPlaceholder  = regexp.MustCompile(`:repo\b`)
 )
 
 func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
@@ -37,6 +28,7 @@ func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
 		Long:  tr.T("cmd.api.long"),
 		Example: `  gitlink-cli api GET /users/me
   gitlink-cli api GET /projects --query 'page=1&limit=10'
+  gitlink-cli api GET /:owner/:repo/issues --paginate
   gitlink-cli api POST /:owner/:repo/issues --body '{"subject":"Bug","description":"..."}'
   gitlink-cli api POST /:owner/:repo/issues --body-file issue.json
   gitlink-cli api --batch-file plan.json --dry-run
@@ -49,6 +41,7 @@ func NewAPICmd(translators ...*i18n.Translator) *cobra.Command {
 	apiCmd.Flags().String("body-file", "", tr.T("flag.api.body_file"))
 	apiCmd.Flags().Bool("body-stdin", false, tr.T("flag.api.body_stdin"))
 	apiCmd.Flags().String("query", "", tr.T("flag.api.query"))
+	apiCmd.Flags().Bool("paginate", false, tr.T("flag.api.paginate"))
 	apiCmd.Flags().StringSlice("header", nil, tr.T("flag.api.header"))
 	apiCmd.Flags().String("batch-file", "", tr.T("flag.api.batch_file"))
 	apiCmd.Flags().Bool("dry-run", false, tr.T("flag.api.batch_dry_run"))
@@ -69,47 +62,31 @@ func validateAPIArgs(c *cobra.Command, args []string) error {
 	return cobra.ExactArgs(2)(c, args)
 }
 
-// msysPathRe matches Windows drive-letter prefixes produced by MSYS2/Git Bash
-// path conversion, e.g. "C:/Program Files/Git/v1/owner/repo" for input "/v1/owner/repo".
-var msysPathRe = regexp.MustCompile(`^[A-Za-z]:/`)
-
-// restoreAPIPath restores an API path polluted by MSYS2/Git Bash path
-// conversion on Windows, e.g. "C:/Program Files/Git/v1/owner/repo" -> "/v1/owner/repo".
-// If the path does not start with a drive letter, or no known API prefix is
-// found, the original path is returned unchanged.
-func restoreAPIPath(path string) string {
-	if !msysPathRe.MatchString(path) {
-		return path
-	}
-	// Pick the EARLIEST occurrence among known API prefixes, so a path like
-	// ".../api/v1/users" restores to "/api/v1/users" rather than "/v1/users".
-	bestIdx := -1
-	for _, prefix := range []string{"/v1/", "/v2/", "/api/", "/users/", "/projects/"} {
-		if idx := strings.Index(path, prefix); idx >= 0 && (bestIdx == -1 || idx < bestIdx) {
-			bestIdx = idx
-		}
-	}
-	if bestIdx >= 0 {
-		return path[bestIdx:]
-	}
-	return path
-}
-
 func runAPI(c *cobra.Command, args []string) error {
 	batchFile, _ := c.Flags().GetString("batch-file")
+	paginate, _ := c.Flags().GetBool("paginate")
 	if batchFile != "" {
+		if paginate {
+			return fmt.Errorf("--paginate cannot be used with --batch-file")
+		}
 		return runAPIBatch(c, batchFile)
 	}
 
 	method := strings.ToUpper(args[0])
-
-	// Fix MSYS2/Git Bash path auto-conversion on Windows first:
-	// "/v1/owner/repo" is rewritten to "C:/Program Files/Git/v1/owner/repo".
-	rawPath := restoreAPIPath(args[1])
-
-	path, err := resolveAPIPath(c, rawPath)
+	path := args[1]
+	vars, err := parseBatchVars(c)
 	if err != nil {
 		return err
+	}
+	path = strings.ReplaceAll(path, ":owner", cmdutil.Owner)
+	path = strings.ReplaceAll(path, ":repo", cmdutil.Repo)
+	path, err = renderTemplate(path, vars)
+	if err != nil {
+		return err
+	}
+
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
 	}
 
 	cli, err := client.New()
@@ -122,15 +99,54 @@ func runAPI(c *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if body != nil {
+		body, err = renderBatchValue(body, vars)
+		if err != nil {
+			return err
+		}
+	}
 
 	var query url.Values
 	queryStr, _ := c.Flags().GetString("query")
 	if queryStr != "" {
-		var err error
+		queryStr, err = renderTemplate(queryStr, vars)
+		if err != nil {
+			return err
+		}
 		query, err = url.ParseQuery(queryStr)
 		if err != nil {
 			return fmt.Errorf("invalid query string: %w", err)
 		}
+	}
+
+	dryRun, _ := c.Flags().GetBool("dry-run")
+	if dryRun {
+		return output.Print(output.SuccessEnvelope(map[string]interface{}{
+			"dry_run": true,
+			"method":  method,
+			"path":    path,
+			"query":   query,
+			"body":    body,
+		}, nil), resolveFormat())
+	}
+
+	if paginate {
+		if method != "GET" {
+			return fmt.Errorf("--paginate only supports GET requests, got %s", method)
+		}
+		if body != nil {
+			return fmt.Errorf("--paginate cannot be used with a request body")
+		}
+		items, err := cli.PaginateAll(path, query)
+		if err != nil {
+			var apiErr *client.APIError
+			if errors.As(err, &apiErr) {
+				errEnv := output.ErrorEnvelope(apiErr.Code, apiErr.Message, "")
+				return output.Print(errEnv, resolveFormat())
+			}
+			return err
+		}
+		return output.Print(paginatedEnvelope(items), resolveFormat())
 	}
 
 	env, err := cli.Do(method, path, body, query)
@@ -146,38 +162,21 @@ func runAPI(c *cobra.Command, args []string) error {
 	return output.Print(env, resolveFormat())
 }
 
-// resolveAPIPath prepares a single-call path: it renders {{var}} templates
-// supplied via --var (consistent with batch mode), substitutes the REST-style
-// :owner / :repo placeholders (resolved from --owner/--repo or the git remote,
-// exactly like the shortcut commands), and ensures a leading slash.
-func resolveAPIPath(c *cobra.Command, rawPath string) (string, error) {
-	path := rawPath
-
-	overrides, err := parseBatchVars(c)
-	if err != nil {
-		return "", err
-	}
-	if len(overrides) > 0 {
-		rendered, rerr := renderTemplate(path, overrides)
-		if rerr != nil {
-			return "", rerr
+// paginatedEnvelope wraps merged pages in the same shape as a single-page
+// list response: {"total_count": N, "items": [...]}.
+func paginatedEnvelope(items []json.RawMessage) *output.Envelope {
+	decoded := make([]interface{}, 0, len(items))
+	for _, item := range items {
+		var v interface{}
+		if err := json.Unmarshal(item, &v); err == nil {
+			decoded = append(decoded, v)
 		}
-		path = rendered
 	}
-
-	if apiOwnerPlaceholder.MatchString(path) || apiRepoPlaceholder.MatchString(path) {
-		owner, repo, rerr := context.ResolveOwnerRepo(cmdutil.Owner, cmdutil.Repo)
-		if rerr != nil {
-			return "", fmt.Errorf("path contains :owner/:repo placeholders but they could not be resolved: %w", rerr)
-		}
-		path = apiOwnerPlaceholder.ReplaceAllLiteralString(path, owner)
-		path = apiRepoPlaceholder.ReplaceAllLiteralString(path, repo)
+	data := map[string]interface{}{
+		"total_count": len(decoded),
+		"items":       decoded,
 	}
-
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	return path, nil
+	return output.SuccessEnvelope(data, &output.Meta{TotalCount: len(decoded)})
 }
 
 func readJSONBody(c *cobra.Command) (interface{}, error) {

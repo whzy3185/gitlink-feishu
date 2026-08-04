@@ -30,7 +30,7 @@ func Shortcuts() []*common.Shortcut {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
 					return err
 				}
-				env, err := ctx.CallAPI("GET", collaboratorsPath(ctx), nil)
+				env, err := ctx.CallAPI("GET", collaboratorsListPath(ctx), nil)
 				if err != nil {
 					return err
 				}
@@ -331,6 +331,10 @@ func runBatchAdd(ctx *common.RuntimeContext) error {
 
 func collaboratorsPath(ctx *common.RuntimeContext) string {
 	return fmt.Sprintf("/%s/%s/collaborators", ctx.Owner, ctx.Repo)
+}
+
+func collaboratorsListPath(ctx *common.RuntimeContext) string {
+	return fmt.Sprintf("/v1/%s/%s/collaborators", ctx.Owner, ctx.Repo)
 }
 
 func collaboratorsRemovePath(ctx *common.RuntimeContext) string {

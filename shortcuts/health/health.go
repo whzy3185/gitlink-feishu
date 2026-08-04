@@ -93,6 +93,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return nil
 			},
 		},
+		diagnoseShortcut(tr),
 	}
 }
 

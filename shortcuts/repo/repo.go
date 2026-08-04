@@ -202,7 +202,23 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		{
 			Name:        "contributors",
 			Description: "List repository contributors",
+			Flags:       []common.Flag{{Name: "page", Default: "1"}, {Name: "limit", Default: "20"}},
 			Run:         runContributors,
+		},
+		{
+			Name:  "files",
+			Flags: []common.Flag{{Name: "path"}, {Name: "ref"}},
+			Run:   runFiles,
+		},
+		{
+			Name:  "tags",
+			Flags: []common.Flag{{Name: "page", Default: "1"}, {Name: "limit", Default: "20"}},
+			Run:   func(ctx *common.RuntimeContext) error { return runRepoPagedList(ctx, "tags") },
+		},
+		{
+			Name:  "commits",
+			Flags: []common.Flag{{Name: "page", Default: "1"}, {Name: "limit", Default: "20"}, {Name: "sha"}, {Name: "path"}},
+			Run:   runRepoCommits,
 		},
 		{
 			Name:        "activity",
@@ -521,11 +537,73 @@ func runContributors(ctx *common.RuntimeContext) error {
 	if err := ctx.ResolveOwnerRepo(); err != nil {
 		return err
 	}
-	env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/contributors", nil)
+	query := url.Values{}
+	query.Set("page", defaultValue(ctx.Arg("page"), "1"))
+	query.Set("limit", defaultValue(ctx.Arg("limit"), "20"))
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/contributors", query)
 	if err != nil {
 		return err
 	}
 	return ctx.Output(env)
+}
+
+func runFiles(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	query := url.Values{}
+	if value := ctx.Arg("path"); value != "" {
+		query.Set("filepath", value)
+	}
+	if value := ctx.Arg("ref"); value != "" {
+		query.Set("ref", value)
+	}
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/files", query)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runRepoPagedList(ctx *common.RuntimeContext, resource string) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	query := url.Values{}
+	query.Set("page", defaultValue(ctx.Arg("page"), "1"))
+	query.Set("limit", defaultValue(ctx.Arg("limit"), "20"))
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/"+resource, query)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func runRepoCommits(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	query := url.Values{}
+	query.Set("page", defaultValue(ctx.Arg("page"), "1"))
+	query.Set("limit", defaultValue(ctx.Arg("limit"), "20"))
+	if value := ctx.Arg("sha"); value != "" {
+		query.Set("sha", value)
+	}
+	if value := ctx.Arg("path"); value != "" {
+		query.Set("path", value)
+	}
+	env, err := ctx.CallAPIWithQuery("GET", ctx.RepoPath()+"/commits", query)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
+}
+
+func defaultValue(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func runFile(ctx *common.RuntimeContext) error {

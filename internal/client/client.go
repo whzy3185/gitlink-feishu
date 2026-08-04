@@ -16,9 +16,9 @@ import (
 
 type Client struct {
 	NoProgress bool
-	HTTP    *http.Client
-	BaseURL string
-	Debug   bool
+	HTTP       *http.Client
+	BaseURL    string
+	Debug      bool
 }
 
 type APIError struct {
@@ -105,6 +105,18 @@ func (c *Client) Do(method, path string, body interface{}, query url.Values) (*o
 			StatusCode: resp.StatusCode,
 			Code:       resp.StatusCode,
 			Message:    fmt.Sprintf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respData))),
+		}
+	}
+
+	// GitLink may return a login or gateway HTML page with a successful HTTP
+	// status. Treat that response as unavailable instead of valid API data.
+	if detectHTMLResponse(respData) {
+		msg := "服务器返回了 HTML 页面而非 JSON 数据"
+		suggestion := suggestHTMLFix()
+		return output.ErrorEnvelope(resp.StatusCode, msg, suggestion), &APIError{
+			StatusCode: resp.StatusCode,
+			Code:       "HTML_RESPONSE",
+			Message:    msg + "\n" + suggestion,
 		}
 	}
 
@@ -217,6 +229,23 @@ func (c *Client) Put(path string, body interface{}) (*output.Envelope, error) {
 
 func (c *Client) Delete(path string, query url.Values) (*output.Envelope, error) {
 	return c.Do("DELETE", path, nil, query)
+}
+
+// detectHTMLResponse identifies full HTML documents, allowing leading
+// whitespace and an XML declaration while deliberately ignoring fragments.
+func detectHTMLResponse(data []byte) bool {
+	trimmed := bytes.TrimSpace(data)
+	if bytes.HasPrefix(trimmed, []byte("<?")) {
+		if end := bytes.Index(trimmed, []byte("?>")); end >= 0 {
+			trimmed = bytes.TrimSpace(trimmed[end+2:])
+		}
+	}
+	lower := bytes.ToLower(trimmed)
+	return bytes.HasPrefix(lower, []byte("<!doctype")) || bytes.HasPrefix(lower, []byte("<html"))
+}
+
+func suggestHTMLFix() string {
+	return "API 返回了 HTML 页面而非 JSON 数据。请运行 gitlink-cli auth login 检查登录状态和 Token 权限，并确认 API 路径有效。"
 }
 
 func suggestFix(code int) string {

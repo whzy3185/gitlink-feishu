@@ -90,9 +90,36 @@ func (ctx *RuntimeContext) CallAPIWithQuery(method, path string, query url.Value
 	return ctx.Client.Do(method, path, nil, query)
 }
 
+func (ctx *RuntimeContext) PostMultipart(path string, fields map[string]string, files []client.MultipartFile) (*output.Envelope, error) {
+	return ctx.Client.PostMultipart(path, fields, files)
+}
+
 // PaginateAll fetches all pages.
 func (ctx *RuntimeContext) PaginateAll(path string, params url.Values) ([]json.RawMessage, error) {
 	return ctx.Client.PaginateAll(path, params)
+}
+
+// PaginateAllKey fetches all pages from an endpoint whose list is wrapped in
+// the named response field.
+func (ctx *RuntimeContext) PaginateAllKey(path string, params url.Values, listKey string) ([]json.RawMessage, error) {
+	return ctx.Client.PaginateAllKey(path, params, listKey)
+}
+
+// NewListEnvelope converts combined raw page entries back into the ordinary
+// GitLink list response shape.
+func NewListEnvelope(listKey string, items []json.RawMessage) *output.Envelope {
+	decoded := make([]interface{}, 0, len(items))
+	for _, item := range items {
+		var value interface{}
+		if err := json.Unmarshal(item, &value); err == nil {
+			decoded = append(decoded, value)
+		}
+	}
+	data := map[string]interface{}{
+		"total_count": len(decoded),
+		listKey:       decoded,
+	}
+	return output.SuccessEnvelope(data, &output.Meta{TotalCount: len(decoded)})
 }
 
 // Output prints the envelope in the configured format.

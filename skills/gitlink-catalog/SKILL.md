@@ -1,5 +1,10 @@
 ---
 name: gitlink-catalog
+version: 1.0.0
+metadata:
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli catalog --help"
 description: "查询 GitLink 平台模板目录，包括仓库创建时可选的许可证模板和 .gitignore 模板。"
 ---
 

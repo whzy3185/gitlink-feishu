@@ -127,6 +127,25 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		newCIToggleShortcut("enable"),
+		newCIToggleShortcut("disable"),
+	}
+}
+
+func newCIToggleShortcut(action string) *common.Shortcut {
+	return &common.Shortcut{
+		Name:        action,
+		Description: action + " repository actions",
+		Run: func(ctx *common.RuntimeContext) error {
+			if err := ctx.ResolveOwnerRepo(); err != nil {
+				return err
+			}
+			env, err := ctx.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/actions/%s", ctx.Owner, ctx.Repo, action), nil)
+			if err != nil {
+				return err
+			}
+			return ctx.Output(env)
+		},
 	}
 }
 

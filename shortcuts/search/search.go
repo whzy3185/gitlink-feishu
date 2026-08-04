@@ -2,7 +2,9 @@ package search
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
@@ -11,6 +13,44 @@ import (
 func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 	tr := shortcutTranslator(translators...)
 	return []*common.Shortcut{
+		{
+			Name:        "issues",
+			Description: "Search repository issues",
+			Flags: []common.Flag{
+				{Name: "keyword", Required: true}, {Name: "category"},
+				{Name: "assignee"}, {Name: "author"}, {Name: "milestone"}, {Name: "tag"},
+				{Name: "sort-by"}, {Name: "sort-dir"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				keyword, err := ctx.RequireArg("keyword")
+				if err != nil {
+					return err
+				}
+				query := url.Values{"keyword": []string{keyword}}
+				for arg, field := range map[string]string{
+					"category": "category", "assignee": "assigner_id", "author": "author_id",
+					"milestone": "milestone_id", "tag": "issue_tag_ids", "sort-dir": "sort_direction",
+				} {
+					if value := ctx.Arg(arg); value != "" {
+						query.Set(field, value)
+					}
+				}
+				if value := ctx.Arg("sort-by"); value != "" {
+					if !strings.Contains(value, ".") {
+						value = "issues." + value
+					}
+					query.Set("sort_by", value)
+				}
+				env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("/v1/%s/%s/issues", ctx.Owner, ctx.Repo), query)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
 		{
 			Name:        "repos",
 			Description: tr.T("cmd.search.repos.short"),

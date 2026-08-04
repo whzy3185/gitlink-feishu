@@ -41,12 +41,12 @@ func NewAliasCmd() *cobra.Command {
 			RunE: func(cmd *cobra.Command, args []string) error {
 				aliases, _ := loadAliases()
 				if len(aliases) == 0 {
-					fmt.Println("（未定义任何别名）")
-					fmt.Println("使用 alias +set <名称> <命令> 来创建别名")
+					cmd.Println("（未定义任何别名）")
+					cmd.Println("使用 alias +set <名称> <命令> 来创建别名")
 					return nil
 				}
 				for k, v := range aliases {
-					fmt.Printf("  %-15s → %s\n", k, v)
+					cmd.Printf("  %-15s → %s\n", k, v)
 				}
 				return nil
 			},
@@ -64,7 +64,7 @@ func NewAliasCmd() *cobra.Command {
 				if err := saveAliases(aliases); err != nil {
 					return err
 				}
-				fmt.Printf("别名已设置: %s → %s\n", args[0], args[1])
+				cmd.Printf("别名已设置: %s → %s\n", args[0], args[1])
 				return nil
 			},
 		},
@@ -82,7 +82,7 @@ func NewAliasCmd() *cobra.Command {
 				if err := saveAliases(aliases); err != nil {
 					return err
 				}
-				fmt.Printf("别名已删除: %s\n", args[0])
+				cmd.Printf("别名已删除: %s\n", args[0])
 				return nil
 			},
 		},
