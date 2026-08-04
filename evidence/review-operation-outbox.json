@@ -1,0 +1,61 @@
+﻿{
+    "schema_version":  "feishu.review-operation-outbox-evidence/v1",
+    "passed":  true,
+    "storage":  "temporary_sqlite",
+    "transport":  "httptest_and_fake_clients",
+    "schema_migrations":  [
+                              11,
+                              12,
+                              13,
+                              14,
+                              15
+                          ],
+    "operation_status_counts":  {
+                                    "pending":  2,
+                                    "succeeded":  5,
+                                    "unchanged":  2,
+                                    "stale":  1,
+                                    "unknown":  2,
+                                    "retry_scheduled":  1,
+                                    "dead_letter":  1
+                                },
+    "attempt_count":  11,
+    "unknown_count":  2,
+    "operation_payload_max_bytes":  262144,
+    "secret_payloads_rejected":  true,
+    "external_writes":  {
+                            "gitlink_get":  0,
+                            "gitlink_post":  0,
+                            "feishu_message":  0,
+                            "base":  0,
+                            "doc":  0,
+                            "task":  0
+                        },
+    "restart":  {
+                    "schema_version":  "feishu.review-operation-restart-evidence/v1",
+                    "passed":  true,
+                    "storage":  "temporary_sqlite",
+                    "schema_migrations":  [
+                                              11,
+                                              12,
+                                              13,
+                                              14,
+                                              15
+                                          ],
+                    "operation_count_before_restart":  1,
+                    "operation_count_after_restart":  1,
+                    "expired_lease_recovered":  true,
+                    "stale_worker_fenced":  true,
+                    "duplicate_operation_count":  0,
+                    "simulated_duplicate_remote_writes":  false,
+                    "identifiers":  "synthetic_or_hashed",
+                    "external_writes":  {
+                                            "gitlink_get":  0,
+                                            "gitlink_post":  0,
+                                            "feishu_message":  0,
+                                            "base":  0,
+                                            "doc":  0,
+                                            "task":  0
+                                        }
+                }
+}
