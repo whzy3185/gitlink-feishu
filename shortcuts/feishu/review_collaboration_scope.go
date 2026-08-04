@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var ErrReviewCollaborationConflict = errors.New("review collaboration state changed concurrently")
+
 // reviewPRSnapshot contains facts whose authority is GitLink. It is shared by
 // chats only inside one installation and never stores Feishu collaboration
 // ownership or deadlines.
@@ -131,9 +133,11 @@ func (s *SQLiteReviewGatewayStore) applyScopedCollaborationAction(
 			return ReviewCollaborationItem{}, err
 		}
 	}
+	statePersisted := state.CollaborationKey != ""
 	if state.CollaborationKey == "" {
 		state = newScopedReviewCollaboration(job, now)
 	}
+	stateBeforeMutation := state
 	before := mergeScopedReviewItem(snapshot, state)
 	if snapshot.Archived {
 		return ReviewCollaborationItem{}, fmt.Errorf("PR #%d is archived and no longer accepts collaboration actions", job.PRNumber)
@@ -174,7 +178,7 @@ func (s *SQLiteReviewGatewayStore) applyScopedCollaborationAction(
 	}
 	state.UpdatedBy = job.RequestedBy
 	state.UpdatedAt = now.Format(time.RFC3339Nano)
-	if err := writeScopedReviewCollaboration(ctx, tx, state); err != nil {
+	if err := writeScopedReviewCollaborationAction(ctx, tx, stateBeforeMutation, state, statePersisted); err != nil {
 		return ReviewCollaborationItem{}, err
 	}
 	after := mergeScopedReviewItem(snapshot, state)
@@ -185,6 +189,51 @@ func (s *SQLiteReviewGatewayStore) applyScopedCollaborationAction(
 		return ReviewCollaborationItem{}, err
 	}
 	return after, nil
+}
+
+func writeScopedReviewCollaborationAction(
+	ctx context.Context,
+	tx *sql.Tx,
+	before,
+	after reviewChatCollaboration,
+	persisted bool,
+) error {
+	var (
+		result sql.Result
+		err    error
+	)
+	if !persisted {
+		result, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO review_collaboration_states (
+			collaboration_key, installation_id, chat_id, repository, pr_number,
+			assigned_to, assigned_display_name, collaboration_status, due_at, updated_by, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			after.CollaborationKey, after.InstallationID, after.ChatID, after.Repository, after.PRNumber,
+			after.AssignedTo, after.AssignedDisplayName, after.CollaborationStatus,
+			after.DueAt, after.UpdatedBy, after.UpdatedAt,
+		)
+	} else {
+		result, err = tx.ExecContext(ctx, `UPDATE review_collaboration_states SET
+			assigned_to=?, assigned_display_name=?, collaboration_status=?, due_at=?,
+			updated_by=?, updated_at=?
+			WHERE collaboration_key=? AND assigned_to=? AND assigned_display_name=?
+			  AND collaboration_status=? AND due_at=? AND updated_at=?`,
+			after.AssignedTo, after.AssignedDisplayName, after.CollaborationStatus,
+			after.DueAt, after.UpdatedBy, after.UpdatedAt, before.CollaborationKey,
+			before.AssignedTo, before.AssignedDisplayName, before.CollaborationStatus,
+			before.DueAt, before.UpdatedAt,
+		)
+	}
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return ErrReviewCollaborationConflict
+	}
+	return nil
 }
 
 func (s *SQLiteReviewGatewayStore) upsertScopedCollaborationFacts(
