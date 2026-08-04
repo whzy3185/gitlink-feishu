@@ -51,7 +51,7 @@ jobs:
 
       - name: Upload Linux full summary
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: linux-full-summary
           path: .ci-artifacts/
@@ -87,7 +87,7 @@ jobs:
 
       - name: Upload Linux race summary
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: linux-race-summary
           path: .ci-artifacts/
@@ -145,7 +145,7 @@ jobs:
 
       - name: Upload Windows review summary
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: windows-review-summary
           path: .ci-artifacts/
@@ -199,7 +199,7 @@ jobs:
 
       - name: Upload PowerShell summary
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: powershell-${{ runner.os }}-summary
           path: .ci-artifacts/
@@ -241,7 +241,7 @@ jobs:
 
       - name: Upload Node and WeCom summary
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: node-wecom-summary
           path: .ci-artifacts/
@@ -253,24 +253,19 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Scan for committed credential material
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p .ci-artifacts
-          matches="$(git grep -n -I -E \
-            -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._-]{20,}' \
-            -- . ':!go.sum' ':!bridges/wecom/package-lock.json' ':!scripts/research/test_repro.py' || true)"
-          if test -n "${matches}"; then
-            printf '%s\n' "${matches}"
-            exit 1
-          fi
-          printf '{"schema_version":"review.secret-scan-summary/v1","passed":true,"validation_mode":"offline"}\n' \
-            > .ci-artifacts/secret-scan.json
+          New-Item -ItemType Directory -Force .ci-artifacts | Out-Null
+          ./scripts/scan-feishu-review-secrets.ps1 `
+            -OutputFile .ci-artifacts/secret-scan.json | Out-Null
 
       - name: Upload secret scan summary
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: secret-scan-summary
           path: .ci-artifacts/
@@ -282,6 +277,23 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Run final offline failure matrix
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .ci-artifacts | Out-Null
+          ./scripts/inject-feishu-review-final-failures.ps1 `
+            -OutputFile .ci-artifacts/failure-injection.json | Out-Null
+
+      - name: Verify backup and restore contracts
+        shell: pwsh
+        run: |
+          ./scripts/verify-feishu-review-backup-restore.ps1 | `
+            Set-Content -LiteralPath .ci-artifacts/backup-restore.json -Encoding utf8
 
       - name: Validate committed evidence JSON
         shell: pwsh
@@ -304,7 +316,7 @@ jobs:
           } | ConvertTo-Json | Set-Content -LiteralPath .ci-artifacts/evidence-index.json -Encoding utf8
 
       - name: Upload evidence index
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: evidence-contract-summary
           path: .ci-artifacts/
