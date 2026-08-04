@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	larktypes "github.com/larksuite/oapi-sdk-go/v3/channel/types"
@@ -21,6 +22,15 @@ type reviewGatewayMessageUpdater interface {
 type reviewGatewayResourceStore interface {
 	GetReviewResourceState(context.Context, string, string) (ReviewResourceState, error)
 	SaveReviewResourceState(context.Context, string, string, string, string, time.Time) error
+}
+
+type reviewGatewayCanonicalCardStore interface {
+	GetChatPRPresentation(context.Context, ReviewGatewayJob) (ReviewChatPRPresentation, error)
+	AcquireChatPRPresentationCreate(context.Context, ReviewGatewayJob, string, time.Time) (ReviewChatPRPresentation, bool, error)
+	CompleteChatPRPresentationCreate(context.Context, ReviewGatewayJob, string, string, string, string, bool, time.Time) error
+	AcquireChatPRPresentationPatch(context.Context, ReviewGatewayJob, string, string, string, time.Time) (ReviewChatPRPresentation, bool, error)
+	CompleteChatPRPresentationPatch(context.Context, ReviewGatewayJob, string, string, string, bool, time.Time) error
+	MarkChatPRPresentationUnknown(context.Context, ReviewGatewayJob, string, string, string, time.Time) error
 }
 
 type reviewGatewayLiveSender struct {
@@ -111,6 +121,7 @@ type ReviewGatewayReplyDispatcher struct {
 	leaseDuration time.Duration
 	pollInterval  time.Duration
 	now           func() time.Time
+	uncertain     sync.Map
 }
 
 func NewReviewGatewayReplyDispatcher(sender reviewGatewayMessageSender, store ReviewGatewayJobStore, output *reviewGatewayJSONOutput, capacity int) *ReviewGatewayReplyDispatcher {
@@ -268,6 +279,16 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 			return
 		}
 		item := pending[0]
+		if _, blocked := d.uncertain.Load(item.Job.JobID); blocked {
+			persistCtx, persistCancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			if err := d.store.MarkReplyUnknown(
+				persistCtx, item.Job.JobID, "", "reply outcome remains uncertain in this process", d.now().UTC(),
+			); err == nil {
+				d.uncertain.Delete(item.Job.JobID)
+			}
+			persistCancel()
+			return
+		}
 		sendCtx, sendCancel := context.WithTimeout(ctx, 10*time.Second)
 		sendInput := &larktypes.SendInput{
 			ChatID:         item.Job.ChatID,
@@ -275,10 +296,8 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 			MsgType:        "text",
 			Text:           formatReviewGatewayResultReply(item.Job, item.Result),
 		}
-		var cardState ReviewResourceState
-		var cardStateErr error
-		cardFingerprint := ""
 		cardResourceStore, hasCardResourceStore := d.store.(reviewGatewayResourceStore)
+		canonicalStore, hasCanonicalStore := d.store.(reviewGatewayCanonicalCardStore)
 		resultCard := item.Result.ResultCard
 		if item.Result.Collaboration != nil {
 			resultCard = item.Result.Collaboration.Card
@@ -286,8 +305,11 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 		if len(resultCard) == 0 && item.Result.Collaboration == nil && item.Job.PRNumber > 0 {
 			resultCard = buildReviewGatewayResultCard(item.Job, item.Result, nil)
 		}
+		completePRCard := item.Job.PRNumber > 0 && item.Result.Status == "completed" &&
+			item.Result.CollectionStatus == "complete" && !item.Result.Partial &&
+			item.Result.PullRequest != nil
 		interactiveCardReady := false
-		if len(resultCard) > 0 {
+		if item.Result.Status != "failed" && !item.Result.Partial && len(resultCard) > 0 {
 			if cardJSON, ok := safeReviewGatewayCardJSON(resultCard); ok {
 				sendInput.MsgType = "interactive"
 				sendInput.Text = ""
@@ -295,53 +317,126 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 				interactiveCardReady = true
 			}
 		}
-		fixedCardReady := item.Result.Collaboration != nil && interactiveCardReady
-		if fixedCardReady {
-			cardFingerprint = reviewCollaborationBundleFingerprint(*item.Result.Collaboration)
-			if hasCardResourceStore {
-				cardState, cardStateErr = cardResourceStore.GetReviewResourceState(
-					sendCtx,
-					item.Result.Collaboration.UniqueKey,
-					"feishu_card",
-				)
-			}
-		}
+		canonicalReady := completePRCard && interactiveCardReady && hasCanonicalStore
+		archivedCard := item.Result.GitLinkState == "merged" || item.Result.GitLinkState == "closed"
+		cardFingerprint := reviewGatewayCardFingerprint(resultCard)
 		var sendResult *larktypes.SendResult
 		var sendErr error
-		fixedCardMessageID := ""
+		canonicalMessageID := ""
 		replyAction := "created"
-		notifyCurrentMessage := func() (*larktypes.SendResult, error) {
+		remoteCardWriteCompleted := false
+		notifyCurrentMessage := func(text string) (*larktypes.SendResult, error) {
 			return d.sender.Send(sendCtx, &larktypes.SendInput{
 				ChatID:         item.Job.ChatID,
 				ReplyMessageID: item.Job.SourceMessageID,
-				MsgType:        "interactive",
-				Card:           sendInput.Card,
+				MsgType:        "text",
+				Text:           text,
 			})
 		}
+		var canonicalState ReviewChatPRPresentation
+		if canonicalReady {
+			canonicalState, sendErr = canonicalStore.GetChatPRPresentation(sendCtx, item.Job)
+		}
 		switch {
-		case cardStateErr != nil:
-			sendErr = fmt.Errorf("load fixed card resource mapping: %w", cardStateErr)
-		case fixedCardReady && cardState.RemoteID != "" && cardState.ContentFingerprint == cardFingerprint:
+		case sendErr != nil:
+			sendErr = fmt.Errorf("load canonical PR card: %w", sendErr)
+		case canonicalReady && canonicalState.PresentationKey == "":
+			_, acquired, acquireErr := canonicalStore.AcquireChatPRPresentationCreate(
+				sendCtx, item.Job, item.Job.JobID, d.now().UTC(),
+			)
+			if acquireErr != nil {
+				sendErr = acquireErr
+			}
+			if sendErr == nil && !acquired {
+				sendErr = fmt.Errorf("canonical PR card create is already owned by another worker")
+			}
+			if sendErr != nil {
+				sendErr = fmt.Errorf("reserve canonical PR card: %w", sendErr)
+				break
+			}
+			sendResult, sendErr = d.sender.Send(sendCtx, sendInput)
+			remoteCardWriteCompleted = true
+			if sendErr != nil {
+				_ = canonicalStore.MarkChatPRPresentationUnknown(
+					sendCtx, item.Job, item.Job.JobID, "", sendErr.Error(), d.now().UTC(),
+				)
+			}
+			if sendErr == nil && sendResult != nil {
+				canonicalMessageID = sendResult.MessageID
+				if persistErr := canonicalStore.CompleteChatPRPresentationCreate(
+					sendCtx, item.Job, item.Job.JobID, canonicalMessageID, cardFingerprint,
+					item.Result.CompletedAt, archivedCard, d.now().UTC(),
+				); persistErr != nil {
+					_ = canonicalStore.MarkChatPRPresentationUnknown(
+						sendCtx, item.Job, item.Job.JobID, canonicalMessageID, persistErr.Error(), d.now().UTC(),
+					)
+					sendErr = fmt.Errorf("canonical card created but local mapping failed: %w", persistErr)
+				}
+			}
+		case canonicalReady && (canonicalState.RequiresReconciliation ||
+			canonicalState.CardStatus == "unknown" || canonicalState.CardStatus == "needs_reconciliation"):
+			canonicalMessageID = canonicalState.CanonicalMessageID
+			sendErr = fmt.Errorf("canonical PR card requires reconciliation before another remote write")
+			remoteCardWriteCompleted = true
+		case canonicalReady && (canonicalState.CardStatus == "creating" || canonicalState.CardStatus == "patching"):
+			sendErr = fmt.Errorf("canonical PR card operation is already owned by another worker")
+		case canonicalReady && canonicalState.CanonicalMessageID != "" &&
+			canonicalState.ContentFingerprint == cardFingerprint:
 			replyAction = "unchanged_and_notified"
-			fixedCardMessageID = cardState.RemoteID
-			sendResult, sendErr = notifyCurrentMessage()
-		case fixedCardReady && cardState.RemoteID != "":
+			canonicalMessageID = canonicalState.CanonicalMessageID
+			sendResult, sendErr = notifyCurrentMessage(formatReviewGatewayCanonicalNotice(item.Job, false))
+		case canonicalReady && canonicalState.CanonicalMessageID != "":
 			replyAction = "updated_and_notified"
+			canonicalMessageID = canonicalState.CanonicalMessageID
 			updater, ok := d.sender.(reviewGatewayMessageUpdater)
 			if !ok {
 				sendErr = fmt.Errorf("review gateway sender cannot update an existing interactive card")
 				break
 			}
-			sendErr = updater.UpdateInteractiveMessage(sendCtx, cardState.RemoteID, item.Result.Collaboration.Card)
+			_, acquired, acquireErr := canonicalStore.AcquireChatPRPresentationPatch(
+				sendCtx, item.Job, canonicalState.ContentFingerprint, item.Job.JobID,
+				item.Result.CompletedAt, d.now().UTC(),
+			)
+			if acquireErr != nil {
+				sendErr = acquireErr
+			} else if !acquired {
+				sendErr = fmt.Errorf("canonical PR card patch is already owned by another worker")
+			}
+			if sendErr != nil {
+				break
+			}
+			sendErr = updater.UpdateInteractiveMessage(sendCtx, canonicalMessageID, resultCard)
+			remoteCardWriteCompleted = true
+			if sendErr != nil {
+				_ = canonicalStore.MarkChatPRPresentationUnknown(
+					sendCtx, item.Job, item.Job.JobID, canonicalMessageID, sendErr.Error(), d.now().UTC(),
+				)
+			}
 			if sendErr == nil {
-				fixedCardMessageID = cardState.RemoteID
-				sendResult, sendErr = notifyCurrentMessage()
+				if persistErr := canonicalStore.CompleteChatPRPresentationPatch(
+					sendCtx, item.Job, item.Job.JobID, cardFingerprint,
+					item.Result.CompletedAt, archivedCard, d.now().UTC(),
+				); persistErr != nil {
+					_ = canonicalStore.MarkChatPRPresentationUnknown(
+						sendCtx, item.Job, item.Job.JobID, canonicalMessageID, persistErr.Error(), d.now().UTC(),
+					)
+					sendErr = fmt.Errorf("canonical card patched but local state failed: %w", persistErr)
+					break
+				}
+				if hasCardResourceStore {
+					_ = cardResourceStore.SaveReviewResourceState(
+						sendCtx, reviewGatewayCardResourceKey(item), "feishu_card",
+						canonicalMessageID, cardFingerprint, d.now().UTC(),
+					)
+				}
+				// The canonical PATCH is now durably reflected locally. A failure
+				// below belongs only to the lightweight current-message notice, so
+				// retrying the reply must not PATCH the canonical card again.
+				remoteCardWriteCompleted = false
+				sendResult, sendErr = notifyCurrentMessage(formatReviewGatewayCanonicalNotice(item.Job, true))
 			}
 		default:
 			sendResult, sendErr = d.sender.Send(sendCtx, sendInput)
-			if sendErr == nil && fixedCardReady && sendResult != nil {
-				fixedCardMessageID = sendResult.MessageID
-			}
 		}
 		sendCancel()
 		event := ReviewGatewayReplyEvent{
@@ -355,7 +450,19 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 			event.Status = replyAction
 		}
 		persistCtx, persistCancel := context.WithTimeout(ctx, 500*time.Millisecond)
-		if sendErr != nil {
+		if sendErr != nil && remoteCardWriteCompleted {
+			event.Status = "unknown"
+			event.Error = redactReviewGatewayError(sendErr.Error())
+			messageID := canonicalMessageID
+			if sendResult != nil && sendResult.MessageID != "" {
+				messageID = sendResult.MessageID
+			}
+			if unknownErr := d.store.MarkReplyUnknown(
+				persistCtx, item.Job.JobID, messageID, sendErr.Error(), d.now().UTC(),
+			); unknownErr != nil {
+				d.uncertain.Store(item.Job.JobID, struct{}{})
+			}
+		} else if sendErr != nil {
 			event.Status = "failed"
 			event.Error = redactReviewGatewayError(sendErr.Error())
 			_, _ = d.store.MarkReplyFailed(persistCtx, item, sendErr.Error(), d.now().UTC())
@@ -365,20 +472,25 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 				messageID = sendResult.MessageID
 				event.MessageIDHash = reviewGatewayHashIdentifier(messageID)
 			}
-			_ = d.store.MarkReplySent(persistCtx, item.Job.JobID, messageID, d.now().UTC())
-			if fixedCardReady && hasCardResourceStore && fixedCardMessageID != "" {
-				if persistErr := cardResourceStore.SaveReviewResourceState(
+			if persistErr := d.store.MarkReplySent(persistCtx, item.Job.JobID, messageID, d.now().UTC()); persistErr != nil {
+				event.Status = "unknown"
+				event.Error = redactReviewGatewayError(fmt.Sprintf("reply sent but local state failed: %v", persistErr))
+				if unknownErr := d.store.MarkReplyUnknown(
+					persistCtx, item.Job.JobID, messageID, persistErr.Error(), d.now().UTC(),
+				); unknownErr != nil {
+					d.uncertain.Store(item.Job.JobID, struct{}{})
+				}
+			}
+			if canonicalReady && hasCardResourceStore && canonicalMessageID != "" && replyAction == "created" {
+				if resourceErr := cardResourceStore.SaveReviewResourceState(
 					persistCtx,
-					item.Result.Collaboration.UniqueKey,
+					reviewGatewayCardResourceKey(item),
 					"feishu_card",
-					fixedCardMessageID,
+					canonicalMessageID,
 					cardFingerprint,
 					d.now().UTC(),
-				); persistErr != nil {
-					event.Status = "unknown"
-					event.Error = redactReviewGatewayError(
-						fmt.Sprintf("card write completed but local resource mapping failed: %v", persistErr),
-					)
+				); resourceErr != nil {
+					event.Error = redactReviewGatewayError(fmt.Sprintf("compatibility card mapping failed: %v", resourceErr))
 				}
 			}
 		}
@@ -388,6 +500,36 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 			return
 		}
 	}
+}
+
+func reviewGatewayCardResourceKey(item ReviewGatewayPendingReply) string {
+	if item.Result.Collaboration != nil && strings.TrimSpace(item.Result.Collaboration.UniqueKey) != "" {
+		return item.Result.Collaboration.UniqueKey
+	}
+	return stableKey(
+		"review-work-item",
+		reviewCollaborationScopeKey(
+			item.Job.InstallationID,
+			item.Job.ChatID,
+			item.Job.Repository,
+			item.Job.PRNumber,
+		),
+	)
+}
+
+func formatReviewGatewayCanonicalNotice(job ReviewGatewayJob, refreshed bool) string {
+	switch job.Action {
+	case "claim_review":
+		return fmt.Sprintf("已领取 PR #%d。", job.PRNumber)
+	case "release_review":
+		return fmt.Sprintf("已释放 PR #%d。", job.PRNumber)
+	case "set_review_deadline":
+		return fmt.Sprintf("PR #%d 截止日期已更新为 %s。", job.PRNumber, strings.TrimSpace(job.Argument))
+	}
+	if refreshed {
+		return fmt.Sprintf("PR #%d 已刷新，正式卡片已更新。", job.PRNumber)
+	}
+	return fmt.Sprintf("PR #%d 状态未变化，正式卡片保持最新。", job.PRNumber)
 }
 
 func formatReviewGatewayAcknowledgement(job ReviewGatewayJob) string {

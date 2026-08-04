@@ -1582,9 +1582,15 @@ func TestReviewGatewayReplyDispatcherMaintainsOneCardPerWorkItem(t *testing.T) {
 		if err != nil || len(claimed) != 1 {
 			t.Fatalf("ClaimReadyJobs = %#v, %v", claimed, err)
 		}
-		bundle := BuildReviewCollaborationBundle(ReviewCollaborationItem{
+		result := fullReviewGatewayResultFixture()
+		result.JobID = job.JobID
+		result.Action = job.Action
+		result.Decision = decision
+		result.CompletedAt = at.UTC().Format(time.RFC3339)
+		item := ReviewCollaborationItem{
 			SchemaVersion:       reviewCollaborationItemSchema,
-			PRKey:               "owner/repo#42",
+			PRKey:               reviewCollaborationScopeKey(job.InstallationID, job.ChatID, "owner/repo", 42),
+			InstallationID:      job.InstallationID,
 			Repository:          "owner/repo",
 			PRNumber:            42,
 			ChatID:              "oc_review",
@@ -1594,14 +1600,11 @@ func TestReviewGatewayReplyDispatcherMaintainsOneCardPerWorkItem(t *testing.T) {
 			CollaborationStatus: "claimed",
 			AssignedTo:          "ou_owner",
 			UpdatedAt:           at.UTC().Format(time.RFC3339),
-		})
-		result := ReviewGatewayExecutionResult{
-			SchemaVersion: reviewGatewayResultSchema,
-			JobID:         job.JobID, Status: "completed", Action: job.Action,
-			Repository: job.Repository, PRNumber: job.PRNumber,
-			RequestedBy: job.RequestedBy, Collaboration: &bundle,
-			CompletedAt: at.UTC().Format(time.RFC3339),
 		}
+		bundle := BuildReviewCollaborationBundle(item)
+		bundle.Card = buildReviewGatewayResultCard(job, result, &item)
+		result.Collaboration = &bundle
+		result.ResultCard = bundle.Card
 		if err := store.CompleteJob(context.Background(), claimed[0], result); err != nil {
 			t.Fatalf("CompleteJob: %v", err)
 		}
@@ -1626,16 +1629,16 @@ func TestReviewGatewayReplyDispatcherMaintainsOneCardPerWorkItem(t *testing.T) {
 	if sendCount != 2 || updateCount != 1 || updatedMessageID != "om_reply" {
 		t.Fatalf("fixed card calls = send:%d update:%d message:%q", sendCount, updateCount, updatedMessageID)
 	}
-	if notification.MsgType != "interactive" || notification.ReplyMessageID != "om_card-second" ||
-		notification.Text != "" || notification.Card == "" ||
-		!strings.Contains(notification.Card, "GitLink 写入") {
+	if notification.MsgType != "text" || notification.ReplyMessageID != "om_card-second" ||
+		notification.Text == "" || notification.Card != "" ||
+		!strings.Contains(notification.Text, "正式卡片已更新") {
 		t.Fatalf("fixed card current-message notification = %#v", notification)
 	}
 	state, err := store.GetReviewResourceState(context.Background(), latest.UniqueKey, "feishu_card")
 	if err != nil {
 		t.Fatalf("GetReviewResourceState: %v", err)
 	}
-	if state.RemoteID != "om_reply" || state.ContentFingerprint != reviewCollaborationBundleFingerprint(latest) {
+	if state.RemoteID != "om_reply" || state.ContentFingerprint != reviewGatewayCardFingerprint(latest.Card) {
 		t.Fatalf("fixed card state = %#v", state)
 	}
 }
@@ -1899,6 +1902,11 @@ func TestReviewCollaborationClaimDeadlineReleaseAndAudit(t *testing.T) {
 	job := testReviewGatewayJob(now, "collaboration")
 	job.Action = "claim_review"
 	job.Mode = "collaboration"
+	presentationResult := fullReviewGatewayResultFixture()
+	presentationResult.CompletedAt = now.Format(time.RFC3339)
+	if _, err := store.UpsertCollaborationFacts(context.Background(), job, presentationResult, now); err != nil {
+		t.Fatalf("seed complete presentation: %v", err)
+	}
 	item, err := store.ApplyCollaborationAction(context.Background(), job, now)
 	if err != nil {
 		t.Fatalf("claim: %v", err)
@@ -1943,10 +1951,10 @@ func TestReviewCollaborationScopesStateByInstallationAndChat(t *testing.T) {
 	}
 	defer store.Close()
 	now := time.Date(2026, 8, 4, 8, 0, 0, 0, time.UTC)
-	result := ReviewGatewayExecutionResult{
-		CollectionStatus: "complete", HeadSHA: "head-installation-a",
-		SourceFingerprint: "fingerprint-a", ReviewStage: "human_reviewing", Decision: "pending",
-	}
+	result := fullReviewGatewayResultFixture()
+	result.CompletedAt = now.Format(time.RFC3339)
+	result.HeadSHA = "head-installation-a"
+	result.SourceFingerprint = "fingerprint-a"
 	jobA := testReviewGatewayJob(now, "scope-a")
 	jobA.InstallationID = "installation-a"
 	jobA.ChatID = "chat-a"
@@ -1987,6 +1995,7 @@ func TestReviewCollaborationScopesStateByInstallationAndChat(t *testing.T) {
 	jobC.Action = "read_review_context"
 	result.HeadSHA = "head-installation-b"
 	result.SourceFingerprint = "fingerprint-b"
+	result.CompletedAt = now.Add(4 * time.Minute).Format(time.RFC3339)
 	itemC, err := store.UpsertCollaborationFacts(context.Background(), jobC, result, now.Add(4*time.Minute))
 	if err != nil {
 		t.Fatalf("upsert installation B facts: %v", err)
@@ -2099,10 +2108,10 @@ func TestReviewCollaborationAmbiguousLegacyStateDoesNotLeakAcrossInstallations(t
 	job := testReviewGatewayJob(time.Date(2026, 8, 4, 8, 0, 0, 0, time.UTC), "ambiguous")
 	job.InstallationID = "installation-a"
 	job.ChatID = "chat-shared"
-	result := ReviewGatewayExecutionResult{
-		CollectionStatus: "complete", HeadSHA: "head-current",
-		SourceFingerprint: "fingerprint-current", ReviewStage: "human_reviewing", Decision: "pending",
-	}
+	result := fullReviewGatewayResultFixture()
+	result.CompletedAt = time.Date(2026, 8, 4, 8, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	result.HeadSHA = "head-current"
+	result.SourceFingerprint = "fingerprint-current"
 	item, err := store.UpsertCollaborationFacts(context.Background(), job, result, time.Date(2026, 8, 4, 8, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatalf("upsert scoped item: %v", err)
@@ -2120,13 +2129,10 @@ func TestReviewCollaborationPartialSnapshotPreservesCompleteFacts(t *testing.T) 
 	defer store.Close()
 	now := time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC)
 	job := testReviewGatewayJob(now, "facts")
-	complete := ReviewGatewayExecutionResult{
-		CollectionStatus:  "complete",
-		HeadSHA:           "head-complete",
-		SourceFingerprint: "fingerprint-complete",
-		ReviewStage:       "human_reviewing",
-		Decision:          "pending",
-	}
+	complete := fullReviewGatewayResultFixture()
+	complete.CompletedAt = now.Format(time.RFC3339)
+	complete.HeadSHA = "head-complete"
+	complete.SourceFingerprint = "fingerprint-complete"
 	item, err := store.UpsertCollaborationFacts(context.Background(), job, complete, now)
 	if err != nil {
 		t.Fatalf("complete upsert: %v", err)

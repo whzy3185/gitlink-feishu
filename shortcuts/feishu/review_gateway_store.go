@@ -156,7 +156,8 @@ CREATE TABLE IF NOT EXISTS chat_pr_presentations (
     pr_number INTEGER NOT NULL,
     canonical_message_id TEXT NOT NULL DEFAULT '',
     content_fingerprint TEXT NOT NULL DEFAULT '',
-    presentation_version INTEGER NOT NULL DEFAULT 1,
+    source_completed_at TEXT NOT NULL DEFAULT '',
+    presentation_version INTEGER NOT NULL DEFAULT 0,
     card_status TEXT NOT NULL DEFAULT 'pending',
     last_operation_id TEXT NOT NULL DEFAULT '',
     last_patch_at TEXT NOT NULL DEFAULT '',
@@ -302,21 +303,20 @@ CREATE INDEX IF NOT EXISTS review_gateway_configuration_audit_applied
 `
 
 var reviewGatewayJobMigrations = map[string]string{
-	"attempt_count":                 "INTEGER NOT NULL DEFAULT 0",
-	"max_attempts":                  "INTEGER NOT NULL DEFAULT 3",
-	"next_attempt_at":               "TEXT NOT NULL DEFAULT ''",
-	"lease_owner":                   "TEXT NOT NULL DEFAULT ''",
-	"lease_expires_at":              "TEXT NOT NULL DEFAULT ''",
-	"result_json":                   "TEXT NOT NULL DEFAULT ''",
-	"handler_latency_ms":            "INTEGER NOT NULL DEFAULT 0",
-	"reply_status":                  "TEXT NOT NULL DEFAULT 'none'",
-	"reply_attempt_count":           "INTEGER NOT NULL DEFAULT 0",
-	"reply_next_attempt_at":         "TEXT NOT NULL DEFAULT ''",
-	"reply_lease_owner":             "TEXT NOT NULL DEFAULT ''",
-	"reply_lease_expires_at":        "TEXT NOT NULL DEFAULT ''",
-	"reply_message_id":              "TEXT NOT NULL DEFAULT ''",
-	"reply_error_summary":           "TEXT NOT NULL DEFAULT ''",
-	"reply_requires_reconciliation": "INTEGER NOT NULL DEFAULT 0",
+	"attempt_count":          "INTEGER NOT NULL DEFAULT 0",
+	"max_attempts":           "INTEGER NOT NULL DEFAULT 3",
+	"next_attempt_at":        "TEXT NOT NULL DEFAULT ''",
+	"lease_owner":            "TEXT NOT NULL DEFAULT ''",
+	"lease_expires_at":       "TEXT NOT NULL DEFAULT ''",
+	"result_json":            "TEXT NOT NULL DEFAULT ''",
+	"handler_latency_ms":     "INTEGER NOT NULL DEFAULT 0",
+	"reply_status":           "TEXT NOT NULL DEFAULT 'none'",
+	"reply_attempt_count":    "INTEGER NOT NULL DEFAULT 0",
+	"reply_next_attempt_at":  "TEXT NOT NULL DEFAULT ''",
+	"reply_lease_owner":      "TEXT NOT NULL DEFAULT ''",
+	"reply_lease_expires_at": "TEXT NOT NULL DEFAULT ''",
+	"reply_message_id":       "TEXT NOT NULL DEFAULT ''",
+	"reply_error_summary":    "TEXT NOT NULL DEFAULT ''",
 }
 
 var reviewActionPlanMigrations = map[string]string{
@@ -336,15 +336,6 @@ var reviewInstallationMigrations = map[string]string{
 
 var reviewChatBindingMigrations = map[string]string{
 	"allow_public_read": "INTEGER NOT NULL DEFAULT 0",
-}
-
-var reviewPRPresentationMigrations = map[string]string{
-	"source_completed_at": "TEXT NOT NULL DEFAULT ''",
-}
-
-var reviewChatPresentationMigrations = map[string]string{
-	"last_operation_id":  "TEXT NOT NULL DEFAULT ''",
-	"last_error_summary": "TEXT NOT NULL DEFAULT ''",
 }
 
 var reviewCollaborationAuditMigrations = map[string]string{
@@ -437,6 +428,7 @@ type reviewGatewayLatencyObservation struct {
 type reviewGatewaySchemaMigration struct {
 	Version    int
 	Name       string
+	Columns    map[string]map[string]string
 	Statements []string
 }
 
@@ -444,6 +436,9 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 	{
 		Version: 1,
 		Name:    "review_pr_presentations_v1",
+		Columns: map[string]map[string]string{
+			"review_pr_presentations": {"source_completed_at": "TEXT NOT NULL DEFAULT ''"},
+		},
 		Statements: []string{
 			`SELECT presentation_key, source_completed_at FROM review_pr_presentations LIMIT 0`,
 		},
@@ -451,13 +446,23 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 	{
 		Version: 2,
 		Name:    "chat_pr_presentations_v1",
+		Columns: map[string]map[string]string{
+			"chat_pr_presentations": {
+				"last_operation_id":   "TEXT NOT NULL DEFAULT ''",
+				"last_error_summary":  "TEXT NOT NULL DEFAULT ''",
+				"source_completed_at": "TEXT NOT NULL DEFAULT ''",
+			},
+		},
 		Statements: []string{
-			`SELECT presentation_key, last_operation_id, last_error_summary FROM chat_pr_presentations LIMIT 0`,
+			`SELECT presentation_key, last_operation_id, last_error_summary, source_completed_at FROM chat_pr_presentations LIMIT 0`,
 		},
 	},
 	{
 		Version: 3,
 		Name:    "reply_unknown_state_v1",
+		Columns: map[string]map[string]string{
+			"review_gateway_jobs": {"reply_requires_reconciliation": "INTEGER NOT NULL DEFAULT 0"},
+		},
 		Statements: []string{
 			`SELECT reply_requires_reconciliation FROM review_gateway_jobs LIMIT 0`,
 		},
@@ -716,14 +721,6 @@ func OpenSQLiteReviewGatewayStore(path string) (*SQLiteReviewGatewayStore, error
 		_ = db.Close()
 		return nil, err
 	}
-	if err := ensureReviewGatewayTableColumns(db, "review_pr_presentations", reviewPRPresentationMigrations); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	if err := ensureReviewGatewayTableColumns(db, "chat_pr_presentations", reviewChatPresentationMigrations); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
 	if err := applyReviewGatewaySchemaMigrations(db, reviewGatewaySchemaMigrations); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -760,16 +757,22 @@ func applyReviewGatewaySchemaMigrations(db *sql.DB, migrations []reviewGatewaySc
 		if err != nil {
 			return fmt.Errorf("begin review gateway schema migration %d: %w", migration.Version, err)
 		}
-		failed := false
-		for _, statement := range migration.Statements {
-			if _, err := tx.Exec(statement); err != nil {
+		tables := make([]string, 0, len(migration.Columns))
+		for table := range migration.Columns {
+			tables = append(tables, table)
+		}
+		sort.Strings(tables)
+		for _, table := range tables {
+			if err := ensureReviewGatewayTableColumnsTx(tx, table, migration.Columns[table]); err != nil {
 				_ = tx.Rollback()
-				failed = true
 				return fmt.Errorf("apply review gateway schema migration %d (%s): %w", migration.Version, migration.Name, err)
 			}
 		}
-		if failed {
-			continue
+		for _, statement := range migration.Statements {
+			if _, err := tx.Exec(statement); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("apply review gateway schema migration %d (%s): %w", migration.Version, migration.Name, err)
+			}
 		}
 		if _, err := tx.Exec(
 			`INSERT INTO schema_migrations(version, name, applied_at) VALUES(?, ?, ?)`,
@@ -780,6 +783,41 @@ func applyReviewGatewaySchemaMigrations(db *sql.DB, migrations []reviewGatewaySc
 		}
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("commit review gateway schema migration %d: %w", migration.Version, err)
+		}
+	}
+	return nil
+}
+
+func ensureReviewGatewayTableColumnsTx(tx *sql.Tx, table string, migrations map[string]string) error {
+	rows, err := tx.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return fmt.Errorf("inspect %s schema: %w", table, err)
+	}
+	existing := map[string]bool{}
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue sql.NullString
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("read %s schema: %w", table, err)
+		}
+		existing[name] = true
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close %s schema rows: %w", table, err)
+	}
+	names := make([]string, 0, len(migrations))
+	for name := range migrations {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if existing[name] {
+			continue
+		}
+		if _, err := tx.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, name, migrations[name])); err != nil {
+			return fmt.Errorf("migrate %s column %s: %w", table, name, err)
 		}
 	}
 	return nil
