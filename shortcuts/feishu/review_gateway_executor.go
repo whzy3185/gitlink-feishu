@@ -46,6 +46,7 @@ type ReviewGatewayExecutionResult struct {
 	CollaborationItems []ReviewCollaborationItem     `json:"collaboration_items,omitempty"`
 	ActionPlan         *ReviewActionPlan             `json:"action_plan,omitempty"`
 	WriteResult        *ReviewWriteResult            `json:"write_result,omitempty"`
+	Subscriptions      []ReviewChatSubscription      `json:"subscriptions,omitempty"`
 	ResourceSync       []ReviewResourceSyncResult    `json:"resource_sync,omitempty"`
 	AgentRun           *workflow.ReviewAgentRun      `json:"agent_run,omitempty"`
 	Warnings           []string                      `json:"warnings,omitempty"`
@@ -124,6 +125,7 @@ type ReviewGatewayExecutor struct {
 	Now                        func() time.Time
 	Collaboration              ReviewCollaborationStore
 	ActionPlans                ReviewActionPlanStore
+	Subscriptions              *SQLiteReviewGatewayStore
 	IdentityBindings           []ReviewIdentityBinding
 	EnableGitLinkWrite         bool
 	Publisher                  ReviewCollaborationPublisher
@@ -282,6 +284,55 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 
 	case "confirm_common_review":
 		return e.confirmCommonReview(ctx, job, result, now().UTC())
+
+	case "subscribe_review_events", "unsubscribe_review_events", "set_review_notification_mode":
+		if e.Subscriptions == nil {
+			return reviewGatewayExecutionFailure(result, fmt.Errorf("review subscription store is required"))
+		}
+		change := ReviewSubscriptionChange{
+			InstallationID: job.InstallationID,
+			ChatID:         job.ChatID,
+			Repository:     job.Repository,
+			ActorID:        job.RequestedBy,
+		}
+		switch job.Action {
+		case "subscribe_review_events":
+			change.AddGroups = splitReviewSubscriptionArgument(job.Argument)
+		case "unsubscribe_review_events":
+			change.RemoveGroups = splitReviewSubscriptionArgument(job.Argument)
+		case "set_review_notification_mode":
+			change.NotificationMode = job.Argument
+		}
+		subscription, err := e.Subscriptions.ChangeReviewChatSubscription(ctx, change, now().UTC())
+		if err != nil {
+			return reviewGatewayExecutionFailure(result, err)
+		}
+		result.Subscriptions = []ReviewChatSubscription{subscription}
+		result.Message = fmt.Sprintf("Review subscription revision %d saved for %s.", subscription.Revision, subscription.Repository)
+
+	case "show_review_subscriptions":
+		if e.Subscriptions == nil {
+			return reviewGatewayExecutionFailure(result, fmt.Errorf("review subscription store is required"))
+		}
+		subscriptions, err := e.Subscriptions.ListReviewChatSubscriptions(
+			ctx, job.InstallationID, job.ChatID, job.Repository, false,
+		)
+		if err != nil {
+			return reviewGatewayExecutionFailure(result, err)
+		}
+		result.Subscriptions = subscriptions
+		result.Message = fmt.Sprintf("Loaded %d Review subscription(s).", len(subscriptions))
+
+	case "set_default_review_repository":
+		if e.Subscriptions == nil {
+			return reviewGatewayExecutionFailure(result, fmt.Errorf("review subscription store is required"))
+		}
+		if err := e.Subscriptions.SetDefaultReviewRepository(
+			ctx, job.InstallationID, job.ChatID, job.Repository, job.RequestedBy,
+		); err != nil {
+			return reviewGatewayExecutionFailure(result, err)
+		}
+		result.Message = fmt.Sprintf("Default Review repository set to %s.", job.Repository)
 
 	case "help":
 		result.Message = "支持：仓库列表、查看 [owner/repo] 待审查、查看 [owner/repo] PR #编号、刷新、生成 Review 草稿、领取/释放、设置截止时间、准备提交 common Review。所有仓库均为平等作用域，PR 级命令必须显式指定 owner/repo；GitLink 默认 GET-only。"

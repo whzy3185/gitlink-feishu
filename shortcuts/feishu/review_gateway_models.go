@@ -401,7 +401,7 @@ func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEven
 		}
 		receipt.Intent = intent
 	}
-	if intent.Name == "plan_bind_repository" && !g.isAdmin(binding, event.UserID) {
+	if reviewGatewayIntentRequiresAdmin(intent.Name) && !g.isAdmin(binding, event.UserID) {
 		receipt.Reason = "binding_requires_admin"
 		return receipt, nil
 	}
@@ -448,6 +448,9 @@ func (g *ReviewGateway) isAdmin(binding ReviewChatBinding, userID string) bool {
 
 func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 	content = strings.Join(strings.Fields(strings.TrimSpace(content)), " ")
+	if intent, ok := parseReviewSubscriptionIntent(content); ok {
+		return intent
+	}
 	switch strings.ToLower(content) {
 	case "帮助", "help", "/help":
 		return ReviewGatewayIntent{Name: "help"}
@@ -502,8 +505,12 @@ func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, d
 	collaborationMutation := intent.Name == "plan_bind_repository" ||
 		intent.Name == "claim_review" ||
 		intent.Name == "release_review" ||
-		intent.Name == "set_review_deadline"
-	requiresAdmin := intent.Name == "plan_bind_repository"
+		intent.Name == "set_review_deadline" ||
+		intent.Name == "subscribe_review_events" ||
+		intent.Name == "unsubscribe_review_events" ||
+		intent.Name == "set_review_notification_mode" ||
+		intent.Name == "set_default_review_repository"
+	requiresAdmin := reviewGatewayIntentRequiresAdmin(intent.Name)
 	jobSeed := strings.Join([]string{dedupeKey, intent.Name, intent.Repository, strconv.Itoa(intent.PRNumber), intent.Argument}, "\x00")
 	digest := sha256.Sum256([]byte(jobSeed))
 	mode := "preview"

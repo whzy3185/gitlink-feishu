@@ -332,6 +332,28 @@ CREATE TABLE IF NOT EXISTS chat_repository_bindings (
         ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS review_chat_subscriptions (
+    subscription_id TEXT PRIMARY KEY,
+    installation_id TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    pull_events INTEGER NOT NULL DEFAULT 0,
+    review_events INTEGER NOT NULL DEFAULT 0,
+    thread_events INTEGER NOT NULL DEFAULT 0,
+    merge_events INTEGER NOT NULL DEFAULT 0,
+    ci_events INTEGER NOT NULL DEFAULT 0,
+    notification_mode TEXT NOT NULL DEFAULT 'canonical_only',
+    enabled INTEGER NOT NULL DEFAULT 0,
+    revision INTEGER NOT NULL DEFAULT 1,
+    created_by_hash TEXT NOT NULL DEFAULT '',
+    updated_by_hash TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (installation_id, chat_id, repository)
+);
+CREATE INDEX IF NOT EXISTS review_chat_subscriptions_enabled
+    ON review_chat_subscriptions(installation_id, repository, enabled, updated_at);
+
 CREATE TABLE IF NOT EXISTS review_identity_bindings (
     installation_id TEXT NOT NULL,
     feishu_user_id TEXT NOT NULL,
@@ -548,6 +570,15 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 			`CREATE TRIGGER IF NOT EXISTS review_resource_migration_audit_no_delete
 			 BEFORE DELETE ON review_resource_migration_audit
 			 BEGIN SELECT RAISE(ABORT, 'review resource migration audit is append-only'); END`,
+		},
+	},
+	{
+		Version: 7,
+		Name:    "review_chat_subscriptions_v1",
+		Statements: []string{
+			`SELECT subscription_id, installation_id, chat_id, repository,
+			 pull_events, review_events, thread_events, merge_events, ci_events,
+			 notification_mode, enabled, revision FROM review_chat_subscriptions LIMIT 0`,
 		},
 	},
 }

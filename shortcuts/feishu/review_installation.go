@@ -333,7 +333,9 @@ func reviewGatewayActionRequiresRepository(action string) bool {
 	switch action {
 	case "read_review_queue", "read_review_context", "refresh_review_context",
 		"generate_review_draft", "run_agent_review", "claim_review", "release_review",
-		"set_review_deadline", "prepare_common_review":
+		"set_review_deadline", "prepare_common_review", "subscribe_review_events",
+		"unsubscribe_review_events",
+		"set_review_notification_mode", "set_default_review_repository":
 		return true
 	default:
 		return false

@@ -364,6 +364,7 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		Runtime:                    runtime,
 		Collaboration:              store,
 		ActionPlans:                store,
+		Subscriptions:              store,
 		IdentityBindings:           bindings.IdentityBindings,
 		EnableGitLinkWrite:         parseBool(runtime.Arg("enable-gitlink-review-write")),
 		Publisher:                  publisher,
