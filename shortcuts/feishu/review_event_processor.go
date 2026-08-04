@@ -36,6 +36,50 @@ type ReviewEventInboxProcessor struct {
 	LeaseOwner    string
 	LeaseDuration time.Duration
 	Now           func() time.Time
+	wake          chan struct{}
+}
+
+func NewReviewEventInboxProcessor(store *SQLiteReviewGatewayStore, queue ReviewPreparedJobEnqueuer, leaseOwner string) *ReviewEventInboxProcessor {
+	return &ReviewEventInboxProcessor{
+		Store: store, Queue: queue, LeaseOwner: leaseOwner,
+		LeaseDuration: 2 * time.Minute, Now: time.Now, wake: make(chan struct{}, 1),
+	}
+}
+
+func (p *ReviewEventInboxProcessor) Wake() {
+	if p == nil || p.wake == nil {
+		return
+	}
+	select {
+	case p.wake <- struct{}{}:
+	default:
+	}
+}
+
+func (p *ReviewEventInboxProcessor) Run(ctx context.Context) {
+	if p == nil {
+		return
+	}
+	if p.wake == nil {
+		p.wake = make(chan struct{}, 1)
+	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	p.Wake()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		case <-p.wake:
+		}
+		for {
+			processed, err := p.ProcessOne(ctx)
+			if err != nil || !processed {
+				break
+			}
+		}
+	}
 }
 
 func (p *ReviewEventInboxProcessor) ProcessOne(ctx context.Context) (bool, error) {

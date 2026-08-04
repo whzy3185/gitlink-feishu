@@ -102,7 +102,7 @@ func newReviewGatewayShortcut() *common.Shortcut {
 			{Name: "review-document-folder-token", Usage: "Feishu folder for one durable Review document per PR. Defaults to FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN"},
 			{Name: "sync-feishu-task", Usage: "Create at most one Feishu Task for each active Review WorkItem", Bool: true, Default: "false"},
 			{Name: "webhook-listen-address", Usage: "Optional local address for signed GitLink webhook ingress, for example 127.0.0.1:8787"},
-			{Name: "webhook-path", Usage: "HTTP path for signed GitLink PR webhook ingress", Default: "/gitlink/events"},
+			{Name: "webhook-path", Usage: "Installation-scoped GitLink webhook path prefix", Default: reviewWebhookPathPrefix},
 			{Name: "allow-public-webhook-listen", Usage: "Allow webhook listener to bind a non-loopback address; use only behind TLS and a trusted reverse proxy", Bool: true, Default: "false"},
 			{Name: "enable-agent-runner", Usage: "Enable provider-neutral read-only Agent review requests", Bool: true, Default: "false"},
 			{Name: "agent-endpoint", Usage: "HTTPS endpoint implementing review.agent-invocation/v1"},
@@ -386,12 +386,14 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 			replyDispatcher.Wake()
 		}
 	})
+	eventProcessor := NewReviewEventInboxProcessor(store, queue, instanceLock.metadata.InstanceID+"-events")
 	go replyDispatcher.Run(liveCtx)
 	go queue.Run(liveCtx, func(_ context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {
 		jobCtx, cancel := context.WithTimeout(liveCtx, time.Duration(jobTimeoutSeconds)*time.Second)
 		defer cancel()
 		return executor.Execute(jobCtx, job)
 	})
+	go eventProcessor.Run(liveCtx)
 	webhookAddress := strings.TrimSpace(runtime.Arg("webhook-listen-address"))
 	var webhookServer *http.Server
 	var webhookListener net.Listener
@@ -403,10 +405,10 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 			return err
 		}
 		webhookPath := strings.TrimSpace(runtime.Arg("webhook-path"))
-		if !strings.HasPrefix(webhookPath, "/") || strings.Contains(webhookPath, "?") {
-			return fmt.Errorf("--webhook-path must be an absolute HTTP path without a query")
+		if webhookPath != reviewWebhookPathPrefix {
+			return fmt.Errorf("--webhook-path must be %q for installation-scoped routing", reviewWebhookPathPrefix)
 		}
-		ingress, err := NewGitLinkWebhookIngress(bindings, queue)
+		ingress, err := NewGitLinkWebhookIngress(bindings, store, eventProcessor)
 		if err != nil {
 			return err
 		}

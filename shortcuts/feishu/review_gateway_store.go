@@ -304,6 +304,10 @@ CREATE TABLE IF NOT EXISTS gitlink_installations (
 	allow_public_read INTEGER NOT NULL DEFAULT 0,
     webhook_id TEXT NOT NULL DEFAULT '',
     webhook_secret_ref TEXT NOT NULL DEFAULT '',
+    webhook_signature_mode TEXT NOT NULL DEFAULT 'body_sha256',
+    webhook_timestamp_mode TEXT NOT NULL DEFAULT 'optional',
+    webhook_max_skew_seconds INTEGER NOT NULL DEFAULT 300,
+    webhook_delivery_required INTEGER NOT NULL DEFAULT 0,
     enabled INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL
 );
@@ -645,6 +649,22 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 			 status, route_revision, lease_owner, replay_request_key FROM review_event_inbox LIMIT 0`,
 			`SELECT event_id, subscription_id, subscription_revision, job_id,
 			 route_status FROM review_event_routes LIMIT 0`,
+		},
+	},
+	{
+		Version: 9,
+		Name:    "gitlink_webhook_security_policy_v1",
+		Columns: map[string]map[string]string{
+			"gitlink_installations": {
+				"webhook_signature_mode":    "TEXT NOT NULL DEFAULT 'body_sha256'",
+				"webhook_timestamp_mode":    "TEXT NOT NULL DEFAULT 'optional'",
+				"webhook_max_skew_seconds":  "INTEGER NOT NULL DEFAULT 300",
+				"webhook_delivery_required": "INTEGER NOT NULL DEFAULT 0",
+			},
+		},
+		Statements: []string{
+			`SELECT webhook_signature_mode, webhook_timestamp_mode,
+			 webhook_max_skew_seconds, webhook_delivery_required FROM gitlink_installations LIMIT 0`,
 		},
 	},
 }

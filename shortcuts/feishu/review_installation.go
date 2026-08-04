@@ -11,16 +11,20 @@ import (
 const legacyReviewInstallationID = "legacy-default"
 
 type GitLinkInstallation struct {
-	InstallationID      string   `json:"installation_id"`
-	GitLinkHost         string   `json:"gitlink_host,omitempty"`
-	Owner               string   `json:"owner,omitempty"`
-	CredentialRef       string   `json:"credential_ref,omitempty"`
-	OperationMode       string   `json:"operation_mode"`
-	AllowedRepositories []string `json:"allowed_repositories"`
-	AllowPublicRead     bool     `json:"allow_public_read,omitempty"`
-	WebhookID           string   `json:"webhook_id,omitempty"`
-	WebhookSecretRef    string   `json:"webhook_secret_ref,omitempty"`
-	Enabled             bool     `json:"enabled"`
+	InstallationID          string   `json:"installation_id"`
+	GitLinkHost             string   `json:"gitlink_host,omitempty"`
+	Owner                   string   `json:"owner,omitempty"`
+	CredentialRef           string   `json:"credential_ref,omitempty"`
+	OperationMode           string   `json:"operation_mode"`
+	AllowedRepositories     []string `json:"allowed_repositories"`
+	AllowPublicRead         bool     `json:"allow_public_read,omitempty"`
+	WebhookID               string   `json:"webhook_id,omitempty"`
+	WebhookSecretRef        string   `json:"webhook_secret_ref,omitempty"`
+	WebhookSignatureMode    string   `json:"webhook_signature_mode,omitempty"`
+	WebhookTimestampMode    string   `json:"webhook_timestamp_mode,omitempty"`
+	WebhookMaxSkewSeconds   int      `json:"webhook_max_skew_seconds,omitempty"`
+	WebhookDeliveryRequired bool     `json:"webhook_delivery_required,omitempty"`
+	Enabled                 bool     `json:"enabled"`
 }
 
 func normalizeReviewGatewayBindings(input ReviewGatewayBindings) (ReviewGatewayBindings, error) {
@@ -104,6 +108,17 @@ func validateReviewGatewayBindingsV2(input ReviewGatewayBindings) (ReviewGateway
 		installation.CredentialRef = strings.TrimSpace(installation.CredentialRef)
 		installation.WebhookID = strings.TrimSpace(installation.WebhookID)
 		installation.WebhookSecretRef = strings.TrimSpace(installation.WebhookSecretRef)
+		installation.WebhookSignatureMode = strings.ToLower(strings.TrimSpace(installation.WebhookSignatureMode))
+		if installation.WebhookSignatureMode == "" {
+			installation.WebhookSignatureMode = "body_sha256"
+		}
+		installation.WebhookTimestampMode = strings.ToLower(strings.TrimSpace(installation.WebhookTimestampMode))
+		if installation.WebhookTimestampMode == "" {
+			installation.WebhookTimestampMode = "optional"
+		}
+		if installation.WebhookMaxSkewSeconds == 0 {
+			installation.WebhookMaxSkewSeconds = 300
+		}
 		installation.OperationMode = strings.ToLower(strings.TrimSpace(installation.OperationMode))
 		if installation.InstallationID == "" {
 			return ReviewGatewayBindings{}, fmt.Errorf("GitLink installation_id is required")
@@ -159,6 +174,19 @@ func validateReviewGatewayBindingsV2(input ReviewGatewayBindings) (ReviewGateway
 				"GitLink installation %q webhook_secret_ref must use env:VARIABLE",
 				installation.InstallationID,
 			)
+		}
+		switch installation.WebhookSignatureMode {
+		case "body_sha256", "timestamp_body_sha256":
+		default:
+			return ReviewGatewayBindings{}, fmt.Errorf("GitLink installation %q has invalid webhook_signature_mode %q", installation.InstallationID, installation.WebhookSignatureMode)
+		}
+		switch installation.WebhookTimestampMode {
+		case "required", "optional", "disabled":
+		default:
+			return ReviewGatewayBindings{}, fmt.Errorf("GitLink installation %q has invalid webhook_timestamp_mode %q", installation.InstallationID, installation.WebhookTimestampMode)
+		}
+		if installation.WebhookMaxSkewSeconds < 30 || installation.WebhookMaxSkewSeconds > 600 {
+			return ReviewGatewayBindings{}, fmt.Errorf("GitLink installation %q webhook_max_skew_seconds must be between 30 and 600", installation.InstallationID)
 		}
 		installations[installation.InstallationID] = installation
 		result.Installations = append(result.Installations, installation)

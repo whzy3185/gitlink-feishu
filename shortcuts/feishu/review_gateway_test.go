@@ -1674,7 +1674,7 @@ func TestOpenAPIClientPatchesInteractiveMessage(t *testing.T) {
 	}
 }
 
-func TestGitLinkWebhookIngressVerifiesSignatureDeduplicatesAndQueuesRefresh(t *testing.T) {
+func TestGitLinkWebhookIngressCompatibilityHeadersReachInbox(t *testing.T) {
 	t.Setenv("TEST_GITLINK_WEBHOOK_SECRET", "webhook-secret")
 	now := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
 	bindings := ReviewGatewayBindings{
@@ -1702,7 +1702,8 @@ func TestGitLinkWebhookIngressVerifiesSignatureDeduplicatesAndQueuesRefresh(t *t
 	}
 	queue := NewReviewGatewayQueue(gateway, store, 2, nil)
 	queue.now = func() time.Time { return now }
-	ingress, err := NewGitLinkWebhookIngress(bindings, queue)
+	processor := NewReviewEventInboxProcessor(store, queue, "test-events")
+	ingress, err := NewGitLinkWebhookIngress(bindings, store, processor)
 	if err != nil {
 		t.Fatalf("NewGitLinkWebhookIngress: %v", err)
 	}
@@ -1713,7 +1714,8 @@ func TestGitLinkWebhookIngressVerifiesSignatureDeduplicatesAndQueuesRefresh(t *t
 	signature := hex.EncodeToString(mac.Sum(nil))
 	deliver := func(signature string) (int, GitLinkWebhookIngressResult) {
 		t.Helper()
-		request := httptest.NewRequest(http.MethodPost, "/gitlink/events", strings.NewReader(string(payload)))
+		request := httptest.NewRequest(http.MethodPost, reviewWebhookPathPrefix+"main", strings.NewReader(string(payload)))
+		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("X-Gitea-Event", "pull_request")
 		request.Header.Set("X-Gitea-Delivery", "delivery-42")
 		request.Header.Set("X-Gitea-Signature", signature)
@@ -1726,22 +1728,21 @@ func TestGitLinkWebhookIngressVerifiesSignatureDeduplicatesAndQueuesRefresh(t *t
 		return response.Code, result
 	}
 	status, result := deliver(signature)
-	if status != http.StatusAccepted || !result.Accepted || result.Queued != 1 || result.Repository != "owner/repo" {
+	if status != http.StatusAccepted || !result.Accepted || result.Duplicate || result.Repository != "owner/repo" {
 		t.Fatalf("first webhook result = status:%d %#v", status, result)
 	}
-	var payloadJSON string
-	if err := store.db.QueryRow("SELECT payload_json FROM review_gateway_jobs").Scan(&payloadJSON); err != nil {
-		t.Fatalf("read queued webhook job: %v", err)
+	var inboxCount, jobCount int
+	if err := store.db.QueryRow("SELECT COUNT(*) FROM review_event_inbox").Scan(&inboxCount); err != nil {
+		t.Fatalf("read webhook inbox: %v", err)
 	}
-	var job ReviewGatewayJob
-	if err := json.Unmarshal([]byte(payloadJSON), &job); err != nil {
-		t.Fatalf("decode queued webhook job: %v", err)
+	if err := store.db.QueryRow("SELECT COUNT(*) FROM review_gateway_jobs").Scan(&jobCount); err != nil {
+		t.Fatalf("read webhook jobs: %v", err)
 	}
-	if job.Action != "refresh_review_context" || !job.NotifyChat || job.MutatesGitLink || job.PRNumber != 42 {
-		t.Fatalf("queued webhook job = %#v", job)
+	if inboxCount != 1 || jobCount != 0 {
+		t.Fatalf("webhook side effects = inbox:%d jobs:%d", inboxCount, jobCount)
 	}
 	status, result = deliver(signature)
-	if status != http.StatusAccepted || !result.Duplicate || result.Queued != 0 {
+	if status != http.StatusAccepted || !result.Duplicate {
 		t.Fatalf("duplicate webhook result = status:%d %#v", status, result)
 	}
 	status, result = deliver(strings.Repeat("0", sha256.Size*2))

@@ -60,8 +60,10 @@ func (s *SQLiteReviewGatewayStore) SyncReviewGatewayConfiguration(
 	for _, installation := range normalized.Installations {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO gitlink_installations(
 			installation_id, gitlink_host, owner, credential_ref, operation_mode,
-			allow_public_read, webhook_id, webhook_secret_ref, enabled, updated_at
-		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			allow_public_read, webhook_id, webhook_secret_ref, webhook_signature_mode,
+			webhook_timestamp_mode, webhook_max_skew_seconds, webhook_delivery_required,
+			enabled, updated_at
+		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			installation.InstallationID,
 			installation.GitLinkHost,
 			installation.Owner,
@@ -70,6 +72,10 @@ func (s *SQLiteReviewGatewayStore) SyncReviewGatewayConfiguration(
 			boolToSQLiteInteger(installation.AllowPublicRead),
 			installation.WebhookID,
 			installation.WebhookSecretRef,
+			installation.WebhookSignatureMode,
+			installation.WebhookTimestampMode,
+			installation.WebhookMaxSkewSeconds,
+			boolToSQLiteInteger(installation.WebhookDeliveryRequired),
 			boolToSQLiteInteger(installation.Enabled),
 			appliedAt,
 		); err != nil {

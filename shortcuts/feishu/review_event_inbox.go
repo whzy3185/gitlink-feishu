@@ -13,10 +13,11 @@ import (
 const reviewEventSanitizedPayloadLimit = 256 * 1024
 
 type ReviewEventIngressMetadata struct {
-	SignatureStatus string
-	TimestampStatus string
-	DeliveryStatus  string
-	RawPayload      []byte
+	SignatureStatus  string
+	TimestampStatus  string
+	DeliveryStatus   string
+	RawPayload       []byte
+	ReplayRequestKey string
 }
 
 type ReviewEventInboxRecord struct {
@@ -50,6 +51,48 @@ type ReviewEventClaimOptions struct {
 	LeaseDuration time.Duration
 }
 
+type ReviewEventListFilters struct {
+	Status         string
+	InstallationID string
+	Repository     string
+	EventType      string
+	Limit          int
+}
+
+func (s *SQLiteReviewGatewayStore) ListReviewEventInbox(ctx context.Context, filters ReviewEventListFilters) ([]ReviewEventInboxRecord, error) {
+	query := reviewEventInboxSelect + ` WHERE 1=1`
+	args := []interface{}{}
+	for _, filter := range []struct{ column, value string }{
+		{"status", filters.Status}, {"installation_id", filters.InstallationID},
+		{"repository", filters.Repository}, {"event_type", filters.EventType},
+	} {
+		if strings.TrimSpace(filter.value) != "" {
+			query += " AND " + filter.column + "=?"
+			args = append(args, strings.TrimSpace(filter.value))
+		}
+	}
+	limit := filters.Limit
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	query += ` ORDER BY received_at DESC, event_id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []ReviewEventInboxRecord{}
+	for rows.Next() {
+		record, err := scanReviewEventInbox(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, record)
+	}
+	return result, rows.Err()
+}
+
 func (s *SQLiteReviewGatewayStore) InsertReviewEventInbox(
 	ctx context.Context,
 	normalization ReviewEventNormalization,
@@ -81,6 +124,7 @@ func (s *SQLiteReviewGatewayStore) InsertReviewEventInbox(
 		TimestampStatus:    firstNonEmpty(metadata.TimestampStatus, "not_checked"),
 		DeliveryStatus:     firstNonEmpty(metadata.DeliveryStatus, "header"),
 		CanonicalEventJSON: canonicalJSON, SanitizedPayloadJSON: sanitizedJSON,
+		ReplayOfEventID: event.ReplayOf, ReplayRequestKey: strings.TrimSpace(metadata.ReplayRequestKey),
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -108,7 +152,12 @@ func (s *SQLiteReviewGatewayStore) InsertReviewEventInbox(
 		return ReviewEventInboxInsertResult{}, err
 	}
 	if affected == 0 {
-		existing, err := getReviewEventInboxTx(ctx, tx, event.InstallationID, event.DeliveryKey)
+		var existing ReviewEventInboxRecord
+		if record.ReplayRequestKey != "" {
+			existing, err = scanReviewEventInbox(tx.QueryRowContext(ctx, reviewEventInboxSelect+` WHERE replay_request_key=?`, record.ReplayRequestKey))
+		} else {
+			existing, err = getReviewEventInboxTx(ctx, tx, event.InstallationID, event.DeliveryKey)
+		}
 		if err != nil {
 			return ReviewEventInboxInsertResult{}, err
 		}
