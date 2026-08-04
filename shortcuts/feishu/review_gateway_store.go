@@ -24,6 +24,8 @@ const (
 	reviewGatewaySQLiteBusyMS       = 400
 )
 
+var ErrReviewServiceDraining = errors.New("review service is draining")
+
 const reviewGatewayStateSchema = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY,
@@ -572,8 +574,12 @@ type MemoryReviewGatewayJobStore struct {
 }
 
 type SQLiteReviewGatewayStore struct {
-	db   *sql.DB
-	path string
+	db              *sql.DB
+	path            string
+	admissionClosed bool
+	claimsClosed    bool
+	gateMu          sync.RWMutex
+	closed          bool
 }
 
 type reviewGatewayLatencyObservation struct {
@@ -963,6 +969,26 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 			`CREATE TRIGGER IF NOT EXISTS review_configuration_revisions_no_delete
 			 BEFORE DELETE ON review_configuration_revisions
 			 BEGIN SELECT RAISE(ABORT, 'review configuration revision is append-only'); END`,
+		},
+	},
+	{
+		Version: 18,
+		Name:    "review_maintenance_runs_v1",
+		Statements: []string{
+			`CREATE TABLE IF NOT EXISTS review_maintenance_runs (
+				run_id TEXT PRIMARY KEY,
+				maintenance_kind TEXT NOT NULL,
+				status TEXT NOT NULL,
+				started_at TEXT NOT NULL,
+				finished_at TEXT NOT NULL DEFAULT '',
+				source_database_hash TEXT NOT NULL DEFAULT '',
+				artifact_path_hash TEXT NOT NULL DEFAULT '',
+				artifact_sha256 TEXT NOT NULL DEFAULT '',
+				rows_affected INTEGER NOT NULL DEFAULT 0,
+				error_summary TEXT NOT NULL DEFAULT ''
+			)`,
+			`CREATE INDEX IF NOT EXISTS review_maintenance_runs_kind
+			 ON review_maintenance_runs(maintenance_kind,status,started_at)`,
 		},
 	},
 	{
@@ -1563,6 +1589,9 @@ func (s *SQLiteReviewGatewayStore) ReserveAndSaveJob(ctx context.Context, job Re
 	if s == nil || s.db == nil || strings.TrimSpace(job.DedupeKey) == "" {
 		return false, fmt.Errorf("review gateway state store and dedupe key are required")
 	}
+	if !s.reviewAdmissionAllowed() {
+		return false, ErrReviewServiceDraining
+	}
 	if ttl <= 0 {
 		ttl = 24 * time.Hour
 	}
@@ -1659,6 +1688,9 @@ func (s *SQLiteReviewGatewayStore) ReserveAndSaveJob(ctx context.Context, job Re
 }
 
 func (s *SQLiteReviewGatewayStore) ClaimReadyJobs(ctx context.Context, opts ReviewGatewayClaimOptions) ([]ReviewGatewayJob, error) {
+	if !s.reviewClaimsAllowed() {
+		return []ReviewGatewayJob{}, nil
+	}
 	normalizeReviewGatewayClaimOptions(&opts)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -2077,7 +2109,59 @@ func (s *SQLiteReviewGatewayStore) Close() error {
 	if s == nil || s.db == nil {
 		return nil
 	}
+	s.gateMu.Lock()
+	if s.closed {
+		s.gateMu.Unlock()
+		return nil
+	}
+	s.closed, s.admissionClosed, s.claimsClosed = true, true, true
+	s.gateMu.Unlock()
 	return s.db.Close()
+}
+
+func (s *SQLiteReviewGatewayStore) CloseReviewAdmission() {
+	if s == nil {
+		return
+	}
+	s.gateMu.Lock()
+	s.admissionClosed = true
+	s.gateMu.Unlock()
+}
+
+func (s *SQLiteReviewGatewayStore) CloseReviewClaims() {
+	if s == nil {
+		return
+	}
+	s.gateMu.Lock()
+	s.claimsClosed = true
+	s.gateMu.Unlock()
+}
+
+func (s *SQLiteReviewGatewayStore) reviewAdmissionAllowed() bool {
+	if s == nil {
+		return false
+	}
+	s.gateMu.RLock()
+	defer s.gateMu.RUnlock()
+	return !s.closed && !s.admissionClosed
+}
+
+func (s *SQLiteReviewGatewayStore) reviewClaimsAllowed() bool {
+	if s == nil {
+		return false
+	}
+	s.gateMu.RLock()
+	defer s.gateMu.RUnlock()
+	return !s.closed && !s.claimsClosed
+}
+
+func (s *SQLiteReviewGatewayStore) Closed() bool {
+	if s == nil {
+		return true
+	}
+	s.gateMu.RLock()
+	defer s.gateMu.RUnlock()
+	return s.closed
 }
 
 func NewReviewGatewayQueue(gateway *ReviewGateway, store ReviewGatewayJobStore, capacity int, onResult func(ReviewGatewayJobOutcome)) *ReviewGatewayQueue {

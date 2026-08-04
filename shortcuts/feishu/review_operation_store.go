@@ -159,6 +159,9 @@ func (s *SQLiteReviewGatewayStore) ListReviewOperations(ctx context.Context, que
 }
 
 func (s *SQLiteReviewGatewayStore) ClaimReviewOperations(ctx context.Context, opts ReviewOperationClaimOptions) ([]ReviewOperation, error) {
+	if !s.reviewClaimsAllowed() {
+		return []ReviewOperation{}, nil
+	}
 	if strings.TrimSpace(opts.QueueClass) == "" {
 		return nil, fmt.Errorf("review operation queue class is required")
 	}

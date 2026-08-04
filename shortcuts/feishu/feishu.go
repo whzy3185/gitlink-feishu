@@ -45,6 +45,8 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		newReviewDeadLetterShortcut(),
 		newReviewOperationReconciliationShortcut(),
 		newReviewQueueStatusShortcut(),
+		newReviewServiceShortcut(),
+		newReviewConfigurationShortcut(),
 	}
 }
 

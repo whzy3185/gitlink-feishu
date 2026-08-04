@@ -2,6 +2,7 @@ package feishu
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -279,11 +280,45 @@ func (s *ReviewService) Shutdown(ctx context.Context) error {
 	}
 	s.shutdown = true
 	s.mu.Unlock()
+	shutdownCtx, shutdownCancel := reviewContextWithMaximum(ctx, s.Config.ShutdownTimeout)
+	defer shutdownCancel()
+	var shutdownErr error
 	s.Status.SetService(ReviewServiceDraining, ReviewAdmissionDraining, s.now(), nil)
+	if s.Store != nil {
+		s.Store.CloseReviewAdmission()
+		s.Store.CloseReviewClaims()
+		releaseCtx, cancelRelease := context.WithTimeout(context.Background(), time.Second)
+		shutdownErr = reviewShutdownError(shutdownErr, s.Store.ReleaseNotStartedReviewWork(releaseCtx, s.now()))
+		cancelRelease()
+	}
+	// Stop public admission first. The loopback admin listener remains alive
+	// long enough for readyz to report 503 while the service drains.
+	if s.PublicServer != nil {
+		shutdownErr = reviewShutdownError(shutdownErr, s.PublicServer.Shutdown(shutdownCtx))
+	}
+	if s.Store != nil {
+		readCtx, cancelRead := reviewContextWithMaximum(shutdownCtx, s.Config.ReadDrainTimeout)
+		readErr := s.Store.WaitForReviewReadJobs(readCtx)
+		cancelRead()
+		if readErr != nil && !errors.Is(readErr, context.DeadlineExceeded) && !errors.Is(readErr, context.Canceled) {
+			shutdownErr = reviewShutdownError(shutdownErr, readErr)
+		}
+		operationCtx, cancelOperations := reviewContextWithMaximum(shutdownCtx, s.Config.OperationDrainTimeout)
+		operationErr := s.Store.WaitForReviewOperations(operationCtx)
+		cancelOperations()
+		if operationErr != nil && !errors.Is(operationErr, context.DeadlineExceeded) && !errors.Is(operationErr, context.Canceled) {
+			shutdownErr = reviewShutdownError(shutdownErr, operationErr)
+		}
+		transitionCtx, cancelTransition := context.WithTimeout(context.Background(), 2*time.Second)
+		shutdownErr = reviewShutdownError(shutdownErr, s.Store.PrepareReviewWorkForShutdown(transitionCtx, s.now()))
+		cancelTransition()
+	}
+	if s.AdminServer != nil {
+		shutdownErr = reviewShutdownError(shutdownErr, s.AdminServer.Shutdown(shutdownCtx))
+	}
 	if s.cancel != nil {
 		s.cancel()
 	}
-	s.closeHTTP(ctx)
 	for index := len(s.Components) - 1; index >= 0; index-- {
 		component := s.Components[index]
 		if !component.Enabled {
@@ -291,7 +326,7 @@ func (s *ReviewService) Shutdown(ctx context.Context) error {
 		}
 		s.Status.UpdateComponent(component.Name, component.WorkerIndex, ReviewComponentStopping, s.now(), nil)
 		if component.Stop != nil {
-			_ = component.Stop(ctx)
+			shutdownErr = reviewShutdownError(shutdownErr, component.Stop(shutdownCtx))
 		}
 		s.Status.UpdateComponent(component.Name, component.WorkerIndex, ReviewComponentStopped, s.now(), nil)
 	}
@@ -299,20 +334,26 @@ func (s *ReviewService) Shutdown(ctx context.Context) error {
 	go func() { s.wg.Wait(); close(done) }()
 	select {
 	case <-done:
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-shutdownCtx.Done():
+		shutdownErr = reviewShutdownError(shutdownErr, shutdownCtx.Err())
 	}
 	s.Status.SetService(ReviewServiceStopping, ReviewAdmissionClosed, s.now(), nil)
 	_ = s.persistInstance(context.Background(), s.now())
+	if s.Store != nil && reviewDatabaseOpen(s.Store.db) {
+		checkpointCtx, checkpointCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_, checkpointErr := s.Store.WALCheckpoint(checkpointCtx, "TRUNCATE", s.Metrics, s.now())
+		checkpointCancel()
+		shutdownErr = reviewShutdownError(shutdownErr, checkpointErr)
+	}
 	s.Status.SetService(ReviewServiceStopped, ReviewAdmissionClosed, s.now(), nil)
 	_ = s.persistInstance(context.Background(), s.now())
 	if s.ownedStore && s.Store != nil {
 		_ = s.Store.Close()
 	}
 	if s.ownedLock && s.InstanceLock != nil {
-		_ = s.InstanceLock.Release()
+		shutdownErr = reviewShutdownError(shutdownErr, s.InstanceLock.Release())
 	}
-	return nil
+	return shutdownErr
 }
 
 func (s *ReviewService) persistInstance(ctx context.Context, now time.Time) error {

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	lark "github.com/larksuite/oapi-sdk-go/v3"
@@ -97,6 +98,11 @@ func newReviewGatewayShortcut() *common.Shortcut {
 			{Name: "operation-drain-timeout", Usage: "Grace period for in-flight Feishu operations", Default: "25s"},
 			{Name: "worker-heartbeat-interval", Usage: "Review service component heartbeat interval", Default: "5s"},
 			{Name: "worker-stale-after", Usage: "Required component heartbeat age that makes readiness fail", Default: "20s"},
+			{Name: "backup-directory", Usage: "Directory for periodic consistent SQLite backups"},
+			{Name: "backup-interval", Usage: "Periodic backup interval; 0 disables it", Default: "0"},
+			{Name: "backup-retention-count", Usage: "Successful backups retained", Default: "7"},
+			{Name: "retention-interval", Usage: "Periodic safe retention interval; 0 disables it", Default: "0"},
+			{Name: "wal-checkpoint-interval", Usage: "Periodic PASSIVE WAL checkpoint interval; 0 disables it", Default: "6h"},
 			{Name: "queue-size", Usage: "Maximum in-memory asynchronous job backlog", Default: "128"},
 			{Name: "stale-minutes", Usage: "Reject message events older than this window", Default: "30"},
 			{Name: "job-timeout-seconds", Usage: "Timeout for each GitLink GET-only job", Default: "60"},
@@ -337,7 +343,7 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 	if err != nil {
 		return err
 	}
-	liveCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	liveCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	output.Start(liveCtx, queueSize)
 
@@ -441,6 +447,12 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		}
 	})
 	eventProcessor := NewReviewEventInboxProcessor(store, queue, instanceLock.metadata.InstanceID+"-events")
+	maintenanceScheduler := &ReviewMaintenanceScheduler{
+		Store: store, Metrics: service.Metrics,
+		BackupOptions:  ReviewBackupOptions{OutputDirectory: service.Config.BackupDirectory, Verify: true, RetentionCount: service.Config.BackupRetentionCount, ServiceVersion: service.Config.ServiceVersion, CommitSHA: service.Config.CommitSHA},
+		BackupInterval: service.Config.BackupInterval, RetentionInterval: service.Config.RetentionInterval,
+		WALInterval: service.Config.WALCheckpointInterval, IntegrityInterval: service.Config.WALCheckpointInterval,
+	}
 	reconciliationInterval := time.Duration(0)
 	if value := strings.TrimSpace(runtime.Arg("reconciliation-interval")); value != "" && value != "0" {
 		reconciliationInterval, err = time.ParseDuration(value)
@@ -564,6 +576,11 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 			return operationPlanner.Run(ctx, instanceLock.metadata.InstanceID, workerConcurrency.Planner)
 		}},
 		{Name: "operation_reconciliation", Required: false, Enabled: true, Run: func(ctx context.Context) error { operationReconciler.Run(ctx); return nil }},
+		{Name: "maintenance", Required: false, Enabled: service.Config.BackupInterval > 0 || service.Config.RetentionInterval > 0 || service.Config.WALCheckpointInterval > 0, Run: func(ctx context.Context) error {
+			maintenanceScheduler.Metrics = service.Metrics
+			maintenanceScheduler.Run(ctx)
+			return nil
+		}},
 		{Name: "pr_reconciliation", Required: false, Enabled: reconciliationInterval > 0, Run: func(ctx context.Context) error { reconciliation.Run(ctx); return nil }},
 		{Name: "agent_worker", Required: false, Enabled: agentRunnerEnabled, Run: func(ctx context.Context) error {
 			return workerManager.RunClass(ctx, ReviewQueueAgent, workerConcurrency.Agent, jobHandler)
@@ -606,12 +623,15 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 			return err
 		}
 	}
-	if err := service.Start(liveCtx); err != nil {
+	if err := service.Start(context.Background()); err != nil {
 		return err
 	}
 	serviceCleanupRequired = false
 	output.TryEmit(reviewGatewayLifecycleEvent{SchemaVersion: reviewGatewaySchemaVersion, Type: "service_ready", Message: fmt.Sprintf("Review service ready; admin=%s", service.AdminAddress()), ObservedAt: time.Now().UTC().Format(time.RFC3339)})
-	<-service.serviceContext().Done()
+	select {
+	case <-liveCtx.Done():
+	case <-service.serviceContext().Done():
+	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), service.Config.ShutdownTimeout)
 	defer cancel()
 	if err := service.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
@@ -646,10 +666,11 @@ func reviewServiceConfigFromRuntime(runtime *common.RuntimeContext, statePath, a
 	config.AdminListen = firstNonEmpty(runtime.Arg("admin-listen-address"), config.AdminListen)
 	config.WebhookListen = strings.TrimSpace(runtime.Arg("webhook-listen-address"))
 	config.AdminTokenRef = strings.TrimSpace(runtime.Arg("admin-token-ref"))
+	config.BackupDirectory = strings.TrimSpace(runtime.Arg("backup-directory"))
 	for _, item := range []struct {
 		name   string
 		target *time.Duration
-	}{{"shutdown-timeout", &config.ShutdownTimeout}, {"read-drain-timeout", &config.ReadDrainTimeout}, {"operation-drain-timeout", &config.OperationDrainTimeout}, {"worker-heartbeat-interval", &config.WorkerHeartbeatInterval}, {"worker-stale-after", &config.WorkerStaleAfter}} {
+	}{{"shutdown-timeout", &config.ShutdownTimeout}, {"read-drain-timeout", &config.ReadDrainTimeout}, {"operation-drain-timeout", &config.OperationDrainTimeout}, {"worker-heartbeat-interval", &config.WorkerHeartbeatInterval}, {"worker-stale-after", &config.WorkerStaleAfter}, {"backup-interval", &config.BackupInterval}, {"retention-interval", &config.RetentionInterval}, {"wal-checkpoint-interval", &config.WALCheckpointInterval}} {
 		value := strings.TrimSpace(runtime.Arg(item.name))
 		if value == "" {
 			continue
@@ -660,6 +681,11 @@ func reviewServiceConfigFromRuntime(runtime *common.RuntimeContext, statePath, a
 		}
 		*item.target = parsed
 	}
+	retentionCount, err := boundedReviewGatewayInt(runtime.Arg("backup-retention-count"), config.BackupRetentionCount, 1, 100, "backup-retention-count")
+	if err != nil {
+		return ReviewServiceConfig{}, err
+	}
+	config.BackupRetentionCount = retentionCount
 	if err := config.Validate(); err != nil {
 		return ReviewServiceConfig{}, err
 	}
