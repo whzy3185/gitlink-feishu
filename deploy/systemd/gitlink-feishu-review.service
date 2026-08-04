@@ -1,0 +1,24 @@
+[Unit]
+Description=GitLink Feishu Review collaboration service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gitlink-feishu-review
+Group=gitlink-feishu-review
+WorkingDirectory=/var/lib/gitlink-feishu-review
+EnvironmentFile=-/etc/gitlink-feishu-review/review-service.env
+ExecStart=/usr/local/bin/gitlink-cli feishu +review-gateway --listen --bindings /etc/gitlink-feishu-review/bindings.json --state-db /var/lib/gitlink-feishu-review/review.db --backup-directory /var/backups/gitlink-feishu-review
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/gitlink-feishu-review /var/backups/gitlink-feishu-review /var/log/gitlink-feishu-review
+
+[Install]
+WantedBy=multi-user.target

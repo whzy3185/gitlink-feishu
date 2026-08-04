@@ -1,0 +1,19 @@
+server {
+    listen 443 ssl;
+    server_name review.example.com;
+    client_max_body_size 2m;
+
+    location /webhooks/gitlink/ {
+        proxy_pass http://127.0.0.1:8788;
+        proxy_pass_request_body on;
+        proxy_set_header X-GitLink-Signature $http_x_gitlink_signature;
+        proxy_set_header X-GitLink-Timestamp $http_x_gitlink_timestamp;
+        proxy_set_header X-GitLink-Delivery $http_x_gitlink_delivery;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 5s;
+        proxy_send_timeout 5s;
+    }
+
+    location = /healthz { proxy_pass http://127.0.0.1:8787/healthz; }
+    location = /readyz  { proxy_pass http://127.0.0.1:8787/readyz; }
+}

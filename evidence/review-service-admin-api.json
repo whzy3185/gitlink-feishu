@@ -1,0 +1,19 @@
+﻿{
+    "schema_version":  "review.service-admin-evidence/v1",
+    "passed":  true,
+    "capability":  "metrics_and_read_only_admin",
+    "storage":  "temporary_sqlite",
+    "listener":  "loopback_only",
+    "identifiers":  "synthetic_or_hashed",
+    "external_writes":  {
+                            "gitlink_get":  0,
+                            "gitlink_post":  0,
+                            "feishu_message":  0,
+                            "base":  0,
+                            "doc":  0,
+                            "task":  0
+                        },
+    "admin_paths":  20,
+    "authentication":  "bearer_constant_time",
+    "high_cardinality_labels":  0
+}

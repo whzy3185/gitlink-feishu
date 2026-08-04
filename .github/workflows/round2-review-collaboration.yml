@@ -9,6 +9,7 @@ on:
       - feat/round2-feishu-platform-v2
       - fix/round2-platform-v2-m0-write-scope
       - feat/round2-platform-v2-m1-pr-result-card
+      - feat/feishu-review-service-control-plane
 
 permissions:
   contents: read
@@ -52,6 +53,9 @@ jobs:
 
       - name: Test P2-P5 Go packages
         run: go test ./shortcuts/feishu ./shortcuts/wecom ./shortcuts/workflow
+
+      - name: Verify Review service deployment assets
+        run: go test ./shortcuts/feishu -run 'TestSystemd|TestWindows|TestReverseProxy' -count=1
 
       - name: Test Enterprise WeChat bridge contracts
         working-directory: bridges/wecom

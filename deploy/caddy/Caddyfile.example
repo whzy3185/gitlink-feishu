@@ -1,0 +1,19 @@
+review.example.com {
+    request_body {
+        max_size 2MB
+    }
+
+    @gitlink_webhooks path /webhooks/gitlink/*
+    reverse_proxy @gitlink_webhooks 127.0.0.1:8788 {
+        header_up X-GitLink-Signature {http.request.header.X-GitLink-Signature}
+        header_up X-GitLink-Timestamp {http.request.header.X-GitLink-Timestamp}
+        header_up X-GitLink-Delivery {http.request.header.X-GitLink-Delivery}
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 5s
+        }
+    }
+
+    @probes path /healthz /readyz
+    reverse_proxy @probes 127.0.0.1:8787
+}
