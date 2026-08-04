@@ -288,6 +288,12 @@ CREATE TABLE IF NOT EXISTS review_resource_migration_audit (
 );
 CREATE INDEX IF NOT EXISTS review_resource_migration_audit_migration
     ON review_resource_migration_audit(migration_id, created_at);
+CREATE TRIGGER IF NOT EXISTS review_resource_migration_audit_no_update
+    BEFORE UPDATE ON review_resource_migration_audit
+    BEGIN SELECT RAISE(ABORT, 'review resource migration audit is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS review_resource_migration_audit_no_delete
+    BEFORE DELETE ON review_resource_migration_audit
+    BEGIN SELECT RAISE(ABORT, 'review resource migration audit is append-only'); END;
 
 CREATE TABLE IF NOT EXISTS gitlink_installations (
     installation_id TEXT PRIMARY KEY,
@@ -536,6 +542,12 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 		Name:    "review_resource_migration_audit_v1",
 		Statements: []string{
 			`SELECT audit_id, migration_id, action, from_status, to_status FROM review_resource_migration_audit LIMIT 0`,
+			`CREATE TRIGGER IF NOT EXISTS review_resource_migration_audit_no_update
+			 BEFORE UPDATE ON review_resource_migration_audit
+			 BEGIN SELECT RAISE(ABORT, 'review resource migration audit is append-only'); END`,
+			`CREATE TRIGGER IF NOT EXISTS review_resource_migration_audit_no_delete
+			 BEFORE DELETE ON review_resource_migration_audit
+			 BEGIN SELECT RAISE(ABORT, 'review resource migration audit is append-only'); END`,
 		},
 	},
 }

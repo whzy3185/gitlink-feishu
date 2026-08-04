@@ -1,0 +1,19 @@
+﻿{
+    "schema_version":  "feishu.review-dual-chat-evidence/v1",
+    "passed":  true,
+    "database_sha256":  "",
+    "presentation_shared_by_installation":  true,
+    "collaboration_isolated_by_chat":  true,
+    "canonical_card_isolated_by_chat":  true,
+    "task_isolated_by_chat":  true,
+    "chat_projection_isolated":  true,
+    "installation_projection_shared":  true,
+    "external_writes":  {
+                            "gitlink_get":  0,
+                            "gitlink_post":  0,
+                            "feishu_message":  0,
+                            "base":  0,
+                            "doc":  0,
+                            "task":  0
+                        }
+}

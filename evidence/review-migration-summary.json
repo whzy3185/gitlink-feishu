@@ -1,0 +1,31 @@
+﻿{
+    "schema_version":  "feishu.review-migration-evidence/v1",
+    "generated_at":  "2026-08-04T04:20:42.5988402Z",
+    "database_supplied":  false,
+    "database_sha256":  "",
+    "schema_migration_versions":  [
+                                      1,
+                                      2,
+                                      3,
+                                      4,
+                                      5,
+                                      6
+                                  ],
+    "policy_count":  0,
+    "migration_status_counts":  {
+
+                                },
+    "ambiguous_count":  0,
+    "migrated_count":  0,
+    "superseded_count":  0,
+    "dual_chat_passed":  true,
+    "restart_passed":  true,
+    "external_writes":  {
+                            "gitlink_get":  0,
+                            "gitlink_post":  0,
+                            "feishu_message":  0,
+                            "base":  0,
+                            "doc":  0,
+                            "task":  0
+                        }
+}

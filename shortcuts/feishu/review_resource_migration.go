@@ -68,7 +68,6 @@ type LegacyReviewResourceVerificationInput struct {
 	Method               string              `json:"method"`
 	Actor                string              `json:"-"`
 	Confirmed            bool                `json:"confirmed"`
-	AllowFixture         bool                `json:"-"`
 }
 
 type LegacyReviewResourceVerifier interface {
@@ -85,7 +84,7 @@ func (OperatorConfirmedLegacyReviewResourceVerifier) Verify(
 	if !input.Confirmed {
 		return fmt.Errorf("explicit --yes confirmation is required")
 	}
-	if input.Method != "operator_confirmed" && !(input.Method == "fixture_verified" && input.AllowFixture) {
+	if input.Method != "operator_confirmed" {
 		return fmt.Errorf("unsupported verification method %q", input.Method)
 	}
 	if strings.TrimSpace(input.MigrationID) != migration.MigrationID {
@@ -274,12 +273,19 @@ func classifyLegacyReviewResource(
 		migration.Status = ReviewResourceMigrationNeedsReconciliation
 		migration.ReasonCode = "target_resolution_failed"
 	} else {
-		migration.TargetWorkItemKey = target
+		migration.TargetWorkItemKey = reviewResourceMigrationTargetReference(target, migration.TargetScope)
 		migration.Status = ReviewResourceMigrationNeedsReconciliation
 		migration.ReasonCode = "explicit_verification_required"
 	}
 	migration.MigrationID = reviewResourceMigrationID(migration, candidateIdentity)
 	return migration, nil
+}
+
+func reviewResourceMigrationTargetReference(target string, scope ReviewResourceScope) string {
+	if scope == ReviewResourceScopeChat {
+		return stableKey("review-resource-target", reviewResourceIdentifierHash(target))
+	}
+	return target
 }
 
 func candidateLegacyReviewInstallations(ctx context.Context, tx *sql.Tx, chatID, repository string) ([]string, error) {
@@ -549,8 +555,12 @@ func (s *SQLiteReviewGatewayStore) applyLegacyReviewResourceMigration(
 		return migration, fmt.Errorf("legacy Review resource changed after verification")
 	}
 	var existing string
+	targetWorkItemKey, _, err := resolveReviewResourceMigrationTarget(ctx, tx, migration)
+	if err != nil {
+		return migration, err
+	}
 	err = tx.QueryRowContext(ctx, `SELECT remote_id FROM review_collaboration_resources
-		WHERE work_item_key=? AND resource_type=?`, migration.TargetWorkItemKey, migration.ResourceType).Scan(&existing)
+		WHERE work_item_key=? AND resource_type=?`, targetWorkItemKey, migration.ResourceType).Scan(&existing)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return migration, err
 	}
@@ -589,7 +599,7 @@ func (s *SQLiteReviewGatewayStore) applyLegacyReviewResourceMigration(
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO review_collaboration_resources (
 		work_item_key, resource_type, remote_id, content_fingerprint, updated_at
-	) VALUES (?, ?, ?, ?, ?)`, migration.TargetWorkItemKey, migration.ResourceType,
+	) VALUES (?, ?, ?, ?, ?)`, targetWorkItemKey, migration.ResourceType,
 		remoteID, fingerprint, sourceUpdatedAt); err != nil {
 		return migration, err
 	}
@@ -603,17 +613,39 @@ func (s *SQLiteReviewGatewayStore) applyLegacyReviewResourceMigration(
 	return s.GetReviewResourceMigration(ctx, migrationID)
 }
 
+func resolveReviewResourceMigrationTarget(
+	ctx context.Context, tx *sql.Tx, migration ReviewResourceMigration,
+) (string, string, error) {
+	chatID := ""
+	if migration.TargetScope == ReviewResourceScopeChat {
+		err := tx.QueryRowContext(ctx, `SELECT chat_id FROM review_collaboration_items
+			WHERE repository=? AND pr_number=?`, migration.Repository, migration.PRNumber).Scan(&chatID)
+		if err != nil {
+			return "", "", err
+		}
+		if reviewResourceIdentifierHash(chatID) != migration.ChatIDHash {
+			return "", "", fmt.Errorf("legacy Review resource chat changed after verification")
+		}
+	}
+	target, err := ResolveReviewResourceTarget(
+		migration.ResourceType, migration.InstallationID, chatID,
+		migration.Repository, migration.PRNumber, migration.TargetScope,
+	)
+	if err != nil {
+		return "", "", err
+	}
+	if reviewResourceMigrationTargetReference(target, migration.TargetScope) != migration.TargetWorkItemKey {
+		return "", "", fmt.Errorf("review resource migration target changed after verification")
+	}
+	return target, chatID, nil
+}
+
 func adoptVerifiedLegacyCanonicalCard(
 	ctx context.Context, tx *sql.Tx, migration ReviewResourceMigration, remoteID string, now time.Time,
 ) (string, error) {
-	var chatID string
-	err := tx.QueryRowContext(ctx, `SELECT chat_id FROM review_collaboration_items
-		WHERE repository=? AND pr_number=?`, migration.Repository, migration.PRNumber).Scan(&chatID)
+	_, chatID, err := resolveReviewResourceMigrationTarget(ctx, tx, migration)
 	if err != nil {
 		return "", err
-	}
-	if reviewResourceIdentifierHash(chatID) != migration.ChatIDHash {
-		return "", fmt.Errorf("legacy Card chat changed after verification")
 	}
 	job := ReviewGatewayJob{InstallationID: migration.InstallationID, ChatID: chatID,
 		Repository: migration.Repository, PRNumber: migration.PRNumber}

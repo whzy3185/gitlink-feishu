@@ -525,11 +525,10 @@ func TestLegacyCardMappingWithVerifiedChatCanBeMigrated(t *testing.T) {
 		Method:               "fixture_verified",
 		Actor:                "test-operator",
 		Confirmed:            true,
-		AllowFixture:         true,
 	}
 	if _, err := store.VerifyLegacyReviewResourceMigration(
 		context.Background(), plans[0].MigrationID, verification,
-		OperatorConfirmedLegacyReviewResourceVerifier{}, reviewProductInvariantTime.Add(time.Minute),
+		fixtureLegacyReviewResourceVerifier{}, reviewProductInvariantTime.Add(time.Minute),
 	); err != nil {
 		t.Fatalf("verify legacy card: %v", err)
 	}

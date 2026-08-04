@@ -11,6 +11,25 @@ import (
 
 var reviewMigrationTestTime = time.Date(2026, 8, 4, 10, 0, 0, 0, time.UTC)
 
+type fixtureLegacyReviewResourceVerifier struct{}
+
+func (fixtureLegacyReviewResourceVerifier) Verify(
+	_ context.Context,
+	migration ReviewResourceMigration,
+	input LegacyReviewResourceVerificationInput,
+) error {
+	if !input.Confirmed || input.Method != "fixture_verified" || input.MigrationID != migration.MigrationID {
+		return errors.New("fixture verification rejected")
+	}
+	if input.ExpectedInstallation != migration.InstallationID || input.ExpectedScope != migration.TargetScope {
+		return errors.New("fixture scope mismatch")
+	}
+	if migration.TargetScope == ReviewResourceScopeChat && reviewResourceIdentifierHash(input.ExpectedChatID) != migration.ChatIDHash {
+		return errors.New("fixture chat mismatch")
+	}
+	return nil
+}
+
 func newReviewMigrationTestStore(t *testing.T) *SQLiteReviewGatewayStore {
 	t.Helper()
 	store, err := OpenSQLiteReviewGatewayStore(filepath.Join(t.TempDir(), "migration.db"))
@@ -57,9 +76,8 @@ func verifyReviewMigrationPlan(t *testing.T, store *SQLiteReviewGatewayStore, pl
 			Method:               "fixture_verified",
 			Actor:                "fixture-operator",
 			Confirmed:            true,
-			AllowFixture:         true,
 		},
-		OperatorConfirmedLegacyReviewResourceVerifier{},
+		fixtureLegacyReviewResourceVerifier{},
 		reviewMigrationTestTime.Add(time.Minute),
 	)
 	if err != nil {
@@ -133,7 +151,8 @@ func TestMissingLegacyChatCannotMigrateCard(t *testing.T) {
 func TestDiscoveryDoesNotCopyRemoteID(t *testing.T) {
 	store := newReviewMigrationTestStore(t)
 	plan := seedReviewMigrationPlan(t, store, "chat-a", []string{"installation-a"}, ReviewResourceCard, nil)
-	state, err := store.GetReviewResourceState(context.Background(), plan.TargetWorkItemKey, ReviewResourceCard)
+	target, _ := ResolveReviewResourceTarget(ReviewResourceCard, plan.InstallationID, "chat-a", plan.Repository, plan.PRNumber, plan.TargetScope)
+	state, err := store.GetReviewResourceState(context.Background(), target, ReviewResourceCard)
 	if err != nil || state.RemoteID != "" {
 		t.Fatalf("discovery copied remote ID: %#v err=%v", state, err)
 	}
@@ -182,8 +201,8 @@ func TestLegacyCardDoesNotCrossChatBoundary(t *testing.T) {
 	plan := seedReviewMigrationPlan(t, store, "chat-a", []string{"installation-a"}, ReviewResourceCard, nil)
 	_, err := store.VerifyLegacyReviewResourceMigration(context.Background(), plan.MigrationID,
 		LegacyReviewResourceVerificationInput{ExpectedInstallation: "installation-a", ExpectedScope: ReviewResourceScopeChat,
-			ExpectedChatID: "chat-b", Method: "fixture_verified", Confirmed: true, AllowFixture: true},
-		OperatorConfirmedLegacyReviewResourceVerifier{}, reviewMigrationTestTime)
+			ExpectedChatID: "chat-b", Method: "fixture_verified", Confirmed: true},
+		fixtureLegacyReviewResourceVerifier{}, reviewMigrationTestTime)
 	if err == nil {
 		t.Fatal("cross-chat verification unexpectedly succeeded")
 	}
@@ -227,7 +246,8 @@ func TestLegacyCardDifferentTargetBecomesSuperseded(t *testing.T) {
 	store := newReviewMigrationTestStore(t)
 	plan := verifyReviewMigrationPlan(t, store,
 		seedReviewMigrationPlan(t, store, "chat-a", []string{"installation-a"}, ReviewResourceCard, nil), "chat-a")
-	if err := store.SaveReviewResourceState(context.Background(), plan.TargetWorkItemKey, ReviewResourceCard, "different-card", "new", reviewMigrationTestTime); err != nil {
+	target, _ := ResolveReviewResourceTarget(ReviewResourceCard, plan.InstallationID, "chat-a", plan.Repository, plan.PRNumber, plan.TargetScope)
+	if err := store.SaveReviewResourceState(context.Background(), target, ReviewResourceCard, "different-card", "new", reviewMigrationTestTime); err != nil {
 		t.Fatal(err)
 	}
 	got := applyReviewMigrationPlan(t, store, plan)
@@ -290,7 +310,8 @@ func assertProjectionMigration(t *testing.T, resource string, scope ReviewResour
 		enabledMigrationPolicy("installation-a", resource, scope))
 	plan = verifyReviewMigrationPlan(t, store, plan, "chat-a")
 	got := applyReviewMigrationPlan(t, store, plan)
-	state, err := store.GetReviewResourceState(context.Background(), plan.TargetWorkItemKey, resource)
+	target, _ := ResolveReviewResourceTarget(resource, plan.InstallationID, "chat-a", plan.Repository, plan.PRNumber, plan.TargetScope)
+	state, err := store.GetReviewResourceState(context.Background(), target, resource)
 	if got.Status != ReviewResourceMigrationMigrated || err != nil || state.RemoteID == "" {
 		t.Fatalf("projection migration=%#v state=%#v err=%v", got, state, err)
 	}
@@ -331,7 +352,8 @@ func TestMigrationFailureRollsBackTargetMapping(t *testing.T) {
 	if err == nil || got.Status != ReviewResourceMigrationFailed {
 		t.Fatalf("failed apply=%#v err=%v", got, err)
 	}
-	state, _ := store.GetReviewResourceState(context.Background(), plan.TargetWorkItemKey, ReviewResourceTask)
+	target, _ := ResolveReviewResourceTarget(ReviewResourceTask, plan.InstallationID, "chat-a", plan.Repository, plan.PRNumber, plan.TargetScope)
+	state, _ := store.GetReviewResourceState(context.Background(), target, ReviewResourceTask)
 	if state.RemoteID != "" {
 		t.Fatalf("failed target mapping persisted: %#v", state)
 	}
@@ -367,6 +389,12 @@ func TestMigrationAuditIsAppendOnly(t *testing.T) {
 		if before[index].AuditID != after[index].AuditID {
 			t.Fatalf("existing audit changed at %d", index)
 		}
+	}
+	if _, err := store.db.Exec(`UPDATE review_resource_migration_audit SET action='tampered' WHERE migration_id=?`, plan.MigrationID); err == nil {
+		t.Fatal("append-only audit accepted UPDATE")
+	}
+	if _, err := store.db.Exec(`DELETE FROM review_resource_migration_audit WHERE migration_id=?`, plan.MigrationID); err == nil {
+		t.Fatal("append-only audit accepted DELETE")
 	}
 }
 
