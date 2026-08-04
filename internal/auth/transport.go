@@ -48,7 +48,8 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func NewHTTPClient() *http.Client {
+	base := wrapGitLinkReadOnlyValidation(&Transport{})
 	return &http.Client{
-		Transport: &Transport{},
+		Transport: base,
 	}
 }
