@@ -1,0 +1,20 @@
+﻿{
+    "schema_version":  "review.service-backup-restore-evidence/v1",
+    "passed":  true,
+    "capability":  "backup_restore",
+    "storage":  "temporary_sqlite",
+    "listener":  "loopback_only",
+    "identifiers":  "synthetic_or_hashed",
+    "external_writes":  {
+                            "gitlink_get":  0,
+                            "gitlink_post":  0,
+                            "feishu_message":  0,
+                            "base":  0,
+                            "doc":  0,
+                            "task":  0
+                        },
+    "backup":  "vacuum_into_consistent_snapshot",
+    "manifest_sha256":  "d120f51f42f3bae8c11c7144033570ae7c20b6b22afe267055e427375a56640b",
+    "restore_verify":  "passed",
+    "validation_mode":  "offline"
+}

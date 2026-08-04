@@ -70,7 +70,11 @@ $summary = [ordered]@{
 }
 $json = $summary | ConvertTo-Json -Depth 8
 if ($OutputFile) {
-    $fullOutput = [IO.Path]::GetFullPath((Join-Path $root $OutputFile))
+    $fullOutput = if ([IO.Path]::IsPathRooted($OutputFile)) {
+        [IO.Path]::GetFullPath($OutputFile)
+    } else {
+        [IO.Path]::GetFullPath((Join-Path $root $OutputFile))
+    }
     [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($fullOutput)) | Out-Null
     [IO.File]::WriteAllText($fullOutput, $json, [Text.UTF8Encoding]::new($false))
 }

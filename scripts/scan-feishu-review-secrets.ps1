@@ -46,12 +46,17 @@ foreach ($relative in $files) {
         }
     }
 }
-$diffText = (& git -C $root diff --unified=0 e2bcb35efc56db659eb58af141a3fd8018e6d5be -- . 2>$null) -join "`n"
+$diffText = (& git -C $root -c core.autocrlf=false diff --unified=0 e2bcb35efc56db659eb58af141a3fd8018e6d5be -- . 2>$null) -join "`n"
 $diffScanned = -not [string]::IsNullOrWhiteSpace($diffText)
+$publicAllowlist = @($exactAllowlist | ForEach-Object {
+    $bytes = [Text.Encoding]::UTF8.GetBytes($_.value)
+    $hash = (Get-FileHash -InputStream ([IO.MemoryStream]::new($bytes)) -Algorithm SHA256).Hash.ToLowerInvariant()
+    [ordered]@{ rule=$_.rule; file=$_.file; value_hash=$hash.Substring(0,16); reason=$_.reason }
+})
 $result = [ordered]@{
     schema_version='feishu.review-secret-scan/v1'; passed=($findings.Count -eq 0); validation_mode='offline'
     scopes=@('tracked_worktree','untracked_worktree','stage5_to_stage6_diff','docs','evidence','deploy','scripts','.github/workflows')
-    exact_whitelist=$exactAllowlist; allowed_placeholder_markers=$allowedValueMarkers; excluded_files=$excludedNames; files_scanned=$files.Count
+    exact_whitelist=$publicAllowlist; allowed_placeholder_markers=$allowedValueMarkers; excluded_files=$excludedNames; files_scanned=$files.Count
     stage5_diff_scanned=$diffScanned; findings_count=$findings.Count; findings=$findings
 }
 $json = $result | ConvertTo-Json -Depth 10

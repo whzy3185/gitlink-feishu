@@ -1,0 +1,34 @@
+﻿# external-write-counts
+
+- Schema: `unspecified`
+- Passed: `False`
+- Validation mode: `offline`
+- Generated: `2026-08-04T16:51:52.9969771Z`
+
+```json
+{
+    "schema_version":  "feishu.review-external-write-counts/v1",
+    "passed":  true,
+    "validation_mode":  "offline",
+    "counts":  {
+                   "gitlink_get":  0,
+                   "gitlink_head":  0,
+                   "gitlink_post":  0,
+                   "gitlink_put":  0,
+                   "gitlink_patch":  0,
+                   "gitlink_delete":  0,
+                   "message_create":  0,
+                   "message_patch":  0,
+                   "reply_send":  0,
+                   "base_search":  0,
+                   "base_create":  0,
+                   "base_update":  0,
+                   "doc_create":  0,
+                   "doc_append":  0,
+                   "task_create":  0,
+                   "task_patch":  0,
+                   "tenant_token":  0
+               },
+    "note":  "Counts remain zero when real-platform validators were not executed; zero does not imply those capabilities passed."
+}
+```

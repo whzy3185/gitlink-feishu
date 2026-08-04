@@ -1,0 +1,9 @@
+﻿{
+    "schema_version":  "feishu.review-github-actions/v1",
+    "passed":  false,
+    "validation_mode":  "offline",
+    "status":  "not_checked",
+    "runs":  [
+
+             ]
+}

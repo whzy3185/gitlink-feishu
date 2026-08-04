@@ -1,0 +1,172 @@
+﻿{
+    "schema_version":  "feishu.review-final-evidence-manifest/v1",
+    "repository":  "whzy3185/gitlink-feishu",
+    "branch":  "chore/feishu-review-final-hardening",
+    "commit_sha":  "de950d37772f4291a3e1339f9984c29c1670849e",
+    "generated_at":  "2026-08-04T16:51:52.9969771Z",
+    "generator_version":  "stage6-v1",
+    "validation_mode":  "offline",
+    "evidence_files":  [
+                           {
+                               "name":  "backup-restore.json",
+                               "sha256":  "cd53b4d2804789c8f7b5919d6a8fd100d16c7e6ff9e0ae4a9e5815280d28d113",
+                               "bytes":  791
+                           },
+                           {
+                               "name":  "backup-restore.md",
+                               "sha256":  "01e3c049b47a45bf599a6814fcb658a081a88ecec912c5e31c99f48bcdea5966",
+                               "bytes":  975
+                           },
+                           {
+                               "name":  "capability-matrix.json",
+                               "sha256":  "d9f5603fa9f560223b76544f4fccd6b76ac00ac55103293ecc8d1073cc18ac22",
+                               "bytes":  9464
+                           },
+                           {
+                               "name":  "capability-matrix.md",
+                               "sha256":  "ae848ac01e39178dcc125fb621eedf7054f64d5f0ba3c5c9c945d9b87cda5e5e",
+                               "bytes":  9622
+                           },
+                           {
+                               "name":  "commit-baseline.json",
+                               "sha256":  "f9dce4b457a4312fb9a451716d5ecaa0167be31c59cfd698fb9b7d47a22daea9",
+                               "bytes":  1488
+                           },
+                           {
+                               "name":  "commit-baseline.md",
+                               "sha256":  "4391f182f30d095d3500d550726eb96419268712d3acddf70fc59c3289b018ca",
+                               "bytes":  1644
+                           },
+                           {
+                               "name":  "external-write-counts.json",
+                               "sha256":  "58c352fe7c853698343038edf48469cfd2bfe6f0ca5c7a758cd037c8b5731650",
+                               "bytes":  972
+                           },
+                           {
+                               "name":  "external-write-counts.md",
+                               "sha256":  "7b4da26020a66238b8b6984792a9bbae2f5d0fe271492b2ed497627efeb44d49",
+                               "bytes":  1134
+                           },
+                           {
+                               "name":  "failure-injection.json",
+                               "sha256":  "53148e399ac38263d4827c74eab0a6ed5101d8855f258caae7e7df754dd29011",
+                               "bytes":  6222
+                           },
+                           {
+                               "name":  "failure-injection.md",
+                               "sha256":  "ec58323b8e18913d49e99782c49775f300514f970245bfcf355b049732c376f5",
+                               "bytes":  6408
+                           },
+                           {
+                               "name":  "full-repository-tests.json",
+                               "sha256":  "7688de210a9160156063ac34033746d4848a69e0d99688aca3ee23b86cf3105e",
+                               "bytes":  374
+                           },
+                           {
+                               "name":  "full-repository-tests.md",
+                               "sha256":  "11f1a83b6bc9f2ffb7a079281cbbac194d36a87549e8dd838ea5d6bfcded5f57",
+                               "bytes":  562
+                           },
+                           {
+                               "name":  "github-actions.json",
+                               "sha256":  "62ecf123ac3a8b0419a05f19221189c25cd08ff4454685060152d0174e9e53f8",
+                               "bytes":  192
+                           },
+                           {
+                               "name":  "github-actions.md",
+                               "sha256":  "a0f74158cb55be228633cd4ad3f82ee6471820af784d77bfb40587bbcbb4d6aa",
+                               "bytes":  347
+                           },
+                           {
+                               "name":  "linux-race.json",
+                               "sha256":  "d3823ac1fd85c659986b963dfb688f3e97a7cf8e56481071fac9f125cd67a569",
+                               "bytes":  296
+                           },
+                           {
+                               "name":  "linux-race.md",
+                               "sha256":  "906a1552dee0e2a141983881ba66849836819f62295f1578480f0c340b65f3fb",
+                               "bytes":  447
+                           },
+                           {
+                               "name":  "real-base.json",
+                               "sha256":  "d761ad8747707417eb6a2037bc0ac10097b5912babaa80c2a95cebe84da10993",
+                               "bytes":  268
+                           },
+                           {
+                               "name":  "real-base.md",
+                               "sha256":  "67a8f1990db1fbf71b011f10b5aec0927f4e304225e188b2d6bcc2d50ce3cebe",
+                               "bytes":  418
+                           },
+                           {
+                               "name":  "real-card-reply.json",
+                               "sha256":  "37dda7cc6f2a246cb364af498b8ac3a1005ea2594f1f10661e4c13e12cdb6af4",
+                               "bytes":  274
+                           },
+                           {
+                               "name":  "real-card-reply.md",
+                               "sha256":  "b950fa8a72ffef655b474e5c4c6ecd9a6b1df3f4599217d2e23973db41402fea",
+                               "bytes":  430
+                           },
+                           {
+                               "name":  "real-doc.json",
+                               "sha256":  "a535f24abdf2ad284901157aca7764f820c96ff1a969380b8f41ebda7417f556",
+                               "bytes":  267
+                           },
+                           {
+                               "name":  "real-doc.md",
+                               "sha256":  "c72f7ab88199ff3b4dedad3a6a9c1e7a709a7edd37c9acd5d5604493da698ef1",
+                               "bytes":  416
+                           },
+                           {
+                               "name":  "real-dual-chat.json",
+                               "sha256":  "fa56851ce99f54d26a08f023b42d8dcd87a53a007d6390f72271ac11337a1eb8",
+                               "bytes":  273
+                           },
+                           {
+                               "name":  "real-dual-chat.md",
+                               "sha256":  "aa59f9f56260e283a5edf95fe76a0c01e0025b75a2ef98ac4e3d352c0c2000b6",
+                               "bytes":  428
+                           },
+                           {
+                               "name":  "real-gitlink-read.json",
+                               "sha256":  "13d546ee58ce0d8a86931049ccb829cbe82316673ff0cca5c2b6811b124ff879",
+                               "bytes":  276
+                           },
+                           {
+                               "name":  "real-gitlink-read.md",
+                               "sha256":  "160c5877eee396f329d883aef4ed11bc856a1cbfc4bbe08ce0847218144ac6cc",
+                               "bytes":  434
+                           },
+                           {
+                               "name":  "real-task.json",
+                               "sha256":  "9abf55684e075e119d58120e7d11c5a79222a91933d6ab3cc76d4323a378481d",
+                               "bytes":  268
+                           },
+                           {
+                               "name":  "real-task.md",
+                               "sha256":  "e60f93ef6e5c87f2fdcf28feff66bdb6b0e41e8fc1542478da2c6b0e07b47f0f",
+                               "bytes":  418
+                           },
+                           {
+                               "name":  "real-webhook.json",
+                               "sha256":  "4b7feeaaba1a10f977ceaab9baf6c95ac582fb2f3b93e079e5ed42ae07da78db",
+                               "bytes":  271
+                           },
+                           {
+                               "name":  "real-webhook.md",
+                               "sha256":  "fa4600e5bd9f420e98c8c99506a219dbf82ed691a9b317ccb1f538ecedb87eb7",
+                               "bytes":  424
+                           },
+                           {
+                               "name":  "secret-scan.json",
+                               "sha256":  "944f31dad3b7b001fac91e6b95f0ff53ccd8a13b2b9b296faa3171a0e8354102",
+                               "bytes":  4114
+                           },
+                           {
+                               "name":  "secret-scan.md",
+                               "sha256":  "cc84e191c15bd864f1eee86c6cffa9e64dcbd12af179f3a195cab46df35199e6",
+                               "bytes":  4282
+                           }
+                       ],
+    "self_hash_exclusion":  "manifest.json and manifest.md are excluded to avoid recursive self-hashing"
+}

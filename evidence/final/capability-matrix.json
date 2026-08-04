@@ -1,0 +1,173 @@
+﻿{
+    "schema_version":  "feishu.review-capability-matrix/v1",
+    "passed":  true,
+    "validation_mode":  "offline",
+    "source":  "docs/FEISHU_REVIEW_CAPABILITY_MATRIX.md",
+    "capabilities":  [
+                         {
+                             "name":  "PR read",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "Review read",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "Thread read",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "PR Presentation",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "canonical card create",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "canonical card patch",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "lightweight reply",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "claim",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "release",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "deadline",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "dual-chat isolation",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "subscription",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "webhook",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "event inbox",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "replay",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "reconciliation",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "Base projection",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "Doc projection",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "Task projection",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "operation outbox",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "dead letter",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "worker isolation",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "rate limit",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "refresh coalescing",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "healthz",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "readyz",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "metrics",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "admin API",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "backup",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "restore",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "retention",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "Linux service",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         },
+                         {
+                             "name":  "Windows service",
+                             "code_implemented":  true,
+                             "real_platform_validation":  "not_executed_unless_separate_real_evidence_passed"
+                         }
+                     ]
+}

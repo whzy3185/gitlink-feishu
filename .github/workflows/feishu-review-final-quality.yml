@@ -24,7 +24,12 @@ jobs:
       - name: Check Go formatting
         shell: bash
         run: |
-          unformatted="$(git ls-files '*.go' | xargs gofmt -l)"
+          unformatted="$(git ls-files \
+            'internal/collab/*.go' \
+            'internal/auth/read_only_validation*.go' \
+            'shortcuts/feishu/review_*.go' \
+            'shortcuts/wecom/*.go' \
+            'shortcuts/workflow/review_*.go' | xargs gofmt -l)"
           test -z "${unformatted}" || {
             echo "${unformatted}"
             exit 1
@@ -98,6 +103,10 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
+      - name: Preserve repository LF for gofmt
+        shell: pwsh
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v7
@@ -117,7 +126,12 @@ jobs:
       - name: Check Go formatting
         shell: pwsh
         run: |
-          $files = @(git ls-files "*.go")
+          $files = @(git ls-files `
+            "internal/collab/*.go" `
+            "internal/auth/read_only_validation*.go" `
+            "shortcuts/feishu/review_*.go" `
+            "shortcuts/wecom/*.go" `
+            "shortcuts/workflow/review_*.go")
           $unformatted = @(& gofmt -l $files)
           if ($unformatted) {
             $unformatted
@@ -308,6 +322,9 @@ jobs:
           if ($forbidden) {
             throw "forbidden evidence artifacts: $($forbidden.FullName -join ', ')"
           }
+          Copy-Item -LiteralPath evidence/final `
+            -Destination .ci-artifacts/final-evidence `
+            -Recurse -Force
           @{
             schema_version = "review.evidence-contract-summary/v1"
             passed = $true

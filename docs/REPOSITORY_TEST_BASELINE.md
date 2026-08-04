@@ -70,5 +70,6 @@ this local run.
 - CI packages excluded from `go test ./...`: 0.
 - Repository history rewritten: no.
 
-The complete fix is isolated in commit `fix(repo): restore full repository test
-baseline`; its final SHA is recorded after the commit is created.
+The complete fix is isolated in commit
+`8cd9dbab989d29fad80dcb47bf6dfd2ee2cd8376` (`fix(repo): restore full repository
+test baseline`).
