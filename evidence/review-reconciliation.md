@@ -1,0 +1,25 @@
+﻿# Review reconciliation evidence
+
+`json
+{
+    "schema_version":  "feishu.review-reconciliation-evidence/v1",
+    "passed":  true,
+    "candidates":  1,
+    "dry_run_jobs":  0,
+    "once_jobs":  1,
+    "duplicate_time_bucket_jobs":  0,
+    "unchanged_card_patches":  0,
+    "changed_card_patches":  1,
+    "notifications":  0,
+    "external_writes":  {
+                            "gitlink_get":  0,
+                            "gitlink_post":  0,
+                            "feishu_message":  0,
+                            "base":  0,
+                            "doc":  0,
+                            "task":  0
+                        }
+}
+`
+
+All identifiers are synthetic or hashed. GitLink POST=0 and real external writes=0.

@@ -414,6 +414,22 @@ CREATE TABLE IF NOT EXISTS review_event_routes (
     PRIMARY KEY (event_id, subscription_id)
 );
 
+CREATE TABLE IF NOT EXISTS review_reconciliation_cursors (
+    cursor_key TEXT PRIMARY KEY,
+    installation_id TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    pr_number INTEGER NOT NULL,
+    last_checked_at TEXT NOT NULL DEFAULT '',
+    last_enqueued_at TEXT NOT NULL DEFAULT '',
+    next_check_at TEXT NOT NULL DEFAULT '',
+    last_source_fingerprint TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    error_summary TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    UNIQUE (installation_id, chat_id, repository, pr_number)
+);
+
 CREATE TABLE IF NOT EXISTS review_identity_bindings (
     installation_id TEXT NOT NULL,
     feishu_user_id TEXT NOT NULL,
@@ -665,6 +681,15 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 		Statements: []string{
 			`SELECT webhook_signature_mode, webhook_timestamp_mode,
 			 webhook_max_skew_seconds, webhook_delivery_required FROM gitlink_installations LIMIT 0`,
+		},
+	},
+	{
+		Version: 10,
+		Name:    "review_reconciliation_cursors_v1",
+		Statements: []string{
+			`SELECT cursor_key, installation_id, chat_id, repository, pr_number,
+			 last_checked_at, last_enqueued_at, next_check_at, last_source_fingerprint,
+			 status FROM review_reconciliation_cursors LIMIT 0`,
 		},
 	},
 }

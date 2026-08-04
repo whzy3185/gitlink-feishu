@@ -104,6 +104,7 @@ func newReviewGatewayShortcut() *common.Shortcut {
 			{Name: "webhook-listen-address", Usage: "Optional local address for signed GitLink webhook ingress, for example 127.0.0.1:8787"},
 			{Name: "webhook-path", Usage: "Installation-scoped GitLink webhook path prefix", Default: reviewWebhookPathPrefix},
 			{Name: "allow-public-webhook-listen", Usage: "Allow webhook listener to bind a non-loopback address; use only behind TLS and a trusted reverse proxy", Bool: true, Default: "false"},
+			{Name: "reconciliation-interval", Usage: "Periodic active canonical-card reconciliation interval; 0 disables it", Default: "0"},
 			{Name: "enable-agent-runner", Usage: "Enable provider-neutral read-only Agent review requests", Bool: true, Default: "false"},
 			{Name: "agent-endpoint", Usage: "HTTPS endpoint implementing review.agent-invocation/v1"},
 			{Name: "agent-credential-ref", Usage: "Optional Agent bearer credential as env:VARIABLE"},
@@ -387,6 +388,19 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		}
 	})
 	eventProcessor := NewReviewEventInboxProcessor(store, queue, instanceLock.metadata.InstanceID+"-events")
+	reconciliationInterval := time.Duration(0)
+	if value := strings.TrimSpace(runtime.Arg("reconciliation-interval")); value != "" && value != "0" {
+		reconciliationInterval, err = time.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("parse --reconciliation-interval: %w", err)
+		}
+	}
+	if err := validateReviewReconciliationInterval(reconciliationInterval); err != nil {
+		return err
+	}
+	reconciliation := &ReviewReconciliationScheduler{
+		Store: store, Queue: queue, Interval: reconciliationInterval, Now: time.Now,
+	}
 	go replyDispatcher.Run(liveCtx)
 	go queue.Run(liveCtx, func(_ context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {
 		jobCtx, cancel := context.WithTimeout(liveCtx, time.Duration(jobTimeoutSeconds)*time.Second)
@@ -394,6 +408,9 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		return executor.Execute(jobCtx, job)
 	})
 	go eventProcessor.Run(liveCtx)
+	if reconciliationInterval > 0 {
+		go reconciliation.Run(liveCtx)
+	}
 	webhookAddress := strings.TrimSpace(runtime.Arg("webhook-listen-address"))
 	var webhookServer *http.Server
 	var webhookListener net.Listener

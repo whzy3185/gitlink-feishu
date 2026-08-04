@@ -1,0 +1,17 @@
+﻿{
+    "schema_version":  "feishu.review-event-replay-evidence/v1",
+    "passed":  true,
+    "original_events_modified":  0,
+    "replay_events":  1,
+    "duplicate_request_ids":  1,
+    "signature_reverified":  false,
+    "direct_jobs":  0,
+    "external_writes":  {
+                            "gitlink_get":  0,
+                            "gitlink_post":  0,
+                            "feishu_message":  0,
+                            "base":  0,
+                            "doc":  0,
+                            "task":  0
+                        }
+}
