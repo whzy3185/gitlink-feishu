@@ -293,6 +293,7 @@ func (s *SQLiteReviewGatewayStore) FinishReviewOperation(ctx context.Context, op
 	retryAfterAt := ""
 	nextAttemptAt := ""
 	requiresReconciliation := false
+	createDeadLetter := false
 	completedAt := reviewGatewayTimestamp(now)
 	projectionStatus := ReviewProjectionSucceeded
 	if outcome.Unchanged {
@@ -320,6 +321,7 @@ func (s *SQLiteReviewGatewayStore) FinishReviewOperation(ctx context.Context, op
 			status = ReviewOperationFailedTerminal
 			mutationStatus = ReviewMutationNotStarted
 			projectionStatus = ReviewProjectionFailed
+			createDeadLetter = true
 		case ReviewOperationErrorRateLimited, ReviewOperationErrorTransient:
 			if operation.AttemptCount+1 < operation.MaxAttempts && !classified.RemoteSideEffectPossible {
 				status = ReviewOperationRetryScheduled
@@ -333,9 +335,10 @@ func (s *SQLiteReviewGatewayStore) FinishReviewOperation(ctx context.Context, op
 				completedAt = ""
 				projectionStatus = ReviewProjectionPending
 			} else {
-				status = ReviewOperationFailedTerminal
+				status = ReviewOperationDeadLetter
 				mutationStatus = ReviewMutationNotStarted
 				projectionStatus = ReviewProjectionFailed
+				createDeadLetter = true
 			}
 		}
 	}
@@ -380,10 +383,22 @@ func (s *SQLiteReviewGatewayStore) FinishReviewOperation(ctx context.Context, op
 	updated.AppliedFingerprint = appliedFingerprint
 	updated.RemoteID = remoteID
 	updated.ErrorClass = errorClass
+	updated.ErrorCode = errorCode
 	updated.ErrorSummary = errorSummary
 	updated.RequiresReconciliation = requiresReconciliation
+	updated.AttemptCount = attempt.AttemptNumber
 	if err := updateReviewProjectionStatusTx(ctx, tx, updated, projectionStatus, appliedFingerprint, errorClass, errorSummary, requiresReconciliation, now); err != nil {
 		return fmt.Errorf("finish review operation projection: %w", err)
+	}
+	if requiresReconciliation {
+		if err := createReviewOperationReconciliationTx(ctx, tx, updated, errorCode, now); err != nil {
+			return fmt.Errorf("create review operation reconciliation: %w", err)
+		}
+	}
+	if createDeadLetter {
+		if err := createReviewOperationDeadLetterTx(ctx, tx, updated, now); err != nil {
+			return fmt.Errorf("create review operation dead letter: %w", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return err

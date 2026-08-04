@@ -791,6 +791,55 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 			 ON review_resource_projection_status(installation_id, chat_id, repository, pr_number, resource_type)`,
 		},
 	},
+	{
+		Version: 13,
+		Name:    "review_dead_letters_operation_reconciliation_v1",
+		Statements: []string{
+			`CREATE TABLE IF NOT EXISTS review_dead_letters (
+				dead_letter_id TEXT PRIMARY KEY,
+				entity_type TEXT NOT NULL,
+				entity_id TEXT NOT NULL,
+				queue_class TEXT NOT NULL DEFAULT '',
+				installation_id TEXT NOT NULL DEFAULT '',
+				chat_id_hash TEXT NOT NULL DEFAULT '',
+				repository TEXT NOT NULL DEFAULT '',
+				pr_number INTEGER NOT NULL DEFAULT 0,
+				error_class TEXT NOT NULL,
+				error_code TEXT NOT NULL DEFAULT '',
+				error_summary TEXT NOT NULL DEFAULT '',
+				attempt_count INTEGER NOT NULL DEFAULT 0,
+				status TEXT NOT NULL DEFAULT 'open',
+				resolution_action TEXT NOT NULL DEFAULT '',
+				resolved_by_hash TEXT NOT NULL DEFAULT '',
+				resolved_at TEXT NOT NULL DEFAULT '',
+				created_at TEXT NOT NULL,
+				updated_at TEXT NOT NULL,
+				UNIQUE(entity_type, entity_id)
+			)`,
+			`CREATE INDEX IF NOT EXISTS review_dead_letters_status
+			 ON review_dead_letters(status, entity_type, updated_at)`,
+			`CREATE TABLE IF NOT EXISTS review_operation_reconciliation_tasks (
+				reconciliation_id TEXT PRIMARY KEY,
+				operation_id TEXT NOT NULL UNIQUE,
+				resource_type TEXT NOT NULL,
+				reason_code TEXT NOT NULL,
+				status TEXT NOT NULL,
+				verification_method TEXT NOT NULL DEFAULT '',
+				attempt_count INTEGER NOT NULL DEFAULT 0,
+				max_attempts INTEGER NOT NULL DEFAULT 3,
+				next_attempt_at TEXT NOT NULL DEFAULT '',
+				lease_owner TEXT NOT NULL DEFAULT '',
+				lease_expires_at TEXT NOT NULL DEFAULT '',
+				result_summary TEXT NOT NULL DEFAULT '',
+				error_summary TEXT NOT NULL DEFAULT '',
+				created_at TEXT NOT NULL,
+				updated_at TEXT NOT NULL,
+				resolved_at TEXT NOT NULL DEFAULT ''
+			)`,
+			`CREATE INDEX IF NOT EXISTS review_operation_reconciliation_ready
+			 ON review_operation_reconciliation_tasks(status, next_attempt_at, created_at)`,
+		},
+	},
 }
 
 type ReviewGatewayQueue struct {

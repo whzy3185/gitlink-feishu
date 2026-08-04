@@ -394,6 +394,10 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		NewReviewOperationWorker(store, operationHandler, "reply", instanceLock.metadata.InstanceID+"-reply"),
 		NewReviewOperationWorker(store, operationHandler, "resource", instanceLock.metadata.InstanceID+"-resource"),
 	}
+	operationReconciler := &ReviewOperationReconciler{
+		Store: store, Client: operationClient, TokenProvider: tokenProvider, Config: publisherConfig,
+		LeaseOwner: instanceLock.metadata.InstanceID + "-operation-reconciliation", Now: time.Now,
+	}
 	queue.UseOperationOutbox(operationPlanner, func() {
 		for _, worker := range operationWorkers {
 			worker.Wake()
@@ -417,6 +421,7 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 	for _, worker := range operationWorkers {
 		go func(current *ReviewOperationWorker) { _ = current.Run(liveCtx) }(worker)
 	}
+	go operationReconciler.Run(liveCtx)
 	go queue.Run(liveCtx, func(_ context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {
 		jobCtx, cancel := context.WithTimeout(liveCtx, time.Duration(jobTimeoutSeconds)*time.Second)
 		defer cancel()
