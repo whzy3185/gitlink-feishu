@@ -31,6 +31,8 @@ type ReviewCollaborationPublisherConfig struct {
 	DocumentID          string
 	DocumentFolderToken string
 	EnableTask          bool
+	BaseScope           ReviewResourceScope
+	DocScope            ReviewResourceScope
 }
 
 type FeishuReviewCollaborationPublisher struct {
@@ -61,7 +63,16 @@ func (p *FeishuReviewCollaborationPublisher) Publish(
 	results := []ReviewResourceSyncResult{}
 	if p.Config.BaseAppToken != "" && p.Config.ReviewTableID != "" {
 		result := ReviewResourceSyncResult{Resource: "feishu_bitable"}
-		state, stateErr := p.Store.GetReviewResourceState(ctx, bundle.UniqueKey, result.Resource)
+		resourceKey, keyErr := reviewPublisherResourceKey(bundle, result.Resource, p.Config.BaseScope)
+		if errors.Is(keyErr, ErrReviewResourceProjectionDisabled) {
+			results = append(results, ReviewResourceSyncResult{Resource: result.Resource, Action: "disabled"})
+			goto documentProjection
+		}
+		if keyErr != nil {
+			results = append(results, ReviewResourceSyncResult{Resource: result.Resource, Action: "failed", Error: keyErr.Error()})
+			goto documentProjection
+		}
+		state, stateErr := p.Store.GetReviewResourceState(ctx, resourceKey, result.Resource)
 		remoteID := state.RemoteID
 		switch {
 		case stateErr != nil:
@@ -77,7 +88,7 @@ func (p *FeishuReviewCollaborationPublisher) Publish(
 					token.Value,
 					p.Config.BaseAppToken,
 					p.Config.ReviewTableID,
-					bundle.UniqueKey,
+					resourceKey,
 				)
 				switch {
 				case searchErr != nil:
@@ -94,7 +105,7 @@ func (p *FeishuReviewCollaborationPublisher) Publish(
 				break
 			}
 			if remoteID == "" {
-				fields := reviewCollaborationBitableFields(bundle, true)
+				fields := reviewCollaborationBitableFields(bundle, resourceKey, true)
 				created, createErr := p.Client.CreateBitableRecord(
 					ctx,
 					token.Value,
@@ -115,7 +126,7 @@ func (p *FeishuReviewCollaborationPublisher) Publish(
 				}
 				break
 			}
-			fields := reviewCollaborationBitableFields(bundle, bundle.HumanFieldsAuthoritative)
+			fields := reviewCollaborationBitableFields(bundle, resourceKey, bundle.HumanFieldsAuthoritative)
 			updated, updateErr := p.Client.UpdateBitableRecord(
 				ctx,
 				token.Value,
@@ -136,15 +147,26 @@ func (p *FeishuReviewCollaborationPublisher) Publish(
 			p.persistRemoteWrite(
 				ctx,
 				&result,
-				bundle.UniqueKey,
+				resourceKey,
 				fingerprint,
 			)
 		}
 		results = append(results, result)
 	}
+
+documentProjection:
 	if p.Config.DocumentID != "" || p.Config.DocumentFolderToken != "" {
 		result := ReviewResourceSyncResult{Resource: "feishu_doc"}
-		state, stateErr := p.Store.GetReviewResourceState(ctx, bundle.UniqueKey, result.Resource)
+		resourceKey, keyErr := reviewPublisherResourceKey(bundle, result.Resource, p.Config.DocScope)
+		if errors.Is(keyErr, ErrReviewResourceProjectionDisabled) {
+			results = append(results, ReviewResourceSyncResult{Resource: result.Resource, Action: "disabled"})
+			goto taskProjection
+		}
+		if keyErr != nil {
+			results = append(results, ReviewResourceSyncResult{Resource: result.Resource, Action: "failed", Error: keyErr.Error()})
+			goto taskProjection
+		}
+		state, stateErr := p.Store.GetReviewResourceState(ctx, resourceKey, result.Resource)
 		documentID := state.RemoteID
 		if documentID == "" {
 			documentID = strings.TrimSpace(p.Config.DocumentID)
@@ -172,7 +194,7 @@ func (p *FeishuReviewCollaborationPublisher) Publish(
 				documentID = created.DocumentID
 				result.Action = "created"
 				result.RemoteID = documentID
-				p.persistRemoteWrite(ctx, &result, bundle.UniqueKey, "")
+				p.persistRemoteWrite(ctx, &result, resourceKey, "")
 				if result.Action == "unknown" {
 					break
 				}
@@ -197,13 +219,15 @@ func (p *FeishuReviewCollaborationPublisher) Publish(
 				p.persistRemoteWrite(
 					ctx,
 					&result,
-					bundle.UniqueKey,
+					resourceKey,
 					fingerprint,
 				)
 			}
 		}
 		results = append(results, result)
 	}
+
+taskProjection:
 	if p.Config.EnableTask && (bundle.Task != nil || bundle.Item.Archived) {
 		result := ReviewResourceSyncResult{Resource: "feishu_task"}
 		state, stateErr := p.Store.GetReviewResourceState(ctx, bundle.UniqueKey, result.Resource)
@@ -261,7 +285,7 @@ func (p *FeishuReviewCollaborationPublisher) Publish(
 	return results, nil
 }
 
-func reviewCollaborationBitableFields(bundle ReviewCollaborationBundle, includeHuman bool) map[string]interface{} {
+func reviewCollaborationBitableFields(bundle ReviewCollaborationBundle, resourceKey string, includeHuman bool) map[string]interface{} {
 	manual := map[string]bool{
 		"assigned_to":          true,
 		"collaboration_status": true,
@@ -275,8 +299,27 @@ func reviewCollaborationBitableFields(bundle ReviewCollaborationBundle, includeH
 		selected[key] = value
 	}
 	fields := normalizeBitableWriteFields(selected)
-	fields["unique_key"] = bundle.UniqueKey
+	fields["unique_key"] = resourceKey
 	return fields
+}
+
+func reviewPublisherResourceKey(
+	bundle ReviewCollaborationBundle,
+	resourceType string,
+	configured ReviewResourceScope,
+) (string, error) {
+	scope, err := RuntimeReviewResourceScope(resourceType, configured)
+	if err != nil {
+		return "", err
+	}
+	return ResolveReviewResourceTarget(
+		resourceType,
+		bundle.Item.InstallationID,
+		bundle.Item.ChatID,
+		bundle.Item.Repository,
+		bundle.Item.PRNumber,
+		scope,
+	)
 }
 
 func reviewCollaborationArchivedTask(bundle ReviewCollaborationBundle) TaskCandidate {

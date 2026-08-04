@@ -239,6 +239,56 @@ CREATE TABLE IF NOT EXISTS review_collaboration_resources (
     PRIMARY KEY (work_item_key, resource_type)
 );
 
+CREATE TABLE IF NOT EXISTS review_resource_scope_policies (
+    installation_id TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    target_scope TEXT NOT NULL,
+    migration_enabled INTEGER NOT NULL DEFAULT 0,
+    revision INTEGER NOT NULL DEFAULT 1,
+    updated_by TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (installation_id, resource_type),
+    CHECK (resource_type IN ('feishu_bitable', 'feishu_doc')),
+    CHECK (target_scope IN ('chat', 'installation', 'disabled'))
+);
+
+CREATE TABLE IF NOT EXISTS review_resource_migrations (
+    migration_id TEXT PRIMARY KEY,
+    legacy_work_item_key TEXT NOT NULL,
+    target_work_item_key TEXT NOT NULL DEFAULT '',
+    resource_type TEXT NOT NULL,
+    target_scope TEXT NOT NULL DEFAULT '',
+    installation_id TEXT NOT NULL DEFAULT '',
+    repository TEXT NOT NULL DEFAULT '',
+    pr_number INTEGER NOT NULL DEFAULT 0,
+    chat_id_hash TEXT NOT NULL DEFAULT '',
+    remote_id_hash TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL,
+    reason_code TEXT NOT NULL DEFAULT '',
+    verification_method TEXT NOT NULL DEFAULT '',
+    verified_by_hash TEXT NOT NULL DEFAULT '',
+    verified_at TEXT NOT NULL DEFAULT '',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    error_summary TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS review_resource_migrations_status
+    ON review_resource_migrations(status, resource_type, updated_at);
+
+CREATE TABLE IF NOT EXISTS review_resource_migration_audit (
+    audit_id TEXT PRIMARY KEY,
+    migration_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    from_status TEXT NOT NULL,
+    to_status TEXT NOT NULL,
+    actor_hash TEXT NOT NULL DEFAULT '',
+    detail_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS review_resource_migration_audit_migration
+    ON review_resource_migration_audit(migration_id, created_at);
+
 CREATE TABLE IF NOT EXISTS gitlink_installations (
     installation_id TEXT PRIMARY KEY,
     gitlink_host TEXT NOT NULL,
@@ -465,6 +515,27 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 		},
 		Statements: []string{
 			`SELECT reply_requires_reconciliation FROM review_gateway_jobs LIMIT 0`,
+		},
+	},
+	{
+		Version: 4,
+		Name:    "review_resource_scope_policies_v1",
+		Statements: []string{
+			`SELECT installation_id, resource_type, target_scope, migration_enabled FROM review_resource_scope_policies LIMIT 0`,
+		},
+	},
+	{
+		Version: 5,
+		Name:    "review_resource_migrations_v1",
+		Statements: []string{
+			`SELECT migration_id, legacy_work_item_key, target_work_item_key, status FROM review_resource_migrations LIMIT 0`,
+		},
+	},
+	{
+		Version: 6,
+		Name:    "review_resource_migration_audit_v1",
+		Statements: []string{
+			`SELECT audit_id, migration_id, action, from_status, to_status FROM review_resource_migration_audit LIMIT 0`,
 		},
 	},
 }
