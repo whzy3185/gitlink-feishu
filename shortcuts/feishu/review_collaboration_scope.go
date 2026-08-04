@@ -533,7 +533,7 @@ func migrateLegacyReviewCollaborationForJob(
 	if err := writeScopedReviewCollaboration(ctx, tx, state); err != nil {
 		return reviewChatCollaboration{}, err
 	}
-	if err := migrateLegacyReviewResources(ctx, tx, job.Repository, job.PRNumber, state.CollaborationKey); err != nil {
+	if err := DiscoverLegacyReviewResourceMigrations(ctx, tx, now); err != nil {
 		return reviewChatCollaboration{}, err
 	}
 	return state, nil
@@ -546,15 +546,10 @@ func migrateLegacyReviewResources(
 	prNumber int,
 	collaborationKey string,
 ) error {
-	legacyWorkItemKey := stableKey("review-work-item", repository, fmt.Sprintf("%d", prNumber))
-	scopedWorkItemKey := stableKey("review-work-item", collaborationKey)
-	_, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO review_collaboration_resources (
-		work_item_key, resource_type, remote_id, content_fingerprint, updated_at
-	)
-	SELECT ?, resource_type, remote_id, content_fingerprint, updated_at
-	FROM review_collaboration_resources
-	WHERE work_item_key = ?`, scopedWorkItemKey, legacyWorkItemKey)
-	return err
+	_ = repository
+	_ = prNumber
+	_ = collaborationKey
+	return DiscoverLegacyReviewResourceMigrations(ctx, tx, time.Now().UTC())
 }
 
 // migrateLegacyReviewCollaborationScope is intentionally idempotent. It only
@@ -633,15 +628,17 @@ func migrateLegacyReviewCollaborationScope(db *sql.DB) error {
 			_ = tx.Rollback()
 			return fmt.Errorf("migrate legacy Review collaboration: %w", err)
 		}
-		if err := migrateLegacyReviewResources(
-			context.Background(), tx, legacy.Repository, legacy.PRNumber, state.CollaborationKey,
-		); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("migrate legacy Review resource mapping: %w", err)
-		}
 		if err := tx.Commit(); err != nil {
 			return err
 		}
 	}
-	return nil
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	if err := DiscoverLegacyReviewResourceMigrations(context.Background(), tx, time.Now().UTC()); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("discover legacy Review resource migrations: %w", err)
+	}
+	return tx.Commit()
 }

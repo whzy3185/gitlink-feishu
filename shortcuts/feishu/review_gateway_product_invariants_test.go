@@ -486,6 +486,17 @@ func TestLegacyCardMappingWithVerifiedChatCanBeMigrated(t *testing.T) {
 	}
 	defer store.Close()
 	item := fullReviewCollaborationItemFixture()
+	if _, err := store.db.Exec(`INSERT INTO chat_repository_bindings (
+		chat_id, installation_id, repository, enabled, updated_at
+	) VALUES (?, ?, ?, 1, ?)`, item.ChatID, item.InstallationID, item.Repository, item.UpdatedAt); err != nil {
+		t.Fatalf("insert verified binding: %v", err)
+	}
+	if _, err := store.db.Exec(`INSERT INTO review_collaboration_items (
+		pr_key, repository, pr_number, chat_id, updated_at
+	) VALUES (?, ?, ?, ?, ?)`, reviewCollaborationPRKey(item.Repository, item.PRNumber),
+		item.Repository, item.PRNumber, item.ChatID, item.UpdatedAt); err != nil {
+		t.Fatalf("insert verified legacy item: %v", err)
+	}
 	if _, err := store.db.Exec(`INSERT INTO review_collaboration_states (
 		collaboration_key, installation_id, chat_id, repository, pr_number,
 		assigned_to, assigned_display_name, collaboration_status, due_at, updated_by, updated_at
@@ -500,16 +511,32 @@ func TestLegacyCardMappingWithVerifiedChatCanBeMigrated(t *testing.T) {
 	) VALUES (?, 'feishu_card', 'om_verified_card', 'verified-fingerprint', ?)`, legacyKey, item.UpdatedAt); err != nil {
 		t.Fatalf("insert verified legacy card: %v", err)
 	}
-	tx, err := store.db.BeginTx(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("begin migration: %v", err)
+	if err := store.ScanLegacyReviewResourceMigrations(context.Background(), reviewProductInvariantTime); err != nil {
+		t.Fatalf("scan verified card: %v", err)
 	}
-	if err := migrateLegacyReviewResources(context.Background(), tx, item.Repository, item.PRNumber, item.PRKey); err != nil {
-		_ = tx.Rollback()
-		t.Fatalf("migrate verified card: %v", err)
+	plans, err := store.ListReviewResourceMigrations(context.Background(), "", ReviewResourceCard, item.InstallationID)
+	if err != nil || len(plans) != 1 {
+		t.Fatalf("verified card plans=%#v err=%v", plans, err)
 	}
-	if err := tx.Commit(); err != nil {
-		t.Fatalf("commit migration: %v", err)
+	verification := LegacyReviewResourceVerificationInput{
+		ExpectedInstallation: item.InstallationID,
+		ExpectedScope:        ReviewResourceScopeChat,
+		ExpectedChatID:       item.ChatID,
+		Method:               "fixture_verified",
+		Actor:                "test-operator",
+		Confirmed:            true,
+		AllowFixture:         true,
+	}
+	if _, err := store.VerifyLegacyReviewResourceMigration(
+		context.Background(), plans[0].MigrationID, verification,
+		OperatorConfirmedLegacyReviewResourceVerifier{}, reviewProductInvariantTime.Add(time.Minute),
+	); err != nil {
+		t.Fatalf("verify legacy card: %v", err)
+	}
+	if _, err := store.ApplyLegacyReviewResourceMigration(
+		context.Background(), plans[0].MigrationID, "test-operator", reviewProductInvariantTime.Add(2*time.Minute),
+	); err != nil {
+		t.Fatalf("apply verified card: %v", err)
 	}
 	state, err := store.GetReviewResourceState(
 		context.Background(), stableKey("review-work-item", item.PRKey), "feishu_card",

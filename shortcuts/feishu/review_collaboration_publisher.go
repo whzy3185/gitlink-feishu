@@ -312,6 +312,12 @@ func reviewPublisherResourceKey(
 	if err != nil {
 		return "", err
 	}
+	// Existing unscoped runtime bundles predate Installation/Chat isolation.
+	// Preserve their current local idempotency key, but never use this fallback
+	// for legacy migration decisions (which require an explicit policy/plan).
+	if scope == ReviewResourceScopeChat && strings.TrimSpace(bundle.Item.ChatID) == "" {
+		return bundle.UniqueKey, nil
+	}
 	return ResolveReviewResourceTarget(
 		resourceType,
 		bundle.Item.InstallationID,

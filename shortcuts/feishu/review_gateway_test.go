@@ -2067,8 +2067,12 @@ func TestReviewCollaborationLegacyMigrationIsIdempotent(t *testing.T) {
 			reviewCollaborationScopeKey("installation-legacy", "chat-legacy", "owner/repo", 42),
 		)
 		resource, err := store.GetReviewResourceState(context.Background(), scopedKey, "feishu_card")
-		if err != nil || resource.RemoteID != "om_existing_card" {
-			t.Fatalf("migration pass %d resource = %#v, %v", pass+1, resource, err)
+		if err != nil || resource.RemoteID != "" {
+			t.Fatalf("migration pass %d copied unverified resource = %#v, %v", pass+1, resource, err)
+		}
+		plans, err := store.ListReviewResourceMigrations(context.Background(), "", ReviewResourceCard, "installation-legacy")
+		if err != nil || len(plans) != 1 || plans[0].Status != ReviewResourceMigrationNeedsReconciliation {
+			t.Fatalf("migration pass %d plans = %#v, %v", pass+1, plans, err)
 		}
 		_ = store.Close()
 	}
