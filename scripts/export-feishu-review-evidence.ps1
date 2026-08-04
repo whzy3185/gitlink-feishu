@@ -56,12 +56,13 @@ $summaryJSON = $summary | ConvertTo-Json -Depth 8
 $dualJSONOut = $dual | ConvertTo-Json -Depth 8
 $summaryJSON | Set-Content -LiteralPath (Join-Path $OutputDirectory "review-migration-summary.json") -Encoding utf8
 $dualJSONOut | Set-Content -LiteralPath (Join-Path $OutputDirectory "review-dual-chat-isolation.json") -Encoding utf8
+$databaseHashLabel = if ($summary.database_sha256) { $summary.database_sha256 } else { "not supplied" }
 
 $summaryMarkdown = @"
 # Review migration evidence
 
 - Database supplied: $($summary.database_supplied)
-- Database SHA-256: $($summary.database_sha256)
+- Database SHA-256: $databaseHashLabel
 - Schema migrations: $($summary.schema_migration_versions -join ', ')
 - Policy count: $($summary.policy_count)
 - Ambiguous: $($summary.ambiguous_count)
