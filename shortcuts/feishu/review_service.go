@@ -28,6 +28,7 @@ type ReviewService struct {
 	PublicServer *http.Server
 	AdminServer  *http.Server
 	Status       *ReviewServiceStatusRegistry
+	Metrics      *ReviewMetrics
 	Config       ReviewServiceConfig
 	Now          func() time.Time
 
@@ -48,6 +49,7 @@ type ReviewService struct {
 	configFingerprint        string
 	componentErrors          chan reviewServiceComponentError
 	backgroundFailureHandled chan struct{}
+	adminToken               []byte
 }
 
 type reviewServiceComponentError struct {
@@ -126,6 +128,7 @@ func (s *ReviewService) Start(parent context.Context) error {
 		}
 		s.SetConfigurationState(0, fingerprint, true)
 	}
+	s.Metrics = NewReviewMetrics(s.Store, s.Status, s.Config.StateDB, s.Now)
 	if err := s.persistInstance(s.ctx, now); err != nil {
 		return s.startFailed(err, nil)
 	}

@@ -22,6 +22,13 @@ type ReviewServiceReadiness struct {
 }
 
 func (s *ReviewService) startAdminHTTP() error {
+	if strings.TrimSpace(s.Config.AdminTokenRef) != "" {
+		token, err := resolveReviewGatewaySecretReference(s.Config.AdminTokenRef)
+		if err != nil {
+			return fmt.Errorf("load review administration token: %w", err)
+		}
+		s.adminToken = []byte(token)
+	}
 	listener, err := net.Listen("tcp", s.Config.AdminListen)
 	if err != nil {
 		return fmt.Errorf("listen for review service administration: %w", err)
@@ -30,6 +37,8 @@ func (s *ReviewService) startAdminHTTP() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.HandleFunc("/readyz", s.handleReady)
+	mux.HandleFunc("/metrics", s.handleMetrics)
+	mux.HandleFunc("/admin/v1/", s.handleAdmin)
 	s.AdminServer = &http.Server{Handler: mux, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
 	s.Status.RegisterComponent("admin_http", 0, true, true, s.now())
 	s.Status.UpdateComponent("admin_http", 0, ReviewComponentRunning, s.now(), nil)
