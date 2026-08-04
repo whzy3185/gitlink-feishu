@@ -70,6 +70,24 @@ func (m *ReviewWorkerManager) Run(ctx context.Context, handler func(context.Cont
 	return nil
 }
 
+func (m *ReviewWorkerManager) RunClass(ctx context.Context, queueClass string, count int, handler func(context.Context, ReviewGatewayJob) (ReviewGatewayExecutionResult, error)) error {
+	if m == nil || m.Queue == nil {
+		return fmt.Errorf("Review worker manager queue is required")
+	}
+	if count < 1 || count > 32 {
+		return fmt.Errorf("Review worker class %s concurrency must be between 1 and 32", queueClass)
+	}
+	if m.PollInterval <= 0 {
+		m.PollInterval = time.Second
+	}
+	for index := 0; index < count; index++ {
+		owner := fmt.Sprintf("%s-%s-%d", firstNonEmpty(m.InstanceID, "review-worker"), queueClass, index+1)
+		go m.runJobWorker(ctx, queueClass, owner, handler)
+	}
+	<-ctx.Done()
+	return nil
+}
+
 func (m *ReviewWorkerManager) runJobWorker(ctx context.Context, queueClass, owner string, handler func(context.Context, ReviewGatewayJob) (ReviewGatewayExecutionResult, error)) {
 	ticker := time.NewTicker(m.PollInterval)
 	defer ticker.Stop()

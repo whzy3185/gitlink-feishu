@@ -89,6 +89,13 @@ func newReviewGatewayShortcut() *common.Shortcut {
 			{Name: "app-secret", Usage: "Feishu self-built app secret. Defaults to FEISHU_APP_SECRET"},
 			{Name: "admin-users", Usage: "Comma-separated Feishu user IDs allowed to preview binding changes"},
 			{Name: "state-db", Usage: "SQLite path for durable event dedupe and jobs in listen mode", Default: ".local/review-gateway.db"},
+			{Name: "admin-listen-address", Usage: "Loopback-only Review service health and administration listener", Default: "127.0.0.1:8787"},
+			{Name: "admin-token-ref", Usage: "Secret reference for authenticated metrics and read-only administration, for example env:FEISHU_REVIEW_ADMIN_TOKEN"},
+			{Name: "shutdown-timeout", Usage: "Total Review service graceful shutdown timeout", Default: "30s"},
+			{Name: "read-drain-timeout", Usage: "Grace period for in-flight GitLink read jobs", Default: "20s"},
+			{Name: "operation-drain-timeout", Usage: "Grace period for in-flight Feishu operations", Default: "25s"},
+			{Name: "worker-heartbeat-interval", Usage: "Review service component heartbeat interval", Default: "5s"},
+			{Name: "worker-stale-after", Usage: "Required component heartbeat age that makes readiness fail", Default: "20s"},
 			{Name: "queue-size", Usage: "Maximum in-memory asynchronous job backlog", Default: "128"},
 			{Name: "stale-minutes", Usage: "Reject message events older than this window", Default: "30"},
 			{Name: "job-timeout-seconds", Usage: "Timeout for each GitLink GET-only job", Default: "60"},
@@ -101,7 +108,7 @@ func newReviewGatewayShortcut() *common.Shortcut {
 			{Name: "review-document-id", Usage: "Feishu DocX receiving Review snapshots. Defaults to FEISHU_REVIEW_DOCUMENT_ID"},
 			{Name: "review-document-folder-token", Usage: "Feishu folder for one durable Review document per PR. Defaults to FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN"},
 			{Name: "sync-feishu-task", Usage: "Create at most one Feishu Task for each active Review WorkItem", Bool: true, Default: "false"},
-			{Name: "webhook-listen-address", Usage: "Optional local address for signed GitLink webhook ingress, for example 127.0.0.1:8787"},
+			{Name: "webhook-listen-address", Usage: "Optional address for signed GitLink webhook ingress, for example 127.0.0.1:8788"},
 			{Name: "webhook-path", Usage: "Installation-scoped GitLink webhook path prefix", Default: reviewWebhookPathPrefix},
 			{Name: "allow-public-webhook-listen", Usage: "Allow webhook listener to bind a non-loopback address; use only behind TLS and a trusted reverse proxy", Bool: true, Default: "false"},
 			{Name: "reconciliation-interval", Usage: "Periodic active canonical-card reconciliation interval; 0 disables it", Default: "0"},
@@ -275,16 +282,31 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		return fmt.Errorf("--sqlite-timeout-ms must be lower than --handler-timeout-ms")
 	}
 	statePath := firstNonEmpty(runtime.Arg("state-db"), ".local/review-gateway.db")
+	serviceConfig, err := reviewServiceConfigFromRuntime(runtime, statePath, appID)
+	if err != nil {
+		return err
+	}
 	instanceLock, err := acquireReviewGatewayInstanceLock(statePath, appID, time.Now())
 	if err != nil {
 		return err
 	}
-	defer instanceLock.Release()
 	store, err := OpenSQLiteReviewGatewayStore(statePath)
 	if err != nil {
+		_ = instanceLock.Release()
 		return err
 	}
-	defer store.Close()
+	service := NewReviewService(serviceConfig)
+	service.InstanceLock = instanceLock
+	service.Store = store
+	service.ownedLock = true
+	service.ownedStore = true
+	serviceCleanupRequired := true
+	defer func() {
+		if serviceCleanupRequired {
+			_ = store.Close()
+			_ = instanceLock.Release()
+		}
+	}()
 	if err := store.SyncReviewGatewayConfiguration(
 		context.Background(),
 		bindings,
@@ -419,26 +441,10 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 	reconciliation := &ReviewReconciliationScheduler{
 		Store: store, Queue: queue, Interval: reconciliationInterval, Now: time.Now,
 	}
-	go replyDispatcher.Run(liveCtx)
-	go func() { _ = operationPlanner.Run(liveCtx, instanceLock.metadata.InstanceID, workerConcurrency.Planner) }()
-	for _, worker := range operationWorkers {
-		go func(current *ReviewOperationWorker) { _ = current.Run(liveCtx) }(worker)
-	}
-	go operationReconciler.Run(liveCtx)
-	go func() {
-		_ = workerManager.Run(liveCtx, func(_ context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {
-			jobCtx, cancel := context.WithTimeout(liveCtx, time.Duration(jobTimeoutSeconds)*time.Second)
-			defer cancel()
-			return executor.Execute(jobCtx, job)
-		})
-	}()
-	go eventProcessor.Run(liveCtx)
-	if reconciliationInterval > 0 {
-		go reconciliation.Run(liveCtx)
-	}
 	webhookAddress := strings.TrimSpace(runtime.Arg("webhook-listen-address"))
 	var webhookServer *http.Server
 	var webhookListener net.Listener
+	var webhookIngress http.Handler
 	if webhookAddress != "" {
 		if err := validateReviewWebhookListenAddress(
 			webhookAddress,
@@ -454,40 +460,7 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		if err != nil {
 			return err
 		}
-		webhookListener, err = net.Listen("tcp", webhookAddress)
-		if err != nil {
-			return fmt.Errorf("listen for GitLink webhooks: %w", err)
-		}
-		mux := http.NewServeMux()
-		mux.Handle(webhookPath, ingress)
-		webhookServer = &http.Server{
-			Handler:           mux,
-			ReadHeaderTimeout: 5 * time.Second,
-			ReadTimeout:       5 * time.Second,
-			WriteTimeout:      5 * time.Second,
-			IdleTimeout:       30 * time.Second,
-		}
-		go func() {
-			if serveErr := webhookServer.Serve(webhookListener); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-				output.TryEmit(reviewGatewayLifecycleEvent{
-					SchemaVersion: reviewGatewaySchemaVersion,
-					Type:          "webhook_error",
-					Message:       redactReviewGatewayError(serveErr.Error()),
-					ObservedAt:    time.Now().UTC().Format(time.RFC3339),
-				})
-			}
-		}()
-		defer func() {
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = webhookServer.Shutdown(shutdownCtx)
-		}()
-		output.TryEmit(reviewGatewayLifecycleEvent{
-			SchemaVersion: reviewGatewaySchemaVersion,
-			Type:          "webhook_ready",
-			Message:       fmt.Sprintf("signed GitLink PR webhook ingress listening on %s%s", webhookAddress, webhookPath),
-			ObservedAt:    time.Now().UTC().Format(time.RFC3339),
-		})
+		webhookIngress = ingress
 	}
 	output.TryEmit(reviewGatewayLifecycleEvent{
 		SchemaVersion: reviewGatewaySchemaVersion,
@@ -556,9 +529,80 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 			ObservedAt:    time.Now().UTC().Format(time.RFC3339),
 		})
 	})
-	defer channel.Stop(context.Background())
-	if err := channel.Start(liveCtx); err != nil && !errors.Is(err, context.Canceled) {
-		return fmt.Errorf("Feishu review gateway channel stopped: %s", redactReviewGatewayError(err.Error()))
+	jobHandler := func(workerCtx context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {
+		jobCtx, cancel := context.WithTimeout(workerCtx, time.Duration(jobTimeoutSeconds)*time.Second)
+		defer cancel()
+		return executor.Execute(jobCtx, job)
+	}
+	components := []ReviewServiceComponent{
+		{Name: "feishu_channel", Required: true, Enabled: true, Run: func(ctx context.Context) error { return channel.Start(ctx) }, Stop: channel.Stop},
+		{Name: "reply_dispatcher", Required: true, Enabled: true, Run: func(ctx context.Context) error { replyDispatcher.Run(ctx); return nil }},
+		{Name: "event_processor", Required: true, Enabled: true, Run: func(ctx context.Context) error { eventProcessor.Run(ctx); return nil }},
+		{Name: "job_worker_gitlink_read", Required: true, Enabled: true, Run: func(ctx context.Context) error {
+			return workerManager.RunClass(ctx, ReviewQueueGitLinkRead, workerConcurrency.GitLinkRead, jobHandler)
+		}},
+		{Name: "job_worker_collaboration", Required: true, Enabled: true, Run: func(ctx context.Context) error {
+			return workerManager.RunClass(ctx, ReviewQueueCollaboration, workerConcurrency.Collaboration, jobHandler)
+		}},
+		{Name: "job_worker_controlled_write", Required: true, Enabled: true, Run: func(ctx context.Context) error {
+			return workerManager.RunClass(ctx, ReviewQueueControlledWrite, workerConcurrency.ControlledWrite, jobHandler)
+		}},
+		{Name: "operation_planner", Required: true, Enabled: true, Run: func(ctx context.Context) error {
+			return operationPlanner.Run(ctx, instanceLock.metadata.InstanceID, workerConcurrency.Planner)
+		}},
+		{Name: "operation_reconciliation", Required: false, Enabled: true, Run: func(ctx context.Context) error { operationReconciler.Run(ctx); return nil }},
+		{Name: "pr_reconciliation", Required: false, Enabled: reconciliationInterval > 0, Run: func(ctx context.Context) error { reconciliation.Run(ctx); return nil }},
+		{Name: "agent_worker", Required: false, Enabled: agentRunnerEnabled, Run: func(ctx context.Context) error {
+			return workerManager.RunClass(ctx, ReviewQueueAgent, workerConcurrency.Agent, jobHandler)
+		}},
+	}
+	queueIndexes := map[string]int{}
+	for _, worker := range operationWorkers {
+		name := "operation_worker_" + worker.QueueClass
+		queueIndexes[name]++
+		current := worker
+		components = append(components, ReviewServiceComponent{Name: name, WorkerIndex: queueIndexes[name], Required: true, Enabled: true, Run: current.Run})
+	}
+	if webhookAddress != "" {
+		webhookPath := strings.TrimSpace(runtime.Arg("webhook-path"))
+		components = append(components, ReviewServiceComponent{
+			Name: "public_webhook", Required: true, Enabled: true,
+			Start: func(context.Context) error {
+				listener, listenErr := net.Listen("tcp", webhookAddress)
+				if listenErr != nil {
+					return fmt.Errorf("listen for GitLink webhooks: %w", listenErr)
+				}
+				webhookListener = listener
+				mux := http.NewServeMux()
+				mux.Handle(webhookPath, webhookIngress)
+				webhookServer = &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
+				service.PublicServer = webhookServer
+				return nil
+			},
+			Run: func(context.Context) error { return webhookServer.Serve(webhookListener) },
+			Stop: func(ctx context.Context) error {
+				if webhookServer == nil {
+					return nil
+				}
+				return webhookServer.Shutdown(ctx)
+			},
+		})
+	}
+	for _, component := range components {
+		if err := service.AddComponent(component); err != nil {
+			return err
+		}
+	}
+	if err := service.Start(liveCtx); err != nil {
+		return err
+	}
+	serviceCleanupRequired = false
+	output.TryEmit(reviewGatewayLifecycleEvent{SchemaVersion: reviewGatewaySchemaVersion, Type: "service_ready", Message: fmt.Sprintf("Review service ready; admin=%s", service.AdminAddress()), ObservedAt: time.Now().UTC().Format(time.RFC3339)})
+	<-service.serviceContext().Done()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), service.Config.ShutdownTimeout)
+	defer cancel()
+	if err := service.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
+		return fmt.Errorf("stop Feishu review service: %w", err)
 	}
 	return nil
 }
@@ -580,6 +624,33 @@ func validateReviewWebhookListenAddress(address string, allowPublic bool) error 
 		return fmt.Errorf("public webhook listen address requires --allow-public-webhook-listen")
 	}
 	return nil
+}
+
+func reviewServiceConfigFromRuntime(runtime *common.RuntimeContext, statePath, appID string) (ReviewServiceConfig, error) {
+	config := DefaultReviewServiceConfig()
+	config.StateDB = statePath
+	config.AppID = appID
+	config.AdminListen = firstNonEmpty(runtime.Arg("admin-listen-address"), config.AdminListen)
+	config.WebhookListen = strings.TrimSpace(runtime.Arg("webhook-listen-address"))
+	config.AdminTokenRef = strings.TrimSpace(runtime.Arg("admin-token-ref"))
+	for _, item := range []struct {
+		name   string
+		target *time.Duration
+	}{{"shutdown-timeout", &config.ShutdownTimeout}, {"read-drain-timeout", &config.ReadDrainTimeout}, {"operation-drain-timeout", &config.OperationDrainTimeout}, {"worker-heartbeat-interval", &config.WorkerHeartbeatInterval}, {"worker-stale-after", &config.WorkerStaleAfter}} {
+		value := strings.TrimSpace(runtime.Arg(item.name))
+		if value == "" {
+			continue
+		}
+		parsed, err := time.ParseDuration(value)
+		if err != nil {
+			return ReviewServiceConfig{}, fmt.Errorf("parse --%s: %w", item.name, err)
+		}
+		*item.target = parsed
+	}
+	if err := config.Validate(); err != nil {
+		return ReviewServiceConfig{}, err
+	}
+	return config, nil
 }
 
 func handleReviewGatewayInbound(

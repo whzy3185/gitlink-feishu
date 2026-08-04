@@ -572,7 +572,8 @@ type MemoryReviewGatewayJobStore struct {
 }
 
 type SQLiteReviewGatewayStore struct {
-	db *sql.DB
+	db   *sql.DB
+	path string
 }
 
 type reviewGatewayLatencyObservation struct {
@@ -897,6 +898,32 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 			 ON review_rate_limit_buckets(bucket_type, window_started_at, updated_at)`,
 		},
 	},
+	{
+		Version: 16,
+		Name:    "review_service_instances_v1",
+		Statements: []string{
+			`CREATE TABLE IF NOT EXISTS review_service_instances (
+				instance_id TEXT PRIMARY KEY,
+				process_id INTEGER NOT NULL DEFAULT 0,
+				hostname_hash TEXT NOT NULL DEFAULT '',
+				service_version TEXT NOT NULL DEFAULT '',
+				commit_sha TEXT NOT NULL DEFAULT '',
+				schema_version INTEGER NOT NULL DEFAULT 0,
+				config_revision INTEGER NOT NULL DEFAULT 0,
+				config_fingerprint TEXT NOT NULL DEFAULT '',
+				status TEXT NOT NULL,
+				admission_status TEXT NOT NULL,
+				started_at TEXT NOT NULL,
+				ready_at TEXT NOT NULL DEFAULT '',
+				heartbeat_at TEXT NOT NULL DEFAULT '',
+				shutdown_started_at TEXT NOT NULL DEFAULT '',
+				stopped_at TEXT NOT NULL DEFAULT '',
+				last_error_summary TEXT NOT NULL DEFAULT ''
+			)`,
+			`CREATE INDEX IF NOT EXISTS review_service_instances_status
+			 ON review_service_instances(status, heartbeat_at)`,
+		},
+	},
 }
 
 type ReviewGatewayQueue struct {
@@ -1176,7 +1203,7 @@ func OpenSQLiteReviewGatewayStore(path string) (*SQLiteReviewGatewayStore, error
 			return nil, fmt.Errorf("initialize review gateway state index: %w", err)
 		}
 	}
-	return &SQLiteReviewGatewayStore{db: db}, nil
+	return &SQLiteReviewGatewayStore{db: db, path: absolute}, nil
 }
 
 func applyReviewGatewaySchemaMigrations(db *sql.DB, migrations []reviewGatewaySchemaMigration) error {
