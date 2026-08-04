@@ -120,7 +120,8 @@ func (s *SQLiteReviewGatewayStore) finishReviewMaintenanceRun(ctx context.Contex
 func redactReviewMaintenanceError(message string) string {
 	message = redactReviewGatewayError(message)
 	for _, part := range strings.Fields(message) {
-		if filepath.IsAbs(strings.Trim(part, `"':,;()`)) {
+		candidate := strings.Trim(part, `"':,;()`)
+		if filepath.IsAbs(candidate) || reviewPortablePathIsAbs(candidate) {
 			message = strings.ReplaceAll(message, part, "[path]")
 		}
 	}

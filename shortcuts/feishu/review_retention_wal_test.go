@@ -262,10 +262,11 @@ func TestMaintenanceMetricsUpdateAfterSuccess(t *testing.T) {
 }
 
 func TestMaintenanceErrorContainsNoSensitivePath(t *testing.T) {
-	path := `E:\sensitive\review.db`
-	redacted := redactReviewMaintenanceError("failed to open " + path + ": access denied")
-	if strings.Contains(redacted, path) || strings.Contains(redacted, "sensitive") {
-		t.Fatalf("path not redacted: %s", redacted)
+	for _, path := range []string{`E:\sensitive\review.db`, `/sensitive/review.db`} {
+		redacted := redactReviewMaintenanceError("failed to open " + path + ": access denied")
+		if strings.Contains(redacted, path) || strings.Contains(redacted, "sensitive") || !strings.Contains(redacted, "[path]") {
+			t.Fatalf("path %q not redacted: %s", path, redacted)
+		}
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -265,10 +264,10 @@ func reviewConfigurationSource(source string) (string, string) {
 		original = "unknown"
 	}
 	safe := original
-	if filepath.IsAbs(original) || strings.ContainsAny(original, `/\\`) {
-		safe = filepath.Base(original)
+	if reviewPortablePathIsAbs(original) || strings.ContainsAny(original, `/\\`) {
+		safe = reviewPortablePathBase(original)
 	}
-	if safe == "." || safe == string(filepath.Separator) || safe == "" {
+	if safe == "." || safe == "" {
 		safe = "file"
 	}
 	return safe, reviewConfigurationIdentifierHash(original)

@@ -84,6 +84,29 @@ func TestConfigurationFingerprintDoesNotContainSecrets(t *testing.T) {
 	}
 }
 
+func TestConfigurationSourceUsesCrossPlatformBaseName(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{name: "windows", source: `E:\private\bindings.json`, want: "bindings.json"},
+		{name: "unix", source: `/private/bindings.json`, want: "bindings.json"},
+		{name: "windows root", source: `E:\\`, want: "file"},
+		{name: "unix root", source: `/`, want: "file"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, hash := reviewConfigurationSource(test.source)
+			if got != test.want || hash == "" {
+				t.Fatalf("source=%q hash=%q want=%q", got, hash, test.want)
+			}
+			if strings.Contains(got, "private") {
+				t.Fatalf("source leaked parent directory: %q", got)
+			}
+		})
+	}
+}
+
 func TestSameConfigurationDoesNotIncrementRevision(t *testing.T) {
 	store := openReviewConfigurationTestStore(t)
 	first := applyReviewConfigurationFixture(t, store, reviewConfigurationFixture(), reviewConfigurationOptions(), reviewConfigurationTestTime)
