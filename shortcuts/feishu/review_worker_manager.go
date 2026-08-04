@@ -23,6 +23,15 @@ func DefaultReviewWorkerConcurrency() ReviewWorkerConcurrency {
 	return ReviewWorkerConcurrency{Event: 2, GitLinkRead: 3, Collaboration: 1, Planner: 2, CanonicalCard: 2, Reply: 2, Resource: 2, ControlledWrite: 1, Agent: 0, OperationReconciliation: 1}
 }
 
+func reviewWorkerConcurrencyConfiguration(c ReviewWorkerConcurrency) map[string]int {
+	return map[string]int{
+		"event": c.Event, "gitlink_read": c.GitLinkRead, "collaboration": c.Collaboration,
+		"planner": c.Planner, "canonical_card": c.CanonicalCard, "reply": c.Reply,
+		"resource": c.Resource, "controlled_write": c.ControlledWrite, "agent": c.Agent,
+		"operation_reconciliation": c.OperationReconciliation,
+	}
+}
+
 func (c ReviewWorkerConcurrency) Validate() error {
 	values := map[string]int{"event": c.Event, "gitlink_read": c.GitLinkRead, "collaboration": c.Collaboration, "planner": c.Planner, "canonical_card": c.CanonicalCard, "reply": c.Reply, "resource": c.Resource, "controlled_write": c.ControlledWrite, "agent": c.Agent, "operation_reconciliation": c.OperationReconciliation}
 	for name, value := range values {

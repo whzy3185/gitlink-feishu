@@ -27,6 +27,7 @@ const (
 var (
 	ErrReviewResourceProjectionDisabled = errors.New("review resource projection is disabled")
 	ErrReviewResourcePolicyRequired     = errors.New("explicit review resource migration policy is required")
+	ErrReviewResourcePolicyConflict     = errors.New("review resource policy changed concurrently")
 )
 
 type ReviewResourceScopePolicy struct {
@@ -121,6 +122,21 @@ func (s *SQLiteReviewGatewayStore) SetReviewResourceScopePolicy(
 		return ReviewResourceScopePolicy{}, fmt.Errorf("invalid review resource policy scope %q", policy.TargetScope)
 	}
 	nowText := now.UTC().Format(time.RFC3339Nano)
+	if policy.Revision > 0 {
+		result, err := s.db.ExecContext(ctx, `UPDATE review_resource_scope_policies SET
+			target_scope=?, migration_enabled=?, revision=revision+1, updated_by=?, updated_at=?
+			WHERE installation_id=? AND resource_type=? AND revision=?`, policy.TargetScope,
+			boolToReviewCollaborationInt(policy.MigrationEnabled), policy.UpdatedBy, nowText,
+			policy.InstallationID, policy.ResourceType, policy.Revision)
+		if err != nil {
+			return ReviewResourceScopePolicy{}, err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil || affected != 1 {
+			return ReviewResourceScopePolicy{}, ErrReviewResourcePolicyConflict
+		}
+		return s.GetReviewResourceScopePolicy(ctx, policy.InstallationID, policy.ResourceType)
+	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO review_resource_scope_policies (
 		installation_id, resource_type, target_scope, migration_enabled,
 		revision, updated_by, updated_at

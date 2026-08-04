@@ -91,6 +91,7 @@ func newReviewGatewayShortcut() *common.Shortcut {
 			{Name: "state-db", Usage: "SQLite path for durable event dedupe and jobs in listen mode", Default: ".local/review-gateway.db"},
 			{Name: "admin-listen-address", Usage: "Loopback-only Review service health and administration listener", Default: "127.0.0.1:8787"},
 			{Name: "admin-token-ref", Usage: "Secret reference for authenticated metrics and read-only administration, for example env:FEISHU_REVIEW_ADMIN_TOKEN"},
+			{Name: "expected-revision", Usage: "Expected global Review configuration revision for optimistic concurrency"},
 			{Name: "shutdown-timeout", Usage: "Total Review service graceful shutdown timeout", Default: "30s"},
 			{Name: "read-drain-timeout", Usage: "Grace period for in-flight GitLink read jobs", Default: "20s"},
 			{Name: "operation-drain-timeout", Usage: "Grace period for in-flight Feishu operations", Default: "25s"},
@@ -307,14 +308,30 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 			_ = instanceLock.Release()
 		}
 	}()
-	if err := store.SyncReviewGatewayConfiguration(
-		context.Background(),
-		bindings,
-		"bindings_file",
-		time.Now(),
-	); err != nil {
+	var expectedRevision *int
+	if raw := strings.TrimSpace(runtime.Arg("expected-revision")); raw != "" {
+		value, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || value < 0 {
+			return fmt.Errorf("--expected-revision must be a non-negative integer")
+		}
+		expectedRevision = &value
+	}
+	workerConcurrency := DefaultReviewWorkerConcurrency()
+	if parseBool(runtime.Arg("enable-agent-runner")) {
+		workerConcurrency.Agent = 1
+	}
+	configurationState, _, err := store.ApplyReviewGatewayConfiguration(
+		context.Background(), bindings, ReviewConfigurationApplyOptions{
+			Source: "bindings_file", ActorID: "review-gateway-cli", ExpectedRevision: expectedRevision,
+			WorkerConfig:  reviewWorkerConcurrencyConfiguration(workerConcurrency),
+			LimitConfig:   map[string]int{"queue_size": queueSize, "job_timeout_seconds": jobTimeoutSeconds, "handler_timeout_ms": handlerTimeoutMS, "sqlite_timeout_ms": sqliteTimeoutMS},
+			ServiceConfig: serviceConfig,
+		}, time.Now(),
+	)
+	if err != nil {
 		return err
 	}
+	service.SetConfigurationState(configurationState.ConfigRevision, configurationState.ConfigFingerprint, true)
 
 	gateway, err := NewReviewGateway(bindings, config, store)
 	if err != nil {
@@ -412,10 +429,6 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		TokenProvider: tokenProvider, Config: publisherConfig, Now: time.Now,
 	}
 	operationPlanner := &ReviewOperationPlanner{Store: store, Config: publisherConfig, Now: time.Now}
-	workerConcurrency := DefaultReviewWorkerConcurrency()
-	if agentRunnerEnabled {
-		workerConcurrency.Agent = 1
-	}
 	operationWorkers := NewReviewOperationWorkerPool(store, operationHandler, workerConcurrency, instanceLock.metadata.InstanceID)
 	workerManager := &ReviewWorkerManager{Queue: queue, Concurrency: workerConcurrency, InstanceID: instanceLock.metadata.InstanceID}
 	operationReconciler := &ReviewOperationReconciler{

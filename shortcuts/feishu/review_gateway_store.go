@@ -924,6 +924,79 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 			 ON review_service_instances(status, heartbeat_at)`,
 		},
 	},
+	{
+		Version: 17,
+		Name:    "review_configuration_revisions_v1",
+		Statements: []string{
+			`CREATE TABLE IF NOT EXISTS review_configuration_state (
+				singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+				config_revision INTEGER NOT NULL DEFAULT 0,
+				config_fingerprint TEXT NOT NULL DEFAULT '',
+				source TEXT NOT NULL DEFAULT '',
+				source_hash TEXT NOT NULL DEFAULT '',
+				applied_by_hash TEXT NOT NULL DEFAULT '',
+				applied_at TEXT NOT NULL DEFAULT ''
+			)`,
+			`CREATE TABLE IF NOT EXISTS review_configuration_revisions (
+				revision_id TEXT PRIMARY KEY,
+				config_revision INTEGER NOT NULL,
+				config_fingerprint TEXT NOT NULL,
+				source TEXT NOT NULL,
+				source_hash TEXT NOT NULL DEFAULT '',
+				installation_count INTEGER NOT NULL DEFAULT 0,
+				repository_count INTEGER NOT NULL DEFAULT 0,
+				binding_count INTEGER NOT NULL DEFAULT 0,
+				subscription_count INTEGER NOT NULL DEFAULT 0,
+				identity_binding_count INTEGER NOT NULL DEFAULT 0,
+				resource_policy_count INTEGER NOT NULL DEFAULT 0,
+				worker_config_json TEXT NOT NULL DEFAULT '{}',
+				limit_config_json TEXT NOT NULL DEFAULT '{}',
+				service_config_json TEXT NOT NULL DEFAULT '{}',
+				applied_by_hash TEXT NOT NULL DEFAULT '',
+				applied_at TEXT NOT NULL
+			)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS review_configuration_revisions_number
+			 ON review_configuration_revisions(config_revision)`,
+			`CREATE TRIGGER IF NOT EXISTS review_configuration_revisions_no_update
+			 BEFORE UPDATE ON review_configuration_revisions
+			 BEGIN SELECT RAISE(ABORT, 'review configuration revision is append-only'); END`,
+			`CREATE TRIGGER IF NOT EXISTS review_configuration_revisions_no_delete
+			 BEFORE DELETE ON review_configuration_revisions
+			 BEGIN SELECT RAISE(ABORT, 'review configuration revision is append-only'); END`,
+		},
+	},
+	{
+		Version: 19,
+		Name:    "review_configuration_entity_revisions_v1",
+		Columns: map[string]map[string]string{
+			"gitlink_installations": {
+				"revision":        "INTEGER NOT NULL DEFAULT 1",
+				"created_at":      "TEXT NOT NULL DEFAULT ''",
+				"updated_by_hash": "TEXT NOT NULL DEFAULT ''",
+			},
+			"installation_repositories": {
+				"revision":        "INTEGER NOT NULL DEFAULT 1",
+				"created_at":      "TEXT NOT NULL DEFAULT ''",
+				"updated_by_hash": "TEXT NOT NULL DEFAULT ''",
+			},
+			"chat_repository_bindings": {
+				"revision":        "INTEGER NOT NULL DEFAULT 1",
+				"created_at":      "TEXT NOT NULL DEFAULT ''",
+				"updated_by_hash": "TEXT NOT NULL DEFAULT ''",
+			},
+			"review_identity_bindings": {
+				"revision":        "INTEGER NOT NULL DEFAULT 1",
+				"created_at":      "TEXT NOT NULL DEFAULT ''",
+				"updated_by_hash": "TEXT NOT NULL DEFAULT ''",
+			},
+		},
+		Statements: []string{
+			`SELECT revision,created_at,updated_by_hash FROM gitlink_installations LIMIT 0`,
+			`SELECT revision,created_at,updated_by_hash FROM installation_repositories LIMIT 0`,
+			`SELECT revision,created_at,updated_by_hash FROM chat_repository_bindings LIMIT 0`,
+			`SELECT revision,created_at,updated_by_hash FROM review_identity_bindings LIMIT 0`,
+		},
+	},
 }
 
 type ReviewGatewayQueue struct {
