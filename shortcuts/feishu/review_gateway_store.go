@@ -692,6 +692,105 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 			 status FROM review_reconciliation_cursors LIMIT 0`,
 		},
 	},
+	{
+		Version: 11,
+		Name:    "review_operations_v1",
+		Statements: []string{
+			`CREATE TABLE IF NOT EXISTS review_operations (
+				operation_id TEXT PRIMARY KEY,
+				operation_kind TEXT NOT NULL,
+				queue_class TEXT NOT NULL,
+				installation_id TEXT NOT NULL DEFAULT '',
+				chat_id TEXT NOT NULL DEFAULT '',
+				repository TEXT NOT NULL DEFAULT '',
+				pr_number INTEGER NOT NULL DEFAULT 0,
+				source_job_id TEXT NOT NULL DEFAULT '',
+				source_event_id TEXT NOT NULL DEFAULT '',
+				consumer_id TEXT NOT NULL DEFAULT '',
+				work_item_key TEXT NOT NULL DEFAULT '',
+				resource_type TEXT NOT NULL DEFAULT '',
+				idempotency_key TEXT NOT NULL UNIQUE,
+				desired_fingerprint TEXT NOT NULL DEFAULT '',
+				applied_fingerprint TEXT NOT NULL DEFAULT '',
+				expected_remote_id TEXT NOT NULL DEFAULT '',
+				remote_id TEXT NOT NULL DEFAULT '',
+				desired_json TEXT NOT NULL DEFAULT '{}',
+				dependency_operation_id TEXT NOT NULL DEFAULT '',
+				dependency_policy TEXT NOT NULL DEFAULT 'none',
+				retry_safety TEXT NOT NULL,
+				status TEXT NOT NULL,
+				error_class TEXT NOT NULL DEFAULT '',
+				error_code TEXT NOT NULL DEFAULT '',
+				error_summary TEXT NOT NULL DEFAULT '',
+				http_status INTEGER NOT NULL DEFAULT 0,
+				mutation_status TEXT NOT NULL DEFAULT 'not_started',
+				requires_reconciliation INTEGER NOT NULL DEFAULT 0,
+				attempt_count INTEGER NOT NULL DEFAULT 0,
+				max_attempts INTEGER NOT NULL DEFAULT 3,
+				next_attempt_at TEXT NOT NULL DEFAULT '',
+				retry_after_at TEXT NOT NULL DEFAULT '',
+				lease_owner TEXT NOT NULL DEFAULT '',
+				lease_expires_at TEXT NOT NULL DEFAULT '',
+				created_at TEXT NOT NULL,
+				updated_at TEXT NOT NULL,
+				completed_at TEXT NOT NULL DEFAULT ''
+			)`,
+			`CREATE INDEX IF NOT EXISTS review_operations_ready
+			 ON review_operations(queue_class, status, next_attempt_at, created_at)`,
+			`CREATE INDEX IF NOT EXISTS review_operations_scope
+			 ON review_operations(installation_id, chat_id, repository, pr_number, operation_kind, updated_at)`,
+		},
+	},
+	{
+		Version: 12,
+		Name:    "review_operation_attempts_projection_status_v1",
+		Statements: []string{
+			`CREATE TABLE IF NOT EXISTS review_operation_attempts (
+				attempt_id TEXT PRIMARY KEY,
+				operation_id TEXT NOT NULL,
+				attempt_number INTEGER NOT NULL,
+				lease_owner_hash TEXT NOT NULL DEFAULT '',
+				started_at TEXT NOT NULL,
+				finished_at TEXT NOT NULL DEFAULT '',
+				mutation_status TEXT NOT NULL DEFAULT 'not_started',
+				error_class TEXT NOT NULL DEFAULT '',
+				error_code TEXT NOT NULL DEFAULT '',
+				error_summary TEXT NOT NULL DEFAULT '',
+				http_status INTEGER NOT NULL DEFAULT 0,
+				retry_after_at TEXT NOT NULL DEFAULT '',
+				result_fingerprint TEXT NOT NULL DEFAULT '',
+				UNIQUE(operation_id, attempt_number)
+			)`,
+			`CREATE INDEX IF NOT EXISTS review_operation_attempts_operation
+			 ON review_operation_attempts(operation_id, attempt_number)`,
+			`CREATE TRIGGER IF NOT EXISTS review_operation_attempts_finished_no_update
+			 BEFORE UPDATE ON review_operation_attempts WHEN OLD.finished_at <> ''
+			 BEGIN SELECT RAISE(ABORT, 'finished review operation attempt is append-only'); END`,
+			`CREATE TRIGGER IF NOT EXISTS review_operation_attempts_no_delete
+			 BEFORE DELETE ON review_operation_attempts
+			 BEGIN SELECT RAISE(ABORT, 'review operation attempt is append-only'); END`,
+			`CREATE TABLE IF NOT EXISTS review_resource_projection_status (
+				projection_key TEXT PRIMARY KEY,
+				installation_id TEXT NOT NULL,
+				chat_id TEXT NOT NULL DEFAULT '',
+				repository TEXT NOT NULL,
+				pr_number INTEGER NOT NULL,
+				resource_type TEXT NOT NULL,
+				target_scope TEXT NOT NULL,
+				desired_fingerprint TEXT NOT NULL DEFAULT '',
+				applied_fingerprint TEXT NOT NULL DEFAULT '',
+				operation_id TEXT NOT NULL DEFAULT '',
+				status TEXT NOT NULL,
+				error_class TEXT NOT NULL DEFAULT '',
+				error_summary TEXT NOT NULL DEFAULT '',
+				requires_reconciliation INTEGER NOT NULL DEFAULT 0,
+				updated_at TEXT NOT NULL,
+				UNIQUE(installation_id, chat_id, repository, pr_number, resource_type, target_scope)
+			)`,
+			`CREATE INDEX IF NOT EXISTS review_resource_projection_status_scope
+			 ON review_resource_projection_status(installation_id, chat_id, repository, pr_number, resource_type)`,
+		},
+	},
 }
 
 type ReviewGatewayQueue struct {
@@ -1450,9 +1549,10 @@ func (s *SQLiteReviewGatewayStore) CompleteJob(ctx context.Context, job ReviewGa
 	}
 	replyStatus := "none"
 	replyNext := ""
+	completedAt := reviewGatewayResultCompletionTime(result)
 	if shouldDispatchReviewGatewayResult(job) {
 		replyStatus = "pending"
-		replyNext = reviewGatewayTimestamp(time.Now())
+		replyNext = reviewGatewayTimestamp(completedAt)
 	}
 	update, err := s.db.ExecContext(
 		ctx,
@@ -1469,11 +1569,18 @@ func (s *SQLiteReviewGatewayStore) CompleteJob(ctx context.Context, job ReviewGa
 		string(resultJSON),
 		replyStatus,
 		replyNext,
-		reviewGatewayTimestamp(time.Now()),
+		reviewGatewayTimestamp(completedAt),
 		job.JobID,
 		job.LeaseOwner,
 	)
 	return requireReviewGatewayJobUpdate(update, err, job.JobID, "complete")
+}
+
+func reviewGatewayResultCompletionTime(result ReviewGatewayExecutionResult) time.Time {
+	if parsed, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(result.CompletedAt)); err == nil {
+		return parsed.UTC()
+	}
+	return time.Now().UTC()
 }
 
 func (s *SQLiteReviewGatewayStore) RetryOrFailJob(ctx context.Context, job ReviewGatewayJob, result ReviewGatewayExecutionResult, errorSummary string, now time.Time) (bool, error) {
