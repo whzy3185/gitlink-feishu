@@ -354,6 +354,62 @@ CREATE TABLE IF NOT EXISTS review_chat_subscriptions (
 CREATE INDEX IF NOT EXISTS review_chat_subscriptions_enabled
     ON review_chat_subscriptions(installation_id, repository, enabled, updated_at);
 
+CREATE TABLE IF NOT EXISTS review_event_inbox (
+    event_id TEXT PRIMARY KEY,
+    installation_id TEXT NOT NULL,
+    delivery_key TEXT NOT NULL,
+    delivery_hash TEXT NOT NULL,
+    source TEXT NOT NULL,
+    schema_version TEXT NOT NULL,
+    event_type TEXT NOT NULL DEFAULT '',
+    action TEXT NOT NULL DEFAULT '',
+    repository TEXT NOT NULL DEFAULT '',
+    pr_number INTEGER NOT NULL DEFAULT 0,
+    head_sha TEXT NOT NULL DEFAULT '',
+    actor_hash TEXT NOT NULL DEFAULT '',
+    occurred_at TEXT NOT NULL DEFAULT '',
+    received_at TEXT NOT NULL,
+    signature_status TEXT NOT NULL,
+    timestamp_status TEXT NOT NULL,
+    delivery_status TEXT NOT NULL,
+    payload_fingerprint TEXT NOT NULL,
+    canonical_event_json TEXT NOT NULL DEFAULT '',
+    sanitized_payload_json TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL,
+    reason_code TEXT NOT NULL DEFAULT '',
+    route_revision INTEGER NOT NULL DEFAULT 0,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TEXT NOT NULL DEFAULT '',
+    lease_owner TEXT NOT NULL DEFAULT '',
+    lease_expires_at TEXT NOT NULL DEFAULT '',
+    error_summary TEXT NOT NULL DEFAULT '',
+    processed_at TEXT NOT NULL DEFAULT '',
+    replay_of_event_id TEXT NOT NULL DEFAULT '',
+    replay_request_key TEXT NOT NULL DEFAULT '',
+    UNIQUE (installation_id, delivery_key)
+);
+CREATE INDEX IF NOT EXISTS review_event_inbox_status
+    ON review_event_inbox(status, next_attempt_at, received_at);
+CREATE UNIQUE INDEX IF NOT EXISTS review_event_inbox_replay_request
+    ON review_event_inbox(replay_request_key) WHERE replay_request_key <> '';
+
+CREATE TABLE IF NOT EXISTS review_event_routes (
+    event_id TEXT NOT NULL,
+    subscription_id TEXT NOT NULL,
+    installation_id TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    pr_number INTEGER NOT NULL,
+    subscription_revision INTEGER NOT NULL,
+    notification_mode TEXT NOT NULL,
+    job_id TEXT NOT NULL DEFAULT '',
+    route_status TEXT NOT NULL,
+    reason_code TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (event_id, subscription_id)
+);
+
 CREATE TABLE IF NOT EXISTS review_identity_bindings (
     installation_id TEXT NOT NULL,
     feishu_user_id TEXT NOT NULL,
@@ -581,6 +637,16 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 			 notification_mode, enabled, revision FROM review_chat_subscriptions LIMIT 0`,
 		},
 	},
+	{
+		Version: 8,
+		Name:    "review_event_inbox_routes_v1",
+		Statements: []string{
+			`SELECT event_id, installation_id, delivery_key, canonical_event_json,
+			 status, route_revision, lease_owner, replay_request_key FROM review_event_inbox LIMIT 0`,
+			`SELECT event_id, subscription_id, subscription_revision, job_id,
+			 route_status FROM review_event_routes LIMIT 0`,
+		},
+	},
 }
 
 type ReviewGatewayQueue struct {
@@ -668,7 +734,7 @@ func (s *MemoryReviewGatewayJobStore) CompleteJob(_ context.Context, job ReviewG
 	job.LeaseOwner = ""
 	job.LeaseExpiresAt = ""
 	s.Jobs[job.JobID] = job
-	if job.SourceMessageID != "" || job.NotifyChat {
+	if shouldDispatchReviewGatewayResult(job) {
 		s.ReplyStatus[job.JobID] = "pending"
 	}
 	return nil
@@ -689,7 +755,7 @@ func (s *MemoryReviewGatewayJobStore) RetryOrFailJob(_ context.Context, job Revi
 	} else {
 		job.Status = "failed"
 		s.Status[job.JobID] = "failed"
-		if job.SourceMessageID != "" || job.NotifyChat {
+		if shouldDispatchReviewGatewayResult(job) {
 			s.ReplyStatus[job.JobID] = "pending"
 		}
 	}
@@ -1339,7 +1405,7 @@ func (s *SQLiteReviewGatewayStore) CompleteJob(ctx context.Context, job ReviewGa
 	}
 	replyStatus := "none"
 	replyNext := ""
-	if job.SourceMessageID != "" || job.NotifyChat {
+	if shouldDispatchReviewGatewayResult(job) {
 		replyStatus = "pending"
 		replyNext = reviewGatewayTimestamp(time.Now())
 	}
@@ -1378,7 +1444,7 @@ func (s *SQLiteReviewGatewayStore) RetryOrFailJob(ctx context.Context, job Revie
 	if willRetry {
 		status = "queued"
 		nextAttempt = reviewGatewayTimestamp(now.Add(reviewGatewayRetryDelay(job.AttemptCount)))
-	} else if job.SourceMessageID != "" || job.NotifyChat {
+	} else if shouldDispatchReviewGatewayResult(job) {
 		replyStatus = "pending"
 		replyNext = reviewGatewayTimestamp(now)
 	}

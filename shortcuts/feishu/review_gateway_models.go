@@ -95,6 +95,7 @@ type ReviewGatewayJob struct {
 	SourceEventID         string   `json:"source_event_id,omitempty"`
 	SourceMessageID       string   `json:"source_message_id,omitempty"`
 	NotifyChat            bool     `json:"notify_chat,omitempty"`
+	NotificationMode      string   `json:"notification_mode,omitempty"`
 	CreatedAt             string   `json:"created_at"`
 	MutatesGitLink        bool     `json:"mutates_gitlink"`
 	CollaborationMutation bool     `json:"collaboration_mutation"`
@@ -105,6 +106,12 @@ type ReviewGatewayJob struct {
 	LeaseOwner            string   `json:"lease_owner,omitempty"`
 	LeaseExpiresAt        string   `json:"lease_expires_at,omitempty"`
 	HandlerLatencyMs      int64    `json:"handler_latency_ms,omitempty"`
+}
+
+func shouldDispatchReviewGatewayResult(job ReviewGatewayJob) bool {
+	return job.SourceMessageID != "" || job.NotifyChat ||
+		job.NotificationMode == ReviewNotificationCanonicalOnly ||
+		job.NotificationMode == ReviewNotificationCanonicalAndNotice
 }
 
 type ReviewGatewayEventRef struct {

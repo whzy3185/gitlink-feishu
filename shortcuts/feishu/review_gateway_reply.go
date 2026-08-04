@@ -325,6 +325,7 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 		canonicalMessageID := ""
 		replyAction := "created"
 		remoteCardWriteCompleted := false
+		notifyEvent := item.Job.SourceMessageID != "" || item.Job.NotifyChat
 		notifyCurrentMessage := func(text string) (*larktypes.SendResult, error) {
 			return d.sender.Send(sendCtx, &larktypes.SendInput{
 				ChatID:         item.Job.ChatID,
@@ -382,11 +383,14 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 			sendErr = fmt.Errorf("canonical PR card operation is already owned by another worker")
 		case canonicalReady && canonicalState.CanonicalMessageID != "" &&
 			canonicalState.ContentFingerprint == cardFingerprint:
-			replyAction = "unchanged_and_notified"
+			replyAction = "unchanged"
 			canonicalMessageID = canonicalState.CanonicalMessageID
-			sendResult, sendErr = notifyCurrentMessage(formatReviewGatewayCanonicalNotice(item.Job, false))
+			if notifyEvent {
+				replyAction = "unchanged_and_notified"
+				sendResult, sendErr = notifyCurrentMessage(formatReviewGatewayCanonicalNotice(item.Job, false))
+			}
 		case canonicalReady && canonicalState.CanonicalMessageID != "":
-			replyAction = "updated_and_notified"
+			replyAction = "updated"
 			canonicalMessageID = canonicalState.CanonicalMessageID
 			updater, ok := d.sender.(reviewGatewayMessageUpdater)
 			if !ok {
@@ -433,7 +437,10 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 				// below belongs only to the lightweight current-message notice, so
 				// retrying the reply must not PATCH the canonical card again.
 				remoteCardWriteCompleted = false
-				sendResult, sendErr = notifyCurrentMessage(formatReviewGatewayCanonicalNotice(item.Job, true))
+				if notifyEvent {
+					replyAction = "updated_and_notified"
+					sendResult, sendErr = notifyCurrentMessage(formatReviewGatewayCanonicalNotice(item.Job, true))
+				}
 			}
 		default:
 			sendResult, sendErr = d.sender.Send(sendCtx, sendInput)
