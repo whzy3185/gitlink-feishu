@@ -34,9 +34,18 @@ type reviewGatewayCanonicalCardStore interface {
 }
 
 type reviewGatewayLiveSender struct {
-	client    OpenAPIClient
-	appID     string
-	appSecret string
+	client        OpenAPIClient
+	appID         string
+	appSecret     string
+	tokenProvider *ReviewTenantTokenProvider
+}
+
+func (s *reviewGatewayLiveSender) tenantToken(ctx context.Context) (string, error) {
+	if s.tokenProvider != nil {
+		return s.tokenProvider.Token(ctx, s.appID, s.appSecret)
+	}
+	token, err := s.client.TenantAccessToken(ctx, s.appID, s.appSecret)
+	return token.Value, err
 }
 
 func (s *reviewGatewayLiveSender) Send(
@@ -62,13 +71,13 @@ func (s *reviewGatewayLiveSender) Send(
 	default:
 		return nil, fmt.Errorf("review gateway only sends text or interactive messages")
 	}
-	token, err := s.client.TenantAccessToken(ctx, s.appID, s.appSecret)
+	token, err := s.tenantToken(ctx)
 	if err != nil {
 		return nil, err
 	}
 	sent, err := s.client.SendMessage(
 		ctx,
-		token.Value,
+		token,
 		input.ChatID,
 		"chat_id",
 		input.ReplyMessageID,
@@ -86,11 +95,11 @@ func (s *reviewGatewayLiveSender) UpdateInteractiveMessage(
 	messageID string,
 	card Card,
 ) error {
-	token, err := s.client.TenantAccessToken(ctx, s.appID, s.appSecret)
+	token, err := s.tenantToken(ctx)
 	if err != nil {
 		return err
 	}
-	return s.client.PatchInteractiveMessage(ctx, token.Value, messageID, card)
+	return s.client.PatchInteractiveMessage(ctx, token, messageID, card)
 }
 
 type ReviewGatewayReplyEvent struct {

@@ -59,7 +59,7 @@ func saveReviewOperationsTx(ctx context.Context, tx *sql.Tx, operations []Review
 				return fmt.Errorf("stale superseded review operations: %w", err)
 			}
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO review_operations (
+		result, err := tx.ExecContext(ctx, `INSERT INTO review_operations (
 			operation_id, operation_kind, queue_class,
 			installation_id, chat_id, repository, pr_number,
 			source_job_id, source_event_id, consumer_id,
@@ -104,6 +104,16 @@ func saveReviewOperationsTx(ctx context.Context, tx *sql.Tx, operations []Review
 		)
 		if err != nil {
 			return fmt.Errorf("save review operation %s: %w", operation.OperationID, err)
+		}
+		inserted, _ := result.RowsAffected()
+		if inserted == 1 {
+			createdAt, _ := time.Parse(time.RFC3339Nano, operation.CreatedAt)
+			if createdAt.IsZero() {
+				createdAt = time.Now().UTC()
+			}
+			if err := updateReviewProjectionStatusTx(ctx, tx, operation, ReviewProjectionPending, "", "", "", false, createdAt); err != nil {
+				return fmt.Errorf("save review operation projection: %w", err)
+			}
 		}
 	}
 	return nil
@@ -270,6 +280,118 @@ func (s *SQLiteReviewGatewayStore) StartReviewOperationAttempt(ctx context.Conte
 		return ReviewOperationAttempt{}, err
 	}
 	return attempt, nil
+}
+
+func (s *SQLiteReviewGatewayStore) FinishReviewOperation(ctx context.Context, operation ReviewOperation, attempt ReviewOperationAttempt, outcome ReviewOperationExecutionResult, executeErr error, now time.Time) error {
+	classified := ClassifyReviewOperationError(executeErr, operation, true)
+	status := ReviewOperationSucceeded
+	mutationStatus := ReviewMutationLocalConfirmed
+	appliedFingerprint := firstNonEmpty(outcome.AppliedFingerprint, operation.DesiredFingerprint)
+	remoteID := firstNonEmpty(outcome.RemoteID, operation.RemoteID)
+	errorClass, errorCode, errorSummary := "", "", ""
+	httpStatus := 0
+	retryAfterAt := ""
+	nextAttemptAt := ""
+	requiresReconciliation := false
+	completedAt := reviewGatewayTimestamp(now)
+	projectionStatus := ReviewProjectionSucceeded
+	if outcome.Unchanged {
+		status = ReviewOperationUnchanged
+		projectionStatus = ReviewProjectionUnchanged
+	}
+	if classified != nil {
+		errorClass = string(classified.Class)
+		errorCode = classified.Code
+		errorSummary = redactReviewGatewayError(classified.Error())
+		httpStatus = classified.HTTPStatus
+		appliedFingerprint = ""
+		remoteID = firstNonEmpty(outcome.RemoteID, operation.RemoteID)
+		switch classified.Class {
+		case ReviewOperationErrorStale:
+			status = ReviewOperationStale
+			mutationStatus = ReviewMutationNotStarted
+			projectionStatus = ReviewProjectionPending
+		case ReviewOperationErrorUnknownSideEffect:
+			status = ReviewOperationUnknown
+			mutationStatus = ReviewMutationRemoteUnknown
+			requiresReconciliation = true
+			projectionStatus = ReviewProjectionNeedsReconciliation
+		case ReviewOperationErrorTerminal:
+			status = ReviewOperationFailedTerminal
+			mutationStatus = ReviewMutationNotStarted
+			projectionStatus = ReviewProjectionFailed
+		case ReviewOperationErrorRateLimited, ReviewOperationErrorTransient:
+			if operation.AttemptCount+1 < operation.MaxAttempts && !classified.RemoteSideEffectPossible {
+				status = ReviewOperationRetryScheduled
+				mutationStatus = ReviewMutationNotStarted
+				delay := reviewGatewayRetryDelay(operation.AttemptCount + 1)
+				if classified.RetryAfter > 0 {
+					delay = classified.RetryAfter
+					retryAfterAt = reviewGatewayTimestamp(now.Add(delay))
+				}
+				nextAttemptAt = reviewGatewayTimestamp(now.Add(delay))
+				completedAt = ""
+				projectionStatus = ReviewProjectionPending
+			} else {
+				status = ReviewOperationFailedTerminal
+				mutationStatus = ReviewMutationNotStarted
+				projectionStatus = ReviewProjectionFailed
+			}
+		}
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	result, err := tx.ExecContext(ctx, `UPDATE review_operation_attempts SET
+		finished_at=?, mutation_status=?, error_class=?, error_code=?, error_summary=?,
+		http_status=?, retry_after_at=?, result_fingerprint=?
+		WHERE attempt_id=? AND operation_id=? AND attempt_number=? AND finished_at=''`,
+		reviewGatewayTimestamp(now), mutationStatus, errorClass, errorCode, errorSummary,
+		httpStatus, retryAfterAt, appliedFingerprint, attempt.AttemptID, operation.OperationID, attempt.AttemptNumber)
+	if err != nil {
+		return fmt.Errorf("finish review operation attempt: %w", err)
+	}
+	affected, _ := result.RowsAffected()
+	if affected != 1 {
+		return fmt.Errorf("review operation attempt %s is no longer writable", attempt.AttemptID)
+	}
+	result, err = tx.ExecContext(ctx, `UPDATE review_operations SET
+		status=?, applied_fingerprint=?, remote_id=?, error_class=?, error_code=?,
+		error_summary=?, http_status=?, mutation_status=?, requires_reconciliation=?,
+		next_attempt_at=?, retry_after_at=?, lease_owner='', lease_expires_at='',
+		updated_at=?, completed_at=?
+		WHERE operation_id=? AND status='writing' AND lease_owner=? AND attempt_count=?`,
+		status, appliedFingerprint, remoteID, errorClass, errorCode, errorSummary, httpStatus,
+		mutationStatus, boolToReviewCollaborationInt(requiresReconciliation), nextAttemptAt,
+		retryAfterAt, reviewGatewayTimestamp(now), completedAt, operation.OperationID,
+		operation.LeaseOwner, attempt.AttemptNumber)
+	if err != nil {
+		return fmt.Errorf("finish review operation: %w", err)
+	}
+	affected, _ = result.RowsAffected()
+	if affected != 1 {
+		return fmt.Errorf("review operation %s lease is no longer current", operation.OperationID)
+	}
+	updated := operation
+	updated.Status = status
+	updated.AppliedFingerprint = appliedFingerprint
+	updated.RemoteID = remoteID
+	updated.ErrorClass = errorClass
+	updated.ErrorSummary = errorSummary
+	updated.RequiresReconciliation = requiresReconciliation
+	if err := updateReviewProjectionStatusTx(ctx, tx, updated, projectionStatus, appliedFingerprint, errorClass, errorSummary, requiresReconciliation, now); err != nil {
+		return fmt.Errorf("finish review operation projection: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if err := s.QueueReviewProjectionCardRefresh(ctx, updated, now); err != nil {
+		return fmt.Errorf("queue projection card refresh: %w", err)
+	}
+	return nil
 }
 
 const reviewOperationSelect = `SELECT

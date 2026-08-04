@@ -310,22 +310,18 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 	}
 	replyDispatcher := NewReviewGatewayReplyDispatcher(liveSender, store, output, queueSize)
 	replyDispatcher.instanceID = instanceLock.metadata.InstanceID
-	var publisher ReviewCollaborationPublisher
+	publisherConfig := ReviewCollaborationPublisherConfig{AppID: appID, AppSecret: appSecret}
 	syncFeishuResources := parseBool(runtime.Arg("sync-feishu-resources"))
 	if syncFeishuResources {
-		publisherConfig := ReviewCollaborationPublisherConfig{
-			AppID:     appID,
-			AppSecret: appSecret,
-			BaseAppToken: firstNonEmpty(
-				runtime.Arg("base-app-token"),
-				os.Getenv("FEISHU_REVIEW_BASE_APP_TOKEN"),
-				os.Getenv("FEISHU_BASE_APP_TOKEN"),
-			),
-			ReviewTableID:       firstNonEmpty(runtime.Arg("review-table-id"), os.Getenv("FEISHU_REVIEW_TABLE_ID")),
-			DocumentID:          firstNonEmpty(runtime.Arg("review-document-id"), os.Getenv("FEISHU_REVIEW_DOCUMENT_ID")),
-			DocumentFolderToken: firstNonEmpty(runtime.Arg("review-document-folder-token"), os.Getenv("FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN")),
-			EnableTask:          parseBool(runtime.Arg("sync-feishu-task")),
-		}
+		publisherConfig.BaseAppToken = firstNonEmpty(
+			runtime.Arg("base-app-token"),
+			os.Getenv("FEISHU_REVIEW_BASE_APP_TOKEN"),
+			os.Getenv("FEISHU_BASE_APP_TOKEN"),
+		)
+		publisherConfig.ReviewTableID = firstNonEmpty(runtime.Arg("review-table-id"), os.Getenv("FEISHU_REVIEW_TABLE_ID"))
+		publisherConfig.DocumentID = firstNonEmpty(runtime.Arg("review-document-id"), os.Getenv("FEISHU_REVIEW_DOCUMENT_ID"))
+		publisherConfig.DocumentFolderToken = firstNonEmpty(runtime.Arg("review-document-folder-token"), os.Getenv("FEISHU_REVIEW_DOCUMENT_FOLDER_TOKEN"))
+		publisherConfig.EnableTask = parseBool(runtime.Arg("sync-feishu-task"))
 		if publisherConfig.DocumentID != "" && publisherConfig.DocumentFolderToken != "" {
 			return fmt.Errorf("configure either --review-document-id or --review-document-folder-token, not both")
 		}
@@ -334,11 +330,6 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		}
 		if publisherConfig.BaseAppToken == "" && publisherConfig.DocumentID == "" && publisherConfig.DocumentFolderToken == "" && !publisherConfig.EnableTask {
 			return fmt.Errorf("--sync-feishu-resources requires at least one Base, Doc, or Task target")
-		}
-		publisher = &FeishuReviewCollaborationPublisher{
-			Client: NewOpenAPIClient(nil),
-			Store:  store,
-			Config: publisherConfig,
 		}
 	}
 	var agentProvider workflow.ReviewAgentProvider
@@ -362,13 +353,16 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		agentProvider = provider
 	}
 	executor := &ReviewGatewayExecutor{
-		Runtime:                    runtime,
-		Collaboration:              store,
-		ActionPlans:                store,
-		Subscriptions:              store,
-		IdentityBindings:           bindings.IdentityBindings,
-		EnableGitLinkWrite:         parseBool(runtime.Arg("enable-gitlink-review-write")),
-		Publisher:                  publisher,
+		Runtime:            runtime,
+		Collaboration:      store,
+		ActionPlans:        store,
+		Subscriptions:      store,
+		IdentityBindings:   bindings.IdentityBindings,
+		EnableGitLinkWrite: parseBool(runtime.Arg("enable-gitlink-review-write")),
+		// Production resource writes are planned after completion and executed
+		// by durable Operation workers. Publisher remains a compatibility-only
+		// synchronous wrapper for offline tests.
+		Publisher:                  nil,
 		Installations:              reviewGatewayInstallationMap(bindings),
 		RequireInstallationRuntime: true,
 		AgentProvider:              agentProvider,
@@ -387,6 +381,24 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 			replyDispatcher.Wake()
 		}
 	})
+	operationClient := NewOpenAPIClient(nil)
+	tokenProvider := NewReviewTenantTokenProvider(operationClient, time.Now)
+	liveSender.tokenProvider = tokenProvider
+	operationHandler := &ReviewOperationHandler{
+		Store: store, Client: operationClient, Sender: liveSender,
+		TokenProvider: tokenProvider, Config: publisherConfig, Now: time.Now,
+	}
+	operationPlanner := &ReviewOperationPlanner{Store: store, Config: publisherConfig, Now: time.Now}
+	operationWorkers := []*ReviewOperationWorker{
+		NewReviewOperationWorker(store, operationHandler, "canonical_card", instanceLock.metadata.InstanceID+"-card"),
+		NewReviewOperationWorker(store, operationHandler, "reply", instanceLock.metadata.InstanceID+"-reply"),
+		NewReviewOperationWorker(store, operationHandler, "resource", instanceLock.metadata.InstanceID+"-resource"),
+	}
+	queue.UseOperationOutbox(operationPlanner, func() {
+		for _, worker := range operationWorkers {
+			worker.Wake()
+		}
+	})
 	eventProcessor := NewReviewEventInboxProcessor(store, queue, instanceLock.metadata.InstanceID+"-events")
 	reconciliationInterval := time.Duration(0)
 	if value := strings.TrimSpace(runtime.Arg("reconciliation-interval")); value != "" && value != "0" {
@@ -402,6 +414,9 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		Store: store, Queue: queue, Interval: reconciliationInterval, Now: time.Now,
 	}
 	go replyDispatcher.Run(liveCtx)
+	for _, worker := range operationWorkers {
+		go func(current *ReviewOperationWorker) { _ = current.Run(liveCtx) }(worker)
+	}
 	go queue.Run(liveCtx, func(_ context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {
 		jobCtx, cancel := context.WithTimeout(liveCtx, time.Duration(jobTimeoutSeconds)*time.Second)
 		defer cancel()

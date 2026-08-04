@@ -209,6 +209,18 @@ func (s *SQLiteReviewGatewayStore) CompleteChatPRPresentationPatch(
 	return requireReviewChatPRPresentationUpdate(update, err, job, "complete canonical card patch")
 }
 
+func (s *SQLiteReviewGatewayStore) ReleaseChatPRPresentationPatch(ctx context.Context, job ReviewGatewayJob, operationID, priorStatus, errorSummary string, now time.Time) error {
+	if priorStatus != "archived" {
+		priorStatus = "active"
+	}
+	update, err := s.db.ExecContext(ctx, `UPDATE chat_pr_presentations SET
+		card_status=?, last_error_summary=?, updated_at=?
+		WHERE presentation_key=? AND card_status='patching' AND last_operation_id=?`,
+		priorStatus, redactReviewGatewayError(errorSummary), now.UTC().Format(time.RFC3339Nano),
+		reviewChatPRPresentationKey(job), operationID)
+	return requireReviewChatPRPresentationUpdate(update, err, job, "release canonical card patch")
+}
+
 func reviewChatPresentationSourceIsStale(current, incoming string) (bool, error) {
 	if strings.TrimSpace(current) == "" {
 		return false, nil

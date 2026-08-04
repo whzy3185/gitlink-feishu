@@ -11,9 +11,25 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
+
+type OpenAPIHTTPError struct {
+	Method     string
+	Path       string
+	StatusCode int
+	RetryAfter time.Duration
+	Detail     string
+}
+
+func (e *OpenAPIHTTPError) Error() string {
+	if e == nil {
+		return "Feishu OpenAPI request failed"
+	}
+	return fmt.Sprintf("Feishu OpenAPI %s %s returned HTTP %d: %s", e.Method, e.Path, e.StatusCode, e.Detail)
+}
 
 var openAPIBaseURL = "https://open.feishu.cn/open-apis"
 
@@ -779,12 +795,32 @@ func (c OpenAPIClient) doJSON(req *http.Request, target interface{}) error {
 		if len(detail) > 300 {
 			detail = detail[:300] + "..."
 		}
-		return fmt.Errorf("Feishu OpenAPI %s %s returned HTTP %d: %s", req.Method, redactOpenAPIPath(req.URL.Path), resp.StatusCode, detail)
+		return &OpenAPIHTTPError{
+			Method:     req.Method,
+			Path:       redactOpenAPIPath(req.URL.Path),
+			StatusCode: resp.StatusCode,
+			RetryAfter: parseOpenAPIRetryAfter(resp.Header.Get("Retry-After"), time.Now()),
+			Detail:     detail,
+		}
 	}
 	if err := json.Unmarshal(body, target); err != nil {
 		return fmt.Errorf("parse Feishu OpenAPI response: %w", err)
 	}
 	return nil
+}
+
+func parseOpenAPIRetryAfter(value string, now time.Time) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if seconds, err := strconv.Atoi(value); err == nil && seconds >= 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	if parsed, err := http.ParseTime(value); err == nil && parsed.After(now) {
+		return parsed.Sub(now)
+	}
+	return 0
 }
 
 func redactOpenAPIPath(path string) string {

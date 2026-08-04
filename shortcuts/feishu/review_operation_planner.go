@@ -17,11 +17,12 @@ type ReviewOperationPlanner struct {
 }
 
 type reviewCanonicalCardDesired struct {
-	JobID               string `json:"job_id"`
-	PresentationKey     string `json:"presentation_key"`
-	PresentationVersion int    `json:"presentation_version"`
-	SourceCompletedAt   string `json:"source_completed_at,omitempty"`
-	Card                Card   `json:"card"`
+	JobID                 string `json:"job_id"`
+	PresentationKey       string `json:"presentation_key"`
+	PresentationVersion   int    `json:"presentation_version"`
+	SourceCompletedAt     string `json:"source_completed_at,omitempty"`
+	ProjectionFingerprint string `json:"projection_fingerprint,omitempty"`
+	Card                  Card   `json:"card"`
 }
 
 type reviewReplyDesired struct {
@@ -32,17 +33,20 @@ type reviewReplyDesired struct {
 
 type reviewBitableDesired struct {
 	ResourceKey string                 `json:"resource_key"`
+	TargetScope string                 `json:"target_scope"`
 	Fields      map[string]interface{} `json:"fields"`
 }
 
 type reviewDocDesired struct {
 	ResourceKey string `json:"resource_key"`
+	TargetScope string `json:"target_scope"`
 	Title       string `json:"title"`
 	Markdown    string `json:"markdown"`
 }
 
 type reviewTaskDesired struct {
 	ResourceKey string         `json:"resource_key"`
+	TargetScope string         `json:"target_scope"`
 	Archived    bool           `json:"archived"`
 	Task        *TaskCandidate `json:"task,omitempty"`
 }
@@ -62,7 +66,47 @@ func (p *ReviewOperationPlanner) Plan(ctx context.Context, job ReviewGatewayJob,
 	if err := p.Store.SaveReviewOperations(ctx, operations); err != nil {
 		return nil, err
 	}
+	if reviewOperationHasCard(result.ResultCard) {
+		if err := p.ensureProjectionConfiguration(ctx, job, now().UTC()); err != nil {
+			return nil, err
+		}
+	}
 	return operations, nil
+}
+
+func (p *ReviewOperationPlanner) ensureProjectionConfiguration(ctx context.Context, job ReviewGatewayJob, now time.Time) error {
+	baseScope, _ := RuntimeReviewResourceScope(ReviewResourceBitable, p.Config.BaseScope)
+	baseStatus := ReviewProjectionPending
+	if baseScope == ReviewResourceScopeDisabled {
+		baseStatus = ReviewProjectionDisabled
+	} else if p.Config.BaseAppToken == "" || p.Config.ReviewTableID == "" {
+		baseStatus = ReviewProjectionNotConfigured
+	}
+	docScope, _ := RuntimeReviewResourceScope(ReviewResourceDoc, p.Config.DocScope)
+	docStatus := ReviewProjectionPending
+	if docScope == ReviewResourceScopeDisabled {
+		docStatus = ReviewProjectionDisabled
+	} else if p.Config.DocumentID == "" && p.Config.DocumentFolderToken == "" {
+		docStatus = ReviewProjectionNotConfigured
+	}
+	taskStatus := ReviewProjectionDisabled
+	if p.Config.EnableTask {
+		taskStatus = ReviewProjectionPending
+	}
+	for _, item := range []struct {
+		resource string
+		scope    ReviewResourceScope
+		status   ReviewResourceProjectionStatusValue
+	}{
+		{ReviewResourceBitable, baseScope, baseStatus},
+		{ReviewResourceDoc, docScope, docStatus},
+		{ReviewResourceTask, ReviewResourceScopeChat, taskStatus},
+	} {
+		if err := p.Store.EnsureReviewProjectionConfiguration(ctx, job, item.resource, item.scope, item.status, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *ReviewOperationPlanner) Build(job ReviewGatewayJob, result ReviewGatewayExecutionResult, now time.Time) ([]ReviewOperation, error) {
@@ -135,6 +179,7 @@ func (p *ReviewOperationPlanner) buildResourceOperations(job ReviewGatewayJob, b
 			}
 			desired := reviewBitableDesired{
 				ResourceKey: resourceKey,
+				TargetScope: string(p.Config.BaseScope),
 				Fields:      reviewCollaborationBitableFields(bundle, resourceKey, bundle.HumanFieldsAuthoritative),
 			}
 			operation, buildErr := NewReviewOperation(ReviewOperationBitableUpsert, job, resourceKey, ReviewResourceBitable, desired, ReviewRetryReconcilable, now)
@@ -153,6 +198,7 @@ func (p *ReviewOperationPlanner) buildResourceOperations(job ReviewGatewayJob, b
 			}
 			desired := reviewDocDesired{
 				ResourceKey: resourceKey,
+				TargetScope: string(p.Config.DocScope),
 				Title:       fmt.Sprintf("%s PR #%d Review", bundle.Item.Repository, bundle.Item.PRNumber),
 				Markdown:    truncateReviewGatewayText(bundle.DocMarkdown, 128*1024),
 			}
@@ -174,7 +220,7 @@ func (p *ReviewOperationPlanner) buildResourceOperations(job ReviewGatewayJob, b
 				return operations, nil
 			}
 		}
-		desired := reviewTaskDesired{ResourceKey: bundle.UniqueKey, Archived: bundle.Item.Archived, Task: bundle.Task}
+		desired := reviewTaskDesired{ResourceKey: bundle.UniqueKey, TargetScope: string(ReviewResourceScopeChat), Archived: bundle.Item.Archived, Task: bundle.Task}
 		operation, err := NewReviewOperation(ReviewOperationTaskUpsert, job, bundle.UniqueKey, ReviewResourceTask, desired, ReviewRetryNonIdempotent, now)
 		if err != nil {
 			return nil, err

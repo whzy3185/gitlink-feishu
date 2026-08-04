@@ -794,15 +794,17 @@ var reviewGatewaySchemaMigrations = []reviewGatewaySchemaMigration{
 }
 
 type ReviewGatewayQueue struct {
-	gateway       *ReviewGateway
-	store         ReviewGatewayJobStore
-	wake          chan struct{}
-	latencies     chan reviewGatewayLatencyObservation
-	leaseOwner    string
-	leaseDuration time.Duration
-	pollInterval  time.Duration
-	onResult      func(ReviewGatewayJobOutcome)
-	now           func() time.Time
+	gateway          *ReviewGateway
+	store            ReviewGatewayJobStore
+	wake             chan struct{}
+	latencies        chan reviewGatewayLatencyObservation
+	leaseOwner       string
+	leaseDuration    time.Duration
+	pollInterval     time.Duration
+	onResult         func(ReviewGatewayJobOutcome)
+	now              func() time.Time
+	operationPlanner *ReviewOperationPlanner
+	operationWake    func()
 }
 
 func NewMemoryReviewGatewayJobStore() *MemoryReviewGatewayJobStore {
@@ -1543,6 +1545,17 @@ func (s *SQLiteReviewGatewayStore) ClaimReadyJobs(ctx context.Context, opts Revi
 }
 
 func (s *SQLiteReviewGatewayStore) CompleteJob(ctx context.Context, job ReviewGatewayJob, result ReviewGatewayExecutionResult) error {
+	return s.completeJob(ctx, job, result, true)
+}
+
+// CompleteJobForOperationPlanning persists the result without exposing it to
+// the legacy reply dispatcher. The durable Operation planner becomes the sole
+// production owner of Card, Reply, Base, Doc and Task side effects.
+func (s *SQLiteReviewGatewayStore) CompleteJobForOperationPlanning(ctx context.Context, job ReviewGatewayJob, result ReviewGatewayExecutionResult) error {
+	return s.completeJob(ctx, job, result, false)
+}
+
+func (s *SQLiteReviewGatewayStore) completeJob(ctx context.Context, job ReviewGatewayJob, result ReviewGatewayExecutionResult, legacyReply bool) error {
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
 		return fmt.Errorf("encode review gateway result: %w", err)
@@ -1550,7 +1563,7 @@ func (s *SQLiteReviewGatewayStore) CompleteJob(ctx context.Context, job ReviewGa
 	replyStatus := "none"
 	replyNext := ""
 	completedAt := reviewGatewayResultCompletionTime(result)
-	if shouldDispatchReviewGatewayResult(job) {
+	if legacyReply && shouldDispatchReviewGatewayResult(job) {
 		replyStatus = "pending"
 		replyNext = reviewGatewayTimestamp(completedAt)
 	}
@@ -1866,6 +1879,14 @@ func NewReviewGatewayQueue(gateway *ReviewGateway, store ReviewGatewayJobStore, 
 	}
 }
 
+func (q *ReviewGatewayQueue) UseOperationOutbox(planner *ReviewOperationPlanner, wake func()) {
+	if q == nil {
+		return
+	}
+	q.operationPlanner = planner
+	q.operationWake = wake
+}
+
 func (q *ReviewGatewayQueue) Enqueue(ctx context.Context, event ReviewGatewayEvent) ReviewGatewayReceipt {
 	if q == nil || q.gateway == nil {
 		return ReviewGatewayReceipt{
@@ -2029,7 +2050,17 @@ func (q *ReviewGatewayQueue) runReadyJobs(ctx context.Context, handler func(cont
 		outcome := ReviewGatewayJobOutcome{Job: job, Result: result, Err: executeErr}
 		persistCtx, persistCancel := context.WithTimeout(ctx, 2*time.Second)
 		if executeErr == nil {
-			executeErr = q.store.CompleteJob(persistCtx, job, result)
+			if q.operationPlanner != nil {
+				if planningStore, ok := q.store.(interface {
+					CompleteJobForOperationPlanning(context.Context, ReviewGatewayJob, ReviewGatewayExecutionResult) error
+				}); ok {
+					executeErr = planningStore.CompleteJobForOperationPlanning(persistCtx, job, result)
+				} else {
+					executeErr = fmt.Errorf("review operation planning requires a compatible durable job store")
+				}
+			} else {
+				executeErr = q.store.CompleteJob(persistCtx, job, result)
+			}
 			outcome.Err = executeErr
 		} else {
 			outcome.WillRetry, err = q.store.RetryOrFailJob(
@@ -2044,6 +2075,16 @@ func (q *ReviewGatewayQueue) runReadyJobs(ctx context.Context, handler func(cont
 			}
 		}
 		persistCancel()
+		if executeErr == nil && q.operationPlanner != nil {
+			planCtx, planCancel := context.WithTimeout(ctx, 2*time.Second)
+			_, planErr := q.operationPlanner.Plan(planCtx, job, result)
+			planCancel()
+			if planErr != nil {
+				outcome.Err = planErr
+			} else if q.operationWake != nil {
+				q.operationWake()
+			}
+		}
 		if q.onResult != nil {
 			q.onResult(outcome)
 		}
