@@ -10,6 +10,7 @@ on:
       - fix/round2-platform-v2-m0-write-scope
       - feat/round2-platform-v2-m1-pr-result-card
       - feat/feishu-review-service-control-plane
+      - chore/feishu-review-final-hardening
 
 permissions:
   contents: read
@@ -18,13 +19,13 @@ jobs:
   p2-p5:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: npm

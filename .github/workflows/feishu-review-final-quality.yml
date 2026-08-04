@@ -1,0 +1,312 @@
+name: Feishu Review Final Quality
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - chore/feishu-review-final-hardening
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Check Go formatting
+        shell: bash
+        run: |
+          unformatted="$(git ls-files '*.go' | xargs gofmt -l)"
+          test -z "${unformatted}" || {
+            echo "${unformatted}"
+            exit 1
+          }
+
+      - name: Test full repository
+        shell: bash
+        run: |
+          mkdir -p .ci-artifacts
+          set -o pipefail
+          go test ./... -count=1 2>&1 | tee .ci-artifacts/linux-full-tests.txt
+
+      - name: Vet full repository
+        shell: bash
+        run: |
+          set -o pipefail
+          go vet ./... 2>&1 | tee .ci-artifacts/linux-full-vet.txt
+
+      - name: Build full repository
+        shell: bash
+        run: |
+          set -o pipefail
+          go build ./... 2>&1 | tee .ci-artifacts/linux-full-build.txt
+
+      - name: Upload Linux full summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-full-summary
+          path: .ci-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+  linux-race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Verify C compiler
+        run: gcc --version
+
+      - name: Run review race gate
+        shell: bash
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          mkdir -p .ci-artifacts
+          set -o pipefail
+          go test -race \
+            ./internal/collab \
+            ./shortcuts/feishu \
+            ./shortcuts/wecom \
+            ./shortcuts/workflow \
+            -count=1 2>&1 | tee .ci-artifacts/linux-race.txt
+
+      - name: Upload Linux race summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-race-summary
+          path: .ci-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+  windows-review:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: bridges/wecom/package-lock.json
+
+      - name: Install locked Enterprise WeChat SDK
+        working-directory: bridges/wecom
+        run: npm ci --ignore-scripts
+
+      - name: Check Go formatting
+        shell: pwsh
+        run: |
+          $files = @(git ls-files "*.go")
+          $unformatted = @(& gofmt -l $files)
+          if ($unformatted) {
+            $unformatted
+            throw "gofmt check failed"
+          }
+
+      - name: Test review packages
+        run: go test ./shortcuts/feishu ./shortcuts/wecom ./shortcuts/workflow -count=1
+
+      - name: Test deployment contracts
+        run: go test ./shortcuts/feishu -run "TestSystemd|TestWindows|TestReverseProxy" -count=1
+
+      - name: Build full repository
+        run: go build ./...
+
+      - name: Vet review packages
+        run: go vet ./shortcuts/feishu ./shortcuts/wecom ./shortcuts/workflow
+
+      - name: Run stage one through five PowerShell contracts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .ci-artifacts | Out-Null
+          ./scripts/test-feishu-review-powershell-cross-platform.ps1 `
+            -OutputFile .ci-artifacts/windows-review-powershell.json
+
+      - name: Upload Windows review summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-review-summary
+          path: .ci-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+  powershell-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Run cross-platform PowerShell contracts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .ci-artifacts | Out-Null
+          ./scripts/test-feishu-review-powershell-cross-platform.ps1 `
+            -OutputFile .ci-artifacts/powershell-${{ runner.os }}.json
+
+      - name: Check Windows service scripts without installation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $temporary = Join-Path $env:RUNNER_TEMP "review-service-whatif"
+          New-Item -ItemType Directory -Force $temporary | Out-Null
+          try {
+            $bindings = Join-Path $temporary "bindings.json"
+            $environment = Join-Path $temporary "service.env"
+            '{}' | Set-Content -LiteralPath $bindings -Encoding utf8
+            'FEISHU_APP_ID=replace_me' | Set-Content -LiteralPath $environment -Encoding utf8
+            ./deploy/windows/install-review-service.ps1 `
+              -ExecutablePath (Get-Command go).Source `
+              -WorkingDirectory (Get-Location).Path `
+              -BindingsFile $bindings `
+              -EnvironmentFile $environment `
+              -WhatIf
+            ./deploy/windows/uninstall-review-service.ps1 -WhatIf
+          } finally {
+            Remove-Item -LiteralPath $temporary -Recurse -Force
+          }
+
+      - name: Upload PowerShell summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: powershell-${{ runner.os }}-summary
+          path: .ci-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+  node-wecom:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: bridges/wecom/package-lock.json
+
+      - name: Install locked Enterprise WeChat SDK
+        working-directory: bridges/wecom
+        run: npm ci --ignore-scripts
+
+      - name: Test Enterprise WeChat bridge
+        working-directory: bridges/wecom
+        shell: bash
+        run: |
+          mkdir -p ../../.ci-artifacts
+          set -o pipefail
+          npm test 2>&1 | tee ../../.ci-artifacts/node-wecom.txt
+
+      - name: Test and vet Go adapter
+        run: |
+          go test ./shortcuts/wecom -count=1
+          go vet ./shortcuts/wecom
+
+      - name: Upload Node and WeCom summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: node-wecom-summary
+          path: .ci-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Scan for committed credential material
+        shell: bash
+        run: |
+          mkdir -p .ci-artifacts
+          matches="$(git grep -n -I -E \
+            -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._-]{20,}' \
+            -- . ':!go.sum' ':!bridges/wecom/package-lock.json' ':!scripts/research/test_repro.py' || true)"
+          if test -n "${matches}"; then
+            printf '%s\n' "${matches}"
+            exit 1
+          fi
+          printf '{"schema_version":"review.secret-scan-summary/v1","passed":true,"validation_mode":"offline"}\n' \
+            > .ci-artifacts/secret-scan.json
+
+      - name: Upload secret scan summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: secret-scan-summary
+          path: .ci-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+  evidence-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate committed evidence JSON
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .ci-artifacts | Out-Null
+          $files = @(Get-ChildItem evidence -Filter *.json -File -Recurse)
+          foreach ($file in $files) {
+            Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json | Out-Null
+          }
+          $forbidden = @(Get-ChildItem evidence -File -Recurse |
+            Where-Object { $_.Extension -in @(".db", ".sqlite", ".env") })
+          if ($forbidden) {
+            throw "forbidden evidence artifacts: $($forbidden.FullName -join ', ')"
+          }
+          @{
+            schema_version = "review.evidence-contract-summary/v1"
+            passed = $true
+            validation_mode = "offline"
+            json_files = $files.Count
+          } | ConvertTo-Json | Set-Content -LiteralPath .ci-artifacts/evidence-index.json -Encoding utf8
+
+      - name: Upload evidence index
+        uses: actions/upload-artifact@v7
+        with:
+          name: evidence-contract-summary
+          path: .ci-artifacts/
+          if-no-files-found: error
+          retention-days: 14
