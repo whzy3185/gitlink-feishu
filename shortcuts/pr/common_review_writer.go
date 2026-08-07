@@ -11,7 +11,7 @@ import (
 	"github.com/gitlink-org/gitlink-cli/shortcuts/workflow"
 )
 
-var commonReviewRefLine = regexp.MustCompile(`(?im)^\s*Ref:\s*RW-[0-9A-F]{6}\s*$`)
+var commonReviewRefLine = regexp.MustCompile(`(?i)\bRef:\s*RW-[0-9A-F]{6}\b`)
 var commonReviewRequestID = regexp.MustCompile(`^RW-[0-9A-F]{6}$`)
 
 type CommonReviewOptions struct {
@@ -20,6 +20,7 @@ type CommonReviewOptions struct {
 	Content           string
 	ExpectedHead      string
 	RequestID         string
+	ExpectedActor     string
 	DryRun            bool
 	BeforePOST        func() error
 }
@@ -109,6 +110,9 @@ func ExecuteCommonReview(runtime *common.RuntimeContext, opts CommonReviewOption
 	result.Actor = commonReviewString(userMap, "login", "username")
 	if result.Actor == "" {
 		return commonReviewFailure(result, "active GitLink identity is missing login")
+	}
+	if opts.ExpectedActor != "" && result.Actor != strings.TrimSpace(opts.ExpectedActor) {
+		return commonReviewFailure(result, "active GitLink identity does not match the expected actor")
 	}
 	if result.RequestID != "" {
 		if record := findCommonReview(&runtimeCopy, opts.PRNumber, "", content, result.Actor, result.ExpectedHead); record != nil {
@@ -203,6 +207,9 @@ func commonReviewString(item map[string]interface{}, keys ...string) string {
 
 func commonReviewID(data interface{}) string {
 	item, _ := data.(map[string]interface{})
+	if item == nil {
+		return ""
+	}
 	if id := commonReviewString(item, "id", "review_id"); id != "" {
 		return id
 	}

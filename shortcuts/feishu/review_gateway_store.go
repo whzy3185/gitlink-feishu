@@ -214,6 +214,7 @@ CREATE TABLE IF NOT EXISTS review_action_plans (
     source_fingerprint TEXT NOT NULL,
     review_status TEXT NOT NULL,
     content TEXT NOT NULL,
+	request_id TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL,
     idempotency_key TEXT NOT NULL UNIQUE,
     source_job_id TEXT NOT NULL,
@@ -484,6 +485,7 @@ var reviewActionPlanMigrations = map[string]string{
 	"max_attempts":          "INTEGER NOT NULL DEFAULT 3",
 	"reconciliation_status": "TEXT NOT NULL DEFAULT 'not_required'",
 	"mutation_status":       "TEXT NOT NULL DEFAULT 'none'",
+	"request_id":            "TEXT NOT NULL DEFAULT ''",
 }
 
 var reviewInstallationMigrations = map[string]string{

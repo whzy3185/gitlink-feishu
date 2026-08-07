@@ -114,6 +114,18 @@ func buildReviewGatewayResultCard(
 			{Label: "协作资源", Value: "Base / Doc / Task 按配置同步"},
 		}))
 	}
+	if plan := result.ActionPlan; plan != nil {
+		localCommand := fmt.Sprintf("gitlink-cli feishu +review-confirm-local --plan-id %s --state-db .local/review-gateway.db", plan.PlanID)
+		elements = append(elements,
+			fields([]fieldValue{{Label: "ActionPlan", Value: plan.PlanID}, {Label: "Request ID", Value: plan.RequestID},
+				{Label: "Feishu actor", Value: reviewGatewayHashIdentifier(plan.ActorID)}, {Label: "GitLink login", Value: plan.GitLinkLogin},
+				{Label: "Expected head", Value: shortReviewGatewaySHA(plan.ExpectedHeadSHA)}, {Label: "Expires", Value: plan.ExpiresAt}}),
+			div("**Review body**\n"+escapeMD(truncateReviewGatewayText(plan.Content, 1200))),
+			note("Local command: "+localCommand),
+			reviewCommandActions([][2]string{{"本地执行计划", "本地执行 Review " + plan.PlanID}, {"取消", "取消 Review " + plan.PlanID},
+				{"刷新 Context", fmt.Sprintf("刷新 %s PR #%d", plan.Repository, plan.PRNumber)}}),
+		)
+	}
 
 	gitLinkURL := reviewGatewayGitLinkURL(repository, number)
 	if view != nil && strings.HasPrefix(strings.TrimSpace(view.GitLinkURL), "https://www.gitlink.org.cn/") {
@@ -138,6 +150,14 @@ func buildReviewGatewayResultCard(
 		template = "grey"
 	}
 	return boundedReviewGatewayCard(baseCard(title, template, elements))
+}
+
+func reviewCommandActions(actions [][2]string) map[string]interface{} {
+	buttons := make([]interface{}, 0, len(actions))
+	for _, action := range actions {
+		buttons = append(buttons, map[string]interface{}{"tag": "button", "text": map[string]interface{}{"tag": "plain_text", "content": action[0]}, "value": map[string]interface{}{"command": action[1]}})
+	}
+	return map[string]interface{}{"tag": "action", "actions": buttons}
 }
 
 func reviewItemValue(item *ReviewCollaborationItem, selector func(ReviewCollaborationItem) string) string {

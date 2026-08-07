@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	prshortcut "github.com/gitlink-org/gitlink-cli/shortcuts/pr"
 )
 
 const reviewActionPlanSchema = "review.action-plan/v2"
@@ -32,6 +34,7 @@ type ReviewActionPlan struct {
 	SourceFingerprint string `json:"source_fingerprint"`
 	ReviewStatus      string `json:"review_status"`
 	Content           string `json:"content"`
+	RequestID         string `json:"request_id"`
 	Status            string `json:"status"`
 	IdempotencyKey    string `json:"idempotency_key"`
 	SourceJobID       string `json:"source_job_id"`
@@ -59,6 +62,8 @@ type ReviewWriteResult struct {
 	MutationStatus string `json:"mutation_status"`
 	Mutated        bool   `json:"mutated"`
 	Reconciliation string `json:"reconciliation,omitempty"`
+	RequestID      string `json:"request_id,omitempty"`
+	Outcome        string `json:"outcome,omitempty"`
 }
 
 type ReviewActionPlanStore interface {
@@ -68,6 +73,19 @@ type ReviewActionPlanStore interface {
 	MarkReviewActionPlanWriteStarted(context.Context, string, string, time.Time) error
 	FinishReviewActionPlan(context.Context, string, string, string, string, string, time.Time) error
 	MarkReviewActionPlanUnknown(context.Context, string, string, string, time.Time) error
+	CancelReviewActionPlan(context.Context, string, string, time.Time) error
+}
+
+func (s *SQLiteReviewGatewayStore) CancelReviewActionPlan(ctx context.Context, planID, actorID string, now time.Time) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE review_action_plans SET status='cancelled', updated_at=?
+		WHERE plan_id=? AND actor_id=? AND status='pending_confirmation'`, reviewGatewayTimestamp(now), strings.TrimSpace(planID), strings.TrimSpace(actorID))
+	if err != nil {
+		return err
+	}
+	if affected, _ := result.RowsAffected(); affected != 1 {
+		return fmt.Errorf("review action plan cannot be cancelled")
+	}
+	return nil
 }
 
 type ReviewActionPlanClaimOptions struct {
@@ -98,9 +116,12 @@ func NewReviewActionPlan(
 		sourceFingerprint,
 		"common",
 		content,
+		job.JobID,
 	}, "\x00")
 	digest := sha256.Sum256([]byte(idempotencySeed))
 	key := hex.EncodeToString(digest[:16])
+	requestID := "RW-" + strings.ToUpper(hex.EncodeToString(digest[:3]))
+	content, _ = prshortcut.BuildCommonReviewContent(content, requestID)
 	return ReviewActionPlan{
 		SchemaVersion:     reviewActionPlanSchema,
 		PlanID:            "review-plan-" + key[:16],
@@ -114,6 +135,7 @@ func NewReviewActionPlan(
 		SourceFingerprint: sourceFingerprint,
 		ReviewStatus:      "common",
 		Content:           strings.TrimSpace(content),
+		RequestID:         requestID,
 		Status:            "pending_confirmation",
 		IdempotencyKey:    key,
 		SourceJobID:       job.JobID,
@@ -152,10 +174,10 @@ func (s *SQLiteReviewGatewayStore) CreateReviewActionPlan(
 	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO review_action_plans (
 		plan_id, installation_id, source_chat_id, repository, pr_number, actor_id, gitlink_login,
-		expected_head_sha, source_fingerprint, review_status, content, status,
+		expected_head_sha, source_fingerprint, review_status, content, request_id, status,
 		idempotency_key, source_job_id, max_attempts, reconciliation_status, mutation_status,
 		created_at, expires_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(idempotency_key) DO NOTHING`,
 		plan.PlanID,
 		plan.InstallationID,
@@ -168,6 +190,7 @@ func (s *SQLiteReviewGatewayStore) CreateReviewActionPlan(
 		plan.SourceFingerprint,
 		plan.ReviewStatus,
 		plan.Content,
+		plan.RequestID,
 		plan.Status,
 		plan.IdempotencyKey,
 		plan.SourceJobID,
@@ -187,7 +210,7 @@ func (s *SQLiteReviewGatewayStore) CreateReviewActionPlan(
 func (s *SQLiteReviewGatewayStore) GetReviewActionPlan(ctx context.Context, planID string) (ReviewActionPlan, error) {
 	return scanReviewActionPlan(s.db.QueryRowContext(ctx, `SELECT
 		plan_id, installation_id, source_chat_id, repository, pr_number, actor_id, gitlink_login,
-		expected_head_sha, source_fingerprint, review_status, content, status,
+		expected_head_sha, source_fingerprint, review_status, content, request_id, status,
 		idempotency_key, source_job_id, review_id, error_summary,
 		lease_owner, lease_expires_at, attempt_count, max_attempts, reconciliation_status, mutation_status,
 		created_at, expires_at, updated_at
@@ -200,7 +223,7 @@ func (s *SQLiteReviewGatewayStore) getReviewActionPlanByIdempotencyKey(
 ) (ReviewActionPlan, error) {
 	return scanReviewActionPlan(s.db.QueryRowContext(ctx, `SELECT
 		plan_id, installation_id, source_chat_id, repository, pr_number, actor_id, gitlink_login,
-		expected_head_sha, source_fingerprint, review_status, content, status,
+		expected_head_sha, source_fingerprint, review_status, content, request_id, status,
 		idempotency_key, source_job_id, review_id, error_summary,
 		lease_owner, lease_expires_at, attempt_count, max_attempts, reconciliation_status, mutation_status,
 		created_at, expires_at, updated_at
@@ -392,6 +415,7 @@ func scanReviewActionPlan(scanner reviewCollaborationScanner) (ReviewActionPlan,
 		&plan.SourceFingerprint,
 		&plan.ReviewStatus,
 		&plan.Content,
+		&plan.RequestID,
 		&plan.Status,
 		&plan.IdempotencyKey,
 		&plan.SourceJobID,

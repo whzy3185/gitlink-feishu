@@ -195,6 +195,7 @@ type ReviewGateway struct {
 
 var (
 	reviewGatewayRepositoryPattern        = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+	reviewGatewayCommonReviewPattern      = regexp.MustCompile(`(?i)^review\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s*(?:PR\s*)?#?(\d+)\s+(.+)$`)
 	reviewGatewaySecretReferencePattern   = regexp.MustCompile(`^env:[A-Za-z_][A-Za-z0-9_]*$`)
 	reviewGatewayPRPattern                = regexp.MustCompile(`(?i)^查看\s*PR\s*#?(\d+)$`)
 	reviewGatewayClaimPattern             = regexp.MustCompile(`(?i)^领取\s*PR\s*#?(\d+)$`)
@@ -465,6 +466,17 @@ func (g *ReviewGateway) isAdmin(binding ReviewChatBinding, userID string) bool {
 
 func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 	content = strings.Join(strings.Fields(strings.TrimSpace(content)), " ")
+	if match := reviewGatewayCommonReviewPattern.FindStringSubmatch(content); len(match) == 4 {
+		number, _ := strconv.Atoi(match[2])
+		body := truncateReviewGatewayText(redactReviewGatewayError(match[3]), 3000)
+		return ReviewGatewayIntent{Name: "prepare_common_review", Repository: match[1], PRNumber: number, Argument: body}
+	}
+	if match := regexp.MustCompile(`(?i)^本地执行\s+Review\s+([A-Za-z0-9:_-]+)$`).FindStringSubmatch(content); len(match) == 2 {
+		return ReviewGatewayIntent{Name: "show_local_review_plan", Argument: match[1]}
+	}
+	if match := regexp.MustCompile(`(?i)^取消\s+Review\s+([A-Za-z0-9:_-]+)$`).FindStringSubmatch(content); len(match) == 2 {
+		return ReviewGatewayIntent{Name: "cancel_common_review", Argument: match[1]}
+	}
 	if intent, ok := parseReviewSubscriptionIntent(content); ok {
 		return intent
 	}
@@ -520,6 +532,7 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 
 func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, dedupeKey string, now time.Time) ReviewGatewayJob {
 	collaborationMutation := intent.Name == "plan_bind_repository" ||
+		intent.Name == "cancel_common_review" ||
 		intent.Name == "claim_review" ||
 		intent.Name == "release_review" ||
 		intent.Name == "set_review_deadline" ||

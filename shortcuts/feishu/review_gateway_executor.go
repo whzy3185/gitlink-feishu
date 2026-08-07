@@ -285,6 +285,25 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 	case "confirm_common_review":
 		return e.confirmCommonReview(ctx, job, result, now().UTC())
 
+	case "show_local_review_plan", "cancel_common_review":
+		if e.ActionPlans == nil {
+			return reviewGatewayExecutionFailure(result, fmt.Errorf("review action plan store is required"))
+		}
+		plan, err := e.ActionPlans.GetReviewActionPlan(ctx, job.Argument)
+		if err != nil || plan.ActorID != job.RequestedBy || plan.SourceChatID != job.ChatID {
+			return reviewGatewayExecutionFailure(result, fmt.Errorf("review action plan is unavailable in this scope"))
+		}
+		if job.Action == "cancel_common_review" {
+			if err := e.ActionPlans.CancelReviewActionPlan(ctx, plan.PlanID, job.RequestedBy, now().UTC()); err != nil {
+				return reviewGatewayExecutionFailure(result, err)
+			}
+			plan.Status = "cancelled"
+		}
+		result.ActionPlan, result.Repository, result.PRNumber = &plan, plan.Repository, plan.PRNumber
+		result.Message = "Use the local review-confirm-local command; this card action performs no GitLink write"
+		result.ResultCard = buildReviewGatewayResultCard(job, result, nil)
+		return result, nil
+
 	case "subscribe_review_events", "unsubscribe_review_events", "set_review_notification_mode":
 		if e.Subscriptions == nil {
 			return reviewGatewayExecutionFailure(result, fmt.Errorf("review subscription store is required"))

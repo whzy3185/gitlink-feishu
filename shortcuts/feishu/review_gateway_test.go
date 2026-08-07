@@ -2879,6 +2879,7 @@ func TestCardConfirmationCannotCrossSourceChat(t *testing.T) {
 
 func TestConfirmedCommonReviewWritesExactlyOnceAndVerifiesReadBack(t *testing.T) {
 	var writeCount, readbackCount int
+	var postedContent string
 	var writeMu sync.Mutex
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
@@ -2897,7 +2898,7 @@ func TestConfirmedCommonReviewWritesExactlyOnceAndVerifiesReadBack(t *testing.T)
 			}
 			writeMu.Unlock()
 			if written {
-				_, _ = writer.Write([]byte(`{"reviews":[{"id":901,"status":"common","commit_id":"head-431","content":"Evidence-backed Review summary","user":{"login":"gitlink-reviewer"}}]}`))
+				_ = json.NewEncoder(writer).Encode(map[string]interface{}{"reviews": []map[string]interface{}{{"id": 901, "status": "common", "commit_id": "head-431", "content": postedContent, "user": map[string]interface{}{"login": "gitlink-reviewer"}}}})
 			} else {
 				_, _ = writer.Write([]byte(`{"reviews":[]}`))
 			}
@@ -2915,6 +2916,7 @@ func TestConfirmedCommonReviewWritesExactlyOnceAndVerifiesReadBack(t *testing.T)
 			}
 			writeMu.Lock()
 			writeCount++
+			postedContent, _ = payload["content"].(string)
 			writeMu.Unlock()
 			_, _ = writer.Write([]byte(`{"review":{"id":901}}`))
 		default:
