@@ -58,7 +58,6 @@ func executeLocalReviewConfirmation(ctx context.Context, runtime *common.Runtime
 	populateReviewGatewayContextResult(&result, current)
 	if dryRun || !approved {
 		result.WriteResult = &ReviewWriteResult{PlanID: plan.PlanID, Status: map[bool]string{true: "dry_run", false: "cancelled"}[dryRun], Outcome: "not_started", Repository: plan.Repository, PRNumber: plan.PRNumber, HeadSHA: plan.ExpectedHeadSHA, ReviewStatus: "common", MutationStatus: reviewMutationNone, RequestID: plan.RequestID}
-		result.Message = "Local confirmation did not write to GitLink"
 		return result, nil
 	}
 	leaseOwner := "local-review:" + plan.RequestID

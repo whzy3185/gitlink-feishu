@@ -19,11 +19,47 @@ those external validators, so no new real-platform claim is made here.
 - Normal review discovery is GET-only.
 - The Stage Six validator blocks every method except GET and HEAD before the
   network and records exact method counts.
-- Existing controlled common-Review write code remains behind its own ActionPlan,
-  installation, source-chat, head and fingerprint gates. It is outside the
-  Stage Six real acceptance scope.
+- A common Review can be prepared in Feishu and confirmed from the local CLI.
+  The write path is guarded by one ActionPlan, current head, complete source
+  fingerprint, bound GitLink login, atomic lease and a persisted write boundary.
+- `pr +review --status common` and Feishu confirmation use the same writer.
+  One execution performs at most one POST and then a bounded GET read-back.
 - Automatic approve, reject, merge, close, reviewer mutation, line comments and
   thread resolution are not promised.
+
+## Common Review contract
+
+The formal Feishu input is:
+
+```text
+review owner/repository#123 review body
+```
+
+Preparation creates a 15-minute ActionPlan containing the repository, PR,
+expected head, source fingerprint, Feishu actor hash, bound GitLink login,
+review body and a system-generated `RW-XXXXXX` request ID. The trusted footer
+is written as `Ref: RW-XXXXXX`; look-alike references supplied in the body are
+removed.
+
+The local execution command is:
+
+```text
+gitlink-cli feishu +review-confirm-local \
+  --plan-id <plan-id> \
+  --state-db .local/review-gateway.db
+```
+
+It uses the current local CLI credential and checks `/users/me`; it does not
+fall back to an Installation credential. `--dry-run` performs no POST, and
+`--yes` only bypasses the terminal prompt. A cancelled, expired, stale,
+completed, remotely uncertain, cross-actor or identity-mismatched plan cannot
+start another POST.
+
+Writer outcomes are `verified`, `duplicate`, `stale`, `failed` and `unknown`.
+`commit_id=null` remains null with a warning. `unknown` requires reconciliation
+and disables automatic retry. These are offline code-contract claims only;
+real GitLink write acceptance still requires explicit user authorization and
+separately preserved before/after evidence.
 
 ## Feishu boundary
 

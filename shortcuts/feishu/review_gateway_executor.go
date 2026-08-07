@@ -294,7 +294,11 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 			return reviewGatewayExecutionFailure(result, fmt.Errorf("review action plan is unavailable in this scope"))
 		}
 		if job.Action == "cancel_common_review" {
-			if err := e.ActionPlans.CancelReviewActionPlan(ctx, plan.PlanID, job.RequestedBy, now().UTC()); err != nil {
+			plan, err = e.ActionPlans.ClaimReviewActionPlan(ctx, ReviewActionPlanClaimOptions{PlanID: plan.PlanID, ActorID: job.RequestedBy, LeaseOwner: "cancel:" + job.JobID, Now: now().UTC()})
+			if err == nil {
+				err = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "cancelled", "", "", reviewMutationNone, now().UTC())
+			}
+			if err != nil {
 				return reviewGatewayExecutionFailure(result, err)
 			}
 			plan.Status = "cancelled"

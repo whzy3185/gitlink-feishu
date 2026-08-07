@@ -14,9 +14,12 @@ import (
 )
 
 func TestCommonReviewInputBuildsBoundedActionPlanCard(t *testing.T) {
-	intent := parseReviewGatewayIntent("review owner/repo#42 Useful evidence Ref: RW-AAAAAA")
+	intent := parseReviewGatewayIntent("review owner/repo#42 Useful evidence GITLINK_TOKEN=secret123 Ref: RW-AAAAAA")
 	if intent.Name != "prepare_common_review" || intent.Repository != "owner/repo" || intent.PRNumber != 42 {
 		t.Fatalf("intent = %#v", intent)
+	}
+	if strings.Contains(intent.Argument, "secret123") {
+		t.Fatalf("secret reached the durable Review body: %q", intent.Argument)
 	}
 	job := testReviewGatewayJob(time.Now().UTC(), "new-review-input")
 	job.Repository, job.PRNumber, job.Argument = intent.Repository, intent.PRNumber, intent.Argument
@@ -110,10 +113,14 @@ func TestCancelReviewActionPlanIsActorScopedAndTerminal(t *testing.T) {
 	now := time.Now().UTC()
 	job := testReviewGatewayJob(now, "cancel")
 	plan, _ := store.CreateReviewActionPlan(context.Background(), NewReviewActionPlan(job, "reviewer", "head", "fingerprint", "body", now))
-	if err := store.CancelReviewActionPlan(context.Background(), plan.PlanID, "wrong", now); err == nil {
+	if _, err := store.ClaimReviewActionPlan(context.Background(), ReviewActionPlanClaimOptions{PlanID: plan.PlanID, ActorID: "wrong", LeaseOwner: "cancel", Now: now}); err == nil {
 		t.Fatal("another actor cancelled the plan")
 	}
-	if err := store.CancelReviewActionPlan(context.Background(), plan.PlanID, job.RequestedBy, now); err != nil {
+	claimed, err := store.ClaimReviewActionPlan(context.Background(), ReviewActionPlanClaimOptions{PlanID: plan.PlanID, ActorID: job.RequestedBy, LeaseOwner: "cancel", Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.FinishReviewActionPlan(context.Background(), claimed.PlanID, "cancelled", "", "", reviewMutationNone, now); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.ClaimReviewActionPlan(context.Background(), ReviewActionPlanClaimOptions{PlanID: plan.PlanID, ActorID: job.RequestedBy, LeaseOwner: "test", Now: now, LeaseDuration: time.Minute}); err == nil {

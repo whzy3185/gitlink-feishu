@@ -73,19 +73,6 @@ type ReviewActionPlanStore interface {
 	MarkReviewActionPlanWriteStarted(context.Context, string, string, time.Time) error
 	FinishReviewActionPlan(context.Context, string, string, string, string, string, time.Time) error
 	MarkReviewActionPlanUnknown(context.Context, string, string, string, time.Time) error
-	CancelReviewActionPlan(context.Context, string, string, time.Time) error
-}
-
-func (s *SQLiteReviewGatewayStore) CancelReviewActionPlan(ctx context.Context, planID, actorID string, now time.Time) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE review_action_plans SET status='cancelled', updated_at=?
-		WHERE plan_id=? AND actor_id=? AND status='pending_confirmation'`, reviewGatewayTimestamp(now), strings.TrimSpace(planID), strings.TrimSpace(actorID))
-	if err != nil {
-		return err
-	}
-	if affected, _ := result.RowsAffected(); affected != 1 {
-		return fmt.Errorf("review action plan cannot be cancelled")
-	}
-	return nil
 }
 
 type ReviewActionPlanClaimOptions struct {
@@ -335,7 +322,7 @@ func (s *SQLiteReviewGatewayStore) FinishReviewActionPlan(
 	now time.Time,
 ) error {
 	switch status {
-	case "completed", "stale", "failed", "unknown":
+	case "completed", "stale", "failed", "unknown", "cancelled":
 	default:
 		return fmt.Errorf("unsupported review action plan terminal status %q", status)
 	}
