@@ -371,6 +371,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "status", Short: "s", Usage: tr.T("flag.pr.review_status"), Default: "common"},
 				{Name: "content", Short: "c", Usage: tr.T("flag.pr.review_content"), Required: true},
 				{Name: "commit", Short: "m", Usage: tr.T("flag.pr.review_commit")},
+				{Name: "request-id", Usage: "Stable common Review request ID (RW-XXXXXX)"},
 				{Name: "dry-run", Usage: tr.T("flag.dry_run"), Bool: true, Default: "false"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
@@ -391,6 +392,15 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				}
 				if err := validatePRReviewStatus(status); err != nil {
 					return err
+				}
+				if status == "common" {
+					number, _ := strconv.Atoi(id)
+					result := ExecuteCommonReview(ctx, CommonReviewOptions{
+						Owner: ctx.Owner, Repository: ctx.Repo, PRNumber: number,
+						Content: content, ExpectedHead: ctx.Arg("commit"), RequestID: ctx.Arg("request-id"),
+						DryRun: ctx.Arg("dry-run") == "true",
+					})
+					return ctx.OutputData(result)
 				}
 				payload := map[string]interface{}{
 					"content": content,
