@@ -11,6 +11,10 @@ import (
 )
 
 func (e *ReviewGatewayExecutor) prepareCommonReview(ctx context.Context, job ReviewGatewayJob, result ReviewGatewayExecutionResult, now time.Time) (ReviewGatewayExecutionResult, error) {
+	return e.prepareControlledReviewAction(ctx, job, result, now)
+}
+
+func (e *ReviewGatewayExecutor) prepareControlledReviewAction(ctx context.Context, job ReviewGatewayJob, result ReviewGatewayExecutionResult, now time.Time) (ReviewGatewayExecutionResult, error) {
 	if e.ActionPlans == nil {
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("review action plan runtime and store are required"))
 	}
@@ -37,9 +41,16 @@ func (e *ReviewGatewayExecutor) prepareCommonReview(ctx context.Context, job Rev
 	if reviewContext.Partial || reviewContext.CollectionStatus != "complete" || strings.TrimSpace(reviewContext.CurrentHeadSHA) == "" {
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("complete Review context and current head are required before write planning"))
 	}
+	if strings.ToLower(strings.TrimSpace(reviewContext.WorkItem.GitLinkState)) != "open" {
+		return reviewGatewayExecutionFailure(result, fmt.Errorf("pull request must be open before write planning"))
+	}
+	action := reviewGatewayPrepareAction(job.Action)
+	if action == "" {
+		return reviewGatewayExecutionFailure(result, fmt.Errorf("unsupported controlled Review action %q", job.Action))
+	}
 	draft := buildReviewDraftPreview(reviewContext)
 	content := strings.TrimSpace(job.Argument)
-	if content == "" {
+	if content == "" && action == reviewActionCommon {
 		content = strings.TrimSpace(strings.Join([]string{
 			draft.Summary,
 			"Current decision: " + firstNonEmpty(draft.Decision, "pending"),
@@ -47,7 +58,10 @@ func (e *ReviewGatewayExecutor) prepareCommonReview(ctx context.Context, job Rev
 			"Source head: " + reviewContext.CurrentHeadSHA,
 		}, "\n"))
 	}
-	plan := NewReviewActionPlan(job, identity.GitLinkLogin, reviewContext.CurrentHeadSHA, reviewContext.WorkItem.SourceFingerprint, content, now)
+	if content == "" && action != reviewActionMerge {
+		return reviewGatewayExecutionFailure(result, fmt.Errorf("Review content or rejection reason is required"))
+	}
+	plan := NewControlledReviewActionPlan(job, identity.GitLinkLogin, reviewContext.CurrentHeadSHA, reviewContext.WorkItem.SourceFingerprint, action, content, now)
 	plan, err = e.ActionPlans.CreateReviewActionPlan(ctx, plan)
 	if err != nil {
 		return reviewGatewayExecutionFailure(result, err)
@@ -55,7 +69,7 @@ func (e *ReviewGatewayExecutor) prepareCommonReview(ctx context.Context, job Rev
 	result.ActionPlan, result.Draft = &plan, &draft
 	result.ResultCard = buildReviewGatewayResultCard(job, result, nil)
 	result.ReadOnlyGitLink, result.MutatesGitLink = true, false
-	result.Message = fmt.Sprintf("common Review ActionPlan %s is ready for local confirmation; Ref: %s", plan.PlanID, plan.RequestID)
+	result.Message = fmt.Sprintf("%s ActionPlan %s is ready for local confirmation; Ref: %s", reviewActionLabel(plan.Action), plan.PlanID, plan.RequestID)
 	return result, nil
 }
 
@@ -72,8 +86,8 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(ctx context.Context, job Rev
 	if plan.ActorID != job.RequestedBy {
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("review action plan belongs to another Feishu user"))
 	}
-	if plan.ReviewStatus != "common" {
-		return reviewGatewayExecutionFailure(result, fmt.Errorf("only common Review writes are enabled"))
+	if _, err := normalizeReviewAction(plan.Action, plan.ReviewStatus); err != nil {
+		return reviewGatewayExecutionFailure(result, err)
 	}
 	if err := e.validateReviewActionPlanScope(job, plan); err != nil {
 		return reviewGatewayExecutionFailure(result, err)
@@ -84,7 +98,7 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(ctx context.Context, job Rev
 	}
 	if !e.EnableGitLinkWrite {
 		result.WriteResult = &ReviewWriteResult{PlanID: plan.PlanID, Status: "write_disabled", Repository: plan.Repository,
-			PRNumber: plan.PRNumber, HeadSHA: plan.ExpectedHeadSHA, ReviewStatus: "common", MutationStatus: reviewMutationNone,
+			PRNumber: plan.PRNumber, HeadSHA: plan.ExpectedHeadSHA, Action: plan.Action, ReviewStatus: plan.ReviewStatus, MutationStatus: reviewMutationNone,
 			RequestID: plan.RequestID}
 		result.Message = "ActionPlan is valid, but GitLink writes are disabled"
 		return result, nil
@@ -117,17 +131,26 @@ func (e *ReviewGatewayExecutor) confirmCommonReview(ctx context.Context, job Rev
 		reviewContext.WorkItem.SourceFingerprint != plan.SourceFingerprint {
 		_ = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "stale", "", "PR context changed", reviewMutationNone, now)
 		result.WriteResult = &ReviewWriteResult{PlanID: plan.PlanID, Status: "stale", Outcome: "stale", Repository: plan.Repository,
-			PRNumber: plan.PRNumber, HeadSHA: reviewContext.CurrentHeadSHA, ReviewStatus: "common", MutationStatus: reviewMutationNone,
+			PRNumber: plan.PRNumber, HeadSHA: reviewContext.CurrentHeadSHA, Action: plan.Action, ReviewStatus: plan.ReviewStatus, MutationStatus: reviewMutationNone,
 			RequestID: plan.RequestID}
 		result.Message = "PR context changed; ActionPlan is stale and GitLink writes remain zero"
 		return result, nil
 	}
-	write := prshortcut.ExecuteCommonReview(runtime, prshortcut.CommonReviewOptions{Owner: owner, Repository: repo,
-		PRNumber: plan.PRNumber, Content: plan.Content, ExpectedHead: plan.ExpectedHeadSHA, ExpectedActor: plan.GitLinkLogin,
-		RequestID: plan.RequestID, BeforePOST: func() error {
-			return e.ActionPlans.MarkReviewActionPlanWriteStarted(ctx, plan.PlanID, leaseOwner, now)
-		}})
-	return e.finishCommonReviewWrite(ctx, result, plan, write, now)
+	if strings.ToLower(strings.TrimSpace(reviewContext.WorkItem.GitLinkState)) != "open" {
+		_ = e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, "failed", "", "pull request is not open", reviewMutationNone, now)
+		return reviewGatewayExecutionFailure(result, fmt.Errorf("pull request must remain open"))
+	}
+	beforePOST := func() error { return e.ActionPlans.MarkReviewActionPlanWriteStarted(ctx, plan.PlanID, leaseOwner, now) }
+	if plan.ReviewStatus != "" {
+		write := prshortcut.ExecuteControlledReview(runtime, prshortcut.CommonReviewOptions{Owner: owner, Repository: repo,
+			PRNumber: plan.PRNumber, Content: plan.Content, ReviewStatus: plan.ReviewStatus, ExpectedHead: plan.ExpectedHeadSHA,
+			ExpectedActor: plan.GitLinkLogin, RequestID: plan.RequestID, BeforePOST: beforePOST})
+		return e.finishCommonReviewWrite(ctx, result, plan, write, now)
+	}
+	write := prshortcut.ExecuteControlledPRAction(runtime, prshortcut.ControlledPRActionOptions{Owner: owner, Repository: repo,
+		PRNumber: plan.PRNumber, Action: plan.Action, ExpectedHead: plan.ExpectedHeadSHA, ExpectedActor: plan.GitLinkLogin,
+		BeforePOST: beforePOST})
+	return e.finishControlledPRAction(ctx, result, plan, write, now)
 }
 
 func (e *ReviewGatewayExecutor) finishCommonReviewWrite(ctx context.Context, result ReviewGatewayExecutionResult, plan ReviewActionPlan, write prshortcut.CommonReviewResult, now time.Time) (ReviewGatewayExecutionResult, error) {
@@ -149,7 +172,7 @@ func (e *ReviewGatewayExecutor) finishCommonReviewWrite(ctx context.Context, res
 	}
 	result.ReadOnlyGitLink, result.MutatesGitLink = write.POSTCount == 0, write.Mutated
 	result.WriteResult = &ReviewWriteResult{PlanID: plan.PlanID, Status: status, Outcome: write.Status, ReviewID: write.ReviewID,
-		Repository: plan.Repository, PRNumber: plan.PRNumber, HeadSHA: write.CurrentHead, ReviewStatus: "common",
+		Repository: plan.Repository, PRNumber: plan.PRNumber, HeadSHA: write.CurrentHead, Action: plan.Action, ReviewStatus: plan.ReviewStatus,
 		MutationStatus: mutation, Mutated: write.Mutated, RequestID: plan.RequestID}
 	result.Warnings = append(result.Warnings, write.Warnings...)
 	if status == "unknown_needs_reconciliation" {
@@ -157,11 +180,61 @@ func (e *ReviewGatewayExecutor) finishCommonReviewWrite(ctx context.Context, res
 	} else if write.Status == "verified" {
 		result.WriteResult.Reconciliation = "verified by GitLink GET read-back"
 	}
-	result.Message = fmt.Sprintf("common Review %s; Ref: %s", write.Status, plan.RequestID)
+	result.Message = fmt.Sprintf("%s %s; Ref: %s", reviewActionLabel(plan.Action), write.Status, plan.RequestID)
 	if latest, err := e.ActionPlans.GetReviewActionPlan(ctx, plan.PlanID); err == nil {
 		result.ActionPlan = &latest
 	}
 	return result, nil
+}
+
+func (e *ReviewGatewayExecutor) finishControlledPRAction(ctx context.Context, result ReviewGatewayExecutionResult, plan ReviewActionPlan, write prshortcut.ControlledPRActionResult, now time.Time) (ReviewGatewayExecutionResult, error) {
+	terminal, status, mutation := "failed", write.Status, reviewMutationNone
+	switch write.Status {
+	case "verified":
+		terminal, status = "completed", "completed"
+	case "stale":
+		terminal = "stale"
+	case "unknown":
+		terminal, status, mutation = "unknown", "unknown_needs_reconciliation", reviewMutationPossible
+	}
+	if write.Mutated {
+		mutation = reviewMutationConfirmed
+	}
+	if err := e.ActionPlans.FinishReviewActionPlan(ctx, plan.PlanID, terminal, "", write.Error, mutation, now); err != nil {
+		_ = e.ActionPlans.MarkReviewActionPlanUnknown(ctx, plan.PlanID, "GitLink result could not be persisted", mutation, now)
+		status = "unknown_needs_reconciliation"
+	}
+	result.ReadOnlyGitLink, result.MutatesGitLink = write.POSTCount == 0, write.Mutated
+	result.WriteResult = &ReviewWriteResult{PlanID: plan.PlanID, Status: status, Outcome: write.Status, Action: plan.Action,
+		Repository: plan.Repository, PRNumber: plan.PRNumber, HeadSHA: write.CurrentHead, MutationStatus: mutation,
+		Mutated: write.Mutated, RequestID: plan.RequestID}
+	if status == "unknown_needs_reconciliation" {
+		result.WriteResult.Reconciliation = "verify the pull request state before any retry"
+	} else if write.Status == "verified" {
+		result.WriteResult.Reconciliation = "verified by GitLink GET read-back"
+	}
+	result.Message = fmt.Sprintf("%s %s; Ref: %s", reviewActionLabel(plan.Action), write.Status, plan.RequestID)
+	if latest, err := e.ActionPlans.GetReviewActionPlan(ctx, plan.PlanID); err == nil {
+		result.ActionPlan = &latest
+	}
+	return result, nil
+}
+
+func reviewActionLabel(action string) string {
+	switch action {
+	case reviewActionCommon:
+		return "COMMON REVIEW"
+	case reviewActionApprove:
+		return "APPROVE"
+	case reviewActionReject:
+		return "REJECT REVIEW"
+	case reviewActionRejectClose:
+		return "REJECT & CLOSE"
+	case reviewActionMerge:
+		return "MERGE"
+	default:
+		return "UNKNOWN ACTION"
+	}
 }
 
 func (e *ReviewGatewayExecutor) validateReviewActionPlanScope(job ReviewGatewayJob, plan ReviewActionPlan) error {

@@ -13,12 +13,20 @@ import (
 	prshortcut "github.com/gitlink-org/gitlink-cli/shortcuts/pr"
 )
 
-const reviewActionPlanSchema = "review.action-plan/v2"
+const reviewActionPlanSchema = "review.action-plan/v3"
 
 const (
 	reviewMutationNone      = "none"
 	reviewMutationPossible  = "possible"
 	reviewMutationConfirmed = "confirmed"
+)
+
+const (
+	reviewActionCommon      = "review_common"
+	reviewActionApprove     = "review_approve"
+	reviewActionReject      = "review_reject"
+	reviewActionRejectClose = "reject_close"
+	reviewActionMerge       = "merge"
 )
 
 type ReviewActionPlan struct {
@@ -32,6 +40,7 @@ type ReviewActionPlan struct {
 	GitLinkLogin      string `json:"gitlink_login"`
 	ExpectedHeadSHA   string `json:"expected_head_sha"`
 	SourceFingerprint string `json:"source_fingerprint"`
+	Action            string `json:"action"`
 	ReviewStatus      string `json:"review_status"`
 	Content           string `json:"content"`
 	RequestID         string `json:"request_id"`
@@ -54,6 +63,7 @@ type ReviewActionPlan struct {
 type ReviewWriteResult struct {
 	PlanID         string `json:"plan_id"`
 	Status         string `json:"status"`
+	Action         string `json:"action"`
 	ReviewID       string `json:"review_id,omitempty"`
 	Repository     string `json:"repository"`
 	PRNumber       int    `json:"pr_number"`
@@ -91,7 +101,32 @@ func NewReviewActionPlan(
 	content string,
 	now time.Time,
 ) ReviewActionPlan {
+	return NewControlledReviewActionPlan(job, gitLinkLogin, headSHA, sourceFingerprint, reviewActionCommon, content, now)
+}
+
+func NewControlledReviewActionPlan(
+	job ReviewGatewayJob,
+	gitLinkLogin,
+	headSHA,
+	sourceFingerprint,
+	action,
+	content string,
+	now time.Time,
+) ReviewActionPlan {
 	now = now.UTC()
+	requestedAction := strings.ToLower(strings.TrimSpace(action))
+	if normalized, err := normalizeReviewAction(requestedAction, ""); err == nil {
+		action = normalized
+	} else {
+		action = requestedAction
+	}
+	reviewStatus := reviewStatusForAction(action)
+	idempotencyAction := action
+	if action == reviewActionCommon {
+		// Preserve the v2 digest so replaying an old common Review job after the
+		// migration resolves to its existing ActionPlan instead of creating one.
+		idempotencyAction = "common"
+	}
 	idempotencySeed := strings.Join([]string{
 		job.InstallationID,
 		job.ChatID,
@@ -101,14 +136,18 @@ func NewReviewActionPlan(
 		gitLinkLogin,
 		headSHA,
 		sourceFingerprint,
-		"common",
+		idempotencyAction,
 		content,
 		job.JobID,
 	}, "\x00")
 	digest := sha256.Sum256([]byte(idempotencySeed))
 	key := hex.EncodeToString(digest[:16])
 	requestID := "RW-" + strings.ToUpper(hex.EncodeToString(digest[:3]))
-	content, _ = prshortcut.BuildCommonReviewContent(content, requestID)
+	if reviewStatus != "" {
+		content, _ = prshortcut.BuildCommonReviewContent(content, requestID)
+	} else {
+		content = strings.TrimSpace(content)
+	}
 	return ReviewActionPlan{
 		SchemaVersion:     reviewActionPlanSchema,
 		PlanID:            "review-plan-" + key[:16],
@@ -120,7 +159,8 @@ func NewReviewActionPlan(
 		GitLinkLogin:      gitLinkLogin,
 		ExpectedHeadSHA:   headSHA,
 		SourceFingerprint: sourceFingerprint,
-		ReviewStatus:      "common",
+		Action:            action,
+		ReviewStatus:      reviewStatus,
 		Content:           strings.TrimSpace(content),
 		RequestID:         requestID,
 		Status:            "pending_confirmation",
@@ -139,12 +179,14 @@ func (s *SQLiteReviewGatewayStore) CreateReviewActionPlan(
 	ctx context.Context,
 	plan ReviewActionPlan,
 ) (ReviewActionPlan, error) {
-	if plan.ReviewStatus != "common" {
-		return ReviewActionPlan{}, fmt.Errorf("only common Review action plans are allowed")
+	action, err := normalizeReviewAction(plan.Action, plan.ReviewStatus)
+	if err != nil {
+		return ReviewActionPlan{}, err
 	}
+	plan.Action, plan.ReviewStatus = action, reviewStatusForAction(action)
 	if plan.InstallationID == "" || plan.SourceChatID == "" || plan.Repository == "" ||
 		plan.ExpectedHeadSHA == "" || plan.SourceFingerprint == "" ||
-		plan.Content == "" || plan.ActorID == "" || plan.GitLinkLogin == "" {
+		(plan.Action != reviewActionMerge && plan.Content == "") || plan.ActorID == "" || plan.GitLinkLogin == "" {
 		return ReviewActionPlan{}, fmt.Errorf("review action plan scope, identity, head, fingerprint, and content are required")
 	}
 	if plan.MaxAttempts <= 0 {
@@ -159,12 +201,12 @@ func (s *SQLiteReviewGatewayStore) CreateReviewActionPlan(
 	if err := validateReviewMutationStatus(plan.MutationStatus); err != nil {
 		return ReviewActionPlan{}, err
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO review_action_plans (
+	_, err = s.db.ExecContext(ctx, `INSERT INTO review_action_plans (
 		plan_id, installation_id, source_chat_id, repository, pr_number, actor_id, gitlink_login,
-		expected_head_sha, source_fingerprint, review_status, content, request_id, status,
+		expected_head_sha, source_fingerprint, action, review_status, content, request_id, status,
 		idempotency_key, source_job_id, max_attempts, reconciliation_status, mutation_status,
 		created_at, expires_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(idempotency_key) DO NOTHING`,
 		plan.PlanID,
 		plan.InstallationID,
@@ -175,6 +217,7 @@ func (s *SQLiteReviewGatewayStore) CreateReviewActionPlan(
 		plan.GitLinkLogin,
 		plan.ExpectedHeadSHA,
 		plan.SourceFingerprint,
+		plan.Action,
 		plan.ReviewStatus,
 		plan.Content,
 		plan.RequestID,
@@ -197,7 +240,7 @@ func (s *SQLiteReviewGatewayStore) CreateReviewActionPlan(
 func (s *SQLiteReviewGatewayStore) GetReviewActionPlan(ctx context.Context, planID string) (ReviewActionPlan, error) {
 	return scanReviewActionPlan(s.db.QueryRowContext(ctx, `SELECT
 		plan_id, installation_id, source_chat_id, repository, pr_number, actor_id, gitlink_login,
-		expected_head_sha, source_fingerprint, review_status, content, request_id, status,
+		expected_head_sha, source_fingerprint, action, review_status, content, request_id, status,
 		idempotency_key, source_job_id, review_id, error_summary,
 		lease_owner, lease_expires_at, attempt_count, max_attempts, reconciliation_status, mutation_status,
 		created_at, expires_at, updated_at
@@ -210,7 +253,7 @@ func (s *SQLiteReviewGatewayStore) getReviewActionPlanByIdempotencyKey(
 ) (ReviewActionPlan, error) {
 	return scanReviewActionPlan(s.db.QueryRowContext(ctx, `SELECT
 		plan_id, installation_id, source_chat_id, repository, pr_number, actor_id, gitlink_login,
-		expected_head_sha, source_fingerprint, review_status, content, request_id, status,
+		expected_head_sha, source_fingerprint, action, review_status, content, request_id, status,
 		idempotency_key, source_job_id, review_id, error_summary,
 		lease_owner, lease_expires_at, attempt_count, max_attempts, reconciliation_status, mutation_status,
 		created_at, expires_at, updated_at
@@ -400,6 +443,7 @@ func scanReviewActionPlan(scanner reviewCollaborationScanner) (ReviewActionPlan,
 		&plan.GitLinkLogin,
 		&plan.ExpectedHeadSHA,
 		&plan.SourceFingerprint,
+		&plan.Action,
 		&plan.ReviewStatus,
 		&plan.Content,
 		&plan.RequestID,
@@ -418,7 +462,68 @@ func scanReviewActionPlan(scanner reviewCollaborationScanner) (ReviewActionPlan,
 		&plan.ExpiresAt,
 		&plan.UpdatedAt,
 	)
+	if err == nil {
+		plan.Action, err = normalizeReviewAction(plan.Action, plan.ReviewStatus)
+		plan.ReviewStatus = reviewStatusForAction(plan.Action)
+	}
 	return plan, err
+}
+
+func normalizeReviewAction(action, reviewStatus string) (string, error) {
+	action = strings.ToLower(strings.TrimSpace(action))
+	reviewStatus = strings.ToLower(strings.TrimSpace(reviewStatus))
+	if action == "" {
+		if reviewStatus == "" || reviewStatus == "common" {
+			return reviewActionCommon, nil
+		}
+		switch reviewStatus {
+		case "approved":
+			return reviewActionApprove, nil
+		case "rejected":
+			return reviewActionReject, nil
+		default:
+			return "", fmt.Errorf("unsupported Review action/status %q/%q", action, reviewStatus)
+		}
+	}
+	switch action {
+	case reviewActionCommon, reviewActionApprove, reviewActionReject, reviewActionRejectClose, reviewActionMerge:
+		if expected := reviewStatusForAction(action); reviewStatus != "" && reviewStatus != expected {
+			return "", fmt.Errorf("Review action %q conflicts with status %q", action, reviewStatus)
+		}
+		return action, nil
+	default:
+		return "", fmt.Errorf("unsupported Review action %q", action)
+	}
+}
+
+func reviewStatusForAction(action string) string {
+	switch action {
+	case reviewActionCommon:
+		return "common"
+	case reviewActionApprove:
+		return "approved"
+	case reviewActionReject:
+		return "rejected"
+	default:
+		return ""
+	}
+}
+
+func reviewGatewayPrepareAction(jobAction string) string {
+	switch strings.TrimSpace(jobAction) {
+	case "prepare_common_review":
+		return reviewActionCommon
+	case "prepare_review_approve":
+		return reviewActionApprove
+	case "prepare_review_reject":
+		return reviewActionReject
+	case "prepare_reject_close":
+		return reviewActionRejectClose
+	case "prepare_merge":
+		return reviewActionMerge
+	default:
+		return ""
+	}
 }
 
 func validateReviewMutationStatus(value string) error {

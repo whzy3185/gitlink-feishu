@@ -279,8 +279,8 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		}
 		return result, nil
 
-	case "prepare_common_review":
-		return e.prepareCommonReview(ctx, job, result, now().UTC())
+	case "prepare_common_review", "prepare_review_approve", "prepare_review_reject", "prepare_reject_close", "prepare_merge":
+		return e.prepareControlledReviewAction(ctx, job, result, now().UTC())
 
 	case "confirm_common_review":
 		return e.confirmCommonReview(ctx, job, result, now().UTC())

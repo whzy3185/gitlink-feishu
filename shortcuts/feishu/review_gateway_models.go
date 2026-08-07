@@ -196,6 +196,10 @@ type ReviewGateway struct {
 var (
 	reviewGatewayRepositoryPattern        = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 	reviewGatewayCommonReviewPattern      = regexp.MustCompile(`(?i)^review\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s*(?:PR\s*)?#?(\d+)\s+(.+)$`)
+	reviewGatewayApprovePattern           = regexp.MustCompile(`(?i)^approve\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s*(?:PR\s*)?#?(\d+)\s+(.+)$`)
+	reviewGatewayRejectPattern            = regexp.MustCompile(`(?i)^reject\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s*(?:PR\s*)?#?(\d+)\s+(.+)$`)
+	reviewGatewayRefusePattern            = regexp.MustCompile(`(?i)^refuse\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s*(?:PR\s*)?#?(\d+)\s+(.+)$`)
+	reviewGatewayMergePattern             = regexp.MustCompile(`(?i)^merge\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s*(?:PR\s*)?#?(\d+)$`)
 	reviewGatewaySecretReferencePattern   = regexp.MustCompile(`^env:[A-Za-z_][A-Za-z0-9_]*$`)
 	reviewGatewayPRPattern                = regexp.MustCompile(`(?i)^查看\s*PR\s*#?(\d+)$`)
 	reviewGatewayClaimPattern             = regexp.MustCompile(`(?i)^领取\s*PR\s*#?(\d+)$`)
@@ -466,10 +470,24 @@ func (g *ReviewGateway) isAdmin(binding ReviewChatBinding, userID string) bool {
 
 func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 	content = strings.Join(strings.Fields(strings.TrimSpace(content)), " ")
-	if match := reviewGatewayCommonReviewPattern.FindStringSubmatch(content); len(match) == 4 {
+	for _, command := range []struct {
+		pattern *regexp.Regexp
+		action  string
+	}{
+		{reviewGatewayCommonReviewPattern, "prepare_common_review"},
+		{reviewGatewayApprovePattern, "prepare_review_approve"},
+		{reviewGatewayRejectPattern, "prepare_review_reject"},
+		{reviewGatewayRefusePattern, "prepare_reject_close"},
+	} {
+		if match := command.pattern.FindStringSubmatch(content); len(match) == 4 {
+			number, _ := strconv.Atoi(match[2])
+			body := truncateReviewGatewayText(redactReviewGatewayError(match[3]), 3000)
+			return ReviewGatewayIntent{Name: command.action, Repository: match[1], PRNumber: number, Argument: body}
+		}
+	}
+	if match := reviewGatewayMergePattern.FindStringSubmatch(content); len(match) == 3 {
 		number, _ := strconv.Atoi(match[2])
-		body := truncateReviewGatewayText(redactReviewGatewayError(match[3]), 3000)
-		return ReviewGatewayIntent{Name: "prepare_common_review", Repository: match[1], PRNumber: number, Argument: body}
+		return ReviewGatewayIntent{Name: "prepare_merge", Repository: match[1], PRNumber: number}
 	}
 	if match := regexp.MustCompile(`(?i)^本地执行\s+Review\s+([A-Za-z0-9:_-]+)$`).FindStringSubmatch(content); len(match) == 2 {
 		return ReviewGatewayIntent{Name: "show_local_review_plan", Argument: match[1]}
@@ -548,7 +566,7 @@ func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, d
 		mode = "collaboration"
 	}
 	mutatesGitLink := intent.Name == "confirm_common_review"
-	if intent.Name == "prepare_common_review" {
+	if reviewGatewayPrepareAction(intent.Name) != "" {
 		mode = "action_plan"
 	}
 	if mutatesGitLink {

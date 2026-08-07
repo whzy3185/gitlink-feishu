@@ -661,17 +661,27 @@ func TestPRReviewsList(t *testing.T) {
 
 func TestPRReviewCreate(t *testing.T) {
 	var reviewPayload map[string]interface{}
-	requestCount := 0
+	postCount := 0
+	head := "abc123"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
-		if r.Method == "POST" && r.URL.Path == "/v1/owner/repo/pulls/13/reviews.json" {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/pulls/13.json":
+			common.WriteJSON(t, w, map[string]interface{}{"pull_request": map[string]interface{}{"number": 13, "state": "open", "head_commit_sha": head}})
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/pulls/13/versions.json":
+			common.WriteJSON(t, w, map[string]interface{}{"versions": []map[string]interface{}{{"id": 1, "head_commit_sha": head}}})
+		case r.Method == "GET" && r.URL.Path == "/users/me.json":
+			common.WriteJSON(t, w, map[string]interface{}{"login": "alice"})
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/pulls/13/reviews.json":
+			reviews := []map[string]interface{}{}
+			if postCount > 0 {
+				reviews = append(reviews, map[string]interface{}{"id": 2, "content": reviewPayload["content"], "status": "approved", "commit_id": head, "user": map[string]interface{}{"login": "alice"}})
+			}
+			common.WriteJSON(t, w, map[string]interface{}{"reviews": reviews})
+		case r.Method == "POST" && r.URL.Path == "/v1/owner/repo/pulls/13/reviews.json":
+			postCount++
 			reviewPayload = common.DecodeJSON(t, r)
-			common.WriteJSON(t, w, map[string]interface{}{
-				"id":      float64(2),
-				"content": "Looks good",
-				"status":  "approved",
-			})
-		} else {
+			common.WriteJSON(t, w, map[string]interface{}{"review": map[string]interface{}{"id": 2}})
+		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 	}))
@@ -687,17 +697,26 @@ func TestPRReviewCreate(t *testing.T) {
 		t.Fatalf("review create failed: %v", err)
 	}
 
-	common.AssertEqual(t, requestCount, 1)
+	common.AssertEqual(t, postCount, 1)
 	common.AssertEqual(t, reviewPayload["content"], "Looks good")
 	common.AssertEqual(t, reviewPayload["status"], "approved")
 	common.AssertEqual(t, reviewPayload["commit_id"], "abc123")
 }
 
-func TestPRReviewDryRunDoesNotCallServer(t *testing.T) {
-	requestCount := 0
+func TestPRReviewDryRunDoesNotPOST(t *testing.T) {
+	postCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
-		t.Fatalf("dry-run must not send a request: %s %s", r.Method, r.URL.Path)
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/pulls/13.json":
+			common.WriteJSON(t, w, map[string]interface{}{"pull_request": map[string]interface{}{"number": 13, "state": "open", "head_commit_sha": "abc123"}})
+		case r.Method == "GET" && r.URL.Path == "/v1/owner/repo/pulls/13/versions.json":
+			common.WriteJSON(t, w, map[string]interface{}{"versions": []map[string]interface{}{{"id": 1, "head_commit_sha": "abc123"}}})
+		case r.Method == "POST":
+			postCount++
+			t.Fatalf("dry-run must not POST: %s", r.URL.Path)
+		default:
+			t.Fatalf("unexpected dry-run request: %s %s", r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
@@ -712,7 +731,7 @@ func TestPRReviewDryRunDoesNotCallServer(t *testing.T) {
 		t.Fatalf("review dry-run failed: %v", err)
 	}
 
-	common.AssertEqual(t, requestCount, 0)
+	common.AssertEqual(t, postCount, 0)
 }
 
 // --- Diff tests ---

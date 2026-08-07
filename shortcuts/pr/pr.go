@@ -393,37 +393,13 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				if err := validatePRReviewStatus(status); err != nil {
 					return err
 				}
-				if status == "common" {
-					number, _ := strconv.Atoi(id)
-					result := ExecuteCommonReview(ctx, CommonReviewOptions{
-						Owner: ctx.Owner, Repository: ctx.Repo, PRNumber: number,
-						Content: content, ExpectedHead: ctx.Arg("commit"), RequestID: ctx.Arg("request-id"),
-						DryRun: ctx.Arg("dry-run") == "true",
-					})
-					return ctx.OutputData(result)
-				}
-				payload := map[string]interface{}{
-					"content": content,
-					"status":  status,
-				}
-				if commit := ctx.Arg("commit"); commit != "" {
-					payload["commit_id"] = commit
-				}
-				if ctx.Arg("dry-run") == "true" {
-					return ctx.OutputData(map[string]interface{}{
-						"repository":   fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
-						"pull_request": id,
-						"dry_run":      true,
-						"action":       "create_review",
-						"payload":      payload,
-					})
-				}
-				env, err := ctx.CallAPI("POST", prV1Path(ctx, id)+"/reviews", payload)
-				if err != nil {
-					return err
-				}
-
-				return ctx.Output(env)
+				number, _ := strconv.Atoi(id)
+				result := ExecuteControlledReview(ctx, CommonReviewOptions{
+					Owner: ctx.Owner, Repository: ctx.Repo, PRNumber: number,
+					Content: content, ReviewStatus: status, ExpectedHead: ctx.Arg("commit"), RequestID: ctx.Arg("request-id"),
+					DryRun: ctx.Arg("dry-run") == "true",
+				})
+				return ctx.OutputData(result)
 			},
 		},
 		{

@@ -212,6 +212,7 @@ CREATE TABLE IF NOT EXISTS review_action_plans (
     gitlink_login TEXT NOT NULL,
     expected_head_sha TEXT NOT NULL,
     source_fingerprint TEXT NOT NULL,
+	action TEXT NOT NULL DEFAULT '',
     review_status TEXT NOT NULL,
     content TEXT NOT NULL,
 	request_id TEXT NOT NULL DEFAULT '',
@@ -477,6 +478,7 @@ var reviewGatewayJobMigrations = map[string]string{
 }
 
 var reviewActionPlanMigrations = map[string]string{
+	"action":                "TEXT NOT NULL DEFAULT ''",
 	"installation_id":       "TEXT NOT NULL DEFAULT ''",
 	"source_chat_id":        "TEXT NOT NULL DEFAULT ''",
 	"lease_owner":           "TEXT NOT NULL DEFAULT ''",

@@ -19,13 +19,20 @@ those external validators, so no new real-platform claim is made here.
 - Normal review discovery is GET-only.
 - The Stage Six validator blocks every method except GET and HEAD before the
   network and records exact method counts.
-- A common Review can be prepared in Feishu and confirmed from the local CLI.
+- A common, approved or rejected Review, reject-and-close, or merge action can
+  be prepared in Feishu and confirmed from the same local CLI command.
   The write path is guarded by one ActionPlan, current head, complete source
   fingerprint, bound GitLink login, atomic lease and a persisted write boundary.
-- `pr +review --status common` and Feishu confirmation use the same writer.
+- `pr +review --status common|approved|rejected` and Feishu confirmation use
+  the same controlled Review writer.
   One execution performs at most one POST and then a bounded GET read-back.
-- Automatic approve, reject, merge, close, reviewer mutation, line comments and
-  thread resolution are not promised.
+- Reject Review and reject-and-close are distinct. Reject Review creates only a
+  `rejected` Review. Reject-and-close performs one native `refuse_merge` call
+  and does not create a second Review merely to preserve its reason.
+- Controlled merge performs one native `pr_merge` call with the existing
+  default `merge` method. It does not add a strategy selector.
+- Neutral close, reviewer mutation, line comments and thread resolution are
+  not supported.
 
 ## Common Review contract
 
@@ -81,6 +88,36 @@ production boundary remains Feishu preparation followed by local credential
 confirmation. Source-fingerprint-only staleness remains offline-verified, and
 Unknown fault injection was not reproduced by damaging a real network.
 
+## Controlled decision and lifecycle actions (offline code contract)
+
+The additional formal Feishu inputs are:
+
+```text
+approve owner/repository#123 approval evidence
+reject owner/repository#123 rejection reason
+refuse owner/repository#123 reject-and-close reason
+merge owner/repository#123
+```
+
+All five actions use `review_action_plans`, the same identity binding, local
+credential, `/users/me`, head and source-fingerprint gates, lease, attempt,
+mutation status and reconciliation state. Existing plans with an empty action
+and `review_status=common` remain compatible as `review_common`.
+
+Approve and Reject require a body and preserve the trusted `RW-XXXXXX` footer.
+Refuse requires an audit reason, but GitLink's native `refuse_merge` endpoint
+does not accept a reason; the reason stays in the ActionPlan, card and local
+audit result rather than causing a second mutation. Merge and Refuse show an
+explicit high-risk warning. Merge refuses an explicitly failed CI state; the
+current context reports unavailable CI as `unknown`, which is shown as a
+warning and is never represented as a passing check.
+
+These actions are covered by unit tests, fake-server tests and local SQLite
+integration only. Approve, Reject, Reject & Close and Merge have not yet been
+executed against real GitLink or real Feishu. Real acceptance must use only
+disposable PRs in `muel/gitlink-feishu_agent`; merge must target a disposable
+base branch and must not modify the default branch.
+
 ## Feishu boundary
 
 - Remote test writes require both `FEISHU_REVIEW_REAL_VALIDATION=1` and
@@ -105,6 +142,7 @@ Unknown fault injection was not reproduced by damaging a real network.
 
 Multi-instance high availability, distributed databases, Redis, Kafka,
 zero-downtime schema migration, cross-region disaster recovery, complete user
-OAuth, full Git mirroring, code search, automatic code modification, multi-Agent
+OAuth, neutral close, reviewer changes, line or thread mutations, automatic
+code modification, automatic push, full Git mirroring, code search, multi-Agent
 execution and a production-validated Enterprise WeChat chain are not included.
 Not every Unknown can be recovered automatically.

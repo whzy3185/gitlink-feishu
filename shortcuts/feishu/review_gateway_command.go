@@ -78,8 +78,8 @@ func newReviewGatewayShortcut() *common.Shortcut {
 		Description: "Run the durable Feishu-to-GitLink Review collaboration gateway",
 		Long: "P2-P3 Review collaboration gateway. Offline mode reads one normalized Feishu event from JSON. " +
 			"Listen mode uses the official Feishu Channel SDK and persistent connection. " +
-			"GitLink is GET-only by default; only an identity-bound, current-head, explicitly confirmed common Review " +
-			"can write when --enable-gitlink-review-write is set. Approval, rejection, comments, reviewer changes, and merge remain disabled.",
+			"GitLink is GET-only by default; identity-bound, current-head, explicitly confirmed Review decisions, reject-and-close, " +
+			"and merge can write when --enable-gitlink-review-write is set. Comments and reviewer changes remain disabled.",
 		Flags: []common.Flag{
 			{Name: "from-event", Usage: "Read one normalized Feishu event from a local JSON file"},
 			{Name: "bindings", Usage: "Read controlled chat-to-repository bindings from JSON"},
@@ -108,7 +108,7 @@ func newReviewGatewayShortcut() *common.Shortcut {
 			{Name: "job-timeout-seconds", Usage: "Timeout for each GitLink GET-only job", Default: "60"},
 			{Name: "handler-timeout-ms", Usage: "Total Feishu callback persistence budget", Default: "2000"},
 			{Name: "sqlite-timeout-ms", Usage: "SQLite budget inside each Feishu callback", Default: "500"},
-			{Name: "enable-gitlink-review-write", Usage: "Explicitly enable confirmed common Review writes; approved/rejected/comment/merge remain disabled", Bool: true, Default: "false"},
+			{Name: "enable-gitlink-review-write", Usage: "Explicitly enable confirmed common/approved/rejected Review, reject-and-close, and merge writes", Bool: true, Default: "false"},
 			{Name: "sync-feishu-resources", Usage: "Explicitly sync configured Base/Doc/Task resources from the canonical WorkItem", Bool: true, Default: "false"},
 			{Name: "base-app-token", Usage: "Review Base app token. Defaults to FEISHU_REVIEW_BASE_APP_TOKEN, then FEISHU_BASE_APP_TOKEN"},
 			{Name: "review-table-id", Usage: "Feishu Base table for Review WorkItems. Defaults to FEISHU_REVIEW_TABLE_ID"},
@@ -537,7 +537,7 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 	channel.OnReady(func() {
 		boundary := "GitLink execution is GET-only by default."
 		if executor.EnableGitLinkWrite {
-			boundary = "Confirmed common Review write is enabled; every other GitLink mutation remains disabled."
+			boundary = "Confirmed Review decisions, reject-and-close, and merge writes are enabled; comments and reviewer changes remain disabled."
 		}
 		output.TryEmit(reviewGatewayLifecycleEvent{
 			SchemaVersion: reviewGatewaySchemaVersion,

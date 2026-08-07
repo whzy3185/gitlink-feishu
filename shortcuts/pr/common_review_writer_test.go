@@ -46,7 +46,7 @@ func (f *commonWriterFixture) server(t *testing.T) *httptest.Server {
 					commit = nil
 				}
 				reviews = append(reviews, map[string]interface{}{
-					"id": 91, "status": "common", "content": f.posted["content"], "commit_id": commit,
+					"id": 91, "status": f.posted["status"], "content": f.posted["content"], "commit_id": commit,
 					"user": map[string]interface{}{"login": "alice"},
 				})
 			}
@@ -175,6 +175,33 @@ func TestExecuteCommonReviewPreservesNullCommit(t *testing.T) {
 func TestBuildCommonReviewContentRejectsInvalidRequestID(t *testing.T) {
 	if _, err := BuildCommonReviewContent("Evidence", "user supplied"); err == nil {
 		t.Fatal("invalid request ID accepted")
+	}
+}
+
+func TestExecuteControlledReviewUsesOneGuardedPOSTForApproveAndReject(t *testing.T) {
+	for _, status := range []string{"approved", "rejected"} {
+		t.Run(status, func(t *testing.T) {
+			fixture := &commonWriterFixture{head: strings.Repeat("a", 40), state: "open"}
+			server := fixture.server(t)
+			defer server.Close()
+			result := ExecuteControlledReview(fixture.runtime(server), CommonReviewOptions{
+				Owner: "owner", Repository: "repo", PRNumber: 123, Content: "Decision evidence",
+				ReviewStatus: status, ExpectedHead: fixture.head, ExpectedActor: "alice", RequestID: "RW-123ABC",
+			})
+			if result.Status != "verified" || result.ReviewStatus != status || result.POSTCount != 1 || fixture.postCount() != 1 {
+				t.Fatalf("result=%#v posts=%d", result, fixture.postCount())
+			}
+			if got := fixture.posted["status"]; got != status {
+				t.Fatalf("posted status=%v want=%s", got, status)
+			}
+			duplicate := ExecuteControlledReview(fixture.runtime(server), CommonReviewOptions{
+				Owner: "owner", Repository: "repo", PRNumber: 123, Content: "Decision evidence",
+				ReviewStatus: status, ExpectedHead: fixture.head, ExpectedActor: "alice", RequestID: "RW-123ABC",
+			})
+			if duplicate.Status != "duplicate" || fixture.postCount() != 1 {
+				t.Fatalf("duplicate=%#v posts=%d", duplicate, fixture.postCount())
+			}
+		})
 	}
 }
 

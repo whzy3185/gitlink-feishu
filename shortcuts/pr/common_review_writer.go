@@ -18,6 +18,7 @@ type CommonReviewOptions struct {
 	Owner, Repository string
 	PRNumber          int
 	Content           string
+	ReviewStatus      string
 	ExpectedHead      string
 	RequestID         string
 	ExpectedActor     string
@@ -33,6 +34,7 @@ type CommonReviewResult struct {
 	ExpectedHead   string   `json:"expected_head"`
 	RequestID      string   `json:"request_id,omitempty"`
 	Content        string   `json:"content"`
+	ReviewStatus   string   `json:"review_status"`
 	ReviewID       string   `json:"review_id,omitempty"`
 	Actor          string   `json:"actor,omitempty"`
 	Error          string   `json:"error,omitempty"`
@@ -60,11 +62,25 @@ func BuildCommonReviewContent(content, requestID string) (string, error) {
 }
 
 func ExecuteCommonReview(runtime *common.RuntimeContext, opts CommonReviewOptions) CommonReviewResult {
+	opts.ReviewStatus = "common"
+	return ExecuteControlledReview(runtime, opts)
+}
+
+// ExecuteControlledReview applies the same guarded, single-POST contract to
+// GitLink common, approved, and rejected Review decisions.
+func ExecuteControlledReview(runtime *common.RuntimeContext, opts CommonReviewOptions) CommonReviewResult {
+	status := strings.ToLower(strings.TrimSpace(opts.ReviewStatus))
+	if status == "" {
+		status = "common"
+	}
 	result := CommonReviewResult{Repository: opts.Owner + "/" + opts.Repository, PRNumber: opts.PRNumber,
 		ExpectedHead: strings.TrimSpace(opts.ExpectedHead), RequestID: strings.ToUpper(strings.TrimSpace(opts.RequestID)),
-		MutationStatus: "none"}
+		MutationStatus: "none", ReviewStatus: status}
 	if runtime == nil || runtime.Client == nil || opts.Owner == "" || opts.Repository == "" || opts.PRNumber <= 0 {
-		return commonReviewFailure(result, "common Review runtime and target are required")
+		return commonReviewFailure(result, "controlled Review runtime and target are required")
+	}
+	if status != "common" && status != "approved" && status != "rejected" {
+		return commonReviewFailure(result, "controlled Review status must be common, approved, or rejected")
 	}
 	content, err := BuildCommonReviewContent(opts.Content, result.RequestID)
 	if err != nil {
@@ -115,7 +131,7 @@ func ExecuteCommonReview(runtime *common.RuntimeContext, opts CommonReviewOption
 		return commonReviewFailure(result, "active GitLink identity does not match the expected actor")
 	}
 	if result.RequestID != "" {
-		if record := findCommonReview(&runtimeCopy, opts.PRNumber, "", content, result.Actor, result.ExpectedHead); record != nil {
+		if record := findCommonReview(&runtimeCopy, opts.PRNumber, "", status, content, result.Actor, result.ExpectedHead); record != nil {
 			result.Status, result.ReviewID = "duplicate", commonReviewString(record, "id", "review_id")
 			result.RemoteCommitID, _ = commonReviewCommit(record)
 			return result
@@ -128,7 +144,7 @@ func ExecuteCommonReview(runtime *common.RuntimeContext, opts CommonReviewOption
 	}
 	result.MutationStatus = "possible"
 	envelope, err := runtimeCopy.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/pulls/%d/reviews", opts.Owner, opts.Repository, opts.PRNumber), map[string]interface{}{
-		"content": content, "status": "common", "commit_id": result.ExpectedHead,
+		"content": content, "status": status, "commit_id": result.ExpectedHead,
 	})
 	result.POSTCount = 1
 	if err != nil {
@@ -142,8 +158,8 @@ func ExecuteCommonReview(runtime *common.RuntimeContext, opts CommonReviewOption
 		return result
 	}
 	for attempt := 0; attempt < 3; attempt++ {
-		record := findCommonReview(&runtimeCopy, opts.PRNumber, result.ReviewID, "", "", "")
-		if record != nil && strings.EqualFold(commonReviewString(record, "status", "state", "review_status"), "common") &&
+		record := findCommonReview(&runtimeCopy, opts.PRNumber, result.ReviewID, status, "", "", "")
+		if record != nil && strings.EqualFold(commonReviewString(record, "status", "state", "review_status"), status) &&
 			strings.TrimSpace(commonReviewString(record, "content", "body", "note", "notes")) == content &&
 			(commonReviewActor(record) == "" || commonReviewActor(record) == result.Actor) {
 			commit, observed := commonReviewCommit(record)
@@ -171,13 +187,13 @@ func commonReviewFailure(result CommonReviewResult, message string) CommonReview
 	return result
 }
 
-func findCommonReview(runtime *common.RuntimeContext, number int, id, content, actor, head string) map[string]interface{} {
+func findCommonReview(runtime *common.RuntimeContext, number int, id, status, content, actor, head string) map[string]interface{} {
 	for _, record := range commonReviewRecords(runtime, number) {
 		if id != "" && commonReviewString(record, "id", "review_id") == id {
 			return record
 		}
 		commit, observed := commonReviewCommit(record)
-		if id == "" && strings.EqualFold(commonReviewString(record, "status", "state", "review_status"), "common") &&
+		if id == "" && strings.EqualFold(commonReviewString(record, "status", "state", "review_status"), status) &&
 			strings.TrimSpace(commonReviewString(record, "content", "body", "note", "notes")) == content &&
 			(commonReviewActor(record) == "" || commonReviewActor(record) == actor) && observed &&
 			(commit == nil || *commit == head) {

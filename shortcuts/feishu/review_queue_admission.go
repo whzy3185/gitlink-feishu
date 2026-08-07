@@ -100,7 +100,7 @@ func reviewGatewayQueueClassForAction(action string) (string, error) {
 	switch strings.TrimSpace(action) {
 	case "read_review_context", "refresh_review_context", "read_review_queue", "generate_review_draft", "show_review_subscriptions":
 		return ReviewQueueGitLinkRead, nil
-	case "claim_review", "release_review", "set_review_deadline", "prepare_common_review", "show_local_review_plan", "cancel_common_review", "subscribe_review_events", "unsubscribe_review_events", "set_review_notification_mode", "set_default_review_repository", "help", "show_binding", "list_repositories", "read_my_review_tasks", "plan_bind_repository":
+	case "claim_review", "release_review", "set_review_deadline", "prepare_common_review", "prepare_review_approve", "prepare_review_reject", "prepare_reject_close", "prepare_merge", "show_local_review_plan", "cancel_common_review", "subscribe_review_events", "unsubscribe_review_events", "set_review_notification_mode", "set_default_review_repository", "help", "show_binding", "list_repositories", "read_my_review_tasks", "plan_bind_repository":
 		return ReviewQueueCollaboration, nil
 	case "confirm_common_review":
 		return ReviewQueueControlledWrite, nil

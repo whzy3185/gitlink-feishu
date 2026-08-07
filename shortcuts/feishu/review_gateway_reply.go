@@ -553,9 +553,10 @@ func formatReviewGatewayAcknowledgement(job ReviewGatewayJob) string {
 	if job.PRNumber > 0 {
 		target = fmt.Sprintf("%s PR #%d", job.Repository, job.PRNumber)
 	}
-	if job.Action == "prepare_common_review" {
+	if reviewGatewayPrepareAction(job.Action) != "" {
 		return fmt.Sprintf(
-			"已接收 common Review 计划请求：%s\n任务：%s\n本阶段只生成 ActionPlan；GitLink 写入：0\n完成后会回复确认卡片。",
+			"已接收 %s 计划请求：%s\n任务：%s\n本阶段只生成 ActionPlan；GitLink 写入：0\n完成后会回复确认卡片。",
+			reviewActionLabel(reviewGatewayPrepareAction(job.Action)),
 			target,
 			job.JobID,
 		)
@@ -596,8 +597,12 @@ func formatReviewGatewayResultReply(job ReviewGatewayJob, result ReviewGatewayEx
 	}
 	if result.WriteResult != nil {
 		write := result.WriteResult
+		action := write.Action
+		if action == "" {
+			action, _ = normalizeReviewAction("", write.ReviewStatus)
+		}
 		lines := []string{
-			fmt.Sprintf("%s PR #%d common Review", write.Repository, write.PRNumber),
+			fmt.Sprintf("%s PR #%d %s", write.Repository, write.PRNumber, reviewActionLabel(action)),
 			"状态：" + write.Status,
 		}
 		switch write.MutationStatus {
@@ -647,7 +652,7 @@ func formatReviewGatewayResultReply(job ReviewGatewayJob, result ReviewGatewayEx
 	}
 	if plan := result.ActionPlan; plan != nil {
 		return truncateReviewGatewayText(strings.Join([]string{
-			fmt.Sprintf("%s PR #%d common Review ActionPlan 已生成", plan.Repository, plan.PRNumber),
+			fmt.Sprintf("%s PR #%d %s ActionPlan 已生成", plan.Repository, plan.PRNumber, reviewActionLabel(plan.Action)),
 			"ActionPlan：" + plan.PlanID,
 			"Request ID：" + plan.RequestID,
 			"GitLink 用户：" + plan.GitLinkLogin,

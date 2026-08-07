@@ -116,11 +116,17 @@ func buildReviewGatewayResultCard(
 	}
 	if plan := result.ActionPlan; plan != nil {
 		localCommand := fmt.Sprintf("gitlink-cli feishu +review-confirm-local --plan-id %s --state-db .local/review-gateway.db", plan.PlanID)
+		actionLabel := reviewActionLabel(plan.Action)
+		if plan.Action == reviewActionMerge {
+			elements = append(elements, div("**HIGH RISK: this action will merge the PR and change its target branch.**"))
+		} else if plan.Action == reviewActionRejectClose {
+			elements = append(elements, div("**HIGH RISK: this action will reject and close the PR.**"))
+		}
 		elements = append(elements,
-			fields([]fieldValue{{Label: "ActionPlan", Value: plan.PlanID}, {Label: "Request ID", Value: plan.RequestID},
+			fields([]fieldValue{{Label: "Action", Value: actionLabel}, {Label: "ActionPlan", Value: plan.PlanID}, {Label: "Request ID", Value: plan.RequestID},
 				{Label: "Feishu actor", Value: reviewGatewayHashIdentifier(plan.ActorID)}, {Label: "GitLink login", Value: plan.GitLinkLogin},
 				{Label: "Expected head", Value: shortReviewGatewaySHA(plan.ExpectedHeadSHA)}, {Label: "Expires", Value: plan.ExpiresAt}}),
-			div("**Review body**\n"+escapeMD(truncateReviewGatewayText(plan.Content, 1200))),
+			div("**Content / Reason**\n"+escapeMD(truncateReviewGatewayText(firstNonEmpty(plan.Content, "No remote body for this lifecycle action"), 1200))),
 			note("Local command: "+localCommand),
 			reviewCommandActions([][2]string{{"本地执行计划", "本地执行 Review " + plan.PlanID}, {"取消", "取消 Review " + plan.PlanID},
 				{"刷新 Context", fmt.Sprintf("刷新 %s PR #%d", plan.Repository, plan.PRNumber)}}),
@@ -142,6 +148,9 @@ func buildReviewGatewayResultCard(
 	}
 	if result.Partial || result.CollectionStatus == "partial" {
 		template = "yellow"
+	}
+	if result.ActionPlan != nil && (result.ActionPlan.Action == reviewActionMerge || result.ActionPlan.Action == reviewActionRejectClose) {
+		template = "red"
 	}
 	switch strings.ToLower(strings.TrimSpace(result.GitLinkState)) {
 	case "merged":

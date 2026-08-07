@@ -41,7 +41,7 @@ func TestCommonReviewInputBuildsBoundedActionPlanCard(t *testing.T) {
 		t.Fatalf("ActionPlan reply was downgraded to a PR summary: %s", reply)
 	}
 	ack := formatReviewGatewayAcknowledgement(ReviewGatewayJob{Action: "prepare_common_review", Repository: job.Repository, PRNumber: job.PRNumber, JobID: job.JobID})
-	if !strings.Contains(ack, "Review 计划请求") || strings.Contains(ack, "只读 Review 请求") {
+	if !strings.Contains(ack, "COMMON REVIEW") || !strings.Contains(ack, "ActionPlan") || strings.Contains(ack, "只读 Review 请求") {
 		t.Fatalf("ActionPlan acknowledgement = %q", ack)
 	}
 	planner := &ReviewOperationPlanner{}
@@ -60,9 +60,19 @@ func TestCommonReviewInputBuildsBoundedActionPlanCard(t *testing.T) {
 	if !cardPlanned {
 		t.Fatalf("ActionPlan confirmation card operation was not planned: %#v", operations)
 	}
-	for _, unsafe := range []string{"approve owner/repo#42", "reject owner/repo#42", "merge owner/repo#42"} {
-		if got := parseReviewGatewayIntent(unsafe); got.Name != "unknown" {
-			t.Fatalf("unsafe command %q mapped to %#v", unsafe, got)
+	for input, want := range map[string]string{
+		"approve owner/repo#42 evidence": "prepare_review_approve",
+		"reject owner/repo#42 reason":    "prepare_review_reject",
+		"refuse owner/repo#42 reason":    "prepare_reject_close",
+		"merge owner/repo#42":            "prepare_merge",
+	} {
+		if got := parseReviewGatewayIntent(input); got.Name != want {
+			t.Fatalf("controlled command %q mapped to %#v, want %s", input, got, want)
+		}
+	}
+	for _, incomplete := range []string{"approve owner/repo#42", "reject owner/repo#42", "refuse owner/repo#42"} {
+		if got := parseReviewGatewayIntent(incomplete); got.Name != "unknown" {
+			t.Fatalf("missing required reason %q mapped to %#v", incomplete, got)
 		}
 	}
 }
