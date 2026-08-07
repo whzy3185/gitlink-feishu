@@ -61,6 +61,26 @@ and disables automatic retry. These are offline code-contract claims only;
 real GitLink write acceptance still requires explicit user authorization and
 separately preserved before/after evidence.
 
+## Bounded real-platform acceptance (2026-08-07)
+
+The explicitly authorized test target `muel/gitlink-feishu_agent#1` passed one
+real common Review write. GitLink returned Review ID `130`, author `muel`,
+status `common`, the expected head SHA and the trusted `Ref: RW-2DEAFE` footer.
+The Review count changed from zero to one and the write result was verified by
+GET read-back. Reusing the completed ActionPlan produced zero additional POSTs.
+
+A second ActionPlan was created at the original head, after which the test
+branch advanced. Local confirmation persisted the plan as `stale`; the Review
+count remained one and no POST occurred. Feishu canonical-card and reply
+operations for both the verified and stale outcomes completed without a dead
+letter or reconciliation task. No approve, reject, merge, close, reviewer or
+line-comment mutation was executed.
+
+This acceptance does not enable one-message writes from Feishu. The tested
+production boundary remains Feishu preparation followed by local credential
+confirmation. Source-fingerprint-only staleness remains offline-verified, and
+Unknown fault injection was not reproduced by damaging a real network.
+
 ## Feishu boundary
 
 - Remote test writes require both `FEISHU_REVIEW_REAL_VALIDATION=1` and

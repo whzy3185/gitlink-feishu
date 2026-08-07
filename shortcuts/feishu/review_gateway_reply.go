@@ -553,6 +553,13 @@ func formatReviewGatewayAcknowledgement(job ReviewGatewayJob) string {
 	if job.PRNumber > 0 {
 		target = fmt.Sprintf("%s PR #%d", job.Repository, job.PRNumber)
 	}
+	if job.Action == "prepare_common_review" {
+		return fmt.Sprintf(
+			"已接收 common Review 计划请求：%s\n任务：%s\n本阶段只生成 ActionPlan；GitLink 写入：0\n完成后会回复确认卡片。",
+			target,
+			job.JobID,
+		)
+	}
 	return fmt.Sprintf(
 		"已接收只读 Review 请求：%s\n任务：%s\nGitLink 写入：0\n完成后会回复本消息。",
 		target,
@@ -637,6 +644,18 @@ func formatReviewGatewayResultReply(job ReviewGatewayJob, result ReviewGatewayEx
 		}
 		lines = append(lines, "GitLink 写入：0")
 		return truncateReviewGatewayText(strings.Join(lines, "\n"), 3000)
+	}
+	if plan := result.ActionPlan; plan != nil {
+		return truncateReviewGatewayText(strings.Join([]string{
+			fmt.Sprintf("%s PR #%d common Review ActionPlan 已生成", plan.Repository, plan.PRNumber),
+			"ActionPlan：" + plan.PlanID,
+			"Request ID：" + plan.RequestID,
+			"GitLink 用户：" + plan.GitLinkLogin,
+			"Expected Head：" + shortReviewGatewaySHA(plan.ExpectedHeadSHA),
+			"状态：" + plan.Status,
+			"GitLink 写入：0",
+			"请使用确认卡片或本地凭据命令继续。",
+		}, "\n"), 3000)
 	}
 	if result.PullRequest != nil {
 		view := result.PullRequest

@@ -27,12 +27,38 @@ func TestCommonReviewInputBuildsBoundedActionPlanCard(t *testing.T) {
 	if !strings.HasPrefix(plan.RequestID, "RW-") || strings.Count(plan.Content, "Ref:") != 1 || strings.Contains(plan.Content, "RW-AAAAAA") {
 		t.Fatalf("plan request identity/content = %#v", plan)
 	}
-	result := ReviewGatewayExecutionResult{Repository: plan.Repository, PRNumber: plan.PRNumber, ActionPlan: &plan}
+	result := ReviewGatewayExecutionResult{Status: "completed", Repository: plan.Repository, PRNumber: plan.PRNumber, ActionPlan: &plan}
 	cardJSON, ok := safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, result, nil))
 	for _, expected := range []string{plan.RequestID, plan.GitLinkLogin, "review-confirm-local", "本地执行 Review", "取消 Review", "刷新 owner/repo PR #42"} {
 		if !ok || !strings.Contains(cardJSON, expected) {
 			t.Fatalf("ActionPlan card missing %q: %s", expected, cardJSON)
 		}
+	}
+	result.PullRequest = &ReviewGatewayPullRequestView{RecommendedNextStep: "assign_human_reviewer"}
+	result.ResultCard = buildReviewGatewayResultCard(job, result, nil)
+	reply := formatReviewGatewayResultReply(job, result)
+	if !strings.Contains(reply, plan.PlanID) || !strings.Contains(reply, plan.RequestID) || strings.Contains(reply, "assign_human_reviewer") {
+		t.Fatalf("ActionPlan reply was downgraded to a PR summary: %s", reply)
+	}
+	ack := formatReviewGatewayAcknowledgement(ReviewGatewayJob{Action: "prepare_common_review", Repository: job.Repository, PRNumber: job.PRNumber, JobID: job.JobID})
+	if !strings.Contains(ack, "Review 计划请求") || strings.Contains(ack, "只读 Review 请求") {
+		t.Fatalf("ActionPlan acknowledgement = %q", ack)
+	}
+	planner := &ReviewOperationPlanner{}
+	operations, err := planner.BuildWithConsumers(job, result, []ReviewJobConsumer{{
+		ConsumerID: "consumer", JobID: job.JobID, SourceType: "user_command", ChatID: job.ChatID, SourceMessageID: job.SourceMessageID,
+	}}, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cardPlanned bool
+	for _, operation := range operations {
+		if operation.OperationKind == ReviewOperationCanonicalCardUpsert && strings.Contains(operation.DesiredJSON, plan.PlanID) && strings.Contains(operation.DesiredJSON, plan.RequestID) {
+			cardPlanned = true
+		}
+	}
+	if !cardPlanned {
+		t.Fatalf("ActionPlan confirmation card operation was not planned: %#v", operations)
 	}
 	for _, unsafe := range []string{"approve owner/repo#42", "reject owner/repo#42", "merge owner/repo#42"} {
 		if got := parseReviewGatewayIntent(unsafe); got.Name != "unknown" {
@@ -69,10 +95,21 @@ func TestLocalReviewConfirmationDryRunStaleAndConcurrentSingleWrite(t *testing.T
 	if result, err := executeLocalReviewConfirmation(context.Background(), runtime, store, plan, true, false, now.Add(time.Second)); err != nil || result.WriteResult.Status != "dry_run" || state.writes() != 0 {
 		t.Fatalf("dry run result=%#v err=%v writes=%d", result, err, state.writes())
 	}
-	stale := plan
-	stale.SourceFingerprint = "changed"
-	if _, err := executeLocalReviewConfirmation(context.Background(), runtime, store, stale, false, true, now.Add(time.Second)); err == nil || state.writes() != 0 {
-		t.Fatalf("stale err=%v writes=%d", err, state.writes())
+	staleJob := testReviewGatewayJob(now, "local-confirm-stale")
+	if err := store.SaveJob(context.Background(), staleJob); err != nil {
+		t.Fatal(err)
+	}
+	stalePlan, err := store.CreateReviewActionPlan(context.Background(), NewReviewActionPlan(staleJob, "gitlink-reviewer", current.CurrentHeadSHA, "changed", "Evidence", now))
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleResult, err := executeLocalReviewConfirmation(context.Background(), runtime, store, stalePlan, false, true, now.Add(time.Second))
+	if err != nil || staleResult.WriteResult == nil || staleResult.WriteResult.Status != "stale" || state.writes() != 0 {
+		t.Fatalf("stale result=%#v err=%v writes=%d", staleResult, err, state.writes())
+	}
+	storedStale, _ := store.GetReviewActionPlan(context.Background(), stalePlan.PlanID)
+	if storedStale.Status != "stale" || storedStale.MutationStatus != reviewMutationNone {
+		t.Fatalf("stored stale plan = %#v", storedStale)
 	}
 	var wg sync.WaitGroup
 	results := make(chan ReviewGatewayExecutionResult, 2)

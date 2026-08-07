@@ -52,10 +52,32 @@ func executeLocalReviewConfirmation(ctx context.Context, runtime *common.Runtime
 		return reviewGatewayExecutionFailure(result, err)
 	}
 	current, err := workflow.FetchReviewContext(runtime, workflow.ReviewContextOptions{Owner: owner, Repo: repo, Number: plan.PRNumber, VersionLimit: 100, ThreadLimit: 100, IncludePR: true, IncludeFiles: true, IncludeVersions: true, IncludeReviews: true, IncludeThreads: true})
-	if err != nil || current.Partial || current.CollectionStatus != "complete" || current.CurrentHeadSHA != plan.ExpectedHeadSHA || current.WorkItem.SourceFingerprint != plan.SourceFingerprint {
-		return reviewGatewayExecutionFailure(result, fmt.Errorf("ActionPlan is stale or the current Review context is incomplete"))
+	if err != nil {
+		return reviewGatewayExecutionFailure(result, err)
 	}
 	populateReviewGatewayContextResult(&result, current)
+	if current.Partial || current.CollectionStatus != "complete" {
+		return reviewGatewayExecutionFailure(result, fmt.Errorf("ActionPlan is stale or the current Review context is incomplete"))
+	}
+	if current.CurrentHeadSHA != plan.ExpectedHeadSHA || current.WorkItem.SourceFingerprint != plan.SourceFingerprint {
+		staleLeaseOwner := "local-review-stale:" + plan.RequestID
+		plan, err = store.ClaimReviewActionPlan(ctx, ReviewActionPlanClaimOptions{PlanID: plan.PlanID, ActorID: plan.ActorID, LeaseOwner: staleLeaseOwner, Now: now, LeaseDuration: 2 * time.Minute})
+		if err != nil {
+			return reviewGatewayExecutionFailure(result, err)
+		}
+		if err := store.FinishReviewActionPlan(ctx, plan.PlanID, "stale", "", "PR context changed", reviewMutationNone, now); err != nil {
+			return reviewGatewayExecutionFailure(result, err)
+		}
+		if latest, err := store.GetReviewActionPlan(ctx, plan.PlanID); err == nil {
+			plan = latest
+		} else {
+			plan.Status = "stale"
+		}
+		result.ActionPlan = &plan
+		result.WriteResult = &ReviewWriteResult{PlanID: plan.PlanID, Status: "stale", Outcome: "stale", Repository: plan.Repository, PRNumber: plan.PRNumber, HeadSHA: current.CurrentHeadSHA, ReviewStatus: "common", MutationStatus: reviewMutationNone, RequestID: plan.RequestID}
+		result.Message = "PR context changed; ActionPlan is stale and GitLink writes remain zero"
+		return planLocalReviewResultOperations(ctx, store, plan, result, now), nil
+	}
 	if dryRun || !approved {
 		result.WriteResult = &ReviewWriteResult{PlanID: plan.PlanID, Status: map[bool]string{true: "dry_run", false: "cancelled"}[dryRun], Outcome: "not_started", Repository: plan.Repository, PRNumber: plan.PRNumber, HeadSHA: plan.ExpectedHeadSHA, ReviewStatus: "common", MutationStatus: reviewMutationNone, RequestID: plan.RequestID}
 		return result, nil
@@ -67,6 +89,10 @@ func executeLocalReviewConfirmation(ctx context.Context, runtime *common.Runtime
 	}
 	write := prshortcut.ExecuteCommonReview(runtime, prshortcut.CommonReviewOptions{Owner: owner, Repository: repo, PRNumber: plan.PRNumber, Content: plan.Content, ExpectedHead: plan.ExpectedHeadSHA, ExpectedActor: plan.GitLinkLogin, RequestID: plan.RequestID, BeforePOST: func() error { return store.MarkReviewActionPlanWriteStarted(ctx, plan.PlanID, leaseOwner, now) }})
 	result, _ = (&ReviewGatewayExecutor{ActionPlans: store}).finishCommonReviewWrite(ctx, result, plan, write, now)
+	return planLocalReviewResultOperations(ctx, store, plan, result, now), nil
+}
+
+func planLocalReviewResultOperations(ctx context.Context, store *SQLiteReviewGatewayStore, plan ReviewActionPlan, result ReviewGatewayExecutionResult, now time.Time) ReviewGatewayExecutionResult {
 	result.ResultCard = buildReviewGatewayResultCard(ReviewGatewayJob{Repository: plan.Repository, PRNumber: plan.PRNumber}, result, nil)
 	var source ReviewGatewayJob
 	var payload string
@@ -74,5 +100,5 @@ func executeLocalReviewConfirmation(ctx context.Context, runtime *common.Runtime
 		planner := &ReviewOperationPlanner{Store: store, Now: func() time.Time { return now }}
 		_, _ = planner.Plan(ctx, source, result)
 	}
-	return result, nil
+	return result
 }

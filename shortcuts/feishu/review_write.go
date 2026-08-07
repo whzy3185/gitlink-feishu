@@ -53,6 +53,7 @@ func (e *ReviewGatewayExecutor) prepareCommonReview(ctx context.Context, job Rev
 		return reviewGatewayExecutionFailure(result, err)
 	}
 	result.ActionPlan, result.Draft = &plan, &draft
+	result.ResultCard = buildReviewGatewayResultCard(job, result, nil)
 	result.ReadOnlyGitLink, result.MutatesGitLink = true, false
 	result.Message = fmt.Sprintf("common Review ActionPlan %s is ready for local confirmation; Ref: %s", plan.PlanID, plan.RequestID)
 	return result, nil
