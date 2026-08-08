@@ -162,7 +162,7 @@ func TestReviewGatewayPlanLifecyclePresentationIsMutuallyExclusive(t *testing.T)
 }
 
 func TestReviewGatewayAcknowledgementsAreActionSpecific(t *testing.T) {
-	for _, action := range []string{"read_review_context", "claim_review", "release_review", "set_review_deadline", "clear_review_deadline"} {
+	for _, action := range []string{"help", "read_review_context", "claim_review", "release_review", "set_review_deadline", "clear_review_deadline"} {
 		if ack := formatReviewGatewayAcknowledgement(ReviewGatewayJob{Action: action, Repository: "owner/repo", PRNumber: 1}); ack != "" {
 			t.Fatalf("ordinary action %s sent ACK %q", action, ack)
 		}

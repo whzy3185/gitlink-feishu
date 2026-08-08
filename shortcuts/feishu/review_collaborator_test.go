@@ -112,3 +112,21 @@ func TestGatewayAdminCannotBypassRepositoryCollaboratorMembership(t *testing.T) 
 		t.Fatalf("admin bypassed collaborator membership: result=%#v err=%v", result, err)
 	}
 }
+
+func TestReviewerDisplayNameUsesBoundFeishuIdentity(t *testing.T) {
+	view := &ReviewGatewayPullRequestView{Reviewers: []ReviewGatewayReviewerView{
+		{Reviewer: "muel", Decision: "rejected"},
+		{Reviewer: "unbound-reviewer", Decision: "approved"},
+	}}
+	executor := &ReviewGatewayExecutor{
+		IdentityBindings: []ReviewIdentityBinding{{
+			InstallationID: "installation", FeishuUserID: "ou_bound",
+			GitLinkLogin: "muel", Enabled: true,
+		}},
+		DisplayNames: staticFeishuDisplayNameResolver{name: "测试"},
+	}
+	executor.resolveReviewerDisplayNames(context.Background(), "installation", view)
+	if view.Reviewers[0].Reviewer != "测试" || view.Reviewers[1].Reviewer != "unbound-reviewer" {
+		t.Fatalf("reviewer display names = %#v", view.Reviewers)
+	}
+}

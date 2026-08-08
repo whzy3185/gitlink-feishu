@@ -233,6 +233,7 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 			return reviewGatewayExecutionFailure(result, fmt.Errorf("public repository status could not be verified"))
 		}
 		populateReviewGatewayContextResult(&result, reviewContext)
+		e.resolveReviewerDisplayNames(ctx, job.InstallationID, result.PullRequest)
 		result.ResultCard = buildReviewGatewayResultCard(job, result, nil)
 		plan := PlanReviewSnapshotSync(reviewContext, nil)
 		result.SnapshotPlan = &plan
@@ -635,6 +636,32 @@ func sortReviewGatewayReviewers(reviewers []ReviewGatewayReviewerView) {
 		}
 		return reviewers[left].Reviewer < reviewers[right].Reviewer
 	})
+}
+
+func (e *ReviewGatewayExecutor) resolveReviewerDisplayNames(ctx context.Context, installationID string, view *ReviewGatewayPullRequestView) {
+	if e == nil || e.DisplayNames == nil || view == nil || len(view.Reviewers) == 0 {
+		return
+	}
+	identityByLogin := make(map[string]string, len(e.IdentityBindings))
+	for _, binding := range e.IdentityBindings {
+		if !binding.Enabled || strings.TrimSpace(binding.InstallationID) != strings.TrimSpace(installationID) {
+			continue
+		}
+		login, userID := strings.TrimSpace(binding.GitLinkLogin), strings.TrimSpace(binding.FeishuUserID)
+		if login != "" && userID != "" {
+			identityByLogin[login] = userID
+		}
+	}
+	for index := range view.Reviewers {
+		userID := identityByLogin[strings.TrimSpace(view.Reviewers[index].Reviewer)]
+		if userID == "" {
+			continue
+		}
+		name, err := e.DisplayNames.ResolveFeishuDisplayName(ctx, userID)
+		if err == nil && strings.TrimSpace(name) != "" {
+			view.Reviewers[index].Reviewer = strings.TrimSpace(name)
+		}
+	}
 }
 
 func parseReviewGatewayReviewTime(value string) (time.Time, bool) {

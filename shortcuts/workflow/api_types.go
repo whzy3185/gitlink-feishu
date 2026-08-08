@@ -255,16 +255,26 @@ func parseAPIStringTime(value string) time.Time {
 	if trimmed == "" {
 		return time.Time{}
 	}
-	layouts := []string{
+	zonedLayouts := []string{
 		time.RFC3339,
 		time.RFC3339Nano,
+	}
+	for _, layout := range zonedLayouts {
+		if parsed, err := time.Parse(layout, trimmed); err == nil {
+			return parsed
+		}
+	}
+	// GitLink's current API returns timestamps such as "2026-08-08 15:23"
+	// without a zone. They represent China local time, not UTC.
+	localLayouts := []string{
 		"2006-01-02 15:04:05",
 		"2006-01-02 15:04",
 		"2006-01-02T15:04:05",
 		"2006-01-02",
 	}
-	for _, layout := range layouts {
-		if parsed, err := time.Parse(layout, trimmed); err == nil {
+	china := time.FixedZone("Asia/Shanghai", 8*60*60)
+	for _, layout := range localLayouts {
+		if parsed, err := time.ParseInLocation(layout, trimmed, china); err == nil {
 			return parsed
 		}
 	}

@@ -546,6 +546,17 @@ func TestParseAPITimeString(t *testing.T) {
 	}
 }
 
+func TestParseAPINaiveTimeUsesGitLinkChinaTimezone(t *testing.T) {
+	got := parseAPIStringTime("2026-08-08 15:23")
+	want := time.Date(2026, 8, 8, 7, 23, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Fatalf("naive GitLink time = %s, want %s", got.Format(time.RFC3339), want.Format(time.RFC3339))
+	}
+	if got.Location().String() != "Asia/Shanghai" {
+		t.Fatalf("naive GitLink time location = %q", got.Location())
+	}
+}
+
 func TestParseAPINumericTime(t *testing.T) {
 	if got := parseAPINumericTime(0); !got.IsZero() {
 		t.Fatal("expected zero for 0")

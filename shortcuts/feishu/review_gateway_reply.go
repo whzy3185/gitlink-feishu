@@ -550,7 +550,7 @@ func formatReviewGatewayCanonicalNotice(job ReviewGatewayJob, refreshed bool) st
 
 func formatReviewGatewayAcknowledgement(job ReviewGatewayJob) string {
 	switch job.Action {
-	case "read_review_context", "refresh_review_context", "claim_review", "release_review", "set_review_deadline", "clear_review_deadline":
+	case "help", "read_review_context", "refresh_review_context", "claim_review", "release_review", "set_review_deadline", "clear_review_deadline":
 		return ""
 	}
 	if action := reviewGatewayPrepareAction(job.Action); action != "" {
