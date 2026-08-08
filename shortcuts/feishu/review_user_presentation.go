@@ -180,6 +180,10 @@ func reviewWriteStatusDisplayName(value string) string {
 		return "结果待核对"
 	case "failed":
 		return "执行失败"
+	case "write_disabled":
+		return "未启用写操作"
+	case "dry_run":
+		return "试运行完成"
 	default:
 		return "待确认"
 	}

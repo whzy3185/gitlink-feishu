@@ -731,7 +731,8 @@ func formatReviewWriteResultReply(write ReviewWriteResult) string {
 	if action == "" {
 		action, _ = normalizeReviewAction("", write.ReviewStatus)
 	}
-	if write.MutationStatus == reviewMutationPossible || write.Status == "unknown_needs_reconciliation" || write.Status == "unknown" {
+	status := strings.ToLower(strings.TrimSpace(write.Status))
+	if write.MutationStatus == reviewMutationPossible {
 		return truncateReviewGatewayText(strings.Join([]string{
 			fmt.Sprintf("%s PR #%d 操作结果暂无法确认", write.Repository, write.PRNumber),
 			"操作：" + reviewActionDisplayName(action),
@@ -739,16 +740,54 @@ func formatReviewWriteResultReply(write ReviewWriteResult) string {
 			"请先核对 GitLink 当前状态。",
 		}, "\n"), 3000)
 	}
-	if write.Status == "stale" {
+	switch status {
+	case "unknown", "unknown_needs_reconciliation":
+		return truncateReviewGatewayText(strings.Join([]string{
+			fmt.Sprintf("%s PR #%d 操作结果暂无法确认", write.Repository, write.PRNumber),
+			"操作：" + reviewActionDisplayName(action),
+			"系统已停止自动重试，以避免重复写入。",
+			"请先核对 GitLink 当前状态。",
+		}, "\n"), 3000)
+	case "stale":
 		return truncateReviewGatewayText(strings.Join([]string{
 			fmt.Sprintf("%s PR #%d 操作计划已失效", write.Repository, write.PRNumber),
 			"PR 的代码版本已经发生变化。",
 			"本次未修改 GitLink。",
 			"请刷新 PR 后重新发起操作。",
 		}, "\n"), 3000)
-	}
-	if write.Status == "cancelled" {
+	case "cancelled":
 		return fmt.Sprintf("%s PR #%d 操作已取消\n本次未修改 GitLink。", write.Repository, write.PRNumber)
+	case "failed":
+		return truncateReviewGatewayText(strings.Join([]string{
+			fmt.Sprintf("%s PR #%d 操作执行失败", write.Repository, write.PRNumber),
+			"操作：" + reviewActionDisplayName(action),
+			"结果：执行失败",
+			"本次未确认 GitLink 写入。",
+			"请刷新 PR 状态并检查失败原因后重新发起操作。",
+		}, "\n"), 3000)
+	case "write_disabled":
+		return truncateReviewGatewayText(strings.Join([]string{
+			fmt.Sprintf("%s PR #%d 操作未执行", write.Repository, write.PRNumber),
+			"操作：" + reviewActionDisplayName(action),
+			"当前 Gateway 未启用 GitLink 写操作。",
+			"本次未修改 GitLink。",
+		}, "\n"), 3000)
+	case "dry_run":
+		return truncateReviewGatewayText(strings.Join([]string{
+			fmt.Sprintf("%s PR #%d 试运行完成", write.Repository, write.PRNumber),
+			"操作：" + reviewActionDisplayName(action),
+			"结果：校验完成",
+			"GitLink 写入：0",
+		}, "\n"), 3000)
+	case "completed", "verified":
+		// Only explicit terminal success states may reach the success reply.
+	default:
+		return truncateReviewGatewayText(strings.Join([]string{
+			fmt.Sprintf("%s PR #%d 操作结果暂无法确认", write.Repository, write.PRNumber),
+			"操作：" + reviewActionDisplayName(action),
+			"系统已停止自动重试，以避免重复写入。",
+			"请先核对 GitLink 当前状态。",
+		}, "\n"), 3000)
 	}
 	lines := []string{
 		fmt.Sprintf("%s %s", write.Repository, reviewActionCompletedTitle(action, write.PRNumber)),
@@ -778,6 +817,8 @@ func formatReviewActionPlanReply(plan ReviewActionPlan) string {
 		return fmt.Sprintf("%s PR #%d 操作已取消\n本次未修改 GitLink。", plan.Repository, plan.PRNumber)
 	case "unknown":
 		return fmt.Sprintf("%s PR #%d 操作结果暂无法确认\n系统已停止自动重试，以避免重复写入。\n请先核对 GitLink 当前状态。", plan.Repository, plan.PRNumber)
+	case "failed":
+		return fmt.Sprintf("%s PR #%d 操作执行失败\n本次未确认 GitLink 写入。\n请刷新 PR 状态并检查失败原因后重新发起操作。", plan.Repository, plan.PRNumber)
 	default:
 		return truncateReviewGatewayText(strings.Join([]string{
 			fmt.Sprintf("%s PR #%d “%s”操作计划已生成", plan.Repository, plan.PRNumber, reviewActionDisplayName(plan.Action)),

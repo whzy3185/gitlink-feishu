@@ -27,6 +27,9 @@ func TestReviewPresentationMappings(t *testing.T) {
 		reviewCollaborationStatusDisplayName("reviewing"):                    "审查中",
 		reviewCollaborationStatusDisplayName("archived"):                     "已归档",
 		reviewWriteStatusDisplayName("pending_confirmation"):                 "待本地确认",
+		reviewWriteStatusDisplayName("failed"):                               "执行失败",
+		reviewWriteStatusDisplayName("write_disabled"):                       "未启用写操作",
+		reviewWriteStatusDisplayName("dry_run"):                              "试运行完成",
 		reviewReconciliationDisplayName("verified by GitLink GET read-back"): "验证通过",
 	}
 	for got, want := range tests {
@@ -39,6 +42,7 @@ func TestReviewPresentationMappings(t *testing.T) {
 		reviewStageDisplayName("new_internal_stage"),
 		reviewDecisionDisplayName("new_internal_decision"),
 		reviewNextStepDisplayName("new_internal_next_step"),
+		reviewWriteStatusDisplayName("new_internal_write_status"),
 	} {
 		if got != "待确认" {
 			t.Fatalf("unknown presentation value leaked as %q", got)
@@ -227,6 +231,101 @@ func TestReviewGatewayResultReplyDoesNotLeakInternalVocabulary(t *testing.T) {
 	assertReviewPresentationDoesNotContain(t, reply,
 		"APPROVE", "REJECT REVIEW", "REJECT & CLOSE", "MERGE", "completed",
 		"verified by GitLink GET read-back", "assign_human_reviewer")
+}
+
+func TestReviewGatewayWriteResultNeverReportsUnknownStateAsSuccess(t *testing.T) {
+	tests := []struct {
+		status string
+		want   string
+	}{
+		{status: "failed", want: "执行失败"},
+		{status: "write_disabled", want: "未启用 GitLink 写操作"},
+		{status: "dry_run", want: "试运行"},
+		{status: "garbage_status", want: "结果暂无法确认"},
+		{status: "future_new_status", want: "结果暂无法确认"},
+		{status: "", want: "结果暂无法确认"},
+	}
+	for _, test := range tests {
+		t.Run(firstNonEmpty(test.status, "empty"), func(t *testing.T) {
+			reply := formatReviewWriteResultReply(ReviewWriteResult{
+				Action: reviewActionApprove, Repository: "owner/repo", PRNumber: 2,
+				Status: test.status, MutationStatus: reviewMutationNone,
+			})
+			if !strings.Contains(reply, test.want) {
+				t.Fatalf("status %q reply missing %q: %s", test.status, test.want, reply)
+			}
+			for _, forbidden := range []string{"GitLink 写入已完成", "远程回读：验证通过", "待本地确认"} {
+				if strings.Contains(reply, forbidden) {
+					t.Fatalf("status %q reported success/pending via %q: %s", test.status, forbidden, reply)
+				}
+			}
+		})
+	}
+
+	completed := formatReviewWriteResultReply(ReviewWriteResult{
+		Action: reviewActionApprove, Repository: "owner/repo", PRNumber: 2,
+		Status: "completed", MutationStatus: reviewMutationConfirmed,
+	})
+	if !strings.Contains(completed, "GitLink 写入已完成") || !strings.Contains(completed, "远程回读：验证通过") || strings.Contains(completed, "待本地确认") {
+		t.Fatalf("explicit success reply = %s", completed)
+	}
+}
+
+func TestTerminalOrUnknownActionPlanNeverShowsConfirmationControls(t *testing.T) {
+	job, result, _ := reviewGatewayCardFixture()
+	plan := NewControlledReviewActionPlan(job, "gitlink-user", result.HeadSHA, result.SourceFingerprint, reviewActionApprove, "done", time.Now().UTC())
+	result.ActionPlan = &plan
+
+	pendingJSON, ok := safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, result, nil))
+	if !ok || !strings.Contains(pendingJSON, "待本地确认") || !strings.Contains(pendingJSON, "查看本地确认方式") || !strings.Contains(pendingJSON, "取消操作") {
+		t.Fatalf("pending_confirmation lost confirmation controls: %s", pendingJSON)
+	}
+
+	tests := []struct {
+		status string
+		want   string
+	}{
+		{status: "completed", want: "已完成"},
+		{status: "stale", want: "已失效"},
+		{status: "cancelled", want: "已取消"},
+		{status: "unknown", want: "暂无法确认"},
+		{status: "failed", want: "执行失败"},
+		{status: "write_disabled", want: "未启用 GitLink 写操作"},
+		{status: "dry_run", want: "试运行"},
+		{status: "future_status", want: "暂无法确认"},
+	}
+	for _, test := range tests {
+		t.Run(test.status, func(t *testing.T) {
+			terminal := result
+			terminal.WriteResult = &ReviewWriteResult{
+				Action: reviewActionApprove, Repository: job.Repository, PRNumber: job.PRNumber,
+				Status: test.status, MutationStatus: reviewMutationNone,
+			}
+			cardJSON, cardOK := safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, terminal, nil))
+			if !cardOK || !strings.Contains(cardJSON, test.want) {
+				t.Fatalf("status %q card missing %q: %s", test.status, test.want, cardJSON)
+			}
+			for _, forbidden := range []string{"查看本地确认方式", "待本地确认", "取消操作", "GitLink 写入已完成", "远程回读验证通过"} {
+				if strings.Contains(cardJSON, forbidden) {
+					t.Fatalf("status %q exposed terminally invalid %q: %s", test.status, forbidden, cardJSON)
+				}
+			}
+		})
+	}
+
+	for _, status := range []string{"failed", "future_plan_status", ""} {
+		t.Run("stored_plan_"+firstNonEmpty(status, "empty"), func(t *testing.T) {
+			stored := result
+			storedPlan := plan
+			storedPlan.Status = status
+			stored.ActionPlan = &storedPlan
+			stored.WriteResult = nil
+			cardJSON, cardOK := safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, stored, nil))
+			if !cardOK || strings.Contains(cardJSON, "待本地确认") || strings.Contains(cardJSON, "查看本地确认方式") {
+				t.Fatalf("stored plan status %q fell back to pending: %s", status, cardJSON)
+			}
+		})
+	}
 }
 
 func TestReviewGatewayActionPlanIdentityIsConsistentAcrossStoreCardAndReply(t *testing.T) {

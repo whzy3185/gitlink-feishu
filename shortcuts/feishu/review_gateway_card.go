@@ -214,33 +214,32 @@ func shortReviewGatewaySHA(value string) string {
 }
 
 func reviewGatewayWriteBoundary(result ReviewGatewayExecutionResult) string {
-	if result.WriteResult == nil {
-		if plan := result.ActionPlan; plan != nil {
-			switch reviewActionPlanPresentationState(*plan, nil) {
-			case "completed":
-				return "GitLink 操作已完成并通过回读验证。"
-			case "stale":
-				return "PR 状态已经变化，原操作计划已失效；本次未修改 GitLink。"
-			case "cancelled":
-				return "操作已取消；本次未修改 GitLink。"
-			case "unknown":
-				return "远程结果暂无法确认，系统已停止自动重试。"
-			default:
-				return "操作计划已生成，尚未修改 GitLink。最终执行需要使用绑定的 GitLink 身份完成本地确认。"
-			}
-		}
+	if result.ActionPlan == nil && result.WriteResult == nil {
 		return "本次操作未修改 GitLink。"
 	}
-	switch result.WriteResult.MutationStatus {
-	case reviewMutationConfirmed:
+	plan := ReviewActionPlan{}
+	if result.ActionPlan != nil {
+		plan = *result.ActionPlan
+	}
+	switch reviewActionPlanPresentationState(plan, result.WriteResult) {
+	case "completed":
 		return "GitLink 操作已完成并通过回读验证。"
-	case reviewMutationPossible:
+	case "stale":
+		return "PR 状态已经变化，原操作计划已失效；本次未修改 GitLink。"
+	case "cancelled":
+		return "操作已取消；本次未修改 GitLink。"
+	case "unknown":
 		return "远程结果暂无法确认，系统已停止自动重试。"
+	case "failed":
+		return "操作执行失败；本次未确认 GitLink 写入。"
+	case "blocked":
+		return "当前 Gateway 未启用 GitLink 写操作；本次未修改 GitLink。"
+	case "dry_run":
+		return "试运行校验完成；本次未执行 GitLink 写入。"
+	case "pending":
+		return "操作计划已生成，尚未修改 GitLink。最终执行需要使用绑定的 GitLink 身份完成本地确认。"
 	default:
-		if result.WriteResult.Status == "stale" {
-			return "PR 状态已经变化，原操作计划已失效；本次未修改 GitLink。"
-		}
-		return "本次操作未修改 GitLink。"
+		return "远程结果暂无法确认，系统已停止自动重试。"
 	}
 }
 
@@ -255,6 +254,12 @@ func reviewActionPlanCardTitle(plan ReviewActionPlan, write *ReviewWriteResult) 
 		return "操作已取消"
 	case "unknown":
 		return "操作结果暂无法确认"
+	case "failed":
+		return "操作执行失败"
+	case "blocked":
+		return "操作未执行"
+	case "dry_run":
+		return "试运行完成"
 	default:
 		return fmt.Sprintf("%s PR #%d", reviewActionDisplayName(plan.Action), plan.PRNumber)
 	}
@@ -268,6 +273,12 @@ func reviewActionPlanCardTemplate(plan ReviewActionPlan, write *ReviewWriteResul
 		return "grey"
 	case "unknown":
 		return "yellow"
+	case "failed":
+		return "red"
+	case "blocked":
+		return "grey"
+	case "dry_run":
+		return "blue"
 	default:
 		if plan.Action == reviewActionMerge || plan.Action == reviewActionRejectClose {
 			return "red"
@@ -278,6 +289,9 @@ func reviewActionPlanCardTemplate(plan ReviewActionPlan, write *ReviewWriteResul
 
 func reviewActionPlanPresentationState(plan ReviewActionPlan, write *ReviewWriteResult) string {
 	if write != nil {
+		if write.MutationStatus == reviewMutationPossible {
+			return "unknown"
+		}
 		switch strings.ToLower(strings.TrimSpace(write.Status)) {
 		case "completed", "verified":
 			return "completed"
@@ -287,12 +301,19 @@ func reviewActionPlanPresentationState(plan ReviewActionPlan, write *ReviewWrite
 			return "cancelled"
 		case "unknown", "unknown_needs_reconciliation":
 			return "unknown"
-		}
-		if write.MutationStatus == reviewMutationPossible {
+		case "failed":
+			return "failed"
+		case "write_disabled":
+			return "blocked"
+		case "dry_run":
+			return "dry_run"
+		default:
 			return "unknown"
 		}
 	}
 	switch strings.ToLower(strings.TrimSpace(plan.Status)) {
+	case "pending_confirmation":
+		return "pending"
 	case "completed":
 		return "completed"
 	case "stale":
@@ -301,8 +322,10 @@ func reviewActionPlanPresentationState(plan ReviewActionPlan, write *ReviewWrite
 		return "cancelled"
 	case "unknown", "unknown_needs_reconciliation":
 		return "unknown"
+	case "failed":
+		return "failed"
 	default:
-		return "pending"
+		return "unknown"
 	}
 }
 
@@ -330,6 +353,24 @@ func reviewActionPlanCardElements(plan ReviewActionPlan, write *ReviewWriteResul
 		return []interface{}{common, div("本次未修改 GitLink。")}
 	case "unknown":
 		return []interface{}{common, div("系统已停止自动重试，以避免重复写入。\n请先核对 GitLink 当前状态。")}
+	case "failed":
+		return []interface{}{
+			common,
+			fields([]fieldValue{{Label: "结果", Value: "执行失败"}}),
+			div("本次未确认 GitLink 写入。\n请检查错误信息并刷新 PR 状态后重新发起操作。"),
+		}
+	case "blocked":
+		return []interface{}{
+			common,
+			fields([]fieldValue{{Label: "结果", Value: "操作未执行"}}),
+			div("当前 Gateway 未启用 GitLink 写操作。\n本次未修改 GitLink。\n如需执行，请由管理员确认 Gateway 写操作配置。"),
+		}
+	case "dry_run":
+		return []interface{}{
+			common,
+			fields([]fieldValue{{Label: "结果", Value: "试运行完成"}}),
+			div("操作计划校验通过。\n本次为试运行，未执行 GitLink 写入。"),
+		}
 	default:
 		elements := []interface{}{common}
 		if content != "" {
