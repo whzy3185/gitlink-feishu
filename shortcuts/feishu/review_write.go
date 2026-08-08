@@ -212,6 +212,12 @@ func (e *ReviewGatewayExecutor) finishControlledPRAction(ctx context.Context, re
 		result.WriteResult.Reconciliation = "verify the pull request state before any retry"
 	} else if write.Status == "verified" {
 		result.WriteResult.Reconciliation = "verified by GitLink GET read-back"
+		result.GitLinkState = write.RemoteState
+		result.ReviewStage = write.RemoteState
+		result.Decision = "none"
+		if result.PullRequest != nil {
+			result.PullRequest.RecommendedNextStep = "none"
+		}
 	}
 	result.Message = fmt.Sprintf("%s %s; Ref: %s", reviewActionLabel(plan.Action), write.Status, plan.RequestID)
 	if latest, err := e.ActionPlans.GetReviewActionPlan(ctx, plan.PlanID); err == nil {

@@ -1,0 +1,26 @@
+{
+  "schema_version": "feishu.review-real-collaboration/v1",
+  "capability": "claim_deadline_release",
+  "commit_sha": "68c0547c4901a844d8a2d433decb5f18003c29f3",
+  "timestamp": "2026-08-08T06:46:32Z",
+  "validation_mode": "real_platform",
+  "result": "passed",
+  "passed": true,
+  "sanitized_target": "muel/gitlink-feishu_agent#1 chat:sha256:1bb81ef419f5",
+  "observations": {
+    "claim": "reviewing with assignee present",
+    "deadline": "2026-08-10",
+    "release": "unassigned with assignee and deadline cleared",
+    "canonical_message_reused": true,
+    "canonical_message_id_hash": "24c8e017dc6a",
+    "open_dead_letters": 0,
+    "pending_reconciliations": 0
+  },
+  "external_write_count": {
+    "feishu_ack_reply": 3,
+    "feishu_canonical_card_patch": 3,
+    "feishu_result_reply": 3,
+    "gitlink_mutation": 0
+  },
+  "blocking_reason": ""
+}

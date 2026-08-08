@@ -1541,7 +1541,7 @@ func TestReviewGatewayReplyDispatcherRepliesOnceToOriginalMessage(t *testing.T) 
 		t.Fatalf("reply target = %q", sender.inputs[0].ReplyMessageID)
 	}
 	if sender.inputs[0].MsgType != "interactive" ||
-		!strings.Contains(sender.inputs[0].Card, "GitLink 写入：0") {
+		!strings.Contains(sender.inputs[0].Card, "本次操作未修改 GitLink") {
 		t.Fatalf("reply card boundary missing: %#v", sender.inputs[0])
 	}
 	store.mu.Lock()
@@ -2644,8 +2644,8 @@ func TestFormatReviewGatewayResultReplyDistinguishesUncertainWrite(t *testing.T)
 			Reconciliation: "query current reviews before retrying",
 		},
 	})
-	if !strings.Contains(reply, "写入：结果不确定") ||
-		!strings.Contains(reply, "禁止自动重试") || strings.Contains(reply, "写入：0") {
+	if !strings.Contains(reply, "结果暂无法确认") ||
+		!strings.Contains(reply, "停止自动重试") || strings.Contains(reply, "写入已完成") {
 		t.Fatalf("uncertain write reply = %q", reply)
 	}
 }

@@ -1,8 +1,9 @@
-﻿{
-    "schema_version":  "feishu.review-real-webhook/v1",
-    "passed":  false,
-    "validation_mode":  "not_executed",
-    "status":  "not_executed",
-    "reason":  "no verified result file was supplied",
-    "generated_at":  "2026-08-04T16:51:52.9969771Z"
+{
+  "schema_version": "feishu.review-real-webhook/v1",
+  "passed": false,
+  "validation_mode": "real_platform_preflight",
+  "status": "blocked_by_environment",
+  "reason": "no stable public callback URL, webhook secret, and GitLink subscription were supplied",
+  "generated_at": "2026-08-08T08:00:31Z",
+  "external_write_count": 0
 }

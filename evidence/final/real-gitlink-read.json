@@ -1,8 +1,19 @@
-﻿{
-    "schema_version":  "feishu.review-real-gitlink-read/v1",
-    "passed":  false,
-    "validation_mode":  "not_executed",
-    "status":  "not_executed",
-    "reason":  "no verified result file was supplied",
-    "generated_at":  "2026-08-04T16:51:52.9969771Z"
+{
+  "schema_version": "feishu.review-real-gitlink-read/v1",
+  "capability": "gitlink_pr_review_read",
+  "commit_sha": "68c0547c4901a844d8a2d433decb5f18003c29f3",
+  "timestamp": "2026-08-08T07:59:49Z",
+  "passed": true,
+  "validation_mode": "real_platform",
+  "status": "pass",
+  "sanitized_targets": [
+    "muel/gitlink-feishu_agent#1",
+    "muel/gitlink-feishu_agent#2",
+    "muel/gitlink-feishu_agent#3",
+    "muel/gitlink-feishu_agent#4",
+    "muel/gitlink-feishu_agent#5"
+  ],
+  "observed": ["pull_request", "files", "versions", "reviews", "threads"],
+  "external_write_count": 0,
+  "read_back": "complete"
 }

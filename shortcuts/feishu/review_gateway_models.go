@@ -200,12 +200,19 @@ var (
 	reviewGatewayRejectPattern            = regexp.MustCompile(`(?i)^reject\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s*(?:PR\s*)?#?(\d+)\s+(.+)$`)
 	reviewGatewayRefusePattern            = regexp.MustCompile(`(?i)^refuse\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s*(?:PR\s*)?#?(\d+)\s+(.+)$`)
 	reviewGatewayMergePattern             = regexp.MustCompile(`(?i)^merge\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s*(?:PR\s*)?#?(\d+)$`)
+	reviewGatewayChineseCommonPattern     = regexp.MustCompile(`^提交审查意见\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+(.+)$`)
+	reviewGatewayChineseApprovePattern    = regexp.MustCompile(`^批准\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+(.+)$`)
+	reviewGatewayChineseRejectPattern     = regexp.MustCompile(`^要求修改\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+(.+)$`)
+	reviewGatewayChineseRefusePattern     = regexp.MustCompile(`^拒绝并关闭\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+(.+)$`)
+	reviewGatewayChineseMergePattern      = regexp.MustCompile(`^合并\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`)
 	reviewGatewaySecretReferencePattern   = regexp.MustCompile(`^env:[A-Za-z_][A-Za-z0-9_]*$`)
 	reviewGatewayPRPattern                = regexp.MustCompile(`(?i)^查看\s*PR\s*#?(\d+)$`)
 	reviewGatewayClaimPattern             = regexp.MustCompile(`(?i)^领取\s*PR\s*#?(\d+)$`)
 	reviewGatewayReleasePattern           = regexp.MustCompile(`(?i)^释放\s*PR\s*#?(\d+)$`)
+	reviewGatewayCancelClaimPattern       = regexp.MustCompile(`(?i)^取消领取\s*PR\s*#?(\d+)$`)
 	reviewGatewayDeadlinePattern          = regexp.MustCompile(`(?i)^设置\s*PR\s*#?(\d+)\s*截止\s*(\d{4}-\d{2}-\d{2})$`)
 	reviewGatewayQualifiedDeadlinePattern = regexp.MustCompile(`(?i)^设置\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s*截止\s*(\d{4}-\d{2}-\d{2})$`)
+	reviewGatewayReviewDeadlinePattern    = regexp.MustCompile(`(?i)^设置\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s*审查截止\s*(\d{4}-\d{2}-\d{2})$`)
 	reviewGatewayPreparePattern           = regexp.MustCompile(`(?i)^准备提交\s*PR\s*#?(\d+)\s*Review$`)
 	reviewGatewayConfirmPattern           = regexp.MustCompile(`(?i)^确认\s*Review\s+([A-Za-z0-9:_-]+)$`)
 	reviewGatewayDraftPattern             = regexp.MustCompile(`(?i)^生成\s*PR\s*#?(\d+)\s*Review\s*草稿$`)
@@ -221,6 +228,7 @@ var (
 		{pattern: reviewGatewayPRPattern, name: "read_review_context"},
 		{pattern: reviewGatewayClaimPattern, name: "claim_review"},
 		{pattern: reviewGatewayReleasePattern, name: "release_review"},
+		{pattern: reviewGatewayCancelClaimPattern, name: "release_review"},
 		{pattern: reviewGatewayPreparePattern, name: "prepare_common_review"},
 		{pattern: reviewGatewayDraftPattern, name: "generate_review_draft"},
 		{pattern: reviewGatewayRefreshPattern, name: "refresh_review_context"},
@@ -233,6 +241,7 @@ var (
 		{regexp.MustCompile(`(?i)^查看\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`), "read_review_context"},
 		{regexp.MustCompile(`(?i)^领取\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`), "claim_review"},
 		{regexp.MustCompile(`(?i)^释放\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`), "release_review"},
+		{regexp.MustCompile(`(?i)^取消领取\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`), "release_review"},
 		{regexp.MustCompile(`(?i)^准备提交\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s*Review$`), "prepare_common_review"},
 		{regexp.MustCompile(`(?i)^生成\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s*Review\s*草稿$`), "generate_review_draft"},
 		{regexp.MustCompile(`(?i)^刷新\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`), "refresh_review_context"},
@@ -474,6 +483,10 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 		pattern *regexp.Regexp
 		action  string
 	}{
+		{reviewGatewayChineseCommonPattern, "prepare_common_review"},
+		{reviewGatewayChineseApprovePattern, "prepare_review_approve"},
+		{reviewGatewayChineseRejectPattern, "prepare_review_reject"},
+		{reviewGatewayChineseRefusePattern, "prepare_reject_close"},
 		{reviewGatewayCommonReviewPattern, "prepare_common_review"},
 		{reviewGatewayApprovePattern, "prepare_review_approve"},
 		{reviewGatewayRejectPattern, "prepare_review_reject"},
@@ -484,6 +497,10 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 			body := truncateReviewGatewayText(redactReviewGatewayError(match[3]), 3000)
 			return ReviewGatewayIntent{Name: command.action, Repository: match[1], PRNumber: number, Argument: body}
 		}
+	}
+	if match := reviewGatewayChineseMergePattern.FindStringSubmatch(content); len(match) == 3 {
+		number, _ := strconv.Atoi(match[2])
+		return ReviewGatewayIntent{Name: "prepare_merge", Repository: match[1], PRNumber: number}
 	}
 	if match := reviewGatewayMergePattern.FindStringSubmatch(content); len(match) == 3 {
 		number, _ := strconv.Atoi(match[2])
@@ -515,6 +532,10 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 		return ReviewGatewayIntent{Name: "set_review_deadline", PRNumber: number, Argument: match[2]}
 	}
 	if match := reviewGatewayQualifiedDeadlinePattern.FindStringSubmatch(content); len(match) == 4 {
+		number, _ := strconv.Atoi(match[2])
+		return ReviewGatewayIntent{Name: "set_review_deadline", Repository: match[1], PRNumber: number, Argument: match[3]}
+	}
+	if match := reviewGatewayReviewDeadlinePattern.FindStringSubmatch(content); len(match) == 4 {
 		number, _ := strconv.Atoi(match[2])
 		return ReviewGatewayIntent{Name: "set_review_deadline", Repository: match[1], PRNumber: number, Argument: match[3]}
 	}

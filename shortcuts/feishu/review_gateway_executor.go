@@ -14,44 +14,45 @@ import (
 const reviewGatewayResultSchema = "feishu.review-result/v2"
 
 type ReviewGatewayExecutionResult struct {
-	SchemaVersion      string                        `json:"schema_version"`
-	JobID              string                        `json:"job_id"`
-	Status             string                        `json:"status"`
-	Mode               string                        `json:"mode"`
-	Action             string                        `json:"action"`
-	Repository         string                        `json:"repository,omitempty"`
-	PRNumber           int                           `json:"pr_number,omitempty"`
-	RequestedBy        string                        `json:"requested_by"`
-	ReadOnlyGitLink    bool                          `json:"read_only_gitlink"`
-	MutatesGitLink     bool                          `json:"mutates_gitlink"`
-	PublicRead         bool                          `json:"public_read,omitempty"`
-	CompletedAt        string                        `json:"completed_at"`
-	Message            string                        `json:"message,omitempty"`
-	CollectionStatus   string                        `json:"collection_status,omitempty"`
-	Partial            bool                          `json:"partial,omitempty"`
-	HeadSHA            string                        `json:"head_sha,omitempty"`
-	SourceFingerprint  string                        `json:"source_fingerprint,omitempty"`
-	ReviewStage        string                        `json:"review_stage,omitempty"`
-	Decision           string                        `json:"decision,omitempty"`
-	GitLinkState       string                        `json:"gitlink_state,omitempty"`
-	ReviewCount        int                           `json:"review_count,omitempty"`
-	ThreadCount        int                           `json:"thread_count,omitempty"`
-	OpenThreadCount    int                           `json:"open_thread_count,omitempty"`
-	PullRequest        *ReviewGatewayPullRequestView `json:"pull_request,omitempty"`
-	ResultCard         Card                          `json:"result_card,omitempty"`
-	Queue              *ReviewGatewayQueueView       `json:"queue,omitempty"`
-	SnapshotPlan       *ReviewSnapshotPlan           `json:"snapshot_plan,omitempty"`
-	Draft              *ReviewDraftPreview           `json:"draft,omitempty"`
-	Collaboration      *ReviewCollaborationBundle    `json:"collaboration,omitempty"`
-	CollaborationItems []ReviewCollaborationItem     `json:"collaboration_items,omitempty"`
-	ActionPlan         *ReviewActionPlan             `json:"action_plan,omitempty"`
-	WriteResult        *ReviewWriteResult            `json:"write_result,omitempty"`
-	Subscriptions      []ReviewChatSubscription      `json:"subscriptions,omitempty"`
-	ResourceSync       []ReviewResourceSyncResult    `json:"resource_sync,omitempty"`
-	AgentRun           *workflow.ReviewAgentRun      `json:"agent_run,omitempty"`
-	Warnings           []string                      `json:"warnings,omitempty"`
-	Error              string                        `json:"error,omitempty"`
-	AttemptCount       int                           `json:"attempt_count,omitempty"`
+	SchemaVersion       string                        `json:"schema_version"`
+	JobID               string                        `json:"job_id"`
+	Status              string                        `json:"status"`
+	Mode                string                        `json:"mode"`
+	Action              string                        `json:"action"`
+	Repository          string                        `json:"repository,omitempty"`
+	PRNumber            int                           `json:"pr_number,omitempty"`
+	RequestedBy         string                        `json:"requested_by"`
+	ReadOnlyGitLink     bool                          `json:"read_only_gitlink"`
+	MutatesGitLink      bool                          `json:"mutates_gitlink"`
+	PublicRead          bool                          `json:"public_read,omitempty"`
+	CompletedAt         string                        `json:"completed_at"`
+	Message             string                        `json:"message,omitempty"`
+	CollectionStatus    string                        `json:"collection_status,omitempty"`
+	Partial             bool                          `json:"partial,omitempty"`
+	HeadSHA             string                        `json:"head_sha,omitempty"`
+	SourceFingerprint   string                        `json:"source_fingerprint,omitempty"`
+	ReviewStage         string                        `json:"review_stage,omitempty"`
+	Decision            string                        `json:"decision,omitempty"`
+	GitLinkState        string                        `json:"gitlink_state,omitempty"`
+	ReviewCount         int                           `json:"review_count,omitempty"`
+	ThreadCount         int                           `json:"thread_count,omitempty"`
+	OpenThreadCount     int                           `json:"open_thread_count,omitempty"`
+	PullRequest         *ReviewGatewayPullRequestView `json:"pull_request,omitempty"`
+	ResultCard          Card                          `json:"result_card,omitempty"`
+	Queue               *ReviewGatewayQueueView       `json:"queue,omitempty"`
+	SnapshotPlan        *ReviewSnapshotPlan           `json:"snapshot_plan,omitempty"`
+	Draft               *ReviewDraftPreview           `json:"draft,omitempty"`
+	Collaboration       *ReviewCollaborationBundle    `json:"collaboration,omitempty"`
+	CollaborationItems  []ReviewCollaborationItem     `json:"collaboration_items,omitempty"`
+	ActionPlan          *ReviewActionPlan             `json:"action_plan,omitempty"`
+	WriteResult         *ReviewWriteResult            `json:"write_result,omitempty"`
+	Subscriptions       []ReviewChatSubscription      `json:"subscriptions,omitempty"`
+	ResourceSync        []ReviewResourceSyncResult    `json:"resource_sync,omitempty"`
+	AgentRun            *workflow.ReviewAgentRun      `json:"agent_run,omitempty"`
+	Warnings            []string                      `json:"warnings,omitempty"`
+	Error               string                        `json:"error,omitempty"`
+	AttemptCount        int                           `json:"attempt_count,omitempty"`
+	ConfirmationStateDB string                        `json:"-"`
 }
 
 // ReviewGatewayPullRequestView is the bounded presentation contract consumed
@@ -134,6 +135,7 @@ type ReviewGatewayExecutor struct {
 	AgentProvider              workflow.ReviewAgentProvider
 	AgentTaskTimeout           time.Duration
 	AgentMaxConcurrency        int
+	ConfirmationStateDB        string
 }
 
 func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {
@@ -142,19 +144,20 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		now = time.Now
 	}
 	result := ReviewGatewayExecutionResult{
-		SchemaVersion:   reviewGatewayResultSchema,
-		JobID:           job.JobID,
-		Status:          "completed",
-		Mode:            firstNonEmpty(job.Mode, "preview"),
-		Action:          job.Action,
-		Repository:      job.Repository,
-		PRNumber:        job.PRNumber,
-		RequestedBy:     job.RequestedBy,
-		ReadOnlyGitLink: true,
-		MutatesGitLink:  false,
-		PublicRead:      job.PublicRead,
-		CompletedAt:     now().UTC().Format(time.RFC3339),
-		AttemptCount:    job.AttemptCount,
+		SchemaVersion:       reviewGatewayResultSchema,
+		JobID:               job.JobID,
+		Status:              "completed",
+		Mode:                firstNonEmpty(job.Mode, "preview"),
+		Action:              job.Action,
+		Repository:          job.Repository,
+		PRNumber:            job.PRNumber,
+		RequestedBy:         job.RequestedBy,
+		ReadOnlyGitLink:     true,
+		MutatesGitLink:      false,
+		PublicRead:          job.PublicRead,
+		CompletedAt:         now().UTC().Format(time.RFC3339),
+		AttemptCount:        job.AttemptCount,
+		ConfirmationStateDB: firstNonEmpty(e.ConfirmationStateDB, ".local/review-gateway.db"),
 	}
 	select {
 	case <-ctx.Done():
@@ -270,7 +273,7 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 			)
 			result.AgentRun = &run
 			result.Message = fmt.Sprintf(
-				"Agent Review %s；收到 %d/%d 份有效评估；最终决定仍由仓库 Owner 完成；GitLink 写入 0。",
+				"Agent 审查状态：%s；收到 %d/%d 份有效评估；建议由维护团队完成最终复核；本次操作未修改 GitLink。",
 				run.Status,
 				run.Synthesis.AssessmentsReceived,
 				run.Synthesis.AssessmentsExpected,
@@ -304,7 +307,11 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 			plan.Status = "cancelled"
 		}
 		result.ActionPlan, result.Repository, result.PRNumber = &plan, plan.Repository, plan.PRNumber
-		result.Message = "Use the local review-confirm-local command; this card action performs no GitLink write"
+		if job.Action == "cancel_common_review" {
+			result.Message = "操作已取消；本次未修改 GitLink。"
+		} else {
+			result.Message = "已显示本地确认方式；查看操作不会修改 GitLink。"
+		}
 		result.ResultCard = buildReviewGatewayResultCard(job, result, nil)
 		return result, nil
 
@@ -358,7 +365,7 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		result.Message = fmt.Sprintf("Default Review repository set to %s.", job.Repository)
 
 	case "help":
-		result.Message = "支持：仓库列表、查看 [owner/repo] 待审查、查看 [owner/repo] PR #编号、刷新、生成 Review 草稿、领取/释放、设置截止时间、准备提交 common Review。所有仓库均为平等作用域，PR 级命令必须显式指定 owner/repo；GitLink 默认 GET-only。"
+		result.Message = reviewGatewayHelpText()
 	case "show_binding":
 		result.Message = formatReviewGatewayRepositoryBindings(job.Repositories, job.Repository)
 	case "list_repositories":
@@ -500,6 +507,11 @@ func populateReviewGatewayContextResult(result *ReviewGatewayExecutionResult, re
 		RecommendedNextStep: truncateReviewGatewayText(reviewContext.WorkItem.RecommendedNextStep, 240),
 		Unknowns:            []string{},
 		Reviewers:           []ReviewGatewayReviewerView{},
+	}
+	if result.GitLinkState == "closed" || result.GitLinkState == "merged" {
+		result.ReviewStage = result.GitLinkState
+		result.Decision = "none"
+		view.RecommendedNextStep = "none"
 	}
 	for _, unknown := range reviewContext.WorkItem.Unknowns {
 		if len(view.Unknowns) >= 5 {

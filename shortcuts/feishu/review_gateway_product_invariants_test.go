@@ -116,17 +116,17 @@ func assertFullPRCardFacts(t *testing.T, card Card) {
 	expected := map[string]string{
 		"PR title":              "Preserve complete PR context",
 		"author":                "alice",
-		"branch summary":        "main ← feature/card-continuity",
+		"target branch":         "**目标分支**\nmain",
+		"source branch":         "**来源分支**\nfeature/card-continuity",
 		"short head SHA":        "0123456789ab",
-		"files count":           "**文件**\n12",
-		"commits count":         "**提交**\n4",
-		"change summary":        "+328 / -91",
+		"files and changes":     "12 个文件 · +328 / -91",
+		"commits count":         "**提交数量**\n4 次提交",
 		"patchset":              "patchset-7",
-		"review stage":          "human_reviewing",
-		"reviewer":              "bob：changes_pending",
-		"open thread count":     "**未解决线程**\n2",
+		"review stage":          "**审查阶段**\n审查中",
+		"reviewer":              "bob：需修改",
+		"open thread count":     "**未解决讨论**\n2",
 		"assignee field":        "**负责人**",
-		"review deadline field": "**截止时间**",
+		"review deadline field": "**审查截止**",
 	}
 	missing := []string{}
 	for label, value := range expected {

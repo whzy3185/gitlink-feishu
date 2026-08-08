@@ -1,0 +1,63 @@
+{
+  "schema_version": "feishu.review-real-controlled-action/v1",
+  "capability": "controlled_merge",
+  "commit_sha": "68c0547c4901a844d8a2d433decb5f18003c29f3",
+  "timestamp": "2026-08-08T08:00:31Z",
+  "validation_mode": "real_platform",
+  "result": "passed",
+  "passed": true,
+  "sanitized_target": "muel/gitlink-feishu_agent#5",
+  "branch_safety": {
+    "default_branch": "main",
+    "default_before": "73da46c143b37cb2b26e9e624b8c39963ad52d77",
+    "default_after": "73da46c143b37cb2b26e9e624b8c39963ad52d77",
+    "test_base": "test/acceptance-base-20260808",
+    "test_base_before": "73da46c143b37cb2b26e9e624b8c39963ad52d77",
+    "test_base_after": "f3b1bbf1f7276f982daf3cdfac44dc83c1936825",
+    "pr_head": "91a62c511929a35eb15bd5b00aa0b53b6f28d037"
+  },
+  "action_plan": {
+    "action": "merge",
+    "request_id": "RW-A0429E",
+    "final_status": "completed",
+    "mutation_status": "confirmed",
+    "reconciliation_status": "verified"
+  },
+  "ci_observation": {
+    "status": "unknown",
+    "checks_command": "api_data_error",
+    "current_gate": "blocks_explicit_failure_only",
+    "accepted_only_for_disposable_authorized_test": true
+  },
+  "dry_run": {
+    "gitlink_mutation": 0,
+    "result": "passed"
+  },
+  "real_mutation": {
+    "expected": 1,
+    "actual": 1,
+    "operation": "native_pr_merge"
+  },
+  "read_back": {
+    "merged": true,
+    "gitlink_state": "merged",
+    "review_stage": "merged",
+    "decision": "none",
+    "merge_commit_sha": "f3b1bbf1f7276f982daf3cdfac44dc83c1936825"
+  },
+  "duplicate_protection": {
+    "second_confirmation": "rejected_terminal_plan",
+    "additional_mutation": 0,
+    "test_base_unchanged_after_duplicate": true
+  },
+  "feishu_result": {
+    "canonical_card_patch": "succeeded",
+    "reply": "succeeded"
+  },
+  "external_write_count": {
+    "gitlink_merge": 1,
+    "feishu_canonical_card_patch": 1,
+    "feishu_result_reply": 1
+  },
+  "blocking_reason": ""
+}

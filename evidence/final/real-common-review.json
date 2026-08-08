@@ -1,0 +1,23 @@
+{
+  "schema_version": "feishu.review-real-controlled-action/v1",
+  "capability": "common_review",
+  "commit_sha": "68c0547c4901a844d8a2d433decb5f18003c29f3",
+  "timestamp": "2026-08-07T07:08:57Z",
+  "validation_mode": "real_platform_existing_evidence",
+  "result": "passed",
+  "passed": true,
+  "sanitized_target": "muel/gitlink-feishu_agent#1",
+  "action_plan": {
+    "action": "review_common",
+    "request_id": "RW-2DEAFE",
+    "final_status": "completed",
+    "mutation_status": "confirmed",
+    "reconciliation_status": "verified"
+  },
+  "dry_run": {"gitlink_mutation": 0, "result": "passed"},
+  "real_mutation": {"expected": 1, "actual": 1, "review_status": "common", "review_id": "130"},
+  "read_back": {"review_count_before": 0, "review_count_after": 1, "head_matches": true},
+  "duplicate_protection": {"additional_mutation": 0},
+  "feishu_result": {"canonical_card_patch": "succeeded", "reply": "succeeded"},
+  "external_write_count": {"gitlink_review_create": 1}
+}

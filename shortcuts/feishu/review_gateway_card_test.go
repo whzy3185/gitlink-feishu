@@ -71,7 +71,7 @@ func TestReviewGatewayResultCardStateAndPublicBoundaries(t *testing.T) {
 			t.Fatalf("public card leaked bound collaboration field %q: %s", forbidden, publicJSON)
 		}
 	}
-	if !strings.Contains(publicJSON, "打开 GitLink PR") || !strings.Contains(publicJSON, "GitLink 写入：0") {
+	if !strings.Contains(publicJSON, "打开 GitLink PR") || !strings.Contains(publicJSON, "本次操作未修改 GitLink") {
 		t.Fatalf("public card lost navigation or write boundary: %s", publicJSON)
 	}
 }
@@ -84,7 +84,7 @@ func TestReviewGatewayResultCardHandlesUnreviewedPR(t *testing.T) {
 	result.Decision = "pending"
 	result.PullRequest.Reviewers = nil
 	cardJSON, ok := safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, result, nil))
-	if !ok || !strings.Contains(cardJSON, "**Review**\\n0") || strings.Contains(cardJSON, "Reviewer 摘要") {
+	if !ok || !strings.Contains(cardJSON, "**审查记录**\\n0") || strings.Contains(cardJSON, "Reviewer 摘要") {
 		t.Fatalf("unreviewed PR card = %s, ok=%t", cardJSON, ok)
 	}
 }
@@ -170,6 +170,23 @@ func TestPopulateReviewGatewayResultFallsBackToHeadBranchTitle(t *testing.T) {
 	}
 }
 
+func TestPopulateReviewGatewayResultNormalizesTerminalDecision(t *testing.T) {
+	for _, state := range []string{"closed", "merged"} {
+		result := ReviewGatewayExecutionResult{}
+		populateReviewGatewayContextResult(&result, workflow.ReviewContext{
+			WorkItem: workflow.ReviewWorkItem{
+				GitLinkState:        state,
+				ReviewStage:         state,
+				RecommendedNextStep: "request_re_review_for_current_head",
+			},
+			Summary: workflow.ReviewCollaborationSummary{Decision: "pending"},
+		})
+		if result.Decision != "none" || result.ReviewStage != state || result.PullRequest.RecommendedNextStep != "none" {
+			t.Fatalf("terminal %s result = %#v", state, result)
+		}
+	}
+}
+
 func TestReviewGatewayOversizedCardFallsBackToText(t *testing.T) {
 	now := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
 	store := NewMemoryReviewGatewayJobStore()
@@ -198,7 +215,7 @@ func TestReviewGatewayOversizedCardFallsBackToText(t *testing.T) {
 	sender.mu.Lock()
 	defer sender.mu.Unlock()
 	if len(sender.inputs) != 1 || sender.inputs[0].MsgType != "text" ||
-		!strings.Contains(sender.inputs[0].Text, "GitLink 写入：0") {
+		!strings.Contains(sender.inputs[0].Text, "本次操作未修改 GitLink") {
 		t.Fatalf("oversized card did not safely fall back to text: %#v", sender.inputs)
 	}
 }
@@ -267,6 +284,6 @@ func reviewGatewayCardSnapshot(card Card) string {
 	return strings.Join(lines, "\n")
 }
 
-const completeReviewGatewayCardGolden = "sha256:9e7dfc3c484d997ec8fdd4143e964b7efeaeed128e76a2d8d8cd5ca3dd10a676"
-const partialReviewGatewayCardGolden = "sha256:0ce54710a141a5fc12c0f0b7e6137cdc8bcfac5c40fd2c17386752a9ae5d1d03"
-const failedReviewGatewayCardGolden = "sha256:4ccc58ff3193eea4d7540b1ecef75f67c63c616a57cccabb8c9b14555206e1e4"
+const completeReviewGatewayCardGolden = "sha256:cab1676e2ebebc02363c1c5b5118eed30dc57b20b76541c9088a5341abeefd74"
+const partialReviewGatewayCardGolden = "sha256:1442b22f9d9204734a727c04ef73c79d77fa84dc0c0a9e4cedd4d99c55b424e7"
+const failedReviewGatewayCardGolden = "sha256:0d588115fb85b278a20481007dc66aa27425fbcac33b90c6120d216e3de5df75"

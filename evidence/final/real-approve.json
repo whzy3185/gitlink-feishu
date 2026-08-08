@@ -1,0 +1,48 @@
+{
+  "schema_version": "feishu.review-real-controlled-action/v1",
+  "capability": "approve",
+  "commit_sha": "68c0547c4901a844d8a2d433decb5f18003c29f3",
+  "timestamp": "2026-08-08T07:00:44Z",
+  "validation_mode": "real_platform",
+  "result": "passed",
+  "passed": true,
+  "sanitized_target": "muel/gitlink-feishu_agent#2",
+  "action_plan": {
+    "action": "review_approve",
+    "request_id": "RW-C1B018",
+    "expected_head_sha": "dc379f444d2acb095bcf59e2765b90a1666dbf43",
+    "final_status": "completed",
+    "mutation_status": "confirmed",
+    "reconciliation_status": "verified"
+  },
+  "dry_run": {
+    "gitlink_mutation": 0,
+    "result": "passed"
+  },
+  "real_mutation": {
+    "expected": 1,
+    "actual": 1,
+    "review_status": "approved",
+    "review_id": "131"
+  },
+  "read_back": {
+    "total_approved_reviews": 1,
+    "head_matches": true,
+    "content_and_request_id_match": true
+  },
+  "duplicate_protection": {
+    "second_confirmation": "rejected_terminal_plan",
+    "additional_mutation": 0
+  },
+  "feishu_result": {
+    "canonical_card_patch": "succeeded",
+    "reply": "succeeded",
+    "observed_by_user": true
+  },
+  "external_write_count": {
+    "gitlink_review_create": 1,
+    "feishu_canonical_card_patch": 1,
+    "feishu_result_reply": 1
+  },
+  "blocking_reason": ""
+}

@@ -1,0 +1,42 @@
+{
+  "schema_version": "feishu.review-real-validation-manifest/v1",
+  "repository": "whzy3185/gitlink-feishu",
+  "branch": "feat/common-review-write-final",
+  "baseline_commit_sha": "68c0547c4901a844d8a2d433decb5f18003c29f3",
+  "generated_at": "2026-08-08T08:00:31Z",
+  "validation_mode": "real_platform",
+  "results": [
+    {"capability": "gitlink_read", "status": "PASS", "evidence": "real-gitlink-read.json"},
+    {"capability": "card_reply", "status": "PASS", "evidence": "real-card-reply.json"},
+    {"capability": "claim_deadline_release", "status": "PASS", "evidence": "real-collaboration.json"},
+    {"capability": "common_review", "status": "PASS", "evidence": "real-common-review.json"},
+    {"capability": "approve", "status": "PASS", "evidence": "real-approve.json"},
+    {"capability": "reject_review", "status": "PASS", "evidence": "real-reject.json"},
+    {"capability": "reject_and_close", "status": "PASS", "evidence": "real-refuse.json"},
+    {"capability": "controlled_merge", "status": "PASS", "evidence": "real-merge.json"},
+    {"capability": "head_stale", "status": "PASS", "evidence": "real-stale.json"},
+    {"capability": "dual_chat", "status": "BLOCKED_BY_ENVIRONMENT", "evidence": "real-dual-chat.json"},
+    {"capability": "base", "status": "BLOCKED_BY_ENVIRONMENT", "evidence": "real-base.json"},
+    {"capability": "doc", "status": "BLOCKED_BY_ENVIRONMENT", "evidence": "real-doc.json"},
+    {"capability": "task", "status": "BLOCKED_BY_ENVIRONMENT", "evidence": "real-task.json"},
+    {"capability": "webhook", "status": "BLOCKED_BY_ENVIRONMENT", "evidence": "real-webhook.json"}
+  ],
+  "test_setup_writes": {
+    "gitlink_branch_push": 5,
+    "gitlink_pull_request_create": 4,
+    "default_branch_mutation": 0
+  },
+  "controlled_gitlink_mutations": {
+    "common_review_existing_run": 1,
+    "approve_review": 1,
+    "reject_review": 1,
+    "reject_and_close": 1,
+    "merge_disposable_base": 1,
+    "duplicate_or_stale_additional_mutation": 0
+  },
+  "security": {
+    "raw_credentials_in_evidence": false,
+    "raw_sensitive_platform_ids_in_evidence": false,
+    "secret_scan_findings": 0
+  }
+}

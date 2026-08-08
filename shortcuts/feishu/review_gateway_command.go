@@ -399,12 +399,13 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		agentProvider = provider
 	}
 	executor := &ReviewGatewayExecutor{
-		Runtime:            runtime,
-		Collaboration:      store,
-		ActionPlans:        store,
-		Subscriptions:      store,
-		IdentityBindings:   bindings.IdentityBindings,
-		EnableGitLinkWrite: parseBool(runtime.Arg("enable-gitlink-review-write")),
+		Runtime:             runtime,
+		ConfirmationStateDB: statePath,
+		Collaboration:       store,
+		ActionPlans:         store,
+		Subscriptions:       store,
+		IdentityBindings:    bindings.IdentityBindings,
+		EnableGitLinkWrite:  parseBool(runtime.Arg("enable-gitlink-review-write")),
 		// Production resource writes are planned after completion and executed
 		// by durable Operation workers. Publisher remains a compatibility-only
 		// synchronous wrapper for offline tests.

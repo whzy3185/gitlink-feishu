@@ -95,15 +95,32 @@ function Invoke-ReviewFinalRequest {
     if ($Target -eq 'feishu' -and $Method -notin @('GET','HEAD')) {
         Assert-ReviewFinalRealValidation -RequireExternalWrites
     }
+    $webRequestParameters = (Get-Command Invoke-WebRequest).Parameters
     $parameters = @{
-        Uri = $Uri; Method = $Method; Headers = $Headers; SkipHttpErrorCheck = $true
-        MaximumRedirection = 0; ConnectionTimeoutSeconds = 15; OperationTimeoutSeconds = 45
+        Uri = $Uri; Method = $Method; Headers = $Headers; MaximumRedirection = 0
     }
+    if ($webRequestParameters.ContainsKey('SkipHttpErrorCheck')) { $parameters.SkipHttpErrorCheck = $true }
+    if ($webRequestParameters.ContainsKey('ConnectionTimeoutSeconds')) { $parameters.ConnectionTimeoutSeconds = 15 }
+    if ($webRequestParameters.ContainsKey('OperationTimeoutSeconds')) { $parameters.OperationTimeoutSeconds = 45 }
+    elseif ($webRequestParameters.ContainsKey('TimeoutSec')) { $parameters.TimeoutSec = 45 }
+    if ($webRequestParameters.ContainsKey('UseBasicParsing')) { $parameters.UseBasicParsing = $true }
     if ($null -ne $Body) {
         $parameters.ContentType = 'application/json; charset=utf-8'
         $parameters.Body = if ($Body -is [string]) { $Body } else { $Body | ConvertTo-Json -Depth 20 -Compress }
     }
-    $response = Invoke-WebRequest @parameters
+    try {
+        $response = Invoke-WebRequest @parameters
+    } catch {
+        $errorResponse = $_.Exception.Response
+        if ($null -eq $errorResponse) { throw }
+        $content = ''
+        $stream = $errorResponse.GetResponseStream()
+        if ($null -ne $stream) {
+            $reader = [IO.StreamReader]::new($stream)
+            try { $content = $reader.ReadToEnd() } finally { $reader.Dispose(); $stream.Dispose() }
+        }
+        $response = [pscustomobject]@{ StatusCode = [int]$errorResponse.StatusCode; Content = $content }
+    }
     if (-not $AllowHttpError -and $response.StatusCode -notin $ExpectedStatus) {
         throw "tracked $Target request returned HTTP $($response.StatusCode) for $Method $($Uri.AbsolutePath)"
     }

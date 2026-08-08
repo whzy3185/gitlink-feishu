@@ -54,7 +54,7 @@ func runReviewConfirmLocal(runtime *common.RuntimeContext) error {
 	return runtime.OutputData(result)
 }
 func executeLocalReviewConfirmation(ctx context.Context, runtime *common.RuntimeContext, store *SQLiteReviewGatewayStore, plan ReviewActionPlan, dryRun, approved bool, now time.Time) (ReviewGatewayExecutionResult, error) {
-	result := ReviewGatewayExecutionResult{SchemaVersion: reviewGatewayResultSchema, JobID: plan.SourceJobID, Status: "completed", Mode: "local_confirmation", Action: "confirm_common_review", Repository: plan.Repository, PRNumber: plan.PRNumber, RequestedBy: plan.ActorID, ReadOnlyGitLink: true, CompletedAt: now.Format(time.RFC3339)}
+	result := ReviewGatewayExecutionResult{SchemaVersion: reviewGatewayResultSchema, JobID: plan.SourceJobID, Status: "completed", Mode: "local_confirmation", Action: "confirm_common_review", Repository: plan.Repository, PRNumber: plan.PRNumber, RequestedBy: plan.ActorID, ReadOnlyGitLink: true, CompletedAt: now.Format(time.RFC3339), ConfirmationStateDB: firstNonEmpty(runtime.Arg("state-db"), ".local/review-gateway.db")}
 	action, actionErr := normalizeReviewAction(plan.Action, plan.ReviewStatus)
 	if plan.Status != "pending_confirmation" || actionErr != nil {
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("ActionPlan is not pending controlled action confirmation"))

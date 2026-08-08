@@ -1,0 +1,18 @@
+{
+  "schema_version": "feishu.review-real-stale/v1",
+  "capability": "head_stale_protection",
+  "commit_sha": "68c0547c4901a844d8a2d433decb5f18003c29f3",
+  "timestamp": "2026-08-07T07:08:57Z",
+  "validation_mode": "real_platform_existing_evidence",
+  "result": "passed",
+  "passed": true,
+  "sanitized_target": "muel/gitlink-feishu_agent#1",
+  "observed": {
+    "prepared_at_head_a": true,
+    "confirmed_after_head_b": true,
+    "plan_status": "stale",
+    "review_count_unchanged": true
+  },
+  "external_write_count": {"gitlink_mutation": 0},
+  "blocking_reason": ""
+}

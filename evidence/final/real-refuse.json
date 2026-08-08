@@ -1,0 +1,52 @@
+{
+  "schema_version": "feishu.review-real-controlled-action/v1",
+  "capability": "reject_and_close",
+  "commit_sha": "68c0547c4901a844d8a2d433decb5f18003c29f3",
+  "timestamp": "2026-08-08T07:43:09Z",
+  "validation_mode": "real_platform",
+  "result": "passed",
+  "passed": true,
+  "sanitized_target": "muel/gitlink-feishu_agent#4",
+  "action_plan": {
+    "action": "reject_close",
+    "request_id": "RW-30C593",
+    "expected_head_sha": "f6bec4af176763304e632bdd6f82672fd660f4ed",
+    "reason_preserved": true,
+    "final_status": "completed",
+    "mutation_status": "confirmed",
+    "reconciliation_status": "verified"
+  },
+  "dry_run": {
+    "gitlink_mutation": 0,
+    "result": "passed"
+  },
+  "real_mutation": {
+    "expected": 1,
+    "actual": 1,
+    "operation": "native_refuse_merge",
+    "rejected_review_create": 0
+  },
+  "read_back": {
+    "pr_state": "closed",
+    "total_reviews": 0,
+    "head_matches": true
+  },
+  "duplicate_protection": {
+    "second_confirmation": "rejected_terminal_plan",
+    "additional_mutation": 0
+  },
+  "feishu_result": {
+    "canonical_card_state": "closed",
+    "review_stage": "closed",
+    "decision": "none",
+    "collaboration": "archived",
+    "observed_by_user": true
+  },
+  "external_write_count": {
+    "gitlink_reject_close": 1,
+    "gitlink_review_create": 0,
+    "feishu_canonical_card_patch": 1,
+    "feishu_result_reply": 1
+  },
+  "blocking_reason": ""
+}

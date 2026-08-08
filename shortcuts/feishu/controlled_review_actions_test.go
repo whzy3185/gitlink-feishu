@@ -121,7 +121,7 @@ func TestPrepareControlledActionsCreatesZeroWritePlansAndRiskCards(t *testing.T)
 			if !ok || !strings.Contains(card, result.ActionPlan.PlanID) || !strings.Contains(card, result.ActionPlan.RequestID) {
 				t.Fatalf("card=%s", card)
 			}
-			if (test.planAction == reviewActionMerge || test.planAction == reviewActionRejectClose) && !strings.Contains(card, "HIGH RISK") {
+			if (test.planAction == reviewActionMerge || test.planAction == reviewActionRejectClose) && !strings.Contains(card, "高风险操作") {
 				t.Fatalf("high-risk card missing warning: %s", card)
 			}
 		})
@@ -251,6 +251,13 @@ func TestLocalRejectCloseAndMergeUseOneMutationAndPersistUnknown(t *testing.T) {
 			result, err := executeLocalReviewConfirmation(context.Background(), runtime, store, plan, false, true, now.Add(time.Second))
 			if err != nil || result.WriteResult.Status != "completed" || fixture.writeCount() != 1 {
 				t.Fatalf("result=%#v err=%v writes=%d", result, err, fixture.writeCount())
+			}
+			expectedState := "closed"
+			if action == reviewActionMerge {
+				expectedState = "merged"
+			}
+			if result.GitLinkState != expectedState || result.ReviewStage != expectedState || result.Decision != "none" {
+				t.Fatalf("terminal presentation state=%q stage=%q decision=%q, want %q/none", result.GitLinkState, result.ReviewStage, result.Decision, expectedState)
 			}
 			if _, err := executeLocalReviewConfirmation(context.Background(), runtime, store, plan, false, true, now.Add(2*time.Second)); err == nil || fixture.writeCount() != 1 {
 				t.Fatalf("duplicate err=%v writes=%d", err, fixture.writeCount())

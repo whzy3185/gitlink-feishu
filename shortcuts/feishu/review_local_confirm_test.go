@@ -27,21 +27,30 @@ func TestCommonReviewInputBuildsBoundedActionPlanCard(t *testing.T) {
 	if !strings.HasPrefix(plan.RequestID, "RW-") || strings.Count(plan.Content, "Ref:") != 1 || strings.Contains(plan.Content, "RW-AAAAAA") {
 		t.Fatalf("plan request identity/content = %#v", plan)
 	}
-	result := ReviewGatewayExecutionResult{Status: "completed", Repository: plan.Repository, PRNumber: plan.PRNumber, ActionPlan: &plan}
+	result := ReviewGatewayExecutionResult{Status: "completed", Repository: plan.Repository, PRNumber: plan.PRNumber, ActionPlan: &plan, ConfirmationStateDB: ".local/review-gateway-live.db"}
 	cardJSON, ok := safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, result, nil))
-	for _, expected := range []string{plan.RequestID, plan.GitLinkLogin, "review-confirm-local", "本地执行 Review", "取消 Review", "刷新 owner/repo PR #42"} {
+	if !ok || strings.Contains(cardJSON, ".local/review-gateway-live.db") || strings.Contains(cardJSON, "review-confirm-local") {
+		t.Fatalf("ordinary ActionPlan card leaked advanced local confirmation details: %s", cardJSON)
+	}
+	for _, expected := range []string{plan.RequestID, plan.GitLinkLogin, "查看本地确认方式", "取消操作", "刷新 PR 状态", plan.PlanID} {
 		if !ok || !strings.Contains(cardJSON, expected) {
 			t.Fatalf("ActionPlan card missing %q: %s", expected, cardJSON)
 		}
 	}
+	advanced := result
+	advanced.Action = "show_local_review_plan"
+	advancedJSON, ok := safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, advanced, nil))
+	if !ok || !strings.Contains(advancedJSON, "review-confirm-local") || !strings.Contains(advancedJSON, ".local/review-gateway-live.db") || strings.Contains(advancedJSON, "--state-db .local/review-gateway.db") {
+		t.Fatalf("advanced confirmation card did not preserve the configured state DB: %s", advancedJSON)
+	}
 	result.PullRequest = &ReviewGatewayPullRequestView{RecommendedNextStep: "assign_human_reviewer"}
 	result.ResultCard = buildReviewGatewayResultCard(job, result, nil)
 	reply := formatReviewGatewayResultReply(job, result)
-	if !strings.Contains(reply, plan.PlanID) || !strings.Contains(reply, plan.RequestID) || strings.Contains(reply, "assign_human_reviewer") {
+	if strings.Contains(reply, plan.PlanID) || !strings.Contains(reply, plan.RequestID) || strings.Contains(reply, "assign_human_reviewer") {
 		t.Fatalf("ActionPlan reply was downgraded to a PR summary: %s", reply)
 	}
 	ack := formatReviewGatewayAcknowledgement(ReviewGatewayJob{Action: "prepare_common_review", Repository: job.Repository, PRNumber: job.PRNumber, JobID: job.JobID})
-	if !strings.Contains(ack, "COMMON REVIEW") || !strings.Contains(ack, "ActionPlan") || strings.Contains(ack, "只读 Review 请求") {
+	if !strings.Contains(ack, "提交审查意见") || strings.Contains(ack, "ActionPlan") || strings.Contains(ack, "只读 Review 请求") {
 		t.Fatalf("ActionPlan acknowledgement = %q", ack)
 	}
 	planner := &ReviewOperationPlanner{}
