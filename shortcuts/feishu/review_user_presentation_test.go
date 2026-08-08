@@ -2,6 +2,7 @@ package feishu
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,10 +16,10 @@ func TestReviewPresentationMappings(t *testing.T) {
 		reviewPRStateDisplayName("merged"):                                   "已合并",
 		reviewStageDisplayName("triaged"):                                    "已进入审查流程",
 		reviewStageDisplayName("waiting_for_re_review"):                      "等待重新审查",
-		reviewDecisionDisplayName("pending"):                                 "待决定",
+		reviewDecisionDisplayName("pending"):                                 "待审查",
 		reviewDecisionDisplayName("approved"):                                "已批准",
 		reviewDecisionDisplayName("rejected"):                                "需要修改",
-		reviewDecisionDisplayName("unknown"):                                 "待确认",
+		reviewDecisionDisplayName("unknown"):                                 "待审查",
 		reviewCollectionStatusDisplayName("complete", false):                 "完整",
 		reviewCollectionStatusDisplayName("partial", true):                   "数据不完整",
 		reviewNextStepDisplayName("assign_human_reviewer"):                   "建议分配人工审查者",
@@ -40,13 +41,14 @@ func TestReviewPresentationMappings(t *testing.T) {
 	for _, got := range []string{
 		reviewPRStateDisplayName("new_internal_state"),
 		reviewStageDisplayName("new_internal_stage"),
-		reviewDecisionDisplayName("new_internal_decision"),
-		reviewNextStepDisplayName("new_internal_next_step"),
 		reviewWriteStatusDisplayName("new_internal_write_status"),
 	} {
 		if got != "待确认" {
 			t.Fatalf("unknown presentation value leaked as %q", got)
 		}
+	}
+	if got := reviewNextStepDisplayName("new_internal_next_step"); got != "" {
+		t.Fatalf("unknown next-step should be hidden, got %q", got)
 	}
 }
 
@@ -58,6 +60,7 @@ func TestReviewGatewayChineseCommandsAndCompatibilityAliases(t *testing.T) {
 		{"领取 owner/repo PR #1", "claim_review", ""},
 		{"取消领取 owner/repo PR #1", "release_review", ""},
 		{"设置 owner/repo PR #1 审查截止 2026-08-10", "set_review_deadline", "2026-08-10"},
+		{"清除 owner/repo PR #1 审查截止", "clear_review_deadline", ""},
 		{"提交审查意见 owner/repo PR #1 good", "prepare_common_review", "good"},
 		{"批准 owner/repo PR #1 good", "prepare_review_approve", "good"},
 		{"需要修改 owner/repo PR #1 fix this", "prepare_review_reject", "fix this"},
@@ -159,11 +162,12 @@ func TestReviewGatewayPlanLifecyclePresentationIsMutuallyExclusive(t *testing.T)
 }
 
 func TestReviewGatewayAcknowledgementsAreActionSpecific(t *testing.T) {
+	for _, action := range []string{"read_review_context", "claim_review", "release_review", "set_review_deadline", "clear_review_deadline"} {
+		if ack := formatReviewGatewayAcknowledgement(ReviewGatewayJob{Action: action, Repository: "owner/repo", PRNumber: 1}); ack != "" {
+			t.Fatalf("ordinary action %s sent ACK %q", action, ack)
+		}
+	}
 	tests := map[string]string{
-		"read_review_context":    "PR 查询请求",
-		"claim_review":           "正在领取 PR #1",
-		"release_review":         "正在取消 PR #1",
-		"set_review_deadline":    "正在更新 PR #1 的审查截止时间",
 		"prepare_common_review":  "提交审查意见",
 		"prepare_review_approve": "批准 PR #1",
 		"prepare_review_reject":  "需要修改 PR #1",
@@ -175,6 +179,34 @@ func TestReviewGatewayAcknowledgementsAreActionSpecific(t *testing.T) {
 		if !strings.Contains(ack, want) || strings.Contains(ack, "只读 Review 请求") {
 			t.Fatalf("ack %s = %q", action, ack)
 		}
+	}
+}
+
+func TestReviewersAreCompleteSortedAndBoundedOnlyAtPresentation(t *testing.T) {
+	reviewers := []ReviewGatewayReviewerView{
+		{Reviewer: "approved-old", Decision: "approved", ReviewedAt: "2026-08-08T12:00:00Z"},
+		{Reviewer: "comment-old", Decision: "common", ReviewedAt: "2026-08-08T12:01:00Z"},
+		{Reviewer: "rejected-old", Decision: "rejected", ReviewedAt: "2026-08-08T12:02:00Z"},
+		{Reviewer: "rejected-new", Decision: "rejected", ReviewedAt: "2026-08-08T12:03:00Z"},
+		{Reviewer: "comment-new", Decision: "commented", ReviewedAt: "2026-08-08T12:04:00Z"},
+		{Reviewer: "approved-new", Decision: "approved", ReviewedAt: "2026-08-08T12:05:00Z"},
+	}
+	for index := 0; index < 6; index++ {
+		reviewers = append(reviewers, ReviewGatewayReviewerView{Reviewer: fmt.Sprintf("other-%d", index), Decision: "unknown"})
+	}
+	sortReviewGatewayReviewers(reviewers)
+	wantPrefix := []string{"rejected-new", "rejected-old", "comment-new", "comment-old", "approved-new", "approved-old"}
+	for index, want := range wantPrefix {
+		if reviewers[index].Reviewer != want {
+			t.Fatalf("reviewers[%d]=%q, want %q; all=%#v", index, reviewers[index].Reviewer, want, reviewers)
+		}
+	}
+	if len(reviewers) != 12 {
+		t.Fatalf("reviewer aggregation was truncated: %d", len(reviewers))
+	}
+	lines := reviewReviewerDisplayLines(reviewers, 80)
+	if len(lines) >= len(reviewers) || !strings.HasPrefix(lines[len(lines)-1], "另有 ") {
+		t.Fatalf("bounded presentation did not report omitted reviewers: %#v", lines)
 	}
 }
 
@@ -217,29 +249,56 @@ func TestReviewGatewayCollaborationRepliesUseReadableIdentityAndActionCopy(t *te
 		Repository: "owner/repo", PRNumber: 1, CollaborationStatus: "reviewing",
 		AssignedTo: "opaque-sensitive-user-id", AssignedDisplayName: "张三", DueAt: "2026-08-10",
 	}
+	item.ActionOutcome = "claimed"
 	claim := formatReviewCollaborationReply(ReviewGatewayJob{Action: "claim_review"}, item)
-	if !strings.Contains(claim, "领取成功") || !strings.Contains(claim, "负责人：张三") || !strings.Contains(claim, "协作状态：审查中") || strings.Contains(claim, item.AssignedTo) {
+	if claim != "PR #1 已由张三负责" || strings.Contains(claim, "协作状态") || strings.Contains(claim, item.AssignedTo) {
 		t.Fatalf("claim reply = %q", claim)
 	}
+	item.ActionOutcome = "deadline_updated"
 	deadline := formatReviewCollaborationReply(ReviewGatewayJob{Action: "set_review_deadline"}, item)
 	if !strings.Contains(deadline, "审查截止时间已更新") || !strings.Contains(deadline, "2026-08-10") {
 		t.Fatalf("deadline reply = %q", deadline)
 	}
+	item.ActionOutcome = "released"
 	release := formatReviewCollaborationReply(ReviewGatewayJob{Action: "release_review"}, item)
-	if !strings.Contains(release, "已取消领取") || !strings.Contains(release, "负责人：未领取") || !strings.Contains(release, "协作状态：未领取") || strings.Contains(release, item.AssignedTo) {
+	if release != "PR #1 已取消负责人" || strings.Contains(release, "协作状态") || strings.Contains(release, item.AssignedTo) {
 		t.Fatalf("release reply = %q", release)
 	}
 	item.AssignedDisplayName = ""
-	if got := reviewGatewayAssigneePlainLabel(item); got != "飞书成员" || strings.Contains(got, reviewGatewayHashIdentifier(item.AssignedTo)) {
+	if got := reviewGatewayAssigneePlainLabel(item); got != "负责人信息待同步" || strings.Contains(got, reviewGatewayHashIdentifier(item.AssignedTo)) {
 		t.Fatalf("plain assignee fallback leaked identity: %q", got)
+	}
+}
+
+func TestCollaborationFailuresAlwaysProduceUserVisibleReply(t *testing.T) {
+	tests := []struct {
+		action string
+		detail string
+		want   string
+	}{
+		{"claim_review", "当前账号尚未绑定 GitLink 身份", "当前账号尚未绑定 GitLink 身份"},
+		{"claim_review", "当前 GitLink 身份不是该仓库的协作者", "不是该仓库的协作者"},
+		{"claim_review", "暂时无法确认当前 GitLink 身份的仓库协作者状态，请稍后重试", "请稍后重试"},
+		{"claim_review", "PR #3 当前已由测试负责", "当前已由测试负责"},
+		{"release_review", "当前 PR 由测试负责，只有当前负责人或协作管理员可以取消领取", "只有当前负责人"},
+		{"set_review_deadline", "日期格式应为 YYYY-MM-DD", "YYYY-MM-DD"},
+		{"set_review_deadline", "database is locked", "协作状态正忙"},
+		{"read_review_context", "GitLink API request failed", "GitLink 暂时不可用"},
+	}
+	for _, test := range tests {
+		reply := formatReviewGatewayFailureReply(ReviewGatewayJob{Action: test.action, PRNumber: 3}, test.detail)
+		if strings.TrimSpace(reply) == "" || !strings.Contains(reply, test.want) {
+			t.Fatalf("failure reply action=%s detail=%q => %q", test.action, test.detail, reply)
+		}
 	}
 }
 
 func TestReviewGatewayHelpPromotesChineseCommandsAndCurrentBoundaries(t *testing.T) {
 	help := reviewGatewayHelpText()
 	for _, required := range []string{
-		"查看 owner/repo PR #123", "取消领取 owner/repo PR #123", "审查截止 YYYY-MM-DD",
-		"提交审查意见", "批准 owner/repo", "需要修改 owner/repo", "拒绝并关闭 owner/repo", "合并 owner/repo",
+		"查看 <拥有者>/<仓库> PR #<编号>", "取消领取 <拥有者>/<仓库> PR #<编号>", "审查截止 <YYYY-MM-DD>",
+		"清除 <拥有者>/<仓库>", "提交审查意见", "批准 <拥有者>/<仓库>", "需要修改 <拥有者>/<仓库>", "拒绝并关闭 <拥有者>/<仓库>", "合并 <拥有者>/<仓库>",
+		"查看 muel/gitlink-feishu_agent PR #3",
 		"需要修改”只提交审查结论，PR 保持开放",
 	} {
 		if !strings.Contains(help, required) {
@@ -385,7 +444,7 @@ func TestReviewGatewayActionPlanIdentityIsConsistentAcrossStoreCardAndReply(t *t
 	result := ReviewGatewayExecutionResult{Status: "completed", Action: job.Action, Repository: job.Repository, PRNumber: job.PRNumber, ActionPlan: &plan}
 	cardJSON, _ := safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, result, nil))
 	reply := formatReviewGatewayResultReply(job, result)
-	if stored.PlanID != plan.PlanID || stored.RequestID != plan.RequestID || !strings.Contains(cardJSON, plan.PlanID) || !strings.Contains(cardJSON, plan.RequestID) || !strings.Contains(reply, plan.RequestID) {
+	if stored.PlanID != plan.PlanID || stored.RequestID != plan.RequestID || !strings.Contains(cardJSON, plan.PlanID) || strings.Contains(cardJSON, "操作编号") || strings.Contains(reply, plan.RequestID) {
 		t.Fatalf("plan identity drifted: stored=%#v card=%s reply=%s", stored, cardJSON, reply)
 	}
 	replayed, err := store.CreateReviewActionPlan(context.Background(), NewControlledReviewActionPlan(job, "gitlink-user", "head", "fingerprint", reviewActionReject, "fix", now))

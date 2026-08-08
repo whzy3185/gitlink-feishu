@@ -398,6 +398,8 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		}
 		agentProvider = provider
 	}
+	operationClient := NewOpenAPIClient(nil)
+	tokenProvider := NewReviewTenantTokenProvider(operationClient, time.Now)
 	executor := &ReviewGatewayExecutor{
 		Runtime:             runtime,
 		ConfirmationStateDB: statePath,
@@ -415,6 +417,7 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		AgentProvider:              agentProvider,
 		AgentTaskTimeout:           time.Duration(agentTaskTimeoutSeconds) * time.Second,
 		AgentMaxConcurrency:        agentMaxConcurrency,
+		DisplayNames:               NewReviewFeishuDisplayNameResolver(operationClient, tokenProvider, appID, appSecret),
 	}
 	queue := NewReviewGatewayQueue(gateway, store, queueSize, func(outcome ReviewGatewayJobOutcome) {
 		resultObservation := newReviewGatewayObservation("result", instanceLock.metadata.InstanceID)
@@ -428,8 +431,6 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 			replyDispatcher.Wake()
 		}
 	})
-	operationClient := NewOpenAPIClient(nil)
-	tokenProvider := NewReviewTenantTokenProvider(operationClient, time.Now)
 	liveSender.tokenProvider = tokenProvider
 	operationHandler := &ReviewOperationHandler{
 		Store: store, Client: operationClient, Sender: liveSender,
@@ -957,15 +958,10 @@ func countReviewGatewayBindingUsers(bindings ReviewGatewayBindings, admins bool)
 }
 
 func shouldNotifyReviewGatewayRejection(receipt ReviewGatewayReceipt) bool {
-	if !receipt.Bound || strings.TrimSpace(receipt.Event.MessageID) == "" {
+	if strings.TrimSpace(receipt.Event.MessageID) == "" {
 		return false
 	}
-	switch receipt.Reason {
-	case "sender_not_allowed", "unsupported_read_only_command", "binding_requires_admin", "repository_qualification_required":
-		return true
-	default:
-		return false
-	}
+	return strings.TrimSpace(formatReviewGatewayNotice(receipt.Reason)) != ""
 }
 
 func reviewGatewayEventFromMessage(message *larktypes.NormalizedMessage) ReviewGatewayEvent {

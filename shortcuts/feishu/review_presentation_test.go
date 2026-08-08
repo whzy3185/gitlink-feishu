@@ -174,7 +174,7 @@ func TestPresentationBoundsReviewersAndUnknowns(t *testing.T) {
 	if len([]rune(presentation.Title)) > 200 || len([]rune(presentation.Author)) > 100 ||
 		len([]rune(presentation.BaseBranch)) > 200 || len([]rune(presentation.HeadBranch)) > 200 ||
 		len([]rune(presentation.RecommendedNextStep)) > 500 || len([]rune(presentation.GitLinkURL)) > 500 ||
-		len(presentation.Reviewers) != 20 || len(presentation.Unknowns) != 20 {
+		len(presentation.Reviewers) != 25 || len(presentation.Unknowns) != 20 {
 		t.Fatalf("presentation bounds not enforced: %#v", presentation)
 	}
 	for _, unknown := range presentation.Unknowns {

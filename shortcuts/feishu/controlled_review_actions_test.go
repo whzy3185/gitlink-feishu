@@ -118,7 +118,7 @@ func TestPrepareControlledActionsCreatesZeroWritePlansAndRiskCards(t *testing.T)
 				t.Fatalf("result=%#v err=%v writes=%d", result, runErr, state.writes())
 			}
 			card, ok := safeReviewGatewayCardJSON(result.ResultCard)
-			if !ok || !strings.Contains(card, result.ActionPlan.PlanID) || !strings.Contains(card, result.ActionPlan.RequestID) {
+			if !ok || !strings.Contains(card, result.ActionPlan.PlanID) || strings.Contains(card, "操作编号") {
 				t.Fatalf("card=%s", card)
 			}
 			if (test.planAction == reviewActionMerge || test.planAction == reviewActionRejectClose) && !strings.Contains(card, "高风险操作") {

@@ -1541,7 +1541,7 @@ func TestReviewGatewayReplyDispatcherRepliesOnceToOriginalMessage(t *testing.T) 
 		t.Fatalf("reply target = %q", sender.inputs[0].ReplyMessageID)
 	}
 	if sender.inputs[0].MsgType != "interactive" ||
-		!strings.Contains(sender.inputs[0].Card, "本次操作未修改 GitLink") {
+		!strings.Contains(sender.inputs[0].Card, "查看 PR") || strings.Contains(sender.inputs[0].Card, "本次操作未修改 GitLink") {
 		t.Fatalf("reply card boundary missing: %#v", sender.inputs[0])
 	}
 	store.mu.Lock()
@@ -1888,8 +1888,8 @@ func TestReviewGatewayRejectionNoticeIsSafeAndBounded(t *testing.T) {
 			t.Fatalf("unsafe notice for %s: %s", reason, text)
 		}
 	}
-	if text := formatReviewGatewayNotice("chat_not_bound"); text != "" {
-		t.Fatalf("unbound chat should remain silent: %s", text)
+	if text := formatReviewGatewayNotice("chat_not_bound"); text == "" {
+		t.Fatal("unbound chat should receive an explicit failure")
 	}
 }
 
@@ -1933,7 +1933,7 @@ func TestReviewCollaborationClaimDeadlineReleaseAndAudit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("release: %v", err)
 	}
-	if item.AssignedTo != "" || item.CollaborationStatus != "unassigned" || item.DueAt != "" {
+	if item.AssignedTo != "" || item.CollaborationStatus != "unassigned" || item.DueAt != "2026-08-02" {
 		t.Fatalf("released item = %#v", item)
 	}
 	var auditCount int

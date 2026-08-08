@@ -164,7 +164,7 @@ func (d *ReviewGatewayReplyDispatcher) TryNotice(notice ReviewGatewayNotice) boo
 }
 
 func (d *ReviewGatewayReplyDispatcher) TryAcknowledge(job ReviewGatewayJob) bool {
-	if d == nil || d.sender == nil || job.SourceMessageID == "" {
+	if d == nil || d.sender == nil || job.SourceMessageID == "" || strings.TrimSpace(formatReviewGatewayAcknowledgement(job)) == "" {
 		return false
 	}
 	select {
@@ -550,14 +550,8 @@ func formatReviewGatewayCanonicalNotice(job ReviewGatewayJob, refreshed bool) st
 
 func formatReviewGatewayAcknowledgement(job ReviewGatewayJob) string {
 	switch job.Action {
-	case "read_review_context", "refresh_review_context":
-		return "已收到 PR 查询请求，正在获取 GitLink 最新状态。"
-	case "claim_review":
-		return fmt.Sprintf("正在领取 PR #%d。", job.PRNumber)
-	case "release_review":
-		return fmt.Sprintf("正在取消 PR #%d 的领取状态。", job.PRNumber)
-	case "set_review_deadline":
-		return fmt.Sprintf("正在更新 PR #%d 的审查截止时间。", job.PRNumber)
+	case "read_review_context", "refresh_review_context", "claim_review", "release_review", "set_review_deadline", "clear_review_deadline":
+		return ""
 	}
 	if action := reviewGatewayPrepareAction(job.Action); action != "" {
 		return fmt.Sprintf("已收到“%s PR #%d”请求，正在生成操作计划。\n当前尚未修改 GitLink。", reviewActionDisplayName(action), job.PRNumber)
@@ -570,17 +564,25 @@ func formatReviewGatewayNotice(reason string) string {
 	case "sender_not_allowed":
 		return "当前账号没有操作本群 GitLink Review 助手的权限，请联系群管理员加入允许名单。"
 	case "collaboration_not_allowed":
-		return "当前账号没有领取该仓库 PR 的协作权限。"
+		return "操作失败。\n当前账号不能管理该 PR 的负责人。"
 	case "collaboration_identity_required":
-		return "领取 PR 前需要先绑定 GitLink 身份。"
+		return "领取失败。\n当前账号尚未绑定 GitLink 身份。"
 	case "binding_requires_admin":
 		return "仓库绑定只能由已配置的管理员执行；当前请求没有修改任何绑定。"
 	case "repository_qualification_required":
 		return "请明确指定仓库，所有仓库均为平等作用域。示例：查看 Gitlink/gitlink-cli PR #431。"
 	case "unsupported_read_only_command":
-		return "暂不支持该指令。请输入“帮助”查看正式命令。PR 级命令必须包含 owner/repo，例如：查看 Gitlink/gitlink-cli PR #431。Reviewer 修改、行级评论写入和讨论解决暂未支持。"
+		return "暂不支持该指令。请输入“帮助”查看正式命令。PR 级命令必须包含 owner/repo，例如：查看 Gitlink/gitlink-cli PR #431。Reviewer 修改和行级评论写入暂未支持。"
 	case "review_queue_busy", "review_rate_limited":
 		return "当前群的 Review 请求较多，请稍后重试。"
+	case "chat_not_bound":
+		return "操作失败。\n当前群尚未绑定 GitLink 安装。"
+	case "installation_disabled", "installation_write_disabled":
+		return "操作失败。\n当前 GitLink 安装不可用，请联系管理员。"
+	case "repository_not_bound":
+		return "操作失败。\n该仓库不在当前群的可用范围内。"
+	case "state_store_failed":
+		return "操作失败。\n协作状态暂时无法保存，请稍后重试。"
 	default:
 		return ""
 	}
@@ -588,12 +590,7 @@ func formatReviewGatewayNotice(reason string) string {
 
 func formatReviewGatewayResultReply(job ReviewGatewayJob, result ReviewGatewayExecutionResult) string {
 	if result.Status == "failed" {
-		return truncateReviewGatewayText(fmt.Sprintf(
-			"PR 请求处理失败\n目标：%s PR #%d\n错误：%s\n本次操作未修改 GitLink。",
-			job.Repository,
-			job.PRNumber,
-			firstNonEmpty(result.Error, "unknown"),
-		), 3000)
+		return formatReviewGatewayFailureReply(job, result.Error)
 	}
 	if result.WriteResult != nil {
 		return formatReviewWriteResultReply(*result.WriteResult)
@@ -627,61 +624,55 @@ func formatReviewGatewayResultReply(job ReviewGatewayJob, result ReviewGatewayEx
 	if plan := result.ActionPlan; plan != nil {
 		return formatReviewActionPlanReply(*plan)
 	}
-	if result.Collaboration != nil && (job.Action == "claim_review" || job.Action == "release_review" || job.Action == "set_review_deadline") {
+	if result.Collaboration != nil && (job.Action == "claim_review" || job.Action == "release_review" || job.Action == "set_review_deadline" || job.Action == "clear_review_deadline") {
 		return formatReviewCollaborationReply(job, result.Collaboration.Item)
 	}
 	if result.PullRequest != nil {
 		view := result.PullRequest
 		lines := []string{
-			fmt.Sprintf("%s PR #%d · %s", job.Repository, job.PRNumber, firstNonEmpty(view.Title, "无标题")),
-			fmt.Sprintf("作者：%s", firstNonEmpty(view.Author, "待确认")),
-			fmt.Sprintf("PR 状态：%s", reviewPRStateDisplayName(result.GitLinkState)),
-			fmt.Sprintf("目标分支：%s；来源分支：%s", firstNonEmpty(view.BaseBranch, "待确认"), firstNonEmpty(view.HeadBranch, "待确认")),
+			fmt.Sprintf("%s PR #%d", job.Repository, job.PRNumber),
+			firstNonEmpty(view.Title, "无标题"),
+			fmt.Sprintf("作者：%s", firstNonEmpty(view.Author, "未知")),
+			fmt.Sprintf("状态：%s", reviewPRStateDisplayName(result.GitLinkState)),
+			fmt.Sprintf("目标分支：%s", firstNonEmpty(view.BaseBranch, "未知")),
+			fmt.Sprintf("来源分支：%s", firstNonEmpty(view.HeadBranch, "未知")),
 			fmt.Sprintf("当前版本：%s", shortReviewGatewaySHA(result.HeadSHA)),
 			fmt.Sprintf("变更：%d 个文件 · +%d / -%d · %d 次提交", view.FilesCount, view.Additions, view.Deletions, view.CommitsCount),
-			fmt.Sprintf("审查阶段：%s；当前结论：%s", reviewStageDisplayName(result.ReviewStage), reviewDecisionDisplayName(result.Decision)),
-			fmt.Sprintf("审查记录：%d；未解决讨论：%d", result.ReviewCount, result.OpenThreadCount),
-			fmt.Sprintf("数据状态：%s；风险：%s", reviewCollectionStatusDisplayName(result.CollectionStatus, result.Partial), reviewRiskDisplayName(view.RiskLevel)),
+			fmt.Sprintf("Review：%d 条", result.ReviewCount),
 		}
+		decision := result.Decision
+		if result.GitLinkState == "merged" || result.GitLinkState == "closed" {
+			decision = result.GitLinkState
+		}
+		lines = append(lines, "当前结论："+reviewDecisionDisplayName(decision))
 		if len(view.Reviewers) > 0 {
-			reviewers := make([]string, 0, len(view.Reviewers))
-			for _, reviewer := range view.Reviewers {
-				reviewers = append(reviewers, reviewer.Reviewer+"="+reviewReviewerDecisionDisplayName(reviewer.Decision))
+			lines = append(lines, "审查者：")
+			for _, reviewerLine := range reviewReviewerDisplayLines(view.Reviewers, 1600) {
+				lines = append(lines, "- "+reviewerLine)
 			}
-			lines = append(lines, "Reviewer："+strings.Join(reviewers, "；"))
-		}
-		if len(view.Unknowns) > 0 {
-			lines = append(lines, "待确认："+strings.Join(view.Unknowns, "；"))
-		}
-		if view.RecommendedNextStep != "" {
-			lines = append(lines, "建议下一步："+reviewNextStepDisplayName(view.RecommendedNextStep))
+		} else {
+			lines = append(lines, "审查者：无")
 		}
 		if result.Collaboration != nil {
 			item := result.Collaboration.Item
-			lines = append(lines, fmt.Sprintf(
-				"协作：%s；负责人：%s；截止：%s",
-				reviewCollaborationStatusDisplayName(item.CollaborationStatus),
-				reviewGatewayAssigneePlainLabel(item),
-				firstNonEmpty(item.DueAt, "未设置"),
-			))
+			lines = append(lines, "负责人："+reviewGatewayAssigneePlainLabel(item))
+			if strings.TrimSpace(item.DueAt) != "" {
+				lines = append(lines, "审查截止："+item.DueAt)
+			}
+		} else if !result.PublicRead {
+			lines = append(lines, "负责人：无")
+		}
+		if nextStep := reviewNextStepDisplayName(view.RecommendedNextStep); nextStep != "" {
+			lines = append(lines, "建议下一步："+nextStep)
 		}
 		if view.GitLinkURL != "" {
-			lines = append(lines, "GitLink："+view.GitLinkURL)
+			lines = append(lines, "GitLink：查看 PR\n"+view.GitLinkURL)
 		}
-		lines = append(lines, "本次操作未修改 GitLink。")
 		return truncateReviewGatewayText(strings.Join(lines, "\n"), 3000)
 	}
 	if result.Collaboration != nil {
 		item := result.Collaboration.Item
-		return truncateReviewGatewayText(fmt.Sprintf(
-			"%s PR #%d 协作状态已更新\n协作状态：%s\n负责人：%s\n审查截止：%s\n审查阶段：%s\n本次操作未修改 GitLink。",
-			item.Repository,
-			item.PRNumber,
-			reviewCollaborationStatusDisplayName(item.CollaborationStatus),
-			reviewGatewayAssigneePlainLabel(item),
-			firstNonEmpty(item.DueAt, "未设置"),
-			reviewStageDisplayName(item.ReviewStage),
-		), 3000)
+		return truncateReviewGatewayText(fmt.Sprintf("%s PR #%d\n负责人：%s", item.Repository, item.PRNumber, reviewGatewayAssigneePlainLabel(item)), 3000)
 	}
 	if result.CollaborationItems != nil {
 		lines := []string{fmt.Sprintf("我的 Review 任务：%d", len(result.CollaborationItems))}
@@ -708,7 +699,7 @@ func formatReviewGatewayResultReply(job ReviewGatewayJob, result ReviewGatewayEx
 		fmt.Sprintf("%s PR #%d 查询完成", job.Repository, job.PRNumber),
 		fmt.Sprintf("审查阶段：%s；当前结论：%s", reviewStageDisplayName(result.ReviewStage), reviewDecisionDisplayName(result.Decision)),
 		fmt.Sprintf("数据状态：%s", reviewCollectionStatusDisplayName(result.CollectionStatus, result.Partial)),
-		fmt.Sprintf("审查记录：%d；讨论：%d；未解决：%d", result.ReviewCount, result.ThreadCount, result.OpenThreadCount),
+		fmt.Sprintf("审查记录：%d", result.ReviewCount),
 	}
 	if result.HeadSHA != "" {
 		lines = append(lines, "Head："+truncateReviewGatewayText(result.HeadSHA, 12))
@@ -826,13 +817,10 @@ func formatReviewActionPlanReply(plan ReviewActionPlan) string {
 		return fmt.Sprintf("%s PR #%d 操作执行失败\n操作：%s\n本次未确认 GitLink 写入。\n请刷新 PR 状态并检查失败原因后重新发起操作。", plan.Repository, plan.PRNumber, reviewActionDisplayName(plan.Action))
 	default:
 		return truncateReviewGatewayText(strings.Join([]string{
-			fmt.Sprintf("%s PR #%d “%s”操作计划已生成", plan.Repository, plan.PRNumber, reviewActionDisplayName(plan.Action)),
-			"操作编号：" + plan.RequestID,
-			"GitLink 身份：" + firstNonEmpty(plan.GitLinkLogin, "待确认"),
-			"基于版本：" + shortReviewGatewaySHA(plan.ExpectedHeadSHA),
-			"状态：待本地确认",
-			"操作计划已生成，尚未修改 GitLink。",
-			"最终执行需要使用绑定的 GitLink 身份完成本地确认。",
+			fmt.Sprintf("PR #%d “%s”已准备", plan.PRNumber, reviewActionDisplayName(plan.Action)),
+			"执行身份：" + firstNonEmpty(plan.GitLinkLogin, "待确认"),
+			"当前版本：" + shortReviewGatewaySHA(plan.ExpectedHeadSHA),
+			"状态：等待本地确认",
 		}, "\n"), 3000)
 	}
 }
@@ -840,12 +828,56 @@ func formatReviewActionPlanReply(plan ReviewActionPlan) string {
 func formatReviewCollaborationReply(job ReviewGatewayJob, item ReviewCollaborationItem) string {
 	switch job.Action {
 	case "claim_review":
-		return fmt.Sprintf("%s PR #%d 领取成功\n负责人：%s\n协作状态：%s\n本次操作未修改 GitLink。", item.Repository, item.PRNumber, reviewGatewayAssigneePlainLabel(item), reviewCollaborationStatusDisplayName(item.CollaborationStatus))
+		if item.ActionOutcome == "already_responsible" {
+			return fmt.Sprintf("PR #%d 当前已由你负责", item.PRNumber)
+		}
+		return fmt.Sprintf("PR #%d 已由%s负责", item.PRNumber, reviewGatewayAssigneePlainLabel(item))
 	case "release_review":
-		return fmt.Sprintf("%s PR #%d 已取消领取\n负责人：未领取\n审查截止：未设置\n协作状态：未领取\n本次操作未修改 GitLink。", item.Repository, item.PRNumber)
+		if item.ActionOutcome == "no_responsible" {
+			return fmt.Sprintf("PR #%d 当前没有负责人", item.PRNumber)
+		}
+		return fmt.Sprintf("PR #%d 已取消负责人", item.PRNumber)
 	case "set_review_deadline":
-		return fmt.Sprintf("%s PR #%d 的审查截止时间已更新\n审查截止：%s\n本次操作未修改 GitLink。", item.Repository, item.PRNumber, firstNonEmpty(item.DueAt, "未设置"))
+		if item.ActionOutcome == "deadline_set" {
+			return fmt.Sprintf("PR #%d 审查截止时间已设置为 %s", item.PRNumber, item.DueAt)
+		}
+		return fmt.Sprintf("PR #%d 审查截止时间已更新为 %s", item.PRNumber, item.DueAt)
+	case "clear_review_deadline":
+		if item.ActionOutcome == "deadline_absent" {
+			return fmt.Sprintf("PR #%d 当前没有设置审查截止时间", item.PRNumber)
+		}
+		return fmt.Sprintf("PR #%d 的审查截止时间已清除", item.PRNumber)
 	default:
-		return "协作状态已更新。\n本次操作未修改 GitLink。"
+		return "负责人信息已更新。"
+	}
+}
+
+func formatReviewGatewayFailureReply(job ReviewGatewayJob, detail string) string {
+	detail = strings.TrimSpace(redactReviewGatewayError(detail))
+	prefix := "操作失败。"
+	if job.Action == "claim_review" {
+		prefix = "领取失败。"
+	} else if job.Action == "release_review" {
+		prefix = "取消失败。"
+	} else if job.Action == "read_review_context" || job.Action == "refresh_review_context" {
+		prefix = fmt.Sprintf("PR #%d 获取失败。", job.PRNumber)
+	}
+	switch {
+	case strings.Contains(detail, "尚未绑定 GitLink 身份"):
+		return prefix + "\n当前账号尚未绑定 GitLink 身份。"
+	case strings.Contains(detail, "不是该仓库的协作者"):
+		return prefix + "\n当前 GitLink 身份不是该仓库的协作者。"
+	case strings.Contains(detail, "无法确认当前 GitLink 身份的仓库协作者状态"):
+		return prefix + "\n暂时无法确认当前 GitLink 身份的仓库协作者状态，请稍后重试。"
+	case strings.Contains(detail, "日期格式应为"):
+		return "设置失败。\n日期格式应为 YYYY-MM-DD，例如 2026-08-10。"
+	case strings.Contains(strings.ToLower(detail), "database is locked"), strings.Contains(strings.ToLower(detail), "database is busy"):
+		return prefix + "\n协作状态正忙，请稍后重试。"
+	case strings.Contains(detail, "GitLink API"), strings.Contains(detail, "GitLink runtime"):
+		return prefix + "\nGitLink 暂时不可用，请稍后重试。"
+	case detail == "":
+		return prefix + "\n请稍后重试。"
+	default:
+		return truncateReviewGatewayText(prefix+"\n原因："+detail, 3000)
 	}
 }

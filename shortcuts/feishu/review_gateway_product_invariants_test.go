@@ -114,19 +114,15 @@ func assertFullPRCardFacts(t *testing.T, card Card) {
 	t.Helper()
 	text := productInvariantCardText(card)
 	expected := map[string]string{
-		"PR title":              "Preserve complete PR context",
-		"author":                "alice",
-		"target branch":         "**目标分支**\nmain",
-		"source branch":         "**来源分支**\nfeature/card-continuity",
-		"short head SHA":        "0123456789ab",
-		"files and changes":     "12 个文件 · +328 / -91",
-		"commits count":         "**提交数量**\n4 次提交",
-		"patchset":              "patchset-7",
-		"review stage":          "**审查阶段**\n审查中",
-		"reviewer":              "bob：需要修改",
-		"open thread count":     "**未解决讨论**\n2",
-		"assignee field":        "**负责人**",
-		"review deadline field": "**审查截止**",
+		"PR title":          "Preserve complete PR context",
+		"author":            "alice",
+		"target branch":     "**目标分支**\nmain",
+		"source branch":     "**来源分支**\nfeature/card-continuity",
+		"short head SHA":    "0123456789ab",
+		"files and changes": "12 个文件 · +328 / -91 · 4 次提交",
+		"review count":      "**Review**\n3 条",
+		"reviewer":          "bob（需要修改）",
+		"assignee field":    "**负责人**",
 	}
 	missing := []string{}
 	for label, value := range expected {
@@ -137,6 +133,11 @@ func assertFullPRCardFacts(t *testing.T, card Card) {
 	sort.Strings(missing)
 	if len(missing) > 0 {
 		t.Fatalf("card lost complete PR facts: %s", strings.Join(missing, ", "))
+	}
+	for _, forbidden := range []string{"未解决讨论", "协作状态", "数据状态", "风险", "本次操作未修改 GitLink"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("card leaked removed field %q", forbidden)
+		}
 	}
 }
 
@@ -171,6 +172,7 @@ func executeProductInvariantAction(
 	executor := &ReviewGatewayExecutor{
 		Collaboration: store,
 		Now:           func() time.Time { return at },
+		Collaborators: &staticReviewCollaboratorReader{collaborators: []ReviewRepositoryCollaborator{{Login: "gitlink-reviewer"}}},
 		IdentityBindings: []ReviewIdentityBinding{{
 			InstallationID: job.InstallationID,
 			FeishuUserID:   job.RequestedBy,
@@ -239,6 +241,7 @@ func TestCollaborationActionWithoutPresentationMustFailClosed(t *testing.T) {
 	executor := &ReviewGatewayExecutor{
 		Collaboration: store,
 		Now:           func() time.Time { return reviewProductInvariantTime },
+		Collaborators: &staticReviewCollaboratorReader{collaborators: []ReviewRepositoryCollaborator{{Login: "gitlink-reviewer"}}},
 		IdentityBindings: []ReviewIdentityBinding{{
 			InstallationID: job.InstallationID,
 			FeishuUserID:   job.RequestedBy,

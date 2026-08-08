@@ -138,6 +138,7 @@ func (s *SQLiteReviewGatewayStore) applyScopedCollaborationAction(
 		state = newScopedReviewCollaboration(job, now)
 	}
 	stateBeforeMutation := state
+	actionOutcome := "updated"
 	before := mergeScopedReviewItem(snapshot, state)
 	if snapshot.Archived {
 		return ReviewCollaborationItem{}, fmt.Errorf("PR #%d is archived and no longer accepts collaboration actions", job.PRNumber)
@@ -147,16 +148,26 @@ func (s *SQLiteReviewGatewayStore) applyScopedCollaborationAction(
 	case "claim_review":
 		if state.AssignedTo != "" && state.AssignedTo != job.RequestedBy {
 			return ReviewCollaborationItem{}, fmt.Errorf(
-				"PR #%d 当前已由%s负责。如需接手，请先完成负责人释放或转交",
+				"PR #%d 当前由%s负责。请先由当前负责人或管理员取消领取",
 				job.PRNumber,
 				reviewCollaborationAssigneeDisplayName(state),
 			)
 		}
+		alreadyResponsible := state.AssignedTo == job.RequestedBy
+		if alreadyResponsible {
+			actionOutcome = "already_responsible"
+		} else {
+			actionOutcome = "claimed"
+		}
 		state.AssignedTo = job.RequestedBy
+		if !alreadyResponsible || strings.TrimSpace(state.AssignedDisplayName) == "" {
+			state.AssignedDisplayName = strings.TrimSpace(job.RequestedDisplayName)
+		}
 		state.CollaborationStatus = "reviewing"
 	case "release_review":
 		if state.AssignedTo == "" {
-			return ReviewCollaborationItem{}, fmt.Errorf("PR #%d 当前未被领取", job.PRNumber)
+			actionOutcome = "no_responsible"
+			break
 		}
 		if state.AssignedTo != job.RequestedBy && !job.CollaborationAdmin {
 			return ReviewCollaborationItem{}, fmt.Errorf(
@@ -167,9 +178,9 @@ func (s *SQLiteReviewGatewayStore) applyScopedCollaborationAction(
 		state.AssignedTo = ""
 		state.AssignedDisplayName = ""
 		state.CollaborationStatus = "unassigned"
-		state.DueAt = ""
+		actionOutcome = "released"
 	case "set_review_deadline":
-		if state.AssignedTo == "" {
+		if state.AssignedTo == "" && !job.CollaborationAdmin {
 			return ReviewCollaborationItem{}, fmt.Errorf("请先领取 PR #%d，再设置审查截止时间", job.PRNumber)
 		}
 		if state.AssignedTo != job.RequestedBy && !job.CollaborationAdmin {
@@ -180,12 +191,35 @@ func (s *SQLiteReviewGatewayStore) applyScopedCollaborationAction(
 		}
 		due, parseErr := time.Parse("2006-01-02", strings.TrimSpace(job.Argument))
 		if parseErr != nil {
-			return ReviewCollaborationItem{}, fmt.Errorf("deadline must use YYYY-MM-DD")
+			return ReviewCollaborationItem{}, fmt.Errorf("日期格式应为 YYYY-MM-DD，例如 2026-08-10")
 		}
 		if due.Format("2006-01-02") < now.Format("2006-01-02") {
-			return ReviewCollaborationItem{}, fmt.Errorf("deadline cannot be in the past")
+			return ReviewCollaborationItem{}, fmt.Errorf("审查截止时间不能早于今天")
+		}
+		if state.DueAt == "" {
+			actionOutcome = "deadline_set"
+		} else if state.DueAt == due.Format("2006-01-02") {
+			actionOutcome = "deadline_unchanged"
+		} else {
+			actionOutcome = "deadline_updated"
 		}
 		state.DueAt = due.Format("2006-01-02")
+	case "clear_review_deadline":
+		if state.AssignedTo == "" && !job.CollaborationAdmin {
+			return ReviewCollaborationItem{}, fmt.Errorf("请先领取 PR #%d，再清除审查截止时间", job.PRNumber)
+		}
+		if state.AssignedTo != "" && state.AssignedTo != job.RequestedBy && !job.CollaborationAdmin {
+			return ReviewCollaborationItem{}, fmt.Errorf(
+				"当前 PR 由%s负责，只有当前负责人或协作管理员可以清除审查截止时间",
+				reviewCollaborationAssigneeDisplayName(state),
+			)
+		}
+		if state.DueAt == "" {
+			actionOutcome = "deadline_absent"
+		} else {
+			actionOutcome = "deadline_cleared"
+		}
+		state.DueAt = ""
 	default:
 		return ReviewCollaborationItem{}, fmt.Errorf("unsupported collaboration action %q", job.Action)
 	}
@@ -195,6 +229,7 @@ func (s *SQLiteReviewGatewayStore) applyScopedCollaborationAction(
 		return ReviewCollaborationItem{}, err
 	}
 	after := mergeScopedReviewItem(snapshot, state)
+	after.ActionOutcome = actionOutcome
 	if err := writeReviewCollaborationAudit(ctx, tx, before, after, job, now); err != nil {
 		return ReviewCollaborationItem{}, err
 	}
@@ -208,7 +243,7 @@ func reviewCollaborationAssigneeDisplayName(state reviewChatCollaboration) strin
 	if value := strings.TrimSpace(state.AssignedDisplayName); value != "" {
 		return truncateReviewGatewayText(value, 80)
 	}
-	return "其他审查者"
+	return "当前负责人"
 }
 
 func writeScopedReviewCollaborationAction(

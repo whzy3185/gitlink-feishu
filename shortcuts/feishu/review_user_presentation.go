@@ -3,6 +3,7 @@ package feishu
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // This file is the single presentation boundary for Feishu-facing text. The
@@ -89,17 +90,23 @@ func reviewStageDisplayName(value string) string {
 func reviewDecisionDisplayName(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "pending":
-		return "待决定"
+		return "待审查"
 	case "common", "commented":
 		return "已提交审查意见"
 	case "approved":
 		return "已批准"
 	case "rejected", "changes_pending", "blocked":
 		return "需要修改"
+	case "stale", "outdated":
+		return "待重新审查"
 	case "none":
 		return "暂无"
+	case "merged":
+		return "已合并"
+	case "closed":
+		return "已关闭"
 	default:
-		return "待确认"
+		return "待审查"
 	}
 }
 
@@ -114,7 +121,7 @@ func reviewCollaborationStatusDisplayName(value string) string {
 	case "waiting":
 		return "等待处理"
 	default:
-		return "待确认"
+		return ""
 	}
 }
 
@@ -161,8 +168,28 @@ func reviewNextStepDisplayName(value string) string {
 		return "建议由维护团队完成最终复核"
 	case "none":
 		return "暂无"
+	case "refresh_pr":
+		return "刷新 PR 状态后重试"
+	case "review_current_head":
+		return "请重新审查当前版本"
+	case "wait_author_changes":
+		return "等待作者修改后重新审查"
+	case "fix_failed_checks":
+		return "修复失败的检查项"
+	case "resolve_merge_conflicts":
+		return "解决合并冲突"
+	case "wait_remaining_reviews":
+		return "等待其余审查结论"
+	case "wait_explicit_decision":
+		return "等待明确审查结论"
+	case "wait_maintainer_merge":
+		return "等待具备权限的维护者合并"
+	case "wait_checks":
+		return "等待检查完成"
+	case "wait_review":
+		return "等待审查"
 	default:
-		return "待确认"
+		return ""
 	}
 }
 
@@ -206,6 +233,36 @@ func reviewReviewerDecisionDisplayName(value string) string {
 	return reviewDecisionDisplayName(value)
 }
 
+func reviewReviewerDisplayLine(reviewer ReviewGatewayReviewerView) string {
+	name := firstNonEmpty(strings.TrimSpace(reviewer.Reviewer), "GitLink 用户")
+	decision := reviewReviewerDecisionDisplayName(reviewer.Decision)
+	if reviewedAt, ok := parseReviewGatewayReviewTime(reviewer.ReviewedAt); ok {
+		china := time.FixedZone("Asia/Shanghai", 8*60*60)
+		return fmt.Sprintf("%s（%s · %s）", name, decision, reviewedAt.In(china).Format("2006-01-02 15:04"))
+	}
+	return fmt.Sprintf("%s（%s）", name, decision)
+}
+
+func reviewReviewerDisplayLines(reviewers []ReviewGatewayReviewerView, maxRunes int) []string {
+	if len(reviewers) == 0 {
+		return []string{"无"}
+	}
+	lines := make([]string, 0, len(reviewers))
+	used := 0
+	for _, reviewer := range reviewers {
+		line := reviewReviewerDisplayLine(reviewer)
+		if maxRunes > 0 && used+len([]rune(line)) > maxRunes {
+			break
+		}
+		lines = append(lines, line)
+		used += len([]rune(line))
+	}
+	if omitted := len(reviewers) - len(lines); omitted > 0 {
+		lines = append(lines, fmt.Sprintf("另有 %d 名审查者", omitted))
+	}
+	return lines
+}
+
 func reviewActionRiskNotice(action string) string {
 	switch strings.ToLower(strings.TrimSpace(action)) {
 	case reviewActionMerge:
@@ -225,24 +282,26 @@ func reviewActionRiskNotice(action string) string {
 
 func reviewGatewayHelpText() string {
 	return strings.Join([]string{
-		"GitLink Review 助手命令",
+		"GitLink PR Review 助手",
 		"",
-		"PR 查询",
-		"查看 owner/repo PR #123",
+		"查询与协作",
+		"@gitlink 查看 <拥有者>/<仓库> PR #<编号>",
+		"@gitlink 领取 <拥有者>/<仓库> PR #<编号>",
+		"@gitlink 取消领取 <拥有者>/<仓库> PR #<编号>",
+		"@gitlink 设置 <拥有者>/<仓库> PR #<编号> 审查截止 <YYYY-MM-DD>",
+		"@gitlink 清除 <拥有者>/<仓库> PR #<编号> 审查截止",
 		"",
-		"协作",
-		"领取 owner/repo PR #123",
-		"取消领取 owner/repo PR #123",
-		"设置 owner/repo PR #123 审查截止 YYYY-MM-DD",
+		"受控写操作",
+		"@gitlink 提交审查意见 <拥有者>/<仓库> PR #<编号> <意见>",
+		"@gitlink 批准 <拥有者>/<仓库> PR #<编号> <说明>",
+		"@gitlink 需要修改 <拥有者>/<仓库> PR #<编号> <原因>",
+		"@gitlink 拒绝并关闭 <拥有者>/<仓库> PR #<编号> <原因>",
+		"@gitlink 合并 <拥有者>/<仓库> PR #<编号>",
 		"",
-		"审查",
-		"提交审查意见 owner/repo PR #123 <意见>",
-		"批准 owner/repo PR #123 <说明>",
-		"需要修改 owner/repo PR #123 <修改原因>",
-		"拒绝并关闭 owner/repo PR #123 <原因>",
-		"合并 owner/repo PR #123",
+		"示例：",
+		"@gitlink 查看 muel/gitlink-feishu_agent PR #3",
+		"@gitlink 需要修改 muel/gitlink-feishu_agent PR #3 请补充异常场景测试",
 		"",
-		"“需要修改”只提交审查结论，PR 保持开放。批准、需要修改、拒绝并关闭和合并均只生成操作计划，最终执行需要绑定的 GitLink 身份在本地确认。GitLink 权限由 GitLink 服务端在执行时校验。",
-		"Reviewer 修改、行级评论写入和讨论解决暂未支持。",
+		"“需要修改”只提交审查结论，PR 保持开放。受控写操作会先生成计划，再由绑定的 GitLink 身份在本地确认。",
 	}, "\n")
 }

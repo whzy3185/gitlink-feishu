@@ -3,7 +3,6 @@ package feishu
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 )
 
@@ -24,7 +23,7 @@ func buildReviewGatewayResultCard(
 		number = job.PRNumber
 	}
 	view := result.PullRequest
-	title := fmt.Sprintf("%s · PR #%d", repository, number)
+	title := fmt.Sprintf("%s PR #%d", repository, number)
 	if plan := result.ActionPlan; plan != nil {
 		title = reviewActionPlanCardTitle(*plan, result.WriteResult)
 	}
@@ -32,8 +31,7 @@ func buildReviewGatewayResultCard(
 	elements := []interface{}{}
 	if result.Status == "failed" {
 		elements = append(elements,
-			div("**读取失败**\n"+escapeMD(truncateReviewGatewayText(redactReviewGatewayError(firstNonEmpty(result.Error, "unknown")), 500))),
-			note("未执行 GitLink 写入；请检查网络或稍后刷新。"),
+			div("**操作失败**\n"+escapeMD(truncateReviewGatewayText(redactReviewGatewayError(firstNonEmpty(result.Error, "请稍后重试")), 500))),
 		)
 		return boundedReviewGatewayCard(baseCard(title, "red", elements))
 	}
@@ -44,7 +42,7 @@ func buildReviewGatewayResultCard(
 			gitLinkURL = strings.TrimSpace(view.GitLinkURL)
 		}
 		if gitLinkURL != "" {
-			elements = append(elements, actionButton("打开 GitLink PR", gitLinkURL))
+			elements = append(elements, actionButton("查看 PR", gitLinkURL))
 		}
 		elements = append(elements, note(reviewGatewayWriteBoundary(result)))
 		return boundedReviewGatewayCard(baseCard(title, reviewActionPlanCardTemplate(*plan, result.WriteResult), elements))
@@ -59,78 +57,48 @@ func buildReviewGatewayResultCard(
 			elements = append(elements, div("**"+escapeMD(truncateReviewGatewayText(view.Title, 120))+"**"))
 		}
 		elements = append(elements,
-			fields([]fieldValue{
-				{Label: "作者", Value: firstNonEmpty(view.Author, "待确认")},
-				{Label: "PR 状态", Value: reviewPRStateDisplayName(result.GitLinkState)},
-				{Label: "目标分支", Value: firstNonEmpty(view.BaseBranch, "待确认")},
-				{Label: "来源分支", Value: firstNonEmpty(view.HeadBranch, "待确认")},
-			}),
+			fields([]fieldValue{{Label: "作者", Value: firstNonEmpty(view.Author, "未知")}, {Label: "状态", Value: reviewPRStateDisplayName(result.GitLinkState)}}),
+			fields([]fieldValue{{Label: "目标分支", Value: firstNonEmpty(view.BaseBranch, "未知")}, {Label: "来源分支", Value: firstNonEmpty(view.HeadBranch, "未知")}}),
 			fields([]fieldValue{
 				{Label: "当前版本", Value: shortReviewGatewaySHA(result.HeadSHA)},
-				{Label: "文件变化", Value: fmt.Sprintf("%d 个文件 · +%d / -%d", view.FilesCount, view.Additions, view.Deletions)},
-				{Label: "提交数量", Value: fmt.Sprintf("%d 次提交", view.CommitsCount)},
-				{Label: "版本批次", Value: firstNonEmpty(view.PatchsetID, "待确认")},
+				{Label: "变更", Value: fmt.Sprintf("%d 个文件 · +%d / -%d · %d 次提交", view.FilesCount, view.Additions, view.Deletions, view.CommitsCount)},
 			}),
 		)
 	}
 
-	elements = append(elements, fields([]fieldValue{
-		{Label: "审查阶段", Value: reviewStageDisplayName(firstNonEmpty(result.ReviewStage, reviewItemValue(item, func(value ReviewCollaborationItem) string { return value.ReviewStage })))},
-		{Label: "当前结论", Value: reviewDecisionDisplayName(firstNonEmpty(result.Decision, reviewItemValue(item, func(value ReviewCollaborationItem) string { return value.Decision })))},
-		{Label: "审查记录", Value: fmt.Sprintf("%d", result.ReviewCount)},
-		{Label: "未解决讨论", Value: fmt.Sprintf("%d", result.OpenThreadCount)},
-	}))
+	decision := firstNonEmpty(result.Decision, reviewItemValue(item, func(value ReviewCollaborationItem) string { return value.Decision }))
+	if result.GitLinkState == "merged" || result.GitLinkState == "closed" {
+		decision = result.GitLinkState
+	}
+	elements = append(elements, fields([]fieldValue{{Label: "Review", Value: fmt.Sprintf("%d 条", result.ReviewCount)}, {Label: "当前结论", Value: reviewDecisionDisplayName(decision)}}))
 
-	if view != nil && len(view.Reviewers) > 0 {
-		lines := make([]string, 0, 8)
-		for _, reviewer := range view.Reviewers {
-			if len(lines) >= 8 {
-				break
-			}
-			lines = append(lines, fmt.Sprintf(
-				"%s：%s",
-				truncateReviewGatewayText(reviewer.Reviewer, 64),
-				reviewReviewerDecisionDisplayName(reviewer.Decision),
-			))
-		}
-		elements = append(elements, div("**Reviewer 摘要**\n"+bulletList(lines, 8)))
+	if view != nil {
+		lines := reviewReviewerDisplayLines(view.Reviewers, 10000)
+		elements = append(elements, div("**审查者**\n"+bulletList(lines, 0)))
 	}
 
 	if view != nil {
-		elements = append(elements, fields([]fieldValue{
-			{Label: "数据状态", Value: reviewCollectionStatusDisplayName(result.CollectionStatus, result.Partial)},
-			{Label: "风险", Value: reviewRiskDisplayName(view.RiskLevel)},
-		}))
-		if len(view.Unknowns) > 0 {
-			unknowns := make([]string, 0, 5)
-			for _, unknown := range view.Unknowns {
-				if len(unknowns) >= 5 {
-					break
-				}
-				unknowns = append(unknowns, truncateReviewGatewayText(redactReviewGatewayError(unknown), 180))
-			}
-			elements = append(elements, div("**待确认信息**\n"+bulletList(unknowns, 5)))
-		}
-		if strings.TrimSpace(view.RecommendedNextStep) != "" {
-			elements = append(elements, div("**建议下一步**\n"+reviewNextStepDisplayName(view.RecommendedNextStep)))
+		if nextStep := reviewNextStepDisplayName(view.RecommendedNextStep); nextStep != "" {
+			elements = append(elements, div("**建议下一步**\n"+nextStep))
 		}
 	}
 
 	if item != nil && !result.PublicRead {
-		elements = append(elements, fields([]fieldValue{
-			{Label: "协作状态", Value: reviewCollaborationStatusDisplayName(item.CollaborationStatus)},
-			{Label: "负责人", Value: reviewGatewayAssigneeLabel(*item)},
-			{Label: "审查截止", Value: firstNonEmpty(item.DueAt, "未设置")},
-		}))
+		values := []fieldValue{{Label: "负责人", Value: reviewGatewayAssigneeLabel(*item)}}
+		if strings.TrimSpace(item.DueAt) != "" {
+			values = append(values, fieldValue{Label: "审查截止", Value: item.DueAt})
+		}
+		elements = append(elements, fields(values))
+	} else if !result.PublicRead {
+		elements = append(elements, fields([]fieldValue{{Label: "负责人", Value: "无"}}))
 	}
 	gitLinkURL := reviewGatewayGitLinkURL(repository, number)
 	if view != nil && strings.HasPrefix(strings.TrimSpace(view.GitLinkURL), "https://www.gitlink.org.cn/") {
 		gitLinkURL = strings.TrimSpace(view.GitLinkURL)
 	}
 	if gitLinkURL != "" {
-		elements = append(elements, actionButton("打开 GitLink PR", gitLinkURL))
+		elements = append(elements, actionButton("查看 PR", gitLinkURL))
 	}
-	elements = append(elements, note(reviewGatewayWriteBoundary(result)))
 
 	template := templateForRisk("")
 	if view != nil {
@@ -177,32 +145,24 @@ func reviewItemValue(item *ReviewCollaborationItem, selector func(ReviewCollabor
 	return selector(*item)
 }
 
-var reviewGatewayFeishuOpenIDPattern = regexp.MustCompile(`^ou_[A-Za-z0-9_-]+$`)
-
 func reviewGatewayAssigneeLabel(item ReviewCollaborationItem) string {
 	if strings.TrimSpace(item.AssignedTo) == "" {
-		return "未认领"
+		return "无"
 	}
 	if strings.TrimSpace(item.AssignedDisplayName) != "" {
 		return truncateReviewGatewayText(item.AssignedDisplayName, 80)
 	}
-	userID := strings.TrimSpace(item.AssignedTo)
-	if reviewGatewayFeishuOpenIDPattern.MatchString(userID) {
-		// Lark markdown resolves this opaque open_id to the tenant-visible member
-		// name. The card no longer invents a generic assignee label.
-		return fmt.Sprintf("<at id=%s></at>", userID)
-	}
-	return "负责人身份待解析"
+	return "负责人信息待同步"
 }
 
 func reviewGatewayAssigneePlainLabel(item ReviewCollaborationItem) string {
 	if strings.TrimSpace(item.AssignedTo) == "" {
-		return "未认领"
+		return "无"
 	}
 	if strings.TrimSpace(item.AssignedDisplayName) != "" {
 		return truncateReviewGatewayText(item.AssignedDisplayName, 80)
 	}
-	return "飞书成员"
+	return "负责人信息待同步"
 }
 
 func shortReviewGatewaySHA(value string) string {
@@ -337,7 +297,6 @@ func reviewActionPlanCardElements(plan ReviewActionPlan, write *ReviewWriteResul
 		{Label: "操作人", Value: reviewGatewayActorLabel(plan.ActorID)},
 		{Label: "GitLink 身份", Value: firstNonEmpty(plan.GitLinkLogin, "待确认")},
 		{Label: "基于版本", Value: shortReviewGatewaySHA(plan.ExpectedHeadSHA)},
-		{Label: "操作编号", Value: firstNonEmpty(plan.RequestID, "待确认")},
 	})
 	content := reviewPresentationPlanContent(plan.Content)
 	switch state {
@@ -401,10 +360,6 @@ func reviewActionPlanCardElements(plan ReviewActionPlan, write *ReviewWriteResul
 }
 
 func reviewGatewayActorLabel(actorID string) string {
-	actorID = strings.TrimSpace(actorID)
-	if reviewGatewayFeishuOpenIDPattern.MatchString(actorID) {
-		return fmt.Sprintf("<at id=%s></at>", actorID)
-	}
 	return "当前飞书用户"
 }
 

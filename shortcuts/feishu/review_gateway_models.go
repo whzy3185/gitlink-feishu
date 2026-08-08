@@ -94,6 +94,7 @@ type ReviewGatewayJob struct {
 	PublicRead                  bool     `json:"public_read,omitempty"`
 	ChatID                      string   `json:"chat_id"`
 	RequestedBy                 string   `json:"requested_by"`
+	RequestedDisplayName        string   `json:"requested_display_name,omitempty"`
 	SourceEventID               string   `json:"source_event_id,omitempty"`
 	SourceMessageID             string   `json:"source_message_id,omitempty"`
 	NotifyChat                  bool     `json:"notify_chat,omitempty"`
@@ -217,7 +218,8 @@ var (
 	reviewGatewayCancelClaimPattern       = regexp.MustCompile(`(?i)^取消领取\s*PR\s*#?(\d+)$`)
 	reviewGatewayDeadlinePattern          = regexp.MustCompile(`(?i)^设置\s*PR\s*#?(\d+)\s*截止\s*(\d{4}-\d{2}-\d{2})$`)
 	reviewGatewayQualifiedDeadlinePattern = regexp.MustCompile(`(?i)^设置\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s*截止\s*(\d{4}-\d{2}-\d{2})$`)
-	reviewGatewayReviewDeadlinePattern    = regexp.MustCompile(`(?i)^设置\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s*审查截止\s*(\d{4}-\d{2}-\d{2})$`)
+	reviewGatewayReviewDeadlinePattern    = regexp.MustCompile(`(?i)^设置\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s*审查截止\s*(\S+)$`)
+	reviewGatewayClearDeadlinePattern     = regexp.MustCompile(`(?i)^清除\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s*审查截止$`)
 	reviewGatewayPreparePattern           = regexp.MustCompile(`(?i)^准备提交\s*PR\s*#?(\d+)\s*Review$`)
 	reviewGatewayConfirmPattern           = regexp.MustCompile(`(?i)^确认\s*Review\s+([A-Za-z0-9:_-]+)$`)
 	reviewGatewayDraftPattern             = regexp.MustCompile(`(?i)^生成\s*PR\s*#?(\d+)\s*Review\s*草稿$`)
@@ -406,7 +408,9 @@ func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEven
 			receipt.Reason = "chat_not_bound"
 			return receipt, nil
 		}
-		if len(binding.AllowedUserIDs) > 0 && !containsReviewGatewayString(binding.AllowedUserIDs, event.UserID) && !g.isAdmin(binding, event.UserID) {
+		if len(binding.AllowedUserIDs) > 0 &&
+			!reviewGatewayActionRequiresCollaborationAuthorization(intent.Name) &&
+			!containsReviewGatewayString(binding.AllowedUserIDs, event.UserID) && !g.isAdmin(binding, event.UserID) {
 			receipt.Reason = "sender_not_allowed"
 			return receipt, nil
 		}
@@ -438,10 +442,6 @@ func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEven
 		}
 		if reviewGatewayActionRequiresCollaborationAuthorization(intent.Name) {
 			isAdmin := g.isAdmin(binding, event.UserID)
-			if !isAdmin && !containsReviewGatewayString(binding.AllowedUserIDs, event.UserID) {
-				receipt.Reason = "collaboration_not_allowed"
-				return receipt, nil
-			}
 			if _, ok := findReviewIdentity(g.identities, event.UserID, installation.InstallationID); !ok {
 				receipt.Reason = "collaboration_identity_required"
 				return receipt, nil
@@ -558,6 +558,10 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 		number, _ := strconv.Atoi(match[2])
 		return ReviewGatewayIntent{Name: "set_review_deadline", Repository: match[1], PRNumber: number, Argument: match[3]}
 	}
+	if match := reviewGatewayClearDeadlinePattern.FindStringSubmatch(content); len(match) == 3 {
+		number, _ := strconv.Atoi(match[2])
+		return ReviewGatewayIntent{Name: "clear_review_deadline", Repository: match[1], PRNumber: number}
+	}
 	if match := reviewGatewayConfirmPattern.FindStringSubmatch(content); len(match) == 2 {
 		return ReviewGatewayIntent{Name: "confirm_common_review", Argument: match[1]}
 	}
@@ -594,6 +598,7 @@ func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, d
 		intent.Name == "claim_review" ||
 		intent.Name == "release_review" ||
 		intent.Name == "set_review_deadline" ||
+		intent.Name == "clear_review_deadline" ||
 		intent.Name == "subscribe_review_events" ||
 		intent.Name == "unsubscribe_review_events" ||
 		intent.Name == "set_review_notification_mode" ||

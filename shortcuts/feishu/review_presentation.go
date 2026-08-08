@@ -108,17 +108,11 @@ func reviewPRPresentationFromResult(
 	for index := range reviewers {
 		reviewers[index].Reviewer = truncateReviewPresentationText(reviewers[index].Reviewer, 100)
 		reviewers[index].Decision = truncateReviewPresentationText(reviewers[index].Decision, 64)
+		reviewers[index].ReviewedAt = truncateReviewPresentationText(reviewers[index].ReviewedAt, 64)
+		reviewers[index].Freshness = truncateReviewPresentationText(reviewers[index].Freshness, 32)
 	}
-	sort.SliceStable(reviewers, func(left, right int) bool {
-		if reviewers[left].Reviewer == reviewers[right].Reviewer {
-			return reviewers[left].Decision < reviewers[right].Decision
-		}
-		return reviewers[left].Reviewer < reviewers[right].Reviewer
-	})
 	reviewers = deduplicateReviewPresentationReviewers(reviewers)
-	if len(reviewers) > 20 {
-		reviewers = reviewers[:20]
-	}
+	sortReviewGatewayReviewers(reviewers)
 	unknowns := append([]string(nil), view.Unknowns...)
 	for index := range unknowns {
 		unknowns[index] = truncateReviewPresentationText(redactReviewGatewayError(unknowns[index]), 300)
@@ -171,13 +165,13 @@ func reviewPRPresentationFromResult(
 
 func deduplicateReviewPresentationReviewers(values []ReviewGatewayReviewerView) []ReviewGatewayReviewerView {
 	result := make([]ReviewGatewayReviewerView, 0, len(values))
-	lastKey := ""
+	seen := map[string]bool{}
 	for _, value := range values {
-		key := strings.ToLower(value.Reviewer) + "\x00" + strings.ToLower(value.Decision)
-		if key == lastKey {
+		key := strings.ToLower(strings.TrimSpace(value.Reviewer))
+		if key == "" || seen[key] {
 			continue
 		}
-		lastKey = key
+		seen[key] = true
 		result = append(result, value)
 	}
 	return result

@@ -32,7 +32,7 @@ func TestCommonReviewInputBuildsBoundedActionPlanCard(t *testing.T) {
 	if !ok || strings.Contains(cardJSON, ".local/review-gateway-live.db") || strings.Contains(cardJSON, "review-confirm-local") {
 		t.Fatalf("ordinary ActionPlan card leaked advanced local confirmation details: %s", cardJSON)
 	}
-	for _, expected := range []string{plan.RequestID, plan.GitLinkLogin, "查看本地确认方式", "取消操作", "刷新 PR 状态", plan.PlanID} {
+	for _, expected := range []string{plan.GitLinkLogin, "查看本地确认方式", "取消操作", "刷新 PR 状态", plan.PlanID} {
 		if !ok || !strings.Contains(cardJSON, expected) {
 			t.Fatalf("ActionPlan card missing %q: %s", expected, cardJSON)
 		}
@@ -46,7 +46,7 @@ func TestCommonReviewInputBuildsBoundedActionPlanCard(t *testing.T) {
 	result.PullRequest = &ReviewGatewayPullRequestView{RecommendedNextStep: "assign_human_reviewer"}
 	result.ResultCard = buildReviewGatewayResultCard(job, result, nil)
 	reply := formatReviewGatewayResultReply(job, result)
-	if strings.Contains(reply, plan.PlanID) || !strings.Contains(reply, plan.RequestID) || strings.Contains(reply, "assign_human_reviewer") {
+	if strings.Contains(reply, plan.PlanID) || strings.Contains(reply, plan.RequestID) || strings.Contains(reply, "assign_human_reviewer") {
 		t.Fatalf("ActionPlan reply was downgraded to a PR summary: %s", reply)
 	}
 	ack := formatReviewGatewayAcknowledgement(ReviewGatewayJob{Action: "prepare_common_review", Repository: job.Repository, PRNumber: job.PRNumber, JobID: job.JobID})
@@ -62,7 +62,7 @@ func TestCommonReviewInputBuildsBoundedActionPlanCard(t *testing.T) {
 	}
 	var cardPlanned bool
 	for _, operation := range operations {
-		if operation.OperationKind == ReviewOperationCanonicalCardUpsert && strings.Contains(operation.DesiredJSON, plan.PlanID) && strings.Contains(operation.DesiredJSON, plan.RequestID) {
+		if operation.OperationKind == ReviewOperationCanonicalCardUpsert && strings.Contains(operation.DesiredJSON, plan.PlanID) && !strings.Contains(operation.DesiredJSON, "操作编号") {
 			cardPlanned = true
 		}
 	}

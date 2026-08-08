@@ -71,8 +71,8 @@ func TestReviewGatewayResultCardStateAndPublicBoundaries(t *testing.T) {
 			t.Fatalf("public card leaked bound collaboration field %q: %s", forbidden, publicJSON)
 		}
 	}
-	if !strings.Contains(publicJSON, "打开 GitLink PR") || !strings.Contains(publicJSON, "本次操作未修改 GitLink") {
-		t.Fatalf("public card lost navigation or write boundary: %s", publicJSON)
+	if !strings.Contains(publicJSON, "查看 PR") || strings.Contains(publicJSON, "本次操作未修改 GitLink") {
+		t.Fatalf("public card navigation/noise mismatch: %s", publicJSON)
 	}
 }
 
@@ -84,7 +84,7 @@ func TestReviewGatewayResultCardHandlesUnreviewedPR(t *testing.T) {
 	result.Decision = "pending"
 	result.PullRequest.Reviewers = nil
 	cardJSON, ok := safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, result, nil))
-	if !ok || !strings.Contains(cardJSON, "**审查记录**\\n0") || strings.Contains(cardJSON, "Reviewer 摘要") {
+	if !ok || !strings.Contains(cardJSON, "**Review**\\n0 条") || !strings.Contains(cardJSON, "**审查者**\\n- 无") {
 		t.Fatalf("unreviewed PR card = %s, ok=%t", cardJSON, ok)
 	}
 }
@@ -94,8 +94,8 @@ func TestReviewGatewayResultCardUsesResolvableAssigneeIdentity(t *testing.T) {
 	card := buildReviewGatewayResultCard(job, result, &item)
 	cardJSON, ok := safeReviewGatewayCardJSON(card)
 	cardSnapshot := reviewGatewayCardSnapshot(card)
-	if !ok || !strings.Contains(cardSnapshot, "<at id=ou_secret></at>") || strings.Contains(cardJSON, "已认领（飞书成员）") {
-		t.Fatalf("assignee mention card = %s, ok=%t", cardJSON, ok)
+	if !ok || !strings.Contains(cardSnapshot, "负责人信息待同步") || strings.Contains(cardJSON, "ou_secret") || strings.Contains(cardJSON, "飞书成员") {
+		t.Fatalf("unresolved assignee card = %s, ok=%t", cardJSON, ok)
 	}
 	item.AssignedDisplayName = "测试负责人"
 	cardJSON, ok = safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, result, &item))
@@ -105,7 +105,7 @@ func TestReviewGatewayResultCardUsesResolvableAssigneeIdentity(t *testing.T) {
 	item.AssignedDisplayName = ""
 	item.AssignedTo = "not-an-open-id"
 	cardJSON, ok = safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, result, &item))
-	if !ok || !strings.Contains(cardJSON, "负责人身份待解析") || strings.Contains(cardJSON, item.AssignedTo) {
+	if !ok || !strings.Contains(cardJSON, "负责人信息待同步") || strings.Contains(cardJSON, item.AssignedTo) {
 		t.Fatalf("unresolved assignee card = %s, ok=%t", cardJSON, ok)
 	}
 }
@@ -140,7 +140,7 @@ func TestPopulateReviewGatewayResultBoundsPresentationData(t *testing.T) {
 	result := ReviewGatewayExecutionResult{}
 	populateReviewGatewayContextResult(&result, contextInput)
 	if result.PullRequest == nil || len([]rune(result.PullRequest.Title)) > 161 ||
-		len(result.PullRequest.Unknowns) != 5 || len(result.PullRequest.Reviewers) != 8 {
+		len(result.PullRequest.Unknowns) != 5 || len(result.PullRequest.Reviewers) != 10 {
 		t.Fatalf("bounded view = %#v", result.PullRequest)
 	}
 	cardJSON, ok := safeReviewGatewayCardJSON(buildReviewGatewayResultCard(
@@ -149,7 +149,7 @@ func TestPopulateReviewGatewayResultBoundsPresentationData(t *testing.T) {
 	if !ok {
 		t.Fatal("bounded presentation unexpectedly exceeded card budget")
 	}
-	for _, forbidden := range []string{strings.Repeat("a", 40), "must-not-appear", "reviewer-9"} {
+	for _, forbidden := range []string{strings.Repeat("a", 40), "must-not-appear"} {
 		if strings.Contains(cardJSON, forbidden) {
 			t.Fatalf("card contains unbounded or sensitive value %q", forbidden)
 		}
@@ -181,9 +181,24 @@ func TestPopulateReviewGatewayResultNormalizesTerminalDecision(t *testing.T) {
 			},
 			Summary: workflow.ReviewCollaborationSummary{Decision: "pending"},
 		})
-		if result.Decision != "none" || result.ReviewStage != state || result.PullRequest.RecommendedNextStep != "none" {
+		if result.Decision != "none" || result.ReviewStage != state || result.PullRequest.RecommendedNextStep != "" {
 			t.Fatalf("terminal %s result = %#v", state, result)
 		}
+	}
+}
+
+func TestReviewNextStepIgnoresThreadCounts(t *testing.T) {
+	contextInput := workflow.ReviewContext{
+		CollectionStatus: "complete",
+		Summary:          workflow.ReviewCollaborationSummary{TotalThreads: 20, OpenThreads: 20},
+		WorkItem:         workflow.ReviewWorkItem{GitLinkState: "open"},
+	}
+	if got := determineReviewGatewayNextStep(contextInput, nil); got != "wait_review" {
+		t.Fatalf("thread counts changed next step: %q", got)
+	}
+	reviewers := []ReviewGatewayReviewerView{{Reviewer: "alice", Decision: "rejected"}}
+	if got := determineReviewGatewayNextStep(contextInput, reviewers); got != "wait_author_changes" {
+		t.Fatalf("review decision did not drive next step: %q", got)
 	}
 }
 
@@ -284,6 +299,6 @@ func reviewGatewayCardSnapshot(card Card) string {
 	return strings.Join(lines, "\n")
 }
 
-const completeReviewGatewayCardGolden = "sha256:cab1676e2ebebc02363c1c5b5118eed30dc57b20b76541c9088a5341abeefd74"
-const partialReviewGatewayCardGolden = "sha256:1442b22f9d9204734a727c04ef73c79d77fa84dc0c0a9e4cedd4d99c55b424e7"
-const failedReviewGatewayCardGolden = "sha256:0d588115fb85b278a20481007dc66aa27425fbcac33b90c6120d216e3de5df75"
+const completeReviewGatewayCardGolden = "sha256:0a1b32abc84173b45d1495b2c3c7f6cf5a0e2d589d758a876e4a6c903b690ba7"
+const partialReviewGatewayCardGolden = "sha256:06db98786ffea00f100e02ff94aa6f48fe9ef80d4dd0a97965265ac71ad5b49f"
+const failedReviewGatewayCardGolden = "sha256:a36a81d5fea7e1262b331fafd5708362b4e21a606ed700d46700bf4007ffb8c9"

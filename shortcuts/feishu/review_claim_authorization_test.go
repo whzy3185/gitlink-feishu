@@ -27,9 +27,8 @@ func TestReviewGatewayClaimRequiresCollaborationScopeAndIdentity(t *testing.T) {
 			wantReason: "collaboration_identity_required",
 		},
 		{
-			name: "public group member is not collaborator", user: "ou_reader",
+			name: "identity is admitted without AllowedUserIDs", user: "ou_reader",
 			identities: []ReviewIdentityBinding{{InstallationID: "test", FeishuUserID: "ou_reader", GitLinkLogin: "reader", Enabled: true}},
-			wantReason: "collaboration_not_allowed",
 		},
 		{
 			name: "binding admin with identity", admins: []string{"ou_admin"}, user: "ou_admin", wantAdmin: true,
@@ -82,18 +81,19 @@ func TestReviewGatewayClaimExecutionRequiresFrozenAuthorizationAndIdentity(t *te
 	store, job := prepareProductInvariantCollaborationStore(t)
 	defer store.Close()
 	job.Action = "claim_review"
+	job.RequestedDisplayName = "测试成员"
 	identity := ReviewIdentityBinding{
 		InstallationID: job.InstallationID, FeishuUserID: job.RequestedBy,
 		GitLinkLogin: "gitlink-reviewer", Enabled: true,
 	}
 
-	executor := &ReviewGatewayExecutor{Collaboration: store, IdentityBindings: []ReviewIdentityBinding{identity}}
-	if _, err := executor.Execute(context.Background(), job); err == nil || !strings.Contains(err.Error(), "协作权限") {
+	executor := &ReviewGatewayExecutor{Collaboration: store, IdentityBindings: []ReviewIdentityBinding{identity}, Collaborators: &staticReviewCollaboratorReader{collaborators: []ReviewRepositoryCollaborator{{Login: "gitlink-reviewer"}}}}
+	if _, err := executor.Execute(context.Background(), job); err == nil || !strings.Contains(err.Error(), "负责人") {
 		t.Fatalf("claim without frozen authorization error = %v", err)
 	}
 	job.CollaborationAuthorized = true
 	executor.IdentityBindings = nil
-	if _, err := executor.Execute(context.Background(), job); err == nil || !strings.Contains(err.Error(), "绑定 GitLink 身份") {
+	if _, err := executor.Execute(context.Background(), job); err == nil || !strings.Contains(err.Error(), "尚未绑定 GitLink 身份") {
 		t.Fatalf("claim without identity error = %v", err)
 	}
 
@@ -115,20 +115,24 @@ func TestReviewClaimConflictIdempotencyAndAdminManagement(t *testing.T) {
 	store, job := prepareProductInvariantCollaborationStore(t)
 	defer store.Close()
 	job.Action = "claim_review"
+	job.RequestedDisplayName = "测试成员"
 	first, err := store.ApplyCollaborationAction(context.Background(), job, reviewProductInvariantTime.Add(time.Minute))
 	if err != nil || first.AssignedTo != job.RequestedBy {
 		t.Fatalf("first claim = %#v, err=%v", first, err)
 	}
 	repeated := job
 	repeated.JobID = "job-repeat-own-claim"
+	repeated.RequestedDisplayName = ""
 	if item, err := store.ApplyCollaborationAction(context.Background(), repeated, reviewProductInvariantTime.Add(2*time.Minute)); err != nil || item.AssignedTo != job.RequestedBy {
 		t.Fatalf("idempotent own claim = %#v, err=%v", item, err)
+	} else if item.AssignedDisplayName != first.AssignedDisplayName {
+		t.Fatalf("idempotent claim downgraded display name: first=%q repeated=%q", first.AssignedDisplayName, item.AssignedDisplayName)
 	}
 
 	other := job
 	other.JobID = "job-other-claim"
 	other.RequestedBy = "ou_other"
-	if _, err := store.ApplyCollaborationAction(context.Background(), other, reviewProductInvariantTime.Add(3*time.Minute)); err == nil || !strings.Contains(err.Error(), "其他审查者") || strings.Contains(err.Error(), job.RequestedBy) {
+	if _, err := store.ApplyCollaborationAction(context.Background(), other, reviewProductInvariantTime.Add(3*time.Minute)); err == nil || !strings.Contains(err.Error(), "当前由测试成员负责") || !strings.Contains(err.Error(), "管理员取消领取") || strings.Contains(err.Error(), job.RequestedBy) {
 		t.Fatalf("conflicting claim error = %v", err)
 	}
 
@@ -154,7 +158,7 @@ func TestReviewClaimConflictIdempotencyAndAdminManagement(t *testing.T) {
 	admin.JobID = "job-admin-release"
 	admin.CollaborationAdmin = true
 	released, err := store.ApplyCollaborationAction(context.Background(), admin, reviewProductInvariantTime.Add(7*time.Minute))
-	if err != nil || released.AssignedTo != "" || released.CollaborationStatus != "unassigned" || released.DueAt != "" {
+	if err != nil || released.AssignedTo != "" || released.CollaborationStatus != "unassigned" || released.DueAt != "2026-08-10" {
 		t.Fatalf("admin release = %#v, err=%v", released, err)
 	}
 
@@ -163,5 +167,25 @@ func TestReviewClaimConflictIdempotencyAndAdminManagement(t *testing.T) {
 	claimed, err := store.ApplyCollaborationAction(context.Background(), other, reviewProductInvariantTime.Add(8*time.Minute))
 	if err != nil || claimed.AssignedTo != other.RequestedBy {
 		t.Fatalf("claim after release = %#v, err=%v", claimed, err)
+	}
+
+	other.Action = "set_review_deadline"
+	other.Argument = "2026-08-12"
+	other.JobID = "job-deadline-update"
+	updated, err := store.ApplyCollaborationAction(context.Background(), other, reviewProductInvariantTime.Add(9*time.Minute))
+	if err != nil || updated.DueAt != "2026-08-12" || updated.ActionOutcome != "deadline_updated" {
+		t.Fatalf("deadline update = %#v, err=%v", updated, err)
+	}
+	other.Action = "clear_review_deadline"
+	other.Argument = ""
+	other.JobID = "job-deadline-clear"
+	cleared, err := store.ApplyCollaborationAction(context.Background(), other, reviewProductInvariantTime.Add(10*time.Minute))
+	if err != nil || cleared.DueAt != "" || cleared.ActionOutcome != "deadline_cleared" {
+		t.Fatalf("deadline clear = %#v, err=%v", cleared, err)
+	}
+	other.JobID = "job-deadline-clear-idempotent"
+	absent, err := store.ApplyCollaborationAction(context.Background(), other, reviewProductInvariantTime.Add(11*time.Minute))
+	if err != nil || absent.ActionOutcome != "deadline_absent" {
+		t.Fatalf("idempotent deadline clear = %#v, err=%v", absent, err)
 	}
 }

@@ -37,6 +37,7 @@ type ReviewCollaborationItem struct {
 	Archived            bool   `json:"archived"`
 	UpdatedBy           string `json:"updated_by,omitempty"`
 	UpdatedAt           string `json:"updated_at"`
+	ActionOutcome       string `json:"action_outcome,omitempty"`
 }
 
 type ReviewCollaborationBundle struct {

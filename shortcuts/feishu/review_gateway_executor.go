@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -76,8 +77,10 @@ type ReviewGatewayPullRequestView struct {
 }
 
 type ReviewGatewayReviewerView struct {
-	Reviewer string `json:"reviewer"`
-	Decision string `json:"decision"`
+	Reviewer   string `json:"reviewer"`
+	Decision   string `json:"decision"`
+	ReviewedAt string `json:"reviewed_at,omitempty"`
+	Freshness  string `json:"freshness,omitempty"`
 }
 
 type ReviewGatewayQueueView struct {
@@ -136,6 +139,8 @@ type ReviewGatewayExecutor struct {
 	AgentTaskTimeout           time.Duration
 	AgentMaxConcurrency        int
 	ConfirmationStateDB        string
+	Collaborators              ReviewRepositoryCollaboratorReader
+	DisplayNames               FeishuDisplayNameResolver
 }
 
 func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {
@@ -382,12 +387,51 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		result.Message = fmt.Sprintf("已读取 %d 个由当前飞书账号认领的 Review 任务。", len(items))
 	case "plan_bind_repository":
 		result.Message = fmt.Sprintf("已生成仓库绑定变更计划：%s；该命令仅供离线预览，长连接首次绑定必须由管理员预配置。", job.Repository)
-	case "claim_review", "release_review", "set_review_deadline":
+	case "claim_review", "release_review", "set_review_deadline", "clear_review_deadline":
 		if e.Collaboration == nil {
 			return reviewGatewayExecutionFailure(result, fmt.Errorf("review collaboration store is required"))
 		}
 		if err := e.validateReviewCollaborationAuthorization(job); err != nil {
 			return reviewGatewayExecutionFailure(result, err)
+		}
+		identity, _ := findReviewIdentity(e.IdentityBindings, job.RequestedBy, job.InstallationID)
+		if job.Action == "claim_review" {
+			owner, repository, splitErr := splitReviewGatewayRepository(job.Repository)
+			if splitErr != nil {
+				return reviewGatewayExecutionFailure(result, splitErr)
+			}
+			reader := e.Collaborators
+			var runtime *common.RuntimeContext
+			if reader == nil {
+				reader = GitLinkReviewRepositoryCollaboratorReader{}
+				var runtimeErr error
+				runtime, runtimeErr = e.runtimeForJob(job)
+				if runtimeErr != nil {
+					return reviewGatewayExecutionFailure(result, fmt.Errorf("暂时无法确认当前 GitLink 身份的仓库协作者状态，请稍后重试"))
+				}
+			} else if e.Runtime != nil && e.Runtime.Client != nil {
+				runtime, _ = e.runtimeForJob(job)
+			}
+			collaborators, readErr := reader.ListRepositoryCollaborators(ctx, runtime, owner, repository)
+			if readErr != nil {
+				return reviewGatewayExecutionFailure(result, fmt.Errorf("暂时无法确认当前 GitLink 身份的仓库协作者状态，请稍后重试"))
+			}
+			eligible := false
+			for _, collaborator := range collaborators {
+				if strings.TrimSpace(collaborator.Login) == strings.TrimSpace(identity.GitLinkLogin) {
+					eligible = true
+					break
+				}
+			}
+			if !eligible {
+				return reviewGatewayExecutionFailure(result, fmt.Errorf("当前 GitLink 身份不是该仓库的协作者"))
+			}
+			job.RequestedDisplayName = strings.TrimSpace(identity.GitLinkLogin)
+			if e.DisplayNames != nil {
+				if displayName, resolveErr := e.DisplayNames.ResolveFeishuDisplayName(ctx, job.RequestedBy); resolveErr == nil && strings.TrimSpace(displayName) != "" {
+					job.RequestedDisplayName = strings.TrimSpace(displayName)
+				}
+			}
 		}
 		presentation, err := e.Collaboration.GetReviewPRPresentation(ctx, job)
 		if err != nil {
@@ -428,10 +472,10 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 
 func (e *ReviewGatewayExecutor) validateReviewCollaborationAuthorization(job ReviewGatewayJob) error {
 	if job.PublicRead || !job.CollaborationAuthorized {
-		return fmt.Errorf("当前账号没有领取或管理该仓库 PR 的协作权限")
+		return fmt.Errorf("当前账号没有管理该仓库 PR 负责人的权限")
 	}
 	if _, ok := findReviewIdentity(e.IdentityBindings, job.RequestedBy, job.InstallationID); !ok {
-		return fmt.Errorf("领取或管理 PR 前需要先绑定 GitLink 身份")
+		return fmt.Errorf("当前账号尚未绑定 GitLink 身份")
 	}
 	return nil
 }
@@ -461,7 +505,7 @@ func (e *ReviewGatewayExecutor) publishCollaboration(
 		return
 	}
 	switch result.Action {
-	case "claim_review", "release_review", "set_review_deadline":
+	case "claim_review", "release_review", "set_review_deadline", "clear_review_deadline":
 		bundle.HumanFieldsAuthoritative = true
 	}
 	syncResults, err := e.Publisher.Publish(ctx, bundle)
@@ -520,7 +564,7 @@ func populateReviewGatewayContextResult(result *ReviewGatewayExecutionResult, re
 		Additions:           reviewContext.CurrentPatchset.Additions,
 		Deletions:           reviewContext.CurrentPatchset.Deletions,
 		RiskLevel:           truncateReviewGatewayText(reviewContext.WorkItem.RiskLevel, 32),
-		RecommendedNextStep: truncateReviewGatewayText(reviewContext.WorkItem.RecommendedNextStep, 240),
+		RecommendedNextStep: "",
 		Unknowns:            []string{},
 		Reviewers:           []ReviewGatewayReviewerView{},
 	}
@@ -539,19 +583,122 @@ func populateReviewGatewayContextResult(result *ReviewGatewayExecutionResult, re
 		}
 	}
 	for _, reviewer := range reviewContext.ReviewerSummaries {
-		if len(view.Reviewers) >= 8 {
-			break
-		}
 		name := truncateReviewGatewayText(firstNonEmpty(reviewer.Actor, reviewer.ReviewerKey), 64)
 		if name == "" {
 			continue
 		}
+		decision := truncateReviewGatewayText(firstNonEmpty(reviewer.CurrentDecision, "unknown"), 32)
+		freshness, reviewedAt := "unknown", ""
+		if reviewer.LatestEffectiveReview != nil {
+			freshness = reviewer.LatestEffectiveReview.Freshness
+			reviewedAt = firstNonEmpty(reviewer.LatestEffectiveReview.UpdatedAt, reviewer.LatestEffectiveReview.CreatedAt)
+		} else if reviewer.OutdatedCount > 0 && reviewer.CurrentCount == 0 {
+			freshness = "outdated"
+			decision = "stale"
+		}
 		view.Reviewers = append(view.Reviewers, ReviewGatewayReviewerView{
-			Reviewer: name,
-			Decision: truncateReviewGatewayText(firstNonEmpty(reviewer.CurrentDecision, "unknown"), 32),
+			Reviewer: name, Decision: decision, ReviewedAt: reviewedAt, Freshness: freshness,
 		})
 	}
+	sortReviewGatewayReviewers(view.Reviewers)
+	view.RecommendedNextStep = determineReviewGatewayNextStep(reviewContext, view.Reviewers)
 	result.PullRequest = &view
+}
+
+func sortReviewGatewayReviewers(reviewers []ReviewGatewayReviewerView) {
+	priority := func(decision string) int {
+		switch strings.ToLower(strings.TrimSpace(decision)) {
+		case "rejected", "changes_pending", "blocked":
+			return 0
+		case "common", "commented":
+			return 1
+		case "approved":
+			return 2
+		case "stale":
+			return 3
+		default:
+			return 4
+		}
+	}
+	sort.SliceStable(reviewers, func(left, right int) bool {
+		leftPriority, rightPriority := priority(reviewers[left].Decision), priority(reviewers[right].Decision)
+		if leftPriority != rightPriority {
+			return leftPriority < rightPriority
+		}
+		leftTime, leftOK := parseReviewGatewayReviewTime(reviewers[left].ReviewedAt)
+		rightTime, rightOK := parseReviewGatewayReviewTime(reviewers[right].ReviewedAt)
+		if leftOK != rightOK {
+			return leftOK
+		}
+		if leftOK && !leftTime.Equal(rightTime) {
+			return leftTime.After(rightTime)
+		}
+		return reviewers[left].Reviewer < reviewers[right].Reviewer
+	})
+}
+
+func parseReviewGatewayReviewTime(value string) (time.Time, bool) {
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05", "2006-01-02 15:04"} {
+		if parsed, err := time.Parse(layout, strings.TrimSpace(value)); err == nil {
+			return parsed, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func determineReviewGatewayNextStep(reviewContext workflow.ReviewContext, reviewers []ReviewGatewayReviewerView) string {
+	state := strings.ToLower(strings.TrimSpace(reviewContext.WorkItem.GitLinkState))
+	if state == "merged" || state == "closed" {
+		return ""
+	}
+	if reviewContext.Partial || reviewContext.CollectionStatus != "complete" {
+		return "refresh_pr"
+	}
+	hasRejected, hasCommon, hasApproved, hasStale := false, false, false, false
+	for _, reviewer := range reviewers {
+		switch strings.ToLower(strings.TrimSpace(reviewer.Decision)) {
+		case "rejected", "changes_pending", "blocked":
+			hasRejected = true
+		case "common", "commented":
+			hasCommon = true
+		case "approved":
+			hasApproved = true
+		case "stale":
+			hasStale = true
+		}
+		if reviewer.Freshness == "outdated" {
+			hasStale = true
+		}
+	}
+	if hasStale {
+		return "review_current_head"
+	}
+	if hasRejected {
+		return "wait_author_changes"
+	}
+	ciState := strings.ToLower(strings.TrimSpace(reviewContext.WorkItem.CISummary.State))
+	if ciState == "failed" || ciState == "failure" {
+		return "fix_failed_checks"
+	}
+	if strings.ToLower(strings.TrimSpace(reviewContext.WorkItem.Mergeability)) == "conflicting" {
+		return "resolve_merge_conflicts"
+	}
+	if hasCommon && hasApproved {
+		return "wait_remaining_reviews"
+	}
+	if hasCommon {
+		return "wait_explicit_decision"
+	}
+	if hasApproved {
+		return "wait_maintainer_merge"
+	}
+	if ciState == "running" || ciState == "pending" {
+		return "wait_checks"
+	}
+	if len(reviewers) == 0 {
+		return "wait_review"
+	}
+	return ""
 }
 
 func reviewGatewayGitLinkURL(repository string, number int) string {
@@ -606,11 +753,10 @@ func buildReviewDraftPreview(reviewContext workflow.ReviewContext) ReviewDraftPr
 		TemplateVersion: "review-draft/v1",
 		Title:           fmt.Sprintf("%s #%d — %s", reviewContext.Repository, reviewContext.PullRequest, title),
 		Summary: fmt.Sprintf(
-			"当前 patchset %s，%d 个文件，%d 次 Review，%d 个未解决线程。",
+			"当前版本 %s，%d 个文件，%d 次 Review。",
 			firstNonEmpty(reviewContext.CurrentVersionID, "unknown"),
 			reviewContext.CurrentPatchset.FilesCount,
 			reviewContext.Summary.TotalReviews,
-			reviewContext.Summary.OpenThreads,
 		),
 		Decision:       reviewContext.Summary.Decision,
 		ReviewerStates: []ReviewDraftReviewer{},
