@@ -17,7 +17,7 @@ func reviewActionDisplayName(action string) string {
 	case reviewActionApprove, "prepare_review_approve":
 		return "批准"
 	case reviewActionReject, "prepare_review_reject":
-		return "要求修改"
+		return "需要修改"
 	case reviewActionRejectClose, "prepare_reject_close":
 		return "拒绝并关闭"
 	case reviewActionMerge, "prepare_merge":
@@ -34,7 +34,7 @@ func reviewActionCompletedTitle(action string, number int) string {
 	case reviewActionApprove:
 		return fmt.Sprintf("PR #%d 已批准", number)
 	case reviewActionReject:
-		return fmt.Sprintf("PR #%d 已要求修改", number)
+		return fmt.Sprintf("PR #%d 已标记为需要修改", number)
 	case reviewActionRejectClose:
 		return fmt.Sprintf("PR #%d 已拒绝并关闭", number)
 	case reviewActionMerge:
@@ -95,7 +95,7 @@ func reviewDecisionDisplayName(value string) string {
 	case "approved":
 		return "已批准"
 	case "rejected", "changes_pending", "blocked":
-		return "需修改"
+		return "需要修改"
 	case "none":
 		return "暂无"
 	default:
@@ -215,7 +215,7 @@ func reviewActionRiskNotice(action string) string {
 	case reviewActionApprove:
 		return "最终确认后将向 GitLink 提交“批准”审查结果。"
 	case reviewActionReject:
-		return "最终确认后将提交“需修改”审查结果，PR 保持开放。"
+		return "最终确认后将提交“需要修改”审查结果，PR 保持开放。"
 	case reviewActionCommon:
 		return "最终确认后将向 GitLink 提交一条普通审查意见。"
 	default:
@@ -238,11 +238,11 @@ func reviewGatewayHelpText() string {
 		"审查",
 		"提交审查意见 owner/repo PR #123 <意见>",
 		"批准 owner/repo PR #123 <说明>",
-		"要求修改 owner/repo PR #123 <原因>",
+		"需要修改 owner/repo PR #123 <修改原因>",
 		"拒绝并关闭 owner/repo PR #123 <原因>",
 		"合并 owner/repo PR #123",
 		"",
-		"“要求修改”只提交审查结论，PR 保持开放。批准、要求修改、拒绝并关闭和合并均只生成操作计划，最终执行需要绑定的 GitLink 身份在本地确认。GitLink 权限由 GitLink 服务端在执行时校验。",
+		"“需要修改”只提交审查结论，PR 保持开放。批准、需要修改、拒绝并关闭和合并均只生成操作计划，最终执行需要绑定的 GitLink 身份在本地确认。GitLink 权限由 GitLink 服务端在执行时校验。",
 		"Reviewer 修改、行级评论写入和讨论解决暂未支持。",
 	}, "\n")
 }

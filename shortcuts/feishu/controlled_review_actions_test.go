@@ -158,6 +158,15 @@ func TestLocalControlledReviewApproveRejectAndDuplicate(t *testing.T) {
 			if err != nil || result.WriteResult.Status != "completed" || state.writes() != 1 || state.postedStatus != reviewStatusForAction(action) {
 				t.Fatalf("result=%#v err=%v writes=%d status=%q", result, err, state.writes(), state.postedStatus)
 			}
+			if action == reviewActionReject {
+				after, fetchErr := workflow.FetchReviewContext(runtime, workflow.ReviewContextOptions{
+					Owner: "owner", Repo: "repo", Number: 42, VersionLimit: 100, ThreadLimit: 100,
+					IncludePR: true, IncludeFiles: true, IncludeVersions: true, IncludeReviews: true, IncludeThreads: true,
+				})
+				if fetchErr != nil || after.WorkItem.GitLinkState != "open" || len(after.ReviewRecords) != 1 || after.ReviewRecords[0].Status != "rejected" {
+					t.Fatalf("need-changes read-back = state:%q reviews:%#v err=%v", after.WorkItem.GitLinkState, after.ReviewRecords, fetchErr)
+				}
+			}
 			if _, err := executeLocalReviewConfirmation(context.Background(), runtime, store, plan, false, true, now.Add(3*time.Second)); err == nil || state.writes() != 1 {
 				t.Fatalf("completed plan reran: err=%v writes=%d", err, state.writes())
 			}

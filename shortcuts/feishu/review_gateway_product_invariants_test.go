@@ -123,7 +123,7 @@ func assertFullPRCardFacts(t *testing.T, card Card) {
 		"commits count":         "**提交数量**\n4 次提交",
 		"patchset":              "patchset-7",
 		"review stage":          "**审查阶段**\n审查中",
-		"reviewer":              "bob：需修改",
+		"reviewer":              "bob：需要修改",
 		"open thread count":     "**未解决讨论**\n2",
 		"assignee field":        "**负责人**",
 		"review deadline field": "**审查截止**",
@@ -167,9 +167,16 @@ func executeProductInvariantAction(
 	job.JobID = "job-product-" + action
 	job.Action = action
 	job.Argument = argument
+	job.CollaborationAuthorized = true
 	executor := &ReviewGatewayExecutor{
 		Collaboration: store,
 		Now:           func() time.Time { return at },
+		IdentityBindings: []ReviewIdentityBinding{{
+			InstallationID: job.InstallationID,
+			FeishuUserID:   job.RequestedBy,
+			GitLinkLogin:   "gitlink-reviewer",
+			Enabled:        true,
+		}},
 	}
 	result, err := executor.Execute(context.Background(), job)
 	if err != nil {
@@ -228,9 +235,16 @@ func TestCollaborationActionWithoutPresentationMustFailClosed(t *testing.T) {
 	defer store.Close()
 	job := testReviewGatewayJob(reviewProductInvariantTime, "missing-presentation")
 	job.Action = "claim_review"
+	job.CollaborationAuthorized = true
 	executor := &ReviewGatewayExecutor{
 		Collaboration: store,
 		Now:           func() time.Time { return reviewProductInvariantTime },
+		IdentityBindings: []ReviewIdentityBinding{{
+			InstallationID: job.InstallationID,
+			FeishuUserID:   job.RequestedBy,
+			GitLinkLogin:   "gitlink-reviewer",
+			Enabled:        true,
+		}},
 	}
 	result, executeErr := executor.Execute(context.Background(), job)
 	if executeErr == nil {

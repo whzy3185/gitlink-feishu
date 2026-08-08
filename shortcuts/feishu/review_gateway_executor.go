@@ -386,6 +386,9 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		if e.Collaboration == nil {
 			return reviewGatewayExecutionFailure(result, fmt.Errorf("review collaboration store is required"))
 		}
+		if err := e.validateReviewCollaborationAuthorization(job); err != nil {
+			return reviewGatewayExecutionFailure(result, err)
+		}
 		presentation, err := e.Collaboration.GetReviewPRPresentation(ctx, job)
 		if err != nil {
 			if errors.Is(err, ErrReviewPRPresentationNotFound) {
@@ -402,6 +405,9 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		}
 		item, err := e.Collaboration.ApplyCollaborationAction(ctx, job, now().UTC())
 		if err != nil {
+			if errors.Is(err, ErrReviewCollaborationConflict) {
+				err = fmt.Errorf("协作状态已被其他成员更新，请刷新 PR 状态后重试")
+			}
 			return reviewGatewayExecutionFailure(result, err)
 		}
 		bundle := BuildReviewCollaborationBundle(item)
@@ -418,6 +424,16 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("unsupported review gateway action %q", job.Action))
 	}
 	return result, nil
+}
+
+func (e *ReviewGatewayExecutor) validateReviewCollaborationAuthorization(job ReviewGatewayJob) error {
+	if job.PublicRead || !job.CollaborationAuthorized {
+		return fmt.Errorf("当前账号没有领取或管理该仓库 PR 的协作权限")
+	}
+	if _, ok := findReviewIdentity(e.IdentityBindings, job.RequestedBy, job.InstallationID); !ok {
+		return fmt.Errorf("领取或管理 PR 前需要先绑定 GitLink 身份")
+	}
+	return nil
 }
 
 func formatReviewGatewayRepositoryBindings(repositories []string, defaultRepository string) string {

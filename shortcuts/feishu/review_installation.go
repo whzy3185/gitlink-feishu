@@ -357,6 +357,15 @@ func reviewGatewayActionAllowsPublicRepository(action string) bool {
 	return action == "read_review_context"
 }
 
+func reviewGatewayActionRequiresCollaborationAuthorization(action string) bool {
+	switch action {
+	case "claim_review", "release_review", "set_review_deadline":
+		return true
+	default:
+		return false
+	}
+}
+
 func reviewGatewayActionRequiresRepository(action string) bool {
 	switch action {
 	case "read_review_queue", "read_review_context", "refresh_review_context",

@@ -17,7 +17,7 @@ func TestReviewPresentationMappings(t *testing.T) {
 		reviewStageDisplayName("waiting_for_re_review"):                      "等待重新审查",
 		reviewDecisionDisplayName("pending"):                                 "待决定",
 		reviewDecisionDisplayName("approved"):                                "已批准",
-		reviewDecisionDisplayName("rejected"):                                "需修改",
+		reviewDecisionDisplayName("rejected"):                                "需要修改",
 		reviewDecisionDisplayName("unknown"):                                 "待确认",
 		reviewCollectionStatusDisplayName("complete", false):                 "完整",
 		reviewCollectionStatusDisplayName("partial", true):                   "数据不完整",
@@ -60,7 +60,9 @@ func TestReviewGatewayChineseCommandsAndCompatibilityAliases(t *testing.T) {
 		{"设置 owner/repo PR #1 审查截止 2026-08-10", "set_review_deadline", "2026-08-10"},
 		{"提交审查意见 owner/repo PR #1 good", "prepare_common_review", "good"},
 		{"批准 owner/repo PR #1 good", "prepare_review_approve", "good"},
+		{"需要修改 owner/repo PR #1 fix this", "prepare_review_reject", "fix this"},
 		{"要求修改 owner/repo PR #1 fix this", "prepare_review_reject", "fix this"},
+		{"请求修改 owner/repo PR #1 fix this", "prepare_review_reject", "fix this"},
 		{"拒绝并关闭 owner/repo PR #1 reason", "prepare_reject_close", "reason"},
 		{"合并 owner/repo PR #1", "prepare_merge", ""},
 		{"review owner/repo#1 good", "prepare_common_review", "good"},
@@ -164,7 +166,7 @@ func TestReviewGatewayAcknowledgementsAreActionSpecific(t *testing.T) {
 		"set_review_deadline":    "正在更新 PR #1 的审查截止时间",
 		"prepare_common_review":  "提交审查意见",
 		"prepare_review_approve": "批准 PR #1",
-		"prepare_review_reject":  "要求修改 PR #1",
+		"prepare_review_reject":  "需要修改 PR #1",
 		"prepare_reject_close":   "拒绝并关闭 PR #1",
 		"prepare_merge":          "合并 PR #1",
 	}
@@ -173,6 +175,40 @@ func TestReviewGatewayAcknowledgementsAreActionSpecific(t *testing.T) {
 		if !strings.Contains(ack, want) || strings.Contains(ack, "只读 Review 请求") {
 			t.Fatalf("ack %s = %q", action, ack)
 		}
+	}
+}
+
+func TestNeedChangesIsTheOnlyPresentedRejectTerm(t *testing.T) {
+	job, result, _ := reviewGatewayCardFixture()
+	job.Action = "prepare_review_reject"
+	plan := NewControlledReviewActionPlan(job, "gitlink-user", result.HeadSHA, result.SourceFingerprint, reviewActionReject, "请补充回归测试", time.Now().UTC())
+	result.Action = job.Action
+	result.ActionPlan = &plan
+	cardJSON, ok := safeReviewGatewayCardJSON(buildReviewGatewayResultCard(job, result, nil))
+	if !ok {
+		t.Fatal("need-changes ActionPlan card unexpectedly downgraded")
+	}
+	ack := formatReviewGatewayAcknowledgement(job)
+	completed := formatReviewWriteResultReply(ReviewWriteResult{
+		Action: reviewActionReject, Repository: job.Repository, PRNumber: job.PRNumber,
+		Status: "completed", MutationStatus: reviewMutationConfirmed, ReviewID: "132",
+	})
+	stale := formatReviewWriteResultReply(ReviewWriteResult{
+		Action: reviewActionReject, Repository: job.Repository, PRNumber: job.PRNumber,
+		Status: "stale", MutationStatus: reviewMutationNone,
+	})
+	for label, text := range map[string]string{"ack": ack, "card": cardJSON, "completed": completed, "stale": stale} {
+		if !strings.Contains(text, "需要修改") {
+			t.Fatalf("%s does not present need-changes wording: %s", label, text)
+		}
+		for _, forbidden := range []string{"要求修改", "请求修改", "REJECT REVIEW", "prepare_review_reject", "reviewActionReject", "rejected"} {
+			if strings.Contains(text, forbidden) {
+				t.Fatalf("%s leaked compatibility/internal term %q: %s", label, forbidden, text)
+			}
+		}
+	}
+	if !strings.Contains(completed, "已标记为需要修改") || !strings.Contains(completed, "PR 状态：保持开放") {
+		t.Fatalf("completed need-changes reply lost open-PR semantics: %s", completed)
 	}
 }
 
@@ -203,14 +239,14 @@ func TestReviewGatewayHelpPromotesChineseCommandsAndCurrentBoundaries(t *testing
 	help := reviewGatewayHelpText()
 	for _, required := range []string{
 		"查看 owner/repo PR #123", "取消领取 owner/repo PR #123", "审查截止 YYYY-MM-DD",
-		"提交审查意见", "批准 owner/repo", "要求修改 owner/repo", "拒绝并关闭 owner/repo", "合并 owner/repo",
-		"要求修改”只提交审查结论，PR 保持开放",
+		"提交审查意见", "批准 owner/repo", "需要修改 owner/repo", "拒绝并关闭 owner/repo", "合并 owner/repo",
+		"需要修改”只提交审查结论，PR 保持开放",
 	} {
 		if !strings.Contains(help, required) {
 			t.Fatalf("help missing %q: %s", required, help)
 		}
 	}
-	for _, forbidden := range []string{"approve owner/repo", "reject owner/repo", "始终禁用"} {
+	for _, forbidden := range []string{"approve owner/repo", "reject owner/repo", "要求修改 owner/repo", "请求修改 owner/repo", "始终禁用"} {
 		if strings.Contains(help, forbidden) {
 			t.Fatalf("help still promotes obsolete copy %q: %s", forbidden, help)
 		}

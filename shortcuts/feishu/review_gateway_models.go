@@ -66,14 +66,16 @@ type ReviewIdentityBinding struct {
 }
 
 type ReviewGatewayIntent struct {
-	Name             string   `json:"name"`
-	InstallationID   string   `json:"installation_id,omitempty"`
-	InstallationMode string   `json:"installation_mode,omitempty"`
-	Repository       string   `json:"repository,omitempty"`
-	Repositories     []string `json:"repositories,omitempty"`
-	PRNumber         int      `json:"pr_number,omitempty"`
-	Argument         string   `json:"argument,omitempty"`
-	PublicRead       bool     `json:"public_read,omitempty"`
+	Name                    string   `json:"name"`
+	InstallationID          string   `json:"installation_id,omitempty"`
+	InstallationMode        string   `json:"installation_mode,omitempty"`
+	Repository              string   `json:"repository,omitempty"`
+	Repositories            []string `json:"repositories,omitempty"`
+	PRNumber                int      `json:"pr_number,omitempty"`
+	Argument                string   `json:"argument,omitempty"`
+	PublicRead              bool     `json:"public_read,omitempty"`
+	CollaborationAuthorized bool     `json:"collaboration_authorized,omitempty"`
+	CollaborationAdmin      bool     `json:"collaboration_admin,omitempty"`
 }
 
 type ReviewGatewayJob struct {
@@ -99,6 +101,8 @@ type ReviewGatewayJob struct {
 	CreatedAt                   string   `json:"created_at"`
 	MutatesGitLink              bool     `json:"mutates_gitlink"`
 	CollaborationMutation       bool     `json:"collaboration_mutation"`
+	CollaborationAuthorized     bool     `json:"collaboration_authorized,omitempty"`
+	CollaborationAdmin          bool     `json:"collaboration_admin,omitempty"`
 	RequiresAdmin               bool     `json:"requires_admin"`
 	AttemptCount                int      `json:"attempt_count"`
 	MaxAttempts                 int      `json:"max_attempts"`
@@ -187,6 +191,7 @@ type MemoryReviewGatewayDeduper struct {
 type ReviewGateway struct {
 	bindings      map[string]ReviewChatBinding
 	installations map[string]GitLinkInstallation
+	identities    []ReviewIdentityBinding
 	admins        map[string]bool
 	deduper       ReviewGatewayDeduper
 	now           func() time.Time
@@ -202,7 +207,7 @@ var (
 	reviewGatewayMergePattern             = regexp.MustCompile(`(?i)^merge\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s*(?:PR\s*)?#?(\d+)$`)
 	reviewGatewayChineseCommonPattern     = regexp.MustCompile(`^提交审查意见\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+(.+)$`)
 	reviewGatewayChineseApprovePattern    = regexp.MustCompile(`^批准\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+(.+)$`)
-	reviewGatewayChineseRejectPattern     = regexp.MustCompile(`^要求修改\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+(.+)$`)
+	reviewGatewayChineseRejectPattern     = regexp.MustCompile(`^(?:需要修改|要求修改|请求修改)\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+(.+)$`)
 	reviewGatewayChineseRefusePattern     = regexp.MustCompile(`^拒绝并关闭\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+(.+)$`)
 	reviewGatewayChineseMergePattern      = regexp.MustCompile(`^合并\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`)
 	reviewGatewaySecretReferencePattern   = regexp.MustCompile(`^env:[A-Za-z_][A-Za-z0-9_]*$`)
@@ -297,6 +302,7 @@ func NewReviewGateway(bindings ReviewGatewayBindings, config ReviewGatewayConfig
 	result := &ReviewGateway{
 		bindings:      map[string]ReviewChatBinding{},
 		installations: map[string]GitLinkInstallation{},
+		identities:    append([]ReviewIdentityBinding(nil), bindings.IdentityBindings...),
 		admins:        stringSet(config.AdminUserIDs),
 		deduper:       deduper,
 		now:           config.Now,
@@ -429,6 +435,19 @@ func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEven
 			}
 			intent.Repository = resolved
 			intent.PublicRead = publicRead
+		}
+		if reviewGatewayActionRequiresCollaborationAuthorization(intent.Name) {
+			isAdmin := g.isAdmin(binding, event.UserID)
+			if !isAdmin && !containsReviewGatewayString(binding.AllowedUserIDs, event.UserID) {
+				receipt.Reason = "collaboration_not_allowed"
+				return receipt, nil
+			}
+			if _, ok := findReviewIdentity(g.identities, event.UserID, installation.InstallationID); !ok {
+				receipt.Reason = "collaboration_identity_required"
+				return receipt, nil
+			}
+			intent.CollaborationAuthorized = true
+			intent.CollaborationAdmin = isAdmin
 		}
 		receipt.Intent = intent
 	}
@@ -595,32 +614,34 @@ func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, d
 	}
 	queueClass, _ := reviewGatewayQueueClassForAction(intent.Name)
 	return ReviewGatewayJob{
-		SchemaVersion:         reviewGatewayJobSchema,
-		JobID:                 "job-" + hex.EncodeToString(digest[:8]),
-		DedupeKey:             dedupeKey,
-		Status:                "queued",
-		Mode:                  mode,
-		Action:                intent.Name,
-		InstallationID:        intent.InstallationID,
-		InstallationMode:      intent.InstallationMode,
-		Repository:            intent.Repository,
-		Repositories:          append([]string(nil), intent.Repositories...),
-		PRNumber:              intent.PRNumber,
-		Argument:              intent.Argument,
-		PublicRead:            intent.PublicRead,
-		ChatID:                event.ChatID,
-		RequestedBy:           event.UserID,
-		SourceEventID:         event.EventID,
-		SourceMessageID:       event.MessageID,
-		CreatedAt:             now.Format(time.RFC3339),
-		MutatesGitLink:        mutatesGitLink,
-		CollaborationMutation: collaborationMutation,
-		RequiresAdmin:         requiresAdmin,
-		MaxAttempts:           3,
-		NextAttemptAt:         now.Format(time.RFC3339Nano),
-		QueueClass:            queueClass,
-		Priority:              reviewGatewayDefaultPriority(queueClass),
-		OperationPlanStatus:   "none",
+		SchemaVersion:           reviewGatewayJobSchema,
+		JobID:                   "job-" + hex.EncodeToString(digest[:8]),
+		DedupeKey:               dedupeKey,
+		Status:                  "queued",
+		Mode:                    mode,
+		Action:                  intent.Name,
+		InstallationID:          intent.InstallationID,
+		InstallationMode:        intent.InstallationMode,
+		Repository:              intent.Repository,
+		Repositories:            append([]string(nil), intent.Repositories...),
+		PRNumber:                intent.PRNumber,
+		Argument:                intent.Argument,
+		PublicRead:              intent.PublicRead,
+		ChatID:                  event.ChatID,
+		RequestedBy:             event.UserID,
+		SourceEventID:           event.EventID,
+		SourceMessageID:         event.MessageID,
+		CreatedAt:               now.Format(time.RFC3339),
+		MutatesGitLink:          mutatesGitLink,
+		CollaborationMutation:   collaborationMutation,
+		CollaborationAuthorized: intent.CollaborationAuthorized,
+		CollaborationAdmin:      intent.CollaborationAdmin,
+		RequiresAdmin:           requiresAdmin,
+		MaxAttempts:             3,
+		NextAttemptAt:           now.Format(time.RFC3339Nano),
+		QueueClass:              queueClass,
+		Priority:                reviewGatewayDefaultPriority(queueClass),
+		OperationPlanStatus:     "none",
 	}
 }
 

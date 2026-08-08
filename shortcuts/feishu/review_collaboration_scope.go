@@ -146,24 +146,37 @@ func (s *SQLiteReviewGatewayStore) applyScopedCollaborationAction(
 	switch job.Action {
 	case "claim_review":
 		if state.AssignedTo != "" && state.AssignedTo != job.RequestedBy {
-			return ReviewCollaborationItem{}, fmt.Errorf("PR #%d is already claimed by another reviewer", job.PRNumber)
+			return ReviewCollaborationItem{}, fmt.Errorf(
+				"PR #%d 当前已由%s负责。如需接手，请先完成负责人释放或转交",
+				job.PRNumber,
+				reviewCollaborationAssigneeDisplayName(state),
+			)
 		}
 		state.AssignedTo = job.RequestedBy
 		state.CollaborationStatus = "reviewing"
 	case "release_review":
 		if state.AssignedTo == "" {
-			return ReviewCollaborationItem{}, fmt.Errorf("PR #%d is not currently claimed", job.PRNumber)
+			return ReviewCollaborationItem{}, fmt.Errorf("PR #%d 当前未被领取", job.PRNumber)
 		}
-		if state.AssignedTo != job.RequestedBy {
-			return ReviewCollaborationItem{}, fmt.Errorf("only the current reviewer can release PR #%d", job.PRNumber)
+		if state.AssignedTo != job.RequestedBy && !job.CollaborationAdmin {
+			return ReviewCollaborationItem{}, fmt.Errorf(
+				"当前 PR 由%s负责，只有当前负责人或协作管理员可以取消领取",
+				reviewCollaborationAssigneeDisplayName(state),
+			)
 		}
 		state.AssignedTo = ""
 		state.AssignedDisplayName = ""
 		state.CollaborationStatus = "unassigned"
 		state.DueAt = ""
 	case "set_review_deadline":
-		if state.AssignedTo == "" || state.AssignedTo != job.RequestedBy {
-			return ReviewCollaborationItem{}, fmt.Errorf("claim PR #%d before setting its deadline", job.PRNumber)
+		if state.AssignedTo == "" {
+			return ReviewCollaborationItem{}, fmt.Errorf("请先领取 PR #%d，再设置审查截止时间", job.PRNumber)
+		}
+		if state.AssignedTo != job.RequestedBy && !job.CollaborationAdmin {
+			return ReviewCollaborationItem{}, fmt.Errorf(
+				"当前 PR 由%s负责，只有当前负责人或协作管理员可以设置审查截止时间",
+				reviewCollaborationAssigneeDisplayName(state),
+			)
 		}
 		due, parseErr := time.Parse("2006-01-02", strings.TrimSpace(job.Argument))
 		if parseErr != nil {
@@ -189,6 +202,13 @@ func (s *SQLiteReviewGatewayStore) applyScopedCollaborationAction(
 		return ReviewCollaborationItem{}, err
 	}
 	return after, nil
+}
+
+func reviewCollaborationAssigneeDisplayName(state reviewChatCollaboration) string {
+	if value := strings.TrimSpace(state.AssignedDisplayName); value != "" {
+		return truncateReviewGatewayText(value, 80)
+	}
+	return "其他审查者"
 }
 
 func writeScopedReviewCollaborationAction(

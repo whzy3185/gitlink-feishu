@@ -569,6 +569,10 @@ func formatReviewGatewayNotice(reason string) string {
 	switch reason {
 	case "sender_not_allowed":
 		return "当前账号没有操作本群 GitLink Review 助手的权限，请联系群管理员加入允许名单。"
+	case "collaboration_not_allowed":
+		return "当前账号没有领取该仓库 PR 的协作权限。"
+	case "collaboration_identity_required":
+		return "领取 PR 前需要先绑定 GitLink 身份。"
 	case "binding_requires_admin":
 		return "仓库绑定只能由已配置的管理员执行；当前请求没有修改任何绑定。"
 	case "repository_qualification_required":
@@ -751,12 +755,13 @@ func formatReviewWriteResultReply(write ReviewWriteResult) string {
 	case "stale":
 		return truncateReviewGatewayText(strings.Join([]string{
 			fmt.Sprintf("%s PR #%d 操作计划已失效", write.Repository, write.PRNumber),
+			"操作：" + reviewActionDisplayName(action),
 			"PR 的代码版本已经发生变化。",
 			"本次未修改 GitLink。",
 			"请刷新 PR 后重新发起操作。",
 		}, "\n"), 3000)
 	case "cancelled":
-		return fmt.Sprintf("%s PR #%d 操作已取消\n本次未修改 GitLink。", write.Repository, write.PRNumber)
+		return fmt.Sprintf("%s PR #%d 操作已取消\n操作：%s\n本次未修改 GitLink。", write.Repository, write.PRNumber, reviewActionDisplayName(action))
 	case "failed":
 		return truncateReviewGatewayText(strings.Join([]string{
 			fmt.Sprintf("%s PR #%d 操作执行失败", write.Repository, write.PRNumber),
@@ -812,13 +817,13 @@ func formatReviewActionPlanReply(plan ReviewActionPlan) string {
 	case "completed":
 		return fmt.Sprintf("%s %s\n结果：操作已完成并通过 GitLink 回读验证", plan.Repository, reviewActionCompletedTitle(plan.Action, plan.PRNumber))
 	case "stale":
-		return fmt.Sprintf("%s PR #%d 操作计划已失效\nPR 的代码版本已经发生变化。\n本次未修改 GitLink。\n请刷新 PR 后重新发起操作。", plan.Repository, plan.PRNumber)
+		return fmt.Sprintf("%s PR #%d 操作计划已失效\n操作：%s\nPR 的代码版本已经发生变化。\n本次未修改 GitLink。\n请刷新 PR 后重新发起操作。", plan.Repository, plan.PRNumber, reviewActionDisplayName(plan.Action))
 	case "cancelled":
-		return fmt.Sprintf("%s PR #%d 操作已取消\n本次未修改 GitLink。", plan.Repository, plan.PRNumber)
+		return fmt.Sprintf("%s PR #%d 操作已取消\n操作：%s\n本次未修改 GitLink。", plan.Repository, plan.PRNumber, reviewActionDisplayName(plan.Action))
 	case "unknown":
-		return fmt.Sprintf("%s PR #%d 操作结果暂无法确认\n系统已停止自动重试，以避免重复写入。\n请先核对 GitLink 当前状态。", plan.Repository, plan.PRNumber)
+		return fmt.Sprintf("%s PR #%d 操作结果暂无法确认\n操作：%s\n系统已停止自动重试，以避免重复写入。\n请先核对 GitLink 当前状态。", plan.Repository, plan.PRNumber, reviewActionDisplayName(plan.Action))
 	case "failed":
-		return fmt.Sprintf("%s PR #%d 操作执行失败\n本次未确认 GitLink 写入。\n请刷新 PR 状态并检查失败原因后重新发起操作。", plan.Repository, plan.PRNumber)
+		return fmt.Sprintf("%s PR #%d 操作执行失败\n操作：%s\n本次未确认 GitLink 写入。\n请刷新 PR 状态并检查失败原因后重新发起操作。", plan.Repository, plan.PRNumber, reviewActionDisplayName(plan.Action))
 	default:
 		return truncateReviewGatewayText(strings.Join([]string{
 			fmt.Sprintf("%s PR #%d “%s”操作计划已生成", plan.Repository, plan.PRNumber, reviewActionDisplayName(plan.Action)),
