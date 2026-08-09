@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR 关系图谱"
+  short_description: "分析 open PR 之间的依赖、重叠、替代和建议处理顺序。"
+  default_prompt: "Use $gitlink-pr-topology 扫描这个 GitLink 仓库的 open PR 队列，识别依赖链、功能重叠、潜在替代关系、冲突热点和建议处理顺序。"

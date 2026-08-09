@@ -38,9 +38,9 @@ gitlink-cli org +create --name my-org --description "我的组织"
 
 ```bash
 # 组织团队管理
-gitlink-cli api GET /organizations/:id/teams
-gitlink-cli api POST /organizations/:id/teams --body '{"name":"dev-team"}'
+gitlink-cli org +teams
+gitlink-cli org +create-team --body '{"name":"dev-team"}'
 
 # 移除成员
-gitlink-cli api DELETE /organizations/:id/organization_users/:uid
+gitlink-cli org +remove-user
 ```

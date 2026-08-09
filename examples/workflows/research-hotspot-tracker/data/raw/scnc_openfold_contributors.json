@@ -1,0 +1,211 @@
+{
+  "ok": true,
+  "data": {
+    "list": [
+      {
+        "contribution_perc": "28.39%",
+        "contributions": 707,
+        "email": "gahdritz@gmail.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/G/206_115_165/120.png",
+        "login": null,
+        "name": "gustaf ahdritz",
+        "type": null
+      },
+      {
+        "contribution_perc": "7.35%",
+        "contributions": 183,
+        "email": "geoffrey.yu96@icloud.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/G/118_211_238/120.png",
+        "login": null,
+        "name": "geoffrey yu",
+        "type": null
+      },
+      {
+        "contribution_perc": "6.67%",
+        "contributions": 166,
+        "email": "tabuchi.akihiro@fujitsu.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/A/132_145_172/120.png",
+        "login": null,
+        "name": "akihiro tabuchi",
+        "type": null
+      },
+      {
+        "contribution_perc": "6.67%",
+        "contributions": 166,
+        "email": "oyama.yosuke@fujitsu.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/O/133_140_134/120.png",
+        "login": null,
+        "name": "oyamay",
+        "type": null
+      },
+      {
+        "contribution_perc": "6.91%",
+        "contributions": 172,
+        "email": "sachinkadyan7@gmail.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/S/142_140_188/120.png",
+        "login": null,
+        "name": "sachin kadyan",
+        "type": null
+      },
+      {
+        "contribution_perc": "4.14%",
+        "contributions": 103,
+        "email": "christina.floristean@gmail.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/C/88_149_110/120.png",
+        "login": null,
+        "name": "christina floristean",
+        "type": null
+      },
+      {
+        "contribution_perc": "5.26%",
+        "contributions": 131,
+        "email": "jennifer.wei@omsf.io",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/J/62_200_234/120.png",
+        "login": null,
+        "name": "jnwei",
+        "type": null
+      },
+      {
+        "contribution_perc": "3.65%",
+        "contributions": 91,
+        "email": "whereisthelux@gmail.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/J/67_157_94/120.png",
+        "login": null,
+        "name": "jennifer",
+        "type": null
+      },
+      {
+        "contribution_perc": "2.53%",
+        "contributions": 63,
+        "email": "3505568+jflucier@users.noreply.github.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/J/73_190_183/120.png",
+        "login": null,
+        "name": "jflucier",
+        "type": null
+      },
+      {
+        "contribution_perc": "2.45%",
+        "contributions": 61,
+        "email": "97625454+jnwei@users.noreply.github.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/J/229_108_155/120.png",
+        "login": null,
+        "name": "jennifer wei",
+        "type": null
+      },
+      {
+        "contribution_perc": "2.41%",
+        "contributions": 60,
+        "email": "hiroyuki.akamatsu12@metro.co.jp",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/A/145_178_168/120.png",
+        "login": null,
+        "name": "akamatsu",
+        "type": null
+      },
+      {
+        "contribution_perc": "1.29%",
+        "contributions": 32,
+        "email": "jacknicoludis@gmail.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/J/233_188_180/120.png",
+        "login": null,
+        "name": "jack nicoludis",
+        "type": null
+      },
+      {
+        "contribution_perc": "1.85%",
+        "contributions": 46,
+        "email": "jeon_jaesung@metro.co.jp",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/J/74_243_75/120.png",
+        "login": null,
+        "name": "jasesung jeon",
+        "type": null
+      },
+      {
+        "contribution_perc": "1.12%",
+        "contributions": 28,
+        "email": "yianni.anastopoulos@unnaturalproducts.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/I/150_190_213/120.png",
+        "login": null,
+        "name": "ioannisa92",
+        "type": null
+      },
+      {
+        "contribution_perc": "0.92%",
+        "contributions": 23,
+        "email": "tabuchi.akihiro@jp.fujitsu.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/A/186_135_57/120.png",
+        "login": null,
+        "name": "akihiro tabuchi",
+        "type": null
+      },
+      {
+        "contribution_perc": "0.88%",
+        "contributions": 22,
+        "email": "44894955+dingquanyu@users.noreply.github.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/D/181_233_37/120.png",
+        "login": null,
+        "name": "dingquan yu",
+        "type": null
+      },
+      {
+        "contribution_perc": "0.88%",
+        "contributions": 22,
+        "email": "sam@cyrusbio.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/S/34_208_66/120.png",
+        "login": null,
+        "name": "sam deluca",
+        "type": null
+      },
+      {
+        "contribution_perc": "0.80%",
+        "contributions": 20,
+        "email": "geoffreyyu@geoffreys-macbook-pro.local",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/D/181_233_37/120.png",
+        "login": null,
+        "name": "dingquan yu",
+        "type": null
+      },
+      {
+        "contribution_perc": "0.72%",
+        "contributions": 18,
+        "email": "jc@juliocesar.io",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/J/150_190_213/120.png",
+        "login": null,
+        "name": "julio césar",
+        "type": null
+      },
+      {
+        "contribution_perc": "0.72%",
+        "contributions": 18,
+        "email": "64649594+vaclavhanzl@users.noreply.github.com",
+        "id": null,
+        "image_url": "system/lets/letter_avatars/2/V/118_211_238/120.png",
+        "login": null,
+        "name": "vaclav hanzl",
+        "type": null
+      }
+    ],
+    "total_count": 116
+  },
+  "meta": {
+    "total_count": 116
+  }
+}

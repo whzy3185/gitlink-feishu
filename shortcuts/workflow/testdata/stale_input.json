@@ -1,0 +1,27 @@
+{
+  "repository": "Gitlink/gitlink-cli",
+  "source": "local-json",
+  "issues": [
+    {
+      "number": 18,
+      "title": "Issue shortcut returns partial metadata for status_name fields",
+      "state": "open",
+      "author": "alice",
+      "labels": ["bug", "api"],
+      "updated_at": "2026-04-10T09:00:00Z",
+      "comments_count": 2
+    }
+  ],
+  "pull_requests": [
+    {
+      "number": 42,
+      "title": "feat: add stale workflow scanner",
+      "state": "open",
+      "author": "bob",
+      "base_branch": "master",
+      "head_branch": "mengz/workflow-stale",
+      "last_activity_at": "2026-03-01T08:00:00Z",
+      "comments_count": 1
+    }
+  ]
+}

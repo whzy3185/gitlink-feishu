@@ -68,7 +68,7 @@ if ($Layer -eq "stable" -or $Layer -eq "all") {
 
 if ($Layer -eq "open-platform" -or $Layer -eq "all") {
   $allMissing += Test-Group -Title "Open Platform app" -Names @("FEISHU_APP_ID", "FEISHU_APP_SECRET")
-  $allMissing += Test-Group -Title "DocX / Wiki" -Names @("FEISHU_WIKI_URL", "FEISHU_WIKI_NODE_TOKEN", "FEISHU_FOLDER_TOKEN") -Optional @("FEISHU_WIKI_URL", "FEISHU_WIKI_NODE_TOKEN", "FEISHU_FOLDER_TOKEN")
+  $allMissing += Test-Group -Title "DocX / Wiki" -Names @("FEISHU_WIKI_URL", "FEISHU_WIKI_NODE_TOKEN", "FEISHU_FOLDER_TOKEN", "FEISHU_DOCUMENT_ID") -Optional @("FEISHU_WIKI_URL", "FEISHU_WIKI_NODE_TOKEN", "FEISHU_FOLDER_TOKEN", "FEISHU_DOCUMENT_ID")
   $allMissing += Test-Group -Title "Base / Bitable" -Names @("FEISHU_BASE_APP_TOKEN", "FEISHU_REPORT_TABLE_ID", "FEISHU_ISSUE_TABLE_ID", "FEISHU_PR_TABLE_ID", "FEISHU_CONTRIBUTOR_TABLE_ID", "FEISHU_TASK_TABLE_ID") -Optional @("FEISHU_CONTRIBUTOR_TABLE_ID", "FEISHU_TASK_TABLE_ID")
   $allMissing += Test-Group -Title "Feishu Task" -Names @("FEISHU_TASK_PROJECT_ID", "FEISHU_TASK_SECTION_ID") -Optional @("FEISHU_TASK_PROJECT_ID", "FEISHU_TASK_SECTION_ID")
 }

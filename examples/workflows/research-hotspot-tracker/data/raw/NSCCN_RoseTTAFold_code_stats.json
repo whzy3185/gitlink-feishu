@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "data": {
+    "additions": 423167,
+    "author_count": 2,
+    "authors": [
+      {
+        "additions": 423140,
+        "author": {
+          "email": "minkbaek@digs",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/M/116_223_50/120.png",
+          "login": "Minkyung Baek",
+          "name": "Minkyung Baek",
+          "type": null
+        },
+        "commits": 26,
+        "deletions": 45075
+      },
+      {
+        "additions": 27,
+        "author": {
+          "email": "minkbaek@uw.edu",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/M/116_223_50/120.png",
+          "login": "Minkyung Baek",
+          "name": "Minkyung Baek",
+          "type": null
+        },
+        "commits": 8,
+        "deletions": 152
+      }
+    ],
+    "change_files": null,
+    "commit_count": 34,
+    "commit_count_in_all_branches": 40,
+    "deletions": 45227
+  }
+}

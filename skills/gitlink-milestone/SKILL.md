@@ -1,66 +1,52 @@
 ---
 name: gitlink-milestone
 version: 1.0.0
-description: "Milestone management: list, create, view, update, delete, close, and reopen GitLink project milestones."
+description: "里程碑管理：创建、查看、关闭、删除里程碑。当用户需要管理 GitLink 项目里程碑时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
   cliHelp: "gitlink-cli milestone --help"
 ---
 
-# gitlink-milestone
+# gitlink-milestone（里程碑操作）
 
-**CRITICAL**: Read [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md) before starting. It covers authentication, permissions, global flags, and GitLink API behavior.
-**CRITICAL**: Confirm user intent before running write or destructive operations such as `+create`, `+update`, `+delete`, `+close`, or `+reopen`.
-**CRITICAL**: Use `gitlink-cli` for GitLink resources. Do not use GitHub-only tools such as `gh`.
+**CRITICAL — 开始前必须先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)，其中包含认证、权限处理和 API 注意事项。**
+**CRITICAL — 所有 Shortcuts 在执行写入/删除操作前，务必先确认用户意图。**
 
 ## Shortcuts
 
-| Shortcut | Description | Operation |
-|----------|-------------|-----------|
-| `milestone +list` | List repository milestones | Read |
-| `milestone +create` | Create a milestone | Write |
-| `milestone +view` | View milestone details and linked issues | Read |
-| `milestone +update` | Update milestone fields | Write |
-| `milestone +delete` | Delete a milestone | Destructive |
-| `milestone +close` | Close a milestone | Write |
-| `milestone +reopen` | Reopen a closed milestone | Write |
+| Shortcut | 说明 |
+|----------|------|
+| `milestone +list` | 列出里程碑 |
+| `milestone +create` | 创建里程碑 |
+| `milestone +view` | 查看里程碑详情（含关联 Issue） |
+| `milestone +close` | 关闭里程碑 |
+| `milestone +delete` | 删除里程碑 |
 
-## Examples
+## 使用示例
 
 ```bash
-# List open milestones
-gitlink-cli milestone +list --owner Gitlink --repo forgeplus --category opening
+# 列出里程碑
+gitlink-cli milestone +list --owner Gitlink --repo forgeplus
 
-# Create a milestone
-gitlink-cli milestone +create --owner Gitlink --repo forgeplus \
-  --name v1.0 --description "First stable release" --due-date 2026-07-01
+# 按状态筛选
+gitlink-cli milestone +list --owner Gitlink --repo forgeplus --status open
 
-# View milestone details and linked opened issues
-gitlink-cli milestone +view --owner Gitlink --repo forgeplus --id 7 --category opened
+# 创建里程碑
+gitlink-cli milestone +create --owner Gitlink --repo forgeplus --name "v2.0" --description "Second major release" --due-date 2026-09-01
 
-# Update the due date
-gitlink-cli milestone +update --owner Gitlink --repo forgeplus --id 7 --due-date 2026-08-01
+# 查看里程碑详情
+gitlink-cli milestone +view --owner Gitlink --repo forgeplus --id 5
 
-# Close and reopen
-gitlink-cli milestone +close --owner Gitlink --repo forgeplus --id 7
-gitlink-cli milestone +reopen --owner Gitlink --repo forgeplus --id 7
+# 关闭里程碑
+gitlink-cli milestone +close --owner Gitlink --repo forgeplus --id 5
+
+# 删除里程碑
+gitlink-cli milestone +delete --owner Gitlink --repo forgeplus --id 5
 ```
 
-## Parameters
+## API 注意事项
 
-| Command | Key parameters |
-|---------|----------------|
-| `+list` | `--keyword`, `--category opening,closed`, `--only-name`, `--sort-by`, `--sort-direction`, `--page`, `--limit` |
-| `+create` | `--name`, `--description`, `--due-date` |
-| `+view` | `--id`, `--category all,opened,closed`, `--author-id`, `--assigner-id`, `--issue-tag-ids`, `--page`, `--limit` |
-| `+update` | `--id` plus at least one of `--name`, `--description`, `--due-date` |
-| `+delete` | `--id` |
-| `+close` / `+reopen` | `--id` |
-
-## API Notes
-
-- Milestone list/create/view/update/delete use `/api/v1/{owner}/{repo}/milestones`.
-- Status updates use `/api/{owner}/{repo}/milestones/{id}/update_status`.
-- `--due-date` maps to the GitLink API field `effective_date`.
-- `--issue-tag-ids` accepts comma-separated IDs and normalizes whitespace before calling the API.
+- 里程碑使用 v1 API：`/v1/{owner}/{repo}/milestones`
+- `milestone +view` 支持通过 `--category` 参数筛选关联 Issue（all/opened/closed）
+- `milestone +close` 调用更新状态接口，status 设为 "closed"

@@ -21,7 +21,7 @@ gitlink-cli pr +files -i 214 --owner Gitlink --repo forgeplus --format json
 gitlink-cli pr +diff -i 214 --owner Gitlink --repo forgeplus --format json
 
 # commits
-gitlink-cli api GET /Gitlink/forgeplus/pulls/214/commits --format json
+gitlink-cli pr +commits -i 214 --owner Gitlink --repo forgeplus --format json
 
 # CI 状态
 gitlink-cli ci +builds --owner Gitlink --repo forgeplus --format json

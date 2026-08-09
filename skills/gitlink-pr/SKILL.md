@@ -26,11 +26,7 @@ metadata:
 | `pr +refuse` | 拒绝并关闭 PR | 是 |
 | `pr +reopen` | 重开已关闭的 PR | 是 |
 | `pr +files` | 变更文件列表 | 否 |
-| `pr +diff` | 查看变更文件和 diff 内容 | 否 |
-| `pr +versions` | 查看 PR patchset/version 列表 | 否 |
-| `pr +version-diff` | 查看指定 patchset/version diff | 否 |
-| `pr +reviews` | 查看 PR 审查记录，支持状态过滤 | 否 |
-| `pr +review` | 创建 PR 审查（支持 dry-run 预览） | 是 |
+| `pr +diff` | 查看代码差异（含逐行 diff） | 否 |
 | `pr +comment` | 给 PR 添加评论 | 是 |
 
 ## 使用示例
@@ -61,20 +57,14 @@ gitlink-cli pr +reopen --id 3
 # 查看变更文件（含 diff 内容）
 gitlink-cli pr +files --id 3
 
-# 查看 PR patchset/version 列表
-gitlink-cli pr +versions --id 3
+# 查看代码差异（逐行 diff）
+gitlink-cli pr +diff --id 3
 
-# 查看指定 patchset/version diff
-gitlink-cli pr +version-diff --id 3 --version-id 16040
-gitlink-cli pr +version-diff --id 3 --version-id 16040 --file shortcuts/pr/pr.go
+# 查看某个文件的 diff
+gitlink-cli pr +diff --id 3 --file src/main.go
 
-# 查看 PR 审查记录（支持按状态过滤）
-gitlink-cli pr +reviews --id 3
-gitlink-cli pr +reviews --id 3 --status approved
-
-# 创建 PR 审查（common/approved/rejected，支持 --dry-run 预览）
-gitlink-cli pr +review --id 3 --status approved --content "LGTM, ready to merge"
-gitlink-cli pr +review --id 3 --status approved --content "LGTM" --dry-run
+# 仅查看 diff 统计摘要
+gitlink-cli pr +diff --id 3 --stat
 
 # 给 PR 添加评论
 gitlink-cli pr +comment --id 3 --body "LGTM, ready to merge"
@@ -116,7 +106,7 @@ gitlink-cli pr +create --owner TargetOrg --repo target-repo \
 gitlink-cli branch +create --name feature-branch --from master
 
 # 2. 在分支上创建/修改文件（content 必须 base64 编码）
-gitlink-cli api POST /:owner/:repo/create_file --body '{
+gitlink-cli repo +create-file --body '{
   "filepath": "new-file.md",
   "content": "<base64编码的内容>",
   "branch": "feature-branch",
@@ -131,31 +121,31 @@ gitlink-cli pr +create --title "feat: 新功能" --head feature-branch --base ma
 
 ```bash
 # 创建文件（content 必须 base64 编码）
-gitlink-cli api POST /:owner/:repo/create_file --body '{"filepath":"file.md","content":"<base64>","branch":"dev","message":"add file"}'
+gitlink-cli repo +create-file --body '{"filepath":"file.md","content":"<base64>","branch":"dev","message":"add file"}'
 
 # 更新文件（需要先通过 sub_entries 获取文件 SHA）
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=file.md&ref=dev'
+gitlink-cli repo +files --query 'filepath=file.md&ref=dev'
 # 从 entries.sha 获取 SHA，然后：
-gitlink-cli api PUT /:owner/:repo/update_file --body '{"filepath":"file.md","content":"<base64>","sha":"<sha>","branch":"dev","message":"update file"}'
+gitlink-cli repo +update-file --body '{"filepath":"file.md","content":"<base64>","sha":"<sha>","branch":"dev","message":"update file"}'
 
 # 检查是否可合并
-gitlink-cli api POST /:owner/:repo/pulls/check_can_merge --body '{"head":"dev","base":"main"}'
+gitlink-cli pr +check-merge --body '{"head":"dev","base":"main"}'
 
 # 创建 Review
-gitlink-cli api POST /v1/:owner/:repo/pulls/:id/reviews --body '{"content":"LGTM","status":"approved"}'
+gitlink-cli pr +review --body '{"content":"LGTM","status":"approved"}'
 
 # 查看 Review 列表（支持 status 过滤）
-gitlink-cli api GET /v1/:owner/:repo/pulls/:id/reviews
-gitlink-cli api GET /v1/:owner/:repo/pulls/:id/reviews?status=approved
+gitlink-cli pr +reviews
+gitlink-cli pr +reviews?status=approved
 
 # 获取可用分支
-gitlink-cli api GET /:owner/:repo/pulls/get_branches
+gitlink-cli pr +branches
 
 # 查看 PR patchset/version 列表（v1 API）
-gitlink-cli api GET /v1/:owner/:repo/pulls/:id/versions
+gitlink-cli pr +versions
 
 # 查看指定 patchset/version diff（可通过 filepath 过滤文件）
-gitlink-cli api GET /v1/:owner/:repo/pulls/:id/versions/:version_id/diff
+gitlink-cli pr +versions/:version_id/diff
 ```
 
 ## 注意事项
@@ -166,9 +156,11 @@ gitlink-cli api GET /v1/:owner/:repo/pulls/:id/versions/:version_id/diff
 - **PR 创建要求源分支与目标分支有实际代码差异**，否则返回"分支内容相同，无需创建合并请求"
 - PR 查看/合并/关闭/重开需要使用 `pull_request_number`（即网页 URL `/pulls/N` 中的序号，从 `pr +list` 返回）
 - `pr +merge` 默认使用 merge 方式，可通过 `--method` 指定 rebase 或 squash
-- `pr +diff` 实际调用 `/pulls/:id/files` 端点，返回变更文件列表和 diff 内容
+- `pr +diff` 调用 `/pulls/:id/files` 端点，返回变更文件列表及每文件的 patch 内容
+- `pr +files` 调用同一 `/pulls/:id/files` 端点，返回变更文件列表（不含 patch 渲染）
+- `pr +diff` 支持 `--file` 过滤特定文件和 `--stat` 只看统计摘要
 - `pr +versions` / `pr +version-diff` 使用 v1 API，`--id` 为网页 URL `/pulls/N` 中的 PR 序号，`--version-id` 为 patchset/version id
 - 同一个 PR 分支继续 push 新 commit 会生成新的 patchset/version；正常根据 review 修改代码时，应优先在原 PR 分支继续 push，不要关闭 PR 重开
-- `pr +list` 的 `--state` 参数会映射为 GitLink API 的 `status` 筛选；需要查看所有 PR 时传 `--state all`
+- `pr +list` 的 `--state` 参数（open/merged/closed）仅影响统计计数；需要查看所有 PR 时传 `--state all`
 - PR 状态值：`pull_request_status` 0=open, 1=merged, 2=closed
 - 关联已有 Issue 时，把 Issue 编号或 URL 写入 PR `--body`，或使用 `issue +comment` 留痕；不要用 Raw API 对 Issue 做不完整更新，否则可能清空 Issue 描述

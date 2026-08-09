@@ -1,0 +1,11 @@
+.git
+.devops
+.github
+node_modules
+dist
+doc
+npm
+*.md
+*.exe
+.gitignore
+.golangci.yml

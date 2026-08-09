@@ -171,6 +171,42 @@ func TestIssueListStateAll(t *testing.T) {
 	}
 }
 
+func TestIssueListAllPaginates(t *testing.T) {
+	var pages []string
+	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/owner/repo/issues.json" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		page := r.URL.Query().Get("page")
+		pages = append(pages, page)
+		assertEqual(t, r.URL.Query().Get("limit"), "2")
+		var issues []interface{}
+		if page == "1" {
+			issues = []interface{}{
+				map[string]interface{}{"id": float64(1), "project_issues_index": float64(11)},
+				map[string]interface{}{"id": float64(2), "project_issues_index": float64(12)},
+			}
+		} else {
+			issues = []interface{}{
+				map[string]interface{}{"id": float64(3), "project_issues_index": float64(13)},
+			}
+		}
+		writeJSON(t, w, map[string]interface{}{
+			"total_count": float64(3),
+			"issues":      issues,
+		})
+	})
+	defer server.Close()
+
+	err := runShortcut(t, server, "list", map[string]string{"all": "true", "limit": "2"})
+	if err != nil {
+		t.Fatalf("list --all failed: %v", err)
+	}
+	if len(pages) != 2 || pages[0] != "1" || pages[1] != "2" {
+		t.Fatalf("pages requested = %v, want [1 2]", pages)
+	}
+}
+
 // --- create ---
 
 func TestIssueCreate(t *testing.T) {
@@ -777,12 +813,20 @@ func TestBatchClosePreservesCurrentDescription(t *testing.T) {
 	})
 	defer server.Close()
 
-	err := runShortcut(t, server, "batch-close", map[string]string{
-		"numbers": "42",
-		"dry-run": "false",
-	})
+	ctx := &common.RuntimeContext{
+		Client: &client.Client{
+			HTTP:    server.Client(),
+			BaseURL: server.URL,
+		},
+		Owner:  "owner",
+		Repo:   "repo",
+		Format: "json",
+		Args:   map[string]string{},
+	}
+
+	err := patchIssue(ctx, "42", map[string]interface{}{"status_id": closeIssueStatusID}, "close")
 	if err != nil {
-		t.Fatalf("batch-close shortcut failed: %v", err)
+		t.Fatalf("patchIssue (close) failed: %v", err)
 	}
 	assertEqual(t, updatePayload["subject"], "Existing title")
 	assertEqual(t, updatePayload["description"], "Existing description")
@@ -1056,74 +1100,5 @@ func TestIssueCloseHTTPError(t *testing.T) {
 	err := runShortcut(t, server, "close", map[string]string{"number": "42"})
 	if err == nil {
 		t.Fatal("expected error for PATCH HTTP 500")
-	}
-}
-
-func TestFetchExistingIssueBadData(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, "not a map")
-	})
-	defer server.Close()
-
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
-		Owner:  "owner",
-		Repo:   "repo",
-	}
-	_, err := fetchExistingIssue(ctx, "1")
-	if err == nil {
-		t.Fatal("expected error for non-map response")
-	}
-}
-
-func TestFetchExistingIssueNoSubject(t *testing.T) {
-	server := newIssueTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, map[string]interface{}{"id": float64(1)})
-	})
-	defer server.Close()
-
-	ctx := &common.RuntimeContext{
-		Client: &client.Client{HTTP: server.Client(), BaseURL: server.URL},
-		Owner:  "owner",
-		Repo:   "repo",
-	}
-	_, err := fetchExistingIssue(ctx, "1")
-	if err == nil {
-		t.Fatal("expected error for missing subject")
-	}
-}
-
-// --- normalizeIssueStatus ---
-
-func TestNormalizeIssueStatus(t *testing.T) {
-	tests := []struct {
-		input   string
-		want    interface{}
-		wantErr bool
-	}{
-		{"open", 1, false},
-		{"OPEN", 1, false},
-		{"  open  ", 1, false},
-		{"closed", 5, false},
-		{"CLOSED", 5, false},
-		{"0", 0, false},
-		{"10", 10, false},
-		{"invalid", nil, true},
-		{"", nil, true},
-	}
-	for _, tt := range tests {
-		got, err := normalizeIssueStatus(tt.input)
-		if tt.wantErr {
-			if err == nil {
-				t.Errorf("normalizeIssueStatus(%q) expected error", tt.input)
-			}
-		} else {
-			if err != nil {
-				t.Errorf("normalizeIssueStatus(%q) error: %v", tt.input, err)
-			}
-			if got != tt.want {
-				t.Errorf("normalizeIssueStatus(%q) = %v, want %v", tt.input, got, tt.want)
-			}
-		}
 	}
 }

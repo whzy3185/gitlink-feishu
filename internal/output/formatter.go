@@ -53,9 +53,9 @@ func printYAML(w io.Writer, envelope *Envelope) error {
 func printTable(w io.Writer, envelope *Envelope) error {
 	if !envelope.OK {
 		if envelope.Error != nil {
-			fmt.Fprintf(w, "Error: %s\n", envelope.Error.Message)
+			fmt.Fprintf(w, "%s %s\n", red("Error:"), envelope.Error.Message)
 			if envelope.Error.Suggestion != "" {
-				fmt.Fprintf(w, "Suggestion: %s\n", envelope.Error.Suggestion)
+				fmt.Fprintf(w, "%s %s\n", yellow("Suggestion:"), envelope.Error.Suggestion)
 			}
 		}
 		return nil
@@ -109,8 +109,12 @@ func printSliceTable(w io.Writer, items []interface{}) error {
 	headers := collectKeys(first)
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 
-	// Print headers
-	fmt.Fprintln(tw, strings.Join(headers, "\t"))
+	// Print headers (bold/colored)
+	coloredHeaders := make([]string, len(headers))
+	for i, h := range headers {
+		coloredHeaders[i] = bold(h)
+	}
+	fmt.Fprintln(tw, strings.Join(coloredHeaders, "\t"))
 	dashes := make([]string, len(headers))
 	for i, h := range headers {
 		dashes[i] = strings.Repeat("-", len(h))
@@ -125,7 +129,8 @@ func printSliceTable(w io.Writer, items []interface{}) error {
 		}
 		vals := make([]string, len(headers))
 		for i, h := range headers {
-			vals[i] = formatValue(m[h])
+			raw := formatValue(m[h])
+			vals[i] = colorForKey(h, raw)
 		}
 		fmt.Fprintln(tw, strings.Join(vals, "\t"))
 	}

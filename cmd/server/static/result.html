@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitLink Research Atlas · 结果详情</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Noto+Serif+SC:wght@600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+:root{
+  --bg:#F7F9FC; --card:#FFFFFF; --ink:#1E2A44; --ink2:#475569; --mute:#94A3B8;
+  --line:#E6EBF2; --indigo:#4F6BED; --coral:#F26B5E; --mint:#2EC4B6;
+  --t-blue:#E8EEFF; --t-coral:#FFEDEA; --t-mint:#E6F7F4; --t-amber:#FEF3C7;
+  --serif:"Cormorant Garamond","Noto Serif SC",Georgia,serif;
+  --sans:"Inter","Noto Sans SC",-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --shadow:0 1px 2px rgba(30,42,68,.04),0 6px 18px rgba(30,42,68,.06);
+  --shadow-sm:0 1px 2px rgba(30,42,68,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:auto;min-height:100%;margin:0}
+body{font-family:var(--sans);color:var(--ink);background:var(--bg);
+  background-image:radial-gradient(1200px 480px at 80% -8%,#EAF0FF 0%,rgba(234,240,255,0) 60%),
+                   radial-gradient(900px 420px at 0% 0%,#FFF1EE 0%,rgba(255,241,238,0) 55%);
+  -webkit-font-smoothing:antialiased}
+
+/* ========== PRINT ========== */
+@media print{
+  body{background:#fff!important}
+  .no-print{display:none!important}
+  .page-wrap{max-width:100%!important;box-shadow:none!important}
+}
+
+/* ========== PAGE WRAPPER ========== */
+.page-wrap{max-width:1120px;margin:0 auto;padding:32px 40px 60px}
+@media(max-width:760px){.page-wrap{padding:20px 16px 40px}}
+
+/* ========== HEADER ========== */
+.res-header{margin-bottom:32px}
+.res-header .back{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;
+  color:var(--indigo);text-decoration:none;margin-bottom:16px;padding:6px 14px;border-radius:10px;
+  background:var(--t-blue);transition:.15s}
+.res-header .back:hover{background:#D6DEFF}
+.res-header h1{font-family:var(--serif);font-weight:700;font-size:34px;line-height:1.2;letter-spacing:.3px;color:var(--ink)}
+.res-header .sub{font-size:15px;color:var(--ink2);margin-top:6px;line-height:1.5}
+.res-header .meta{display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;align-items:center}
+.res-header .meta .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;
+  padding:5px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line);color:var(--ink2);box-shadow:var(--shadow-sm)}
+.res-header .meta .chip b{font-family:var(--mono);font-weight:700;color:var(--ink)}
+.res-header .cmd-drawer{margin-top:14px;background:var(--ink);color:#CBD5E1;font-family:var(--mono);
+  font-size:12px;padding:10px 16px;border-radius:10px;display:flex;align-items:center;gap:10px;overflow:hidden}
+.res-header .cmd-drawer .dots{display:flex;gap:6px;flex-shrink:0}
+.res-header .cmd-drawer .dots i{width:11px;height:11px;border-radius:50%;display:block}
+.res-header .cmd-drawer .cmd{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#E2E8F0}
+
+/* ========== SECTION TITLES ========== */
+.section{margin-top:36px}
+.section-title{font-family:var(--serif);font-weight:700;font-size:22px;color:var(--ink);margin-bottom:16px;
+  padding-bottom:8px;border-bottom:2px solid var(--line)}
+.section-title .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--mute);display:block;margin-bottom:4px}
+
+/* ========== METRICS ROW ========== */
+.metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:8px}
+@media(max-width:760px){.metrics-row{grid-template-columns:repeat(2,1fr)}}
+.metric-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;
+  box-shadow:var(--shadow);text-align:center}
+.metric-card .label{font-size:12px;color:var(--ink2);font-weight:500;margin-bottom:8px}
+.metric-card .value{font-family:var(--mono);font-weight:700;font-size:32px;color:var(--ink);line-height:1}
+.metric-card .note{font-size:11px;color:var(--mute);margin-top:6px}
+
+/* ========== KNOWLEDGE GRAPH ========== */
+.graph-container{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  padding:20px;overflow:hidden}
+.graph-svg-wrap{width:100%;height:500px;position:relative;background:radial-gradient(500px 380px at 50% 45%,#F2F6FF 0%,rgba(255,255,255,0) 70%);
+  border-radius:10px;overflow:hidden}
+.graph-svg-wrap svg{width:100%;height:100%;display:block}
+.g-edge{stroke:#9DB4F0;stroke-opacity:.55;stroke-width:1}
+.g-node circle{stroke:#fff;stroke-width:2;transition:.2s}
+.g-node:hover circle{filter:brightness(1.08)}
+.g-node text{font-family:var(--sans);font-size:11px;font-weight:600;fill:var(--ink);pointer-events:none;text-anchor:middle}
+.graph-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.graph-legend .leg-item{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2)}
+.graph-legend .leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.graph-legend .leg-note{font-size:12px;color:var(--mute);margin-left:auto}
+
+/* ========== VIZ IFRAME (S6) ========== */
+.viz-container{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  padding:12px;overflow:hidden}
+.viz-container iframe{width:100%;height:520px;border:0;border-radius:10px;background:#fff}
+
+/* ========== MERMAID ========== */
+.mmd-container{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  padding:16px;overflow:auto;max-height:600px}
+
+/* ========== RADAR / SCORE (S3) ========== */
+.score-display{display:flex;align-items:center;justify-content:center;gap:40px;padding:30px;
+  background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);flex-wrap:wrap}
+.score-circle{width:140px;height:140px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  position:relative;border:6px solid}
+.score-circle .val{font-family:var(--mono);font-weight:700;font-size:40px;line-height:1}
+.score-circle .label{font-size:13px;color:var(--ink2);margin-top:2px}
+.score-circle.repro{border-color:var(--mint);color:var(--mint);background:var(--t-mint)}
+.score-circle.compliance{border-color:var(--indigo);color:var(--indigo);background:var(--t-blue)}
+
+/* ========== WEEKLY COMPARISON (S5) ========== */
+.weekly-bars{display:flex;flex-direction:column;gap:16px;padding:20px;
+  background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.week-row{display:flex;align-items:center;gap:14px}
+.week-row .label{width:70px;font-size:13px;font-weight:600;color:var(--ink2);flex-shrink:0}
+.week-row .bar-bg{flex:1;height:28px;background:#F1F5F9;border-radius:8px;overflow:hidden;position:relative}
+.week-row .bar-fill{height:100%;border-radius:8px;transition:width .6s ease}
+.week-row .bar-fill.this-week{background:linear-gradient(90deg,var(--indigo),#7C8CF5)}
+.week-row .bar-fill.last-week{background:var(--line)}
+.week-row .bar-val{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink)}
+.risk-list{margin-top:20px;display:flex;flex-direction:column;gap:10px}
+.risk-item{padding:10px 14px;border-radius:10px;border-left:4px solid}
+.risk-item.critical{border-color:var(--coral);background:var(--t-coral)}
+.risk-item.warning{border-color:#F59E0B;background:var(--t-amber)}
+.risk-item .type{font-size:11px;font-family:var(--mono);color:var(--mute);text-transform:uppercase}
+.risk-item .msg{font-size:13px;color:var(--ink);margin-top:4px}
+.risk-item .suggestion{font-size:12px;color:var(--ink2);margin-top:4px;font-style:italic}
+
+/* ========== REPORT (markdown) ========== */
+.report-content{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  padding:28px 32px;line-height:1.75;font-size:14px;color:var(--ink)}
+.report-content h1{font-family:var(--serif);font-weight:700;font-size:26px;margin:24px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+.report-content h1:first-child{margin-top:0}
+.report-content h2{font-family:var(--serif);font-weight:700;font-size:20px;margin:20px 0 10px;color:var(--ink)}
+.report-content h3{font-weight:700;font-size:16px;margin:16px 0 8px;color:var(--ink2)}
+.report-content p{margin:10px 0}
+.report-content ul,.report-content ol{margin:8px 0;padding-left:24px}
+.report-content li{margin:4px 0}
+.report-content strong{font-weight:700;color:var(--ink)}
+.report-content code{font-family:var(--mono);font-size:12.5px;background:var(--t-blue);padding:2px 6px;border-radius:4px;color:var(--indigo)}
+.report-content table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}
+.report-content th{background:var(--t-blue);font-weight:600;text-align:left;padding:8px 12px;border:1px solid var(--line)}
+.report-content td{padding:8px 12px;border:1px solid var(--line)}
+
+/* ========== STRUCTURED CARDS ========== */
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:20px}
+.conclusion-card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);
+  padding:16px 18px;border-top:4px solid}
+.conclusion-card.innovation{border-top-color:var(--indigo)}
+.conclusion-card.risk{border-top-color:var(--coral)}
+.conclusion-card.collab{border-top-color:var(--mint)}
+.conclusion-card .card-title{font-weight:700;font-size:14px;color:var(--ink);margin-bottom:8px}
+.conclusion-card .card-body{font-size:13px;color:var(--ink2);line-height:1.55}
+.conclusion-card .card-body p{margin:4px 0}
+
+/* ========== LOADING STATE ========== */
+.loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;color:var(--mute);gap:16px}
+.spin-lg{width:40px;height:40px;border-radius:50%;border:4px solid var(--t-blue);border-top-color:var(--indigo);animation:rot .8s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ========== ERROR ========== */
+.error-state{padding:60px 20px;text-align:center;color:var(--coral)}
+.error-state h2{font-family:var(--serif);font-size:24px;margin-bottom:12px}
+.error-state p{font-size:14px;color:var(--ink2);max-width:500px;margin:0 auto}
+
+/* empty */
+.empty-state{padding:60px 20px;text-align:center;color:var(--mute)}
+.empty-state p{font-size:14px}
+</style>
+</head>
+<body>
+<div class="page-wrap" id="app">
+  <div class="loading-state"><div class="spin-lg"></div><div>正在加载结果…</div></div>
+</div>
+
+<script>
+mermaid.initialize({startOnLoad:false, theme:"base", securityLevel:"loose",
+  themeVariables:{primaryColor:"#E8EEFF",primaryTextColor:"#1E2A44",primaryBorderColor:"#4F6BED",lineColor:"#9DB4F0",fontSize:"13px"}});
+
+const NODE_COLOR={repo:"#4F6BED",scholar:"#3B82F6",team:"#6366F1",topic:"#06B6D4",method:"#6366F1",
+  paper:"#8B5CF6",dataset:"#2EC4B6",model:"#4F6BED",experiment:"#F26B5E",
+  reproduce:"#2EC4B6",license:"#64748B",trend:"#F26B5E",issue:"#F59E0B",pr:"#10B981",default:"#94A3B8"};
+const NODE_LABEL={repo:"仓库",scholar:"学者",topic:"主题",paper:"论文",dataset:"数据集",
+  model:"模型",experiment:"实验",reproduce:"复现",license:"许可证",trend:"趋势",issue:"Issue",pr:"PR"};
+
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function token(){return localStorage.getItem("demo_token")||"";}
+function licOf(o){const l=o.license;if(!l)return o.license_id||"—";return typeof l==="string"?l:(l.id||l.name||l.spdx_id||l.identifier||"—");}
+
+/* ========== Force layout (same as index) ========== */
+function forceLayout(nodes,edges,W,H,iters){
+  const cx=W/2,cy=H/2;
+  nodes.forEach(n=>{if(n.x==null){n.x=cx+(Math.random()-.5)*W*.5;n.y=cy+(Math.random()-.5)*H*.5;}});
+  for(let it=0;it<iters;it++){
+    for(const n of nodes){n._fx=0;n._fy=0;}
+    for(let i=0;i<nodes.length;i++){for(let j=i+1;j<nodes.length;j++){
+      let dx=nodes[i].x-nodes[j].x,dy=nodes[i].y-nodes[j].y,d2=dx*dx+dy*dy+.02,d=Math.sqrt(d2),f=2600/d2,fx=dx/d*f,fy=dy/d*f;
+      nodes[i]._fx+=fx;nodes[i]._fy+=fy;nodes[j]._fx-=fx;nodes[j]._fy-=fy;}}
+    for(const e of edges){const a=nodes.find(n=>n.id===e[0]),b=nodes.find(n=>n.id===e[1]);if(!a||!b)continue;
+      let dx=b.x-a.x,dy=b.y-a.y,d=Math.sqrt(dx*dx+dy*dy)+.02,L=a.imp||b.imp?130:85,k=.04;
+      let f=(d-L)*k,fx=dx/d*f,fy=dy/d*f;a._fx+=fx;a._fy+=fy;b._fx-=fx;b._fy-=fy;}
+    for(const n of nodes){n._fx+=(cx-n.x)*.012;n._fy+=(cy-n.y)*.012;
+      n.x+=Math.max(-14,Math.min(14,n._fx));n.y+=Math.max(-14,Math.min(14,n._fy));
+      n.x=Math.max(45,Math.min(W-45,n.x));n.y=Math.max(38,Math.min(H-34,n.y));}}
+}
+
+function drawGraphIn(containerId,data){
+  const svg=document.getElementById(containerId); if(!svg) return;
+  const W=svg.clientWidth||800,H=svg.clientHeight||500;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  let nodes=(data.nodes||[]).map(n=>Object.assign({},n));
+  let edges=(data.edges||[]).map(e=>Array.isArray(e)?e:[e.source||e.from,e.target||e.to]);
+  if(nodes.length>40){
+    const deg=new Map(nodes.map(n=>[n.id,0]));
+    edges.forEach(e=>{deg.set(e[0],(deg.get(e[0])||0)+1);deg.set(e[1],(deg.get(e[1])||0)+1);});
+    nodes.sort((a,b)=>(deg.get(b.id)||0)-(deg.get(a.id)||0));
+    const keep=new Set(nodes.slice(0,40).map(n=>n.id));nodes=nodes.filter(n=>keep.has(n.id));edges=edges.filter(e=>keep.has(e[0])&&keep.has(e[1]));
+  }
+  forceLayout(nodes,edges,W,H,300);
+  let s=`<defs><filter id="glow2"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+  for(const e of edges){const a=nodes.find(n=>n.id===e[0]),b=nodes.find(n=>n.id===e[1]);if(!a||!b)continue;
+    s+=`<line class="g-edge" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/>`;}
+  for(const n of nodes){const col=NODE_COLOR[n.type]||NODE_COLOR.default,r=n.imp?13:8;
+    s+=`<g class="g-node" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})"><circle r="${r}" fill="${col}"${n.imp?' filter="url(#glow2)"':""}/><text y="${r+13}">${esc(n.label||n.id).slice(0,18)}</text></g>`;}
+  svg.innerHTML=s;
+}
+
+function buildGraphLegend(types){
+  let h="";
+  for(const t of [...types].sort()){
+    h+=`<span class="leg-item"><span class="leg-dot" style="background:${NODE_COLOR[t]||NODE_COLOR.default}"></span>${NODE_LABEL[t]||t}</span>`;
+  }
+  return h;
+}
+
+/* ========== Simple markdown to HTML ========== */
+function mdToHtml(md){
+  if(!md) return "";
+  let html=esc(md);
+  // code blocks
+  html=html.replace(/```(\w*)\n([\s\S]*?)```/g,'<pre><code>$2</code></pre>');
+  // inline code
+  html=html.replace(/`([^`]+)`/g,'<code>$1</code>');
+  // tables
+  html=html.replace(/^(\|.+\|)\n(\|[-:\s|]+\|)\n((?:\|.+\|\n?)*)/gm,function(_,hdr,sep,body){
+    const ths=hdr.split("|").filter(c=>c.trim()).map(c=>`<th>${c.trim()}</th>`).join("");
+    let rows="";
+    body.trim().split("\n").forEach(row=>{
+      const tds=row.split("|").filter(c=>c.trim()).map(c=>`<td>${c.trim()}</td>`).join("");
+      rows+=`<tr>${tds}</tr>`;
+    });
+    return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+  });
+  // headings
+  html=html.replace(/^### (.+)$/gm,'<h3>$1</h3>');
+  html=html.replace(/^## (.+)$/gm,'<h2>$1</h2>');
+  html=html.replace(/^# (.+)$/gm,'<h1>$1</h1>');
+  // bold
+  html=html.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  // unordered lists
+  html=html.replace(/^- (.+)$/gm,'<li>$1</li>');
+  html=html.replace(/(<li>.*<\/li>\n?)+/g,'<ul>$&</ul>');
+  // paragraphs (lines not inside tags)
+  html=html.replace(/^(?!<[huplo])((?!<).+)$/gm,'<p>$1</p>');
+  return html;
+}
+
+/* ========== MAIN RENDER ========== */
+async function loadResult(){
+  const params=new URLSearchParams(window.location.search);
+  const scenario=params.get("scenario");
+  if(!scenario){
+    document.getElementById("app").innerHTML='<div class="error-state"><h2>缺少场景参数</h2><p>请从仪表盘点击场景，或手动打开 <code>result.html?scenario=s1</code></p></div>';
+    return;
+  }
+
+  let data;
+  try{
+    const r=await fetch("/api/result/"+encodeURIComponent(scenario),{headers:{"X-Demo-Token":token()}});
+    data=await r.json();
+  }catch(e){
+    document.getElementById("app").innerHTML='<div class="error-state"><h2>加载失败</h2><p>'+esc(e.message)+'</p><a class="back" href="index.html">返回仪表盘</a></div>';
+    return;
+  }
+  if(!data.ok){
+    document.getElementById("app").innerHTML='<div class="error-state"><h2>'+esc(data.error||"数据未就绪")+'</h2><p>请先在仪表盘运行该场景以生成结果。</p><a class="back" href="index.html">返回仪表盘</a></div>';
+    return;
+  }
+
+  const art=data.artifacts||{};
+  const obj=art.json?JSON.parse(art.json):null;
+  const owner=params.get("owner")||val_from("owner")||"";
+  const repo=params.get("repo")||val_from("repo")||"";
+  const keyword=params.get("keyword")||val_from("keyword")||"";
+
+  render(data,obj,art,scenario,owner,repo,keyword);
+}
+
+function val_from(name){try{return localStorage.getItem("atlas_"+name)||"";}catch(e){return"";}}
+
+function render(data,obj,art,scenario,owner,repo,keyword){
+  const label=data.label||scenario;
+  const desc=data.desc||"";
+  const now=new Date().toLocaleString("zh-CN");
+  let h="";
+
+  // ---- HEADER ----
+  h+=`<div class="res-header">
+    <a class="back no-print" href="index.html">&#8592; 返回仪表盘</a>
+    <h1>${esc(label)}</h1>
+    <div class="sub">${esc(desc)}</div>
+    <div class="meta">`;
+  if(owner||repo) h+=`<span class="chip">仓库 <b>${esc(owner)}${repo?"/"+esc(repo):""}</b></span>`;
+  if(keyword) h+=`<span class="chip">关键词 <b>${esc(keyword)}</b></span>`;
+  h+=`<span class="chip">场景 <b>${esc(scenario)}</b></span>
+    <span class="chip">生成于 ${esc(now)}</span>
+  </div>
+  <div class="cmd-drawer no-print">
+    <div class="dots"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i></div>
+    <span style="color:var(--mint)">atlas &#10095;</span>
+    <span class="cmd">gitlink-cli research --scenario ${esc(scenario)} ${owner?"--repo "+esc(owner)+"/"+esc(repo):""} ${keyword?'-k "'+esc(keyword)+'"':""}</span>
+  </div></div>`;
+
+  // ---- METRICS ROW ----
+  const metrics=metricsFor(scenario,obj);
+  if(metrics){
+    h+=`<div class="section"><div class="section-title"><span class="eyebrow">Key Metrics</span>关键指标</div>
+    <div class="metrics-row">${metrics}</div></div>`;
+  }
+
+  // ---- MAIN VIZ ----
+  h+=`<div class="section"><div class="section-title"><span class="eyebrow">Visualization</span>可视化</div>`;
+
+  // S2: Knowledge Graph
+  if(scenario==="s2"&&obj&&obj.nodes&&obj.edges){
+    const graphNodes=obj.nodes.map(n=>({id:n.id,type:n.type||"default",label:n.label||n.id,imp:false}));
+    // highlight repo and high-degree nodes
+    const deg=new Map();
+    obj.edges.forEach(e=>{deg.set((e.source||e.from),(deg.get(e.source||e.from)||0)+1);deg.set((e.target||e.to),(deg.get(e.target||e.to)||0)+1);});
+    graphNodes.forEach(n=>{if(n.type==="repo"||deg.get(n.id)>3)n.imp=true;});
+    const graphEdges=obj.edges.map(e=>[e.source||e.from,e.target||e.to]);
+    const types=new Set(graphNodes.map(n=>n.type));
+    const gId="resGraph_"+Date.now();
+    h+=`<div class="graph-container">
+      <div class="graph-svg-wrap"><svg id="${gId}" preserveAspectRatio="xMidYMid meet"></svg></div>
+      <div class="graph-legend">${buildGraphLegend(types)}
+        <span class="leg-note">${esc(label)} — ${(obj.meta||{}).repo_count||graphNodes.length} 个仓库节点, ${(obj.meta||{}).edge_count||graphEdges.length} 条关联边</span>
+      </div></div>`;
+    // defer drawing
+    setTimeout(()=>drawGraphIn(gId,{nodes:graphNodes,edges:graphEdges}),100);
+  }
+  // S6: plotly
+  else if(scenario==="s6"&&art.html){
+    const blob=URL.createObjectURL(new Blob([art.html],{type:"text/html"}));
+    h+=`<div class="viz-container"><iframe src="${blob}"></iframe></div>`;
+  }
+  // S1/S4: mermaid
+  else if((scenario==="s1"||scenario==="s4")&&art.mermaid){
+    const mId="resMmd_"+Date.now();
+    const mmd=art.mermaid.replace(/```mermaid|```/g,"");
+    h+=`<div class="mmd-container"><div class="mermaid" id="${mId}">${esc(mmd)}</div></div>`;
+    setTimeout(()=>{const el=document.getElementById(mId);if(el)el.removeAttribute("data-processed");
+      mermaid.run({nodes:["#"+mId]}).catch(()=>{});},100);
+  }
+  // S3: radar / scores
+  else if(scenario==="s3"&&obj){
+    const rs=obj.repro_score||0;const cs=obj.compliance_score||0;
+    h+=`<div class="score-display">
+      <div class="score-circle repro"><span class="val">${rs}</span><span class="label">复现性 / 10</span></div>
+      <div class="score-circle compliance"><span class="val">${cs}</span><span class="label">合规性 / 10</span></div>
+    </div>`;
+  }
+  // S5: weekly comparison + risks
+  else if(scenario==="s5"&&obj){
+    const ws=obj.week_stats||{};
+    const tw=ws.this_week||{};const lw=ws.last_week||{};
+    const maxC=Math.max(tw.commits||0,lw.commits||0,1);
+    const maxP=Math.max(tw.prs_merged||0,lw.prs_merged||0,1);
+    const maxI=Math.max(tw.issues_closed||0,lw.issues_closed||0,1);
+    h+=`<div class="weekly-bars">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px;color:var(--ink)">本周 vs 上周 对比</div>
+      <div class="week-row"><span class="label">Commits</span><div class="bar-bg"><div class="bar-fill last-week" style="width:${(lw.commits/maxC*100||0).toFixed(1)}%"><span class="bar-val">${lw.commits||0}</span></div><div class="bar-fill this-week" style="width:${(tw.commits/maxC*100||0).toFixed(1)}%;position:relative;margin-top:-28px"><span class="bar-val">${tw.commits||0}</span></div></div></div>
+      <div class="week-row"><span class="label">PR merged</span><div class="bar-bg"><div class="bar-fill last-week" style="width:${(lw.prs_merged/maxP*100||0).toFixed(1)}%"><span class="bar-val">${lw.prs_merged||0}</span></div><div class="bar-fill this-week" style="width:${(tw.prs_merged/maxP*100||0).toFixed(1)}%;position:relative;margin-top:-28px"><span class="bar-val">${tw.prs_merged||0}</span></div></div></div>
+      <div class="week-row"><span class="label">Issues</span><div class="bar-bg"><div class="bar-fill last-week" style="width:${(lw.issues_closed/maxI*100||0).toFixed(1)}%"><span class="bar-val">${lw.issues_closed||0}</span></div><div class="bar-fill this-week" style="width:${(tw.issues_closed/maxI*100||0).toFixed(1)}%;position:relative;margin-top:-28px"><span class="bar-val">${tw.issues_closed||0}</span></div></div></div>
+    </div>`;
+    // risk warnings
+    const risks=obj.risk_warnings||[];
+    if(risks.length){
+      h+=`<div style="margin-top:20px;font-weight:700;font-size:14px;color:var(--ink)">风险预警</div><div class="risk-list">`;
+      risks.forEach(r=>{const cls=r.level==="critical"?"critical":"warning";
+        h+=`<div class="risk-item ${cls}"><div class="type">${esc(r.level||"")} · ${esc(r.type||"")}</div><div class="msg">${esc(r.message||"")}</div>${r.suggestion?`<div class="suggestion">${esc(r.suggestion)}</div>`:""}</div>`;});
+      h+=`</div>`;
+    }
+  }
+  else{
+    h+=`<div class="empty-state"><p>该场景无可视化产物，详见下方报告。</p></div>`;
+  }
+  h+=`</div>`;
+
+  // ---- REPORT ----
+  if(art.report){
+    h+=`<div class="section"><div class="section-title"><span class="eyebrow">Full Report</span>完整报告</div>
+    <div class="report-content">${mdToHtml(art.report)}</div></div>`;
+  }
+
+  // ---- STRUCTURED CONCLUSION CARDS ----
+  const conclusions=buildConclusionCards(scenario,obj);
+  if(conclusions){
+    h+=`<div class="section"><div class="section-title"><span class="eyebrow">Conclusions</span>结构化结论</div>
+    <div class="cards-grid">${conclusions}</div></div>`;
+  }
+
+  document.getElementById("app").innerHTML=h;
+}
+
+/* ========== METRICS ========== */
+function metricCard(label,val,note){
+  return `<div class="metric-card"><div class="label">${esc(label)}</div><div class="value">${esc(String(val))}</div><div class="note">${esc(note||"")}</div></div>`;
+}
+function metricsFor(key,o){
+  if(!o) return "";
+  const M=o.meta||{};
+  switch(key){
+    case "s1": return metricCard("commits",M.commit_count||0,"采样提交")+metricCard("merged PR",M.merged_pr_count||0,"已合并")+metricCard("docs",M.doc_count||0,"文档文件")+metricCard("创新点",(o.innovation_points||[]).length,"高影响合并");
+    case "s2": return metricCard("repos",M.repo_count||(o.nodes||[]).length,"仓库节点")+metricCard("scholars",M.scholar_count||0,"学者")+metricCard("topics",M.topic_count||0,"主题方向")+metricCard("edges",M.edge_count||(o.edges||[]).length,"关系边");
+    case "s3": return metricCard("复现性",(o.repro_score||0)+"/10","reproducibility")+metricCard("合规性",(o.compliance_score||0)+"/10","compliance")+metricCard("风险项",(o.risks||o.risk_items||[]).length,"项")+metricCard("许可证",esc(licOf(o)),"识别");
+    case "s4": return metricCard("缺口主题",(o.gap_topics||[]).length,"gap topics")+metricCard("推荐候选",(o.candidates||[]).length,"candidates")+metricCard("最高匹配",o.candidates&&o.candidates[0]?o.candidates[0].score:0,"top score")+metricCard("候选池",o.meta&&o.meta.pool_size||0,"pool size");
+    case "s5":{const tw=(o.week_stats&&o.week_stats.this_week)||{};return metricCard("本周 commits",tw.commits||0,"")+metricCard("预警",(o.risk_warnings||[]).length,"risks")+metricCard("PR 合并",tw.prs_merged||0,"")+metricCard("活跃度",(o.trend&&o.trend.activity_level)||"—","");}
+    case "s6":{const tl=o.timeline||{};const sm=a=>(a||[]).reduce((x,y)=>x+(y||0),0);return metricCard("周数",(tl.labels||[]).length,"")+metricCard("commits",sm(tl.commits),"")+metricCard("PRs",sm(tl.prs),"")+metricCard("issues",sm(tl.issues),"");}
+  }
+  return "";
+}
+
+/* ========== CONCLUSION CARDS ========== */
+function buildConclusionCards(key,o){
+  if(!o) return "";
+  let cards="";
+  switch(key){
+    case "s1":{
+      const ips=o.innovation_points||[];
+      if(ips.length){
+        cards+=`<div class="conclusion-card innovation"><div class="card-title">&#128161; 创新点 (${ips.length})</div><div class="card-body">`;
+        ips.slice(0,8).forEach(i=>{cards+=`<p><strong>[${esc(i.category)}]</strong> ${esc(i.description)}<br><small style="color:var(--mute)">${esc(i.evidence||"")}</small></p>`;});
+        cards+=`</div></div>`;
+      }
+      break;}
+    case "s2":{
+      const scholars=o.core_scholars||[];
+      if(scholars.length){
+        cards+=`<div class="conclusion-card collab"><div class="card-title">&#128101; 核心学者</div><div class="card-body">`;
+        scholars.slice(0,6).forEach(s=>{cards+=`<p><strong>${esc(s.login)}</strong> — ${s.repo_count} 个仓库</p>`;});
+        cards+=`</div></div>`;
+      }
+      const topics=o.topic_heat||[];
+      if(topics.length){
+        cards+=`<div class="conclusion-card innovation"><div class="card-title">&#128293; 热门主题</div><div class="card-body">`;
+        topics.slice(0,6).forEach(t=>{cards+=`<p><strong>${esc(t.topic)}</strong> — ${t.count} 个仓库</p>`;});
+        cards+=`</div></div>`;
+      }
+      break;}
+    case "s3":{
+      const risks=o.risk_items||o.risks||[];
+      if(risks.length){
+        cards+=`<div class="conclusion-card risk"><div class="card-title">&#9888;&#65039; 风险项 (${risks.length})</div><div class="card-body">`;
+        risks.slice(0,8).forEach(r=>{
+          const lvl=(r.level||"").includes("high")||r.severity==="P0"?"&#x1F534;":"&#x1F7E1;";
+          cards+=`<p>${lvl} <strong>${esc(r.category||r.name||"")}</strong> — ${esc(r.detail||r.evidence||"")}</p>`;});
+        cards+=`</div></div>`;
+      }
+      break;}
+    case "s4":{
+      const cands=o.candidates||[];
+      if(cands.length){
+        cards+=`<div class="conclusion-card collab"><div class="card-title">&#129309; 协作推荐 (${cands.length})</div><div class="card-body">`;
+        cands.slice(0,6).forEach((c,i)=>{cards+=`<p><strong>#${i+1} ${esc(c.login)}</strong> (${c.score}分)<br><small>${(c.reasons||[]).join("；")}</small></p>`;});
+        cards+=`</div></div>`;
+      }
+      const gaps=o.gap_topics||[];
+      if(gaps.length){
+        cards+=`<div class="conclusion-card innovation"><div class="card-title">&#128270; 缺口主题 (${gaps.length})</div><div class="card-body">`;
+        gaps.slice(0,6).forEach(g=>{cards+=`<p>${esc(typeof g==="string"?g:(g.topic||g.name||JSON.stringify(g)))}</p>`;});
+        cards+=`</div></div>`;
+      }
+      break;}
+    case "s5":{
+      const risks=o.risk_warnings||[];
+      if(risks.length){
+        cards+=`<div class="conclusion-card risk"><div class="card-title">&#9888;&#65039; 风险预警 (${risks.length})</div><div class="card-body">`;
+        risks.slice(0,6).forEach(w=>{cards+=`<p><strong>[${esc(w.type)}]</strong> ${esc(w.message)}${w.suggestion?"<br><small>"+esc(w.suggestion)+"</small>":""}</p>`;});
+        cards+=`</div></div>`;
+      }
+      const trend=o.trend||{};
+      cards+=`<div class="conclusion-card innovation"><div class="card-title">&#128200; 活跃趋势</div><div class="card-body"><p>commit 变化: <strong>${trend.commit_delta_pct||"—"}</strong></p><p>活跃度: <strong>${esc(trend.activity_level||"—")}</strong></p></div></div>`;
+      break;}
+    case "s6":{
+      const tl=o.timeline||{};
+      cards+=`<div class="conclusion-card innovation"><div class="card-title">&#128202; 数据概览</div><div class="card-body"><p>时间线: ${(tl.labels||[]).length} 周</p><p>语言分布: ${(o.language_pie||[]).length} 类</p><p>累计 commits: ${(tl.commits||[]).reduce((a,b)=>a+(b||0),0)}</p></div></div>`;
+      break;}
+  }
+  return cards;
+}
+
+/* go */
+loadResult();
+</script>
+</body>
+</html>

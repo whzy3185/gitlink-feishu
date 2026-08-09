@@ -46,8 +46,8 @@ func Shortcuts() []*common.Shortcut {
 			Description: "Create a milestone",
 			Flags: []common.Flag{
 				{Name: "name", Short: "n", Usage: "Milestone name", Required: true},
-				{Name: "description", Short: "d", Usage: "Milestone description", Required: true},
-				{Name: "due-date", Usage: "Due date in YYYY-MM-DD format", Required: true},
+				{Name: "description", Short: "d", Usage: "Milestone description"},
+				{Name: "due-date", Usage: "Due date in YYYY-MM-DD format"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -168,7 +168,7 @@ func milestoneStatusPath(ctx *common.RuntimeContext, id string) string {
 	return fmt.Sprintf("%s/milestones/%s/update_status", ctx.RepoPath(), url.PathEscape(id))
 }
 
-func milestonePayload(ctx *common.RuntimeContext, requireAll bool) (map[string]interface{}, error) {
+func milestonePayload(ctx *common.RuntimeContext, requireName bool) (map[string]interface{}, error) {
 	payload := map[string]interface{}{}
 	if name := ctx.Arg("name"); name != "" {
 		payload["name"] = name
@@ -180,11 +180,9 @@ func milestonePayload(ctx *common.RuntimeContext, requireAll bool) (map[string]i
 		payload["effective_date"] = dueDate
 	}
 
-	if requireAll {
-		for _, name := range []string{"name", "description", "due-date"} {
-			if _, err := ctx.RequireArg(name); err != nil {
-				return nil, err
-			}
+	if requireName {
+		if _, err := ctx.RequireArg("name"); err != nil {
+			return nil, err
 		}
 		return payload, nil
 	}

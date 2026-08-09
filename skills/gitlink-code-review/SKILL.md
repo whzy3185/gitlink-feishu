@@ -109,13 +109,13 @@ gitlink-cli pr +diff --id <pr_id> --format json
 
 ```bash
 # 方式 1：提交整体 Review
-gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{
+gitlink-cli pr +review --body '{
   "body": "## 审查结果\n\n### 🔴 Critical\n...\n\n### 🟡 Warning\n...\n\n总体评价：...",
   "event": "COMMENT"
 }'
 
 # 方式 2：在特定行添加内联评论（逐条提交）
-gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{
+gitlink-cli pr +review --body '{
   "body": "这里存在安全风险：用户输入未经转义直接拼接到 SQL 查询中，存在注入风险。建议使用参数化查询。",
   "event": "COMMENT",
   "commit_id": "<commit_sha>",
@@ -164,18 +164,18 @@ gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{
 gitlink-cli repo +info --owner <owner> --repo <repo> --format json
 
 # 2. 获取仓库文件列表（遍历关键目录）
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=src&ref=master'
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=tests&ref=master'
+gitlink-cli repo +files --query 'filepath=src&ref=master'
+gitlink-cli repo +files --query 'filepath=tests&ref=master'
 
 # 3. 获取关键文件内容
-gitlink-cli api GET /:owner/:repo/raw/master/README.md
-gitlink-cli api GET /:owner/:repo/raw/master/.gitignore
-gitlink-cli api GET /:owner/:repo/raw/master/.eslintrc.js  # 或类似配置
-gitlink-cli api GET /:owner/:repo/raw/master/package.json  # 或 go.mod, Cargo.toml
+gitlink-cli repo +raw --ref=master/README.md
+gitlink-cli repo +raw --ref=master/.gitignore
+gitlink-cli repo +raw --ref=master/.eslintrc.js  # 或类似配置
+gitlink-cli repo +raw --ref=master/package.json  # 或 go.mod, Cargo.toml
 
 # 4. 获取语言统计和贡献者
-gitlink-cli api GET /:owner/:repo/languages
-gitlink-cli api GET /:owner/:repo/contributors
+gitlink-cli repo +languages
+gitlink-cli repo +contributors
 ```
 
 **健康度检查清单：**
@@ -233,7 +233,7 @@ gitlink-cli issue +view --id <issue_id> --format json
 
 # 3. 根据内容智能分类
 # 分析标题和描述后，通过 Raw API 打标签
-gitlink-cli api POST /:owner/:repo/issues/:id --body '{
+gitlink-cli issue +update --number '{
   "issue_tag_ids": [<tag_id>],
   "done_ratio": 0,
   "subject": "<原始标题>",
@@ -261,28 +261,28 @@ gitlink-cli api POST /:owner/:repo/issues/:id --body '{
 
 ```bash
 # 获取 PR 详情
-gitlink-cli api GET /:owner/:repo/pulls/:id --format json
+gitlink-cli pr +view --id --format json
 
 # 获取 PR 变更文件列表
-gitlink-cli api GET /:owner/:repo/pulls/:id/files --format json
+gitlink-cli pr +files --format json
 
 # 获取 PR Diff
-gitlink-cli api GET /:owner/:repo/pulls/:id/diff --format json
+gitlink-cli pr +diff --format json
 
 # 提交 PR Review
-gitlink-cli api POST /:owner/:repo/pulls/:id/reviews --body '{"body":"...","event":"COMMENT"}'
+gitlink-cli pr +review --body '{"body":"...","event":"COMMENT"}'
 
 # 获取仓库文件列表
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=<path>&ref=<branch>'
+gitlink-cli repo +files --query 'filepath=<path>&ref=<branch>'
 
 # 获取仓库语言统计
-gitlink-cli api GET /:owner/:repo/languages --format json
+gitlink-cli repo +languages --format json
 
 # 获取贡献者列表
-gitlink-cli api GET /:owner/:repo/contributors --format json
+gitlink-cli repo +contributors --format json
 
 # 获取仓库动态
-gitlink-cli api GET /:owner/:repo/activity --format json
+gitlink-cli repo +activity --format json
 ```
 
 ## 代码审查最佳实践

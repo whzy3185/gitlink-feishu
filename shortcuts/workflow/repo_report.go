@@ -12,24 +12,76 @@ import (
 )
 
 type RepoReportInput struct {
-	Repository   string           `json:"repository"`
-	Health       *HealthInput     `json:"health,omitempty"`
-	Issues       []IssueInput     `json:"issues,omitempty"`
-	PullRequests []PRSummaryInput `json:"pull_requests,omitempty"`
-	Source       string           `json:"source"`
+	Repository    string             `json:"repository"`
+	Health        *HealthInput       `json:"health,omitempty"`
+	Issues        []IssueInput       `json:"issues,omitempty"`
+	PullRequests  []PRSummaryInput   `json:"pull_requests,omitempty"`
+	PRLifecycle   *RepoPRLifecycle   `json:"pr_lifecycle,omitempty"`
+	PRReviewAudit *RepoPRReviewAudit `json:"pr_review_audit,omitempty"`
+	Source        string             `json:"source"`
 }
 
 type RepoReportResult struct {
-	Repository      string           `json:"repository"`
-	Health          *HealthResult    `json:"health,omitempty"`
-	IssueSummary    RepoIssueSummary `json:"issue_summary"`
-	PRSummary       RepoPRSummary    `json:"pr_summary"`
-	Recommendations []string         `json:"recommendations"`
-	RiskLevel       string           `json:"risk_level"`
-	ReportScore     int              `json:"report_score"`
-	Sections        []string         `json:"sections"`
-	Reasoning       []string         `json:"reasoning"`
-	Source          string           `json:"source"`
+	Repository      string             `json:"repository"`
+	Health          *HealthResult      `json:"health,omitempty"`
+	IssueSummary    RepoIssueSummary   `json:"issue_summary"`
+	PRSummary       RepoPRSummary      `json:"pr_summary"`
+	PRLifecycle     *RepoPRLifecycle   `json:"pr_lifecycle,omitempty"`
+	PRReviewAudit   *RepoPRReviewAudit `json:"pr_review_audit,omitempty"`
+	Recommendations []string           `json:"recommendations"`
+	RiskLevel       string             `json:"risk_level"`
+	ReportScore     int                `json:"report_score"`
+	Sections        []string           `json:"sections"`
+	Reasoning       []string           `json:"reasoning"`
+	Source          string             `json:"source"`
+}
+
+type RepoPRLifecycle struct {
+	Open             int    `json:"open"`
+	Merged           int    `json:"merged"`
+	ClosedOrRejected int    `json:"closed_or_rejected"`
+	Total            int    `json:"total"`
+	Source           string `json:"source"`
+}
+
+type RepoPRReviewAudit struct {
+	Audited             int             `json:"audited"`
+	Reviewed            int             `json:"reviewed"`
+	Unreviewed          int             `json:"unreviewed"`
+	NeedsReReview       int             `json:"needs_re_review"`
+	FormalReviews       int             `json:"formal_reviews"`
+	ReviewerComments    int             `json:"reviewer_comments"`
+	SubmitterComments   int             `json:"submitter_comments"`
+	ParticipantComments int             `json:"participant_comments"`
+	BotEvents           int             `json:"bot_events"`
+	SystemEvents        int             `json:"system_events"`
+	UnknownActorEvents  int             `json:"unknown_actor_events"`
+	Errors              int             `json:"errors"`
+	Source              string          `json:"source"`
+	PullRequests        []PRReviewAudit `json:"pull_requests,omitempty"`
+}
+
+type PRReviewAudit struct {
+	Number              int      `json:"number"`
+	Author              string   `json:"author,omitempty"`
+	IssueID             int      `json:"issue_id,omitempty"`
+	Reviewed            bool     `json:"reviewed"`
+	NeedsReReview       bool     `json:"needs_re_review"`
+	ReviewStandard      string   `json:"review_standard"`
+	FormalReviewStatus  string   `json:"formal_review_status"`
+	FormalReviewCount   int      `json:"formal_review_count"`
+	ReviewerComments    int      `json:"reviewer_comments"`
+	SubmitterComments   int      `json:"submitter_comments"`
+	ParticipantComments int      `json:"participant_comments"`
+	BotEvents           int      `json:"bot_events"`
+	SystemEvents        int      `json:"system_events"`
+	UnknownActorEvents  int      `json:"unknown_actor_events"`
+	Reviewers           []string `json:"reviewers,omitempty"`
+	LatestReviewerAt    string   `json:"latest_reviewer_at,omitempty"`
+	LatestSubmitterAt   string   `json:"latest_submitter_at,omitempty"`
+	LatestCommitAt      string   `json:"latest_commit_at,omitempty"`
+	LatestPRUpdateAt    string   `json:"latest_pr_update_at,omitempty"`
+	Notes               []string `json:"notes,omitempty"`
 }
 
 type RepoIssueSummary struct {
@@ -44,6 +96,7 @@ type RepoPRSummary struct {
 	Total       int            `json:"total"`
 	ByType      map[string]int `json:"by_type"`
 	ByRisk      map[string]int `json:"by_risk"`
+	RiskSources map[string]int `json:"risk_sources,omitempty"`
 	HighRisk    int            `json:"high_risk"`
 	ReviewFocus []string       `json:"review_focus"`
 }
@@ -54,11 +107,14 @@ func newRepoReportShortcut() *common.Shortcut {
 		Description: "Generate a read-only repository workflow report",
 		Flags: []common.Flag{
 			{Name: "from", Usage: "Read repository report input from a JSON file"},
-			{Name: "issue-limit", Usage: "Maximum issues to fetch and analyze", Default: "20"},
-			{Name: "pr-limit", Usage: "Maximum pull requests to fetch and summarize", Default: "10"},
+			{Name: "issue-limit", Usage: "Maximum issues to fetch and analyze; 0 analyzes all open issues", Default: "0"},
+			{Name: "pr-limit", Usage: "Maximum pull requests to fetch and summarize; 0 analyzes all open pull requests", Default: "0"},
 			{Name: "stale-days", Usage: "Days before an issue or PR is considered stale", Default: "30"},
 			{Name: "include-issues", Usage: "Include issue triage summary", Bool: true, Default: "true"},
 			{Name: "include-prs", Usage: "Include pull request summary", Bool: true, Default: "true"},
+			{Name: "include-pr-lifecycle", Usage: "Include open/merged/closed PR totals", Bool: true, Default: "true"},
+			{Name: "include-pr-review-audit", Usage: "Read formal reviews and PR conversation journals for actor attribution", Bool: true, Default: "false"},
+			{Name: "pr-review-audit-limit", Usage: "Maximum analyzed PRs to review-audit; 0 audits every analyzed PR", Default: "0"},
 			{Name: "include-health", Usage: "Include repository health summary", Bool: true, Default: "true"},
 			{Name: "lang", Usage: "Output language: en or zh-CN", Default: langEN},
 		},
@@ -104,11 +160,11 @@ func collectRepoReportInput(ctx *common.RuntimeContext) (RepoReportInput, []Scor
 		return input, nil, nil
 	}
 
-	issueLimit, err := parseIntArg(ctx.Arg("issue-limit"), 20, "issue-limit")
+	issueLimit, err := parseIntArg(ctx.Arg("issue-limit"), 0, "issue-limit")
 	if err != nil {
 		return RepoReportInput{}, nil, err
 	}
-	prLimit, err := parseIntArg(ctx.Arg("pr-limit"), 10, "pr-limit")
+	prLimit, err := parseIntArg(ctx.Arg("pr-limit"), 0, "pr-limit")
 	if err != nil {
 		return RepoReportInput{}, nil, err
 	}
@@ -116,14 +172,21 @@ func collectRepoReportInput(ctx *common.RuntimeContext) (RepoReportInput, []Scor
 	if err != nil {
 		return RepoReportInput{}, nil, err
 	}
+	prReviewAuditLimit, err := parseIntArg(ctx.Arg("pr-review-audit-limit"), 0, "pr-review-audit-limit")
+	if err != nil {
+		return RepoReportInput{}, nil, err
+	}
 
 	return FetchRepoReportInput(ctx, RepoReportFetchOptions{
-		IssueLimit:    issueLimit,
-		PRLimit:       prLimit,
-		StaleDays:     staleDays,
-		IncludeIssues: parseBoolArg(ctx.Arg("include-issues")),
-		IncludePRs:    parseBoolArg(ctx.Arg("include-prs")),
-		IncludeHealth: parseBoolArg(ctx.Arg("include-health")),
+		IssueLimit:           issueLimit,
+		PRLimit:              prLimit,
+		StaleDays:            staleDays,
+		PRReviewAuditLimit:   prReviewAuditLimit,
+		IncludeIssues:        parseBoolArg(ctx.Arg("include-issues")),
+		IncludePRs:           parseBoolArg(ctx.Arg("include-prs")),
+		IncludePRLifecycle:   parseBoolArg(ctx.Arg("include-pr-lifecycle")),
+		IncludePRReviewAudit: parseBoolArg(ctx.Arg("include-pr-review-audit")),
+		IncludeHealth:        parseBoolArg(ctx.Arg("include-health")),
 	})
 }
 
@@ -198,6 +261,8 @@ func AnalyzeRepoReport(input RepoReportInput, lang string) RepoReportResult {
 		Health:          healthResult,
 		IssueSummary:    issueSummary,
 		PRSummary:       prSummary,
+		PRLifecycle:     input.PRLifecycle,
+		PRReviewAudit:   input.PRReviewAudit,
 		Recommendations: recommendations,
 		RiskLevel:       risk,
 		ReportScore:     reportScore,
@@ -231,8 +296,9 @@ func summarizeRepoIssues(issues []IssueInput, lang string) (RepoIssueSummary, []
 
 func summarizeRepoPRs(inputs []PRSummaryInput, lang string) (RepoPRSummary, []PRSummaryResult) {
 	summary := RepoPRSummary{
-		ByType: map[string]int{},
-		ByRisk: map[string]int{},
+		ByType:      map[string]int{},
+		ByRisk:      map[string]int{},
+		RiskSources: map[string]int{},
 	}
 	results := make([]PRSummaryResult, 0, len(inputs))
 	focus := []string{}
@@ -244,6 +310,9 @@ func summarizeRepoPRs(inputs []PRSummaryInput, lang string) (RepoPRSummary, []PR
 		summary.ByRisk[result.RiskLevel]++
 		if result.RiskLevel == PRRiskHigh || result.RiskLevel == PRRiskCritical {
 			summary.HighRisk++
+			for _, reason := range result.RiskReasons {
+				summary.RiskSources[reason]++
+			}
 		}
 		focus = append(focus, result.ReviewFocus...)
 	}

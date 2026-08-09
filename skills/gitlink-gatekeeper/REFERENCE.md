@@ -95,6 +95,17 @@
 | `auto_merge` | bool | `false` | **仅当 `true` 且裁决=PASS 且显式 `--apply` 时才合并** |
 | `merge_method` | enum | `squash` | `merge` \| `rebase` \| `squash` |
 
+### 1.9 `advisory_flags`（可选 · 咨询标记 · 默认全关）
+
+与硬门禁互补的「软」一层。硬门禁是真牙齿（命中即 `REQUEST_CHANGES`）；咨询标记**只在评分卡中给出建议性提示，不参与评分、不改变裁决**，把治理建议留给人工判断。默认关闭、**向后兼容**（策略无此段时等同关闭，旧行为不变）；**确定性**——仅消费已采集的 PR 数据，不依赖当前时间等非确定性输入，与评分主逻辑同样可复算。
+
+| 字段 | 类型 | 默认值 | 含义 |
+|------|------|--------|------|
+| `enabled` | bool | `false` | 总开关，默认关闭 |
+| `large_pr_files` | int | `0` | 变更文件数 ≥ 此值则提示拆分（`0`=不启用；建议 `< hard_gates.max_changed_files`，使其落在「偏大但未触硬门禁」区间） |
+
+> 典型用途：在 PR 积压的活跃仓库里，对「超体量但未触硬门禁」的 PR 提示拆分而**不阻断**——既给出治理信号，又不把判断权从人手里夺走。命中的标记渲染在评分卡的 `### 💡 Advisory` 小节，并写入 `summary.json` 的 `advisory_flags` 字段。
+
 ---
 
 ## 2. 评分算法规格（确定性，可复现）
@@ -223,7 +234,7 @@ def decide(total, hard_gate_failed, thresholds):
 | PR 元信息 | 标题/描述/作者/关联 | `gitlink-cli pr +view -i <id> --format json` | `+view`，`-i`/`--id` |
 | 变更文件 | 文件路径列表 | `gitlink-cli pr +files -i <id> --format json` | `+files` |
 | Diff | 变更内容供 AI 审查 | `gitlink-cli pr +diff -i <id> --format json` | `+diff`；当前实现与 `+files` 命中同一 `/pulls/:id/files` 端点 |
-| commits | commit 列表 | `gitlink-cli api GET /:owner/:repo/pulls/:id/commits --format json` | Raw API（无对应 shortcut） |
+| commits | commit 列表 | `gitlink-cli pr +commits -i <id> --format json` | `+commits` |
 | CI 状态 | 构建结果 | `gitlink-cli ci +builds --format json` | `+builds`（`-p`/`-l` 分页） |
 | 回写评论 | 评分卡 | `gitlink-cli pr +comment -i <id> -b "<scorecard>"` | `+comment` 底层走 issue journals（评论流）；评审记录形式用 `pr +review -i <id> -s common -c "..."`（走 reviews 端点，payload 字段是 `content`/`status`，status 取 `common`/`approved`/`rejected`）。评分卡作为建议性回写，二者均用 `common` |
 | 创建标签 | 裁决标签 | `gitlink-cli label +create -n "<name>" -c "#RRGGBB"` | `+create`（本作品子题一新增；`label +list/+update/+delete` 同组） |

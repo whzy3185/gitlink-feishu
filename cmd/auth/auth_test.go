@@ -35,7 +35,7 @@ func TestNewAuthCmd(t *testing.T) {
 	}
 
 	expectedSubs := map[string]bool{
-		"login": false, "logout": false, "status": false,
+		"login": false, "logout": false, "status": false, "checkin": false,
 	}
 	for _, sub := range cmd.Commands() {
 		if _, ok := expectedSubs[sub.Use]; !ok {

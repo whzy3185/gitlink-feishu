@@ -37,11 +37,11 @@ gitlink-cli user +info --login zhangsan
 
 ```bash
 # 用户贡献热力图
-gitlink-cli api GET /users/:user_id/headmaps
+gitlink-cli user +heatmap
 
 # 用户统计
-gitlink-cli api GET /users/:user_id/statistics
+gitlink-cli user +stats
 
 # 用户项目动态
-gitlink-cli api GET /users/:user_id/project_trends
+gitlink-cli user +trends
 ```

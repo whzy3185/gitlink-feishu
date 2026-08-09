@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gitlink-cli 功能增强展示</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; background: #f0f2f5; color: #333; }
+        .header { background: linear-gradient(135deg, #1a1a2e, #16213e); color: white; padding: 40px 20px; text-align: center; }
+        .header h1 { font-size: 2em; margin-bottom: 8px; }
+        .header p { color: #8892b0; font-size: 1.1em; }
+        .header .repo-info { margin-top: 12px; font-size: 0.9em; color: #64ffda; }
+        .header .repo-info code { background: rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 4px; }
+        .stats-bar { display: flex; justify-content: center; gap: 32px; padding: 20px; background: white; border-bottom: 1px solid #e8e8e8; flex-wrap: wrap; }
+        .stat-item { text-align: center; }
+        .stat-item .num { font-size: 2em; font-weight: bold; color: #1890ff; }
+        .stat-item .num.green { color: #52c41a; }
+        .stat-item .label { color: #999; font-size: 0.85em; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        .module-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(550px, 1fr)); gap: 20px; }
+        .module-card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
+        .module-header { padding: 16px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0; }
+        .module-header:hover { background: #fafafa; }
+        .module-header h3 { font-size: 1.1em; display: flex; align-items: center; gap: 8px; }
+        .module-header .tag { font-size: 0.75em; background: #e6f7ff; color: #1890ff; padding: 2px 8px; border-radius: 10px; }
+        .module-header .arrow { transition: transform 0.3s; font-size: 0.8em; color: #999; }
+        .module-header .arrow.open { transform: rotate(180deg); }
+        .module-body { padding: 0; }
+        .module-body.collapsed { display: none; }
+        .cmd-section { padding: 10px 20px 4px; color: #1890ff; font-weight: 600; font-size: 0.88em; background: #f0f5ff; border-bottom: 1px solid #e6f0ff; border-top: 1px solid #e6f0ff; }
+        .cmd-section:first-child { border-top: none; }
+        .cmd-row { border-bottom: 1px solid #f5f5f5; }
+        .cmd-row:last-child { border-bottom: none; }
+        .cmd-row:hover { background: #fafbfc; }
+        .cmd-top { display: flex; align-items: center; padding: 10px 20px; gap: 12px; }
+        .cmd-name { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.9em; color: #1890ff; font-weight: 600; min-width: 70px; }
+        .cmd-desc { color: #666; font-size: 0.85em; flex: 1; }
+        .cmd-toggle { color: #999; cursor: pointer; font-size: 0.85em; border: none; background: none; }
+        .cmd-toggle:hover { color: #1890ff; }
+        .cmd-detail { padding: 0 20px 10px 90px; color: #999; font-size: 0.8em; display: none; }
+        .cmd-detail.show { display: block; }
+        .cmd-params { padding: 6px 20px 10px 90px; display: none; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+        .cmd-params.show { display: flex; }
+        .param-group { display: flex; flex-direction: column; gap: 2px; }
+        .param-group label { font-size: 0.75em; color: #999; }
+        .param-group input { border: 1px solid #d9d9d9; border-radius: 4px; padding: 4px 8px; font-size: 0.85em; width: 140px; }
+        .param-group input:focus { border-color: #1890ff; outline: none; box-shadow: 0 0 0 2px rgba(24,144,255,0.2); }
+        .run-btn { background: #1890ff; color: white; border: none; padding: 5px 14px; border-radius: 6px; cursor: pointer; font-size: 0.85em; white-space: nowrap; align-self: flex-end; }
+        .run-btn:hover { background: #40a9ff; }
+        .run-btn:disabled { background: #d9d9d9; cursor: not-allowed; }
+        .result-panel { background: #1e1e1e; margin: 4px 20px 14px; border-radius: 8px; overflow: hidden; display: none; }
+        .result-panel.show { display: block; }
+        .result-toolbar { background: #2d2d2d; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; }
+        .result-toolbar .cmd-text { color: #4ec9b0; font-family: monospace; font-size: 0.85em; }
+        .result-toolbar .status { font-size: 0.8em; padding: 2px 8px; border-radius: 4px; }
+        .result-toolbar .status.ok { background: #2ea04380; color: #4ec9b0; }
+        .result-toolbar .status.err { background: #da363380; color: #f85149; }
+        .result-toolbar .close-btn { color: #666; cursor: pointer; font-size: 1.2em; }
+        .result-toolbar .close-btn:hover { color: #999; }
+        .result-body { padding: 12px; max-height: 400px; overflow: auto; }
+        .result-body pre { color: #d4d4d4; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.82em; line-height: 1.5; white-space: pre-wrap; word-break: break-all; margin: 0; }
+        .result-body table { width: 100%; border-collapse: collapse; color: #d4d4d4; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.82em; }
+        .result-body thead th { background: #2d2d2d; color: #4ec9b0; text-align: left; padding: 6px 10px; border-bottom: 2px solid #4ec9b0; white-space: nowrap; position: sticky; top: 0; }
+        .result-body tbody td { padding: 4px 10px; border-bottom: 1px solid #333; white-space: nowrap; }
+        .result-body tbody tr:hover { background: #2a2a2a; }
+        .result-body tbody tr:nth-child(even) { background: #252525; }
+        .footer { text-align: center; color: #999; padding: 40px 20px; font-size: 0.85em; }
+        @media (max-width: 600px) {
+            .module-grid { grid-template-columns: 1fr; }
+            .cmd-params { padding-left: 20px; }
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>gitlink-cli 功能增强</h1>
+    <p>软件演化与运维 课程实践 — 进阶任务 子任务一</p>
+    <div class="repo-info">演示仓库：<code>chroe/gitlink-cli</code> — 展开命令、填入参数、点击运行查看真实结果</div>
+</div>
+<div class="stats-bar">
+    <div class="stat-item"><div class="num">8</div><div class="label">新增模块</div></div>
+    <div class="stat-item"><div class="num green">47</div><div class="label">新增命令</div></div>
+    <div class="stat-item"><div class="num">8</div><div class="label">批量操作</div></div>
+    <div class="stat-item"><div class="num">47+</div><div class="label">单元测试</div></div>
+    <div class="stat-item" style="cursor:pointer" onclick="toggleFormat()" title="点击切换输出格式">
+        <div class="num" id="format-label" style="font-size:1.2em;transition:color 0.3s;">JSON</div>
+        <div class="label">输出格式 ▾</div>
+    </div>
+</div>
+<div class="container"><div class="module-grid" id="modules"></div></div>
+<div class="footer">gitlink-cli 功能增强 — 软件演化与运维课程实践</div>
+<script>
+let currentFormat = 'json';
+
+function toggleFormat() {
+    currentFormat = currentFormat === 'json' ? 'table' : 'json';
+    const label = document.getElementById('format-label');
+    label.textContent = currentFormat.toUpperCase();
+    label.style.color = currentFormat === 'table' ? '#52c41a' : '';
+}
+
+const MODULES = [
+    {
+        name: "milestone", title: "里程碑管理",
+        desc: "管理项目的版本规划节点，可用于跟踪项目进度和发布计划",
+        color: "#722ed1",
+        commands: [
+            { name: "list", desc: "列出所有里程碑", detail: "获取项目中所有已创建的里程碑列表，包括开启和关闭的数量统计", params: [] },
+            { name: "view", desc: "查看里程碑详情", detail: "查看某个里程碑的详细信息，包括关联的疑修数量和完成进度", params: [{k:"id",l:"里程碑ID",v:"2760"}] },
+            { name: "create", desc: "创建里程碑", detail: "新建一个版本规划节点，可设置名称、描述、截止日期", params: [{k:"name",l:"名称",v:"v2.0"},{k:"description",l:"描述",v:"新里程碑"},{k:"due",l:"截止日期",v:"2026-07-01"}] },
+            { name: "update", desc: "更新里程碑", detail: "修改里程碑的名称、描述或截止日期", params: [{k:"id",l:"里程碑ID",v:"2760"},{k:"description",l:"新描述",v:"已更新"}] },
+            { name: "close", desc: "关闭里程碑", detail: "标记里程碑为已完成状态", params: [{k:"id",l:"里程碑ID",v:"2760"}] },
+            { name: "delete", desc: "删除里程碑", detail: "删除指定的里程碑（不可恢复）", params: [{k:"id",l:"里程碑ID",v:"2760"}] },
+        ]
+    },
+    {
+        name: "webhook", title: "Webhook 配置",
+        desc: "管理项目的事件通知，当仓库发生 push、PR 等事件时自动通知外部服务",
+        color: "#eb2f96",
+        commands: [
+            { name: "list", desc: "列出所有 Webhook", detail: "获取项目中配置的所有事件通知地址列表", params: [] },
+            { name: "view", desc: "查看 Webhook 详情", detail: "查看某个 Webhook 的详细配置信息，包括事件类型和最近触发状态", params: [{k:"id",l:"Webhook ID",v:"51106"}] },
+            { name: "create", desc: "创建 Webhook", detail: "新增一个事件通知配置，指定 URL 和监听的事件类型", params: [{k:"url",l:"回调URL",v:"https://httpbin.org/post"}] },
+            { name: "update", desc: "更新 Webhook", detail: "修改 Webhook 的 URL、事件类型等配置", params: [{k:"id",l:"Webhook ID",v:"51106"},{k:"url",l:"新URL",v:"https://httpbin.org/post"}] },
+            { name: "test", desc: "测试 Webhook", detail: "发送一个测试事件，验证 Webhook 配置是否正确", params: [{k:"id",l:"Webhook ID",v:"51106"}] },
+            { name: "delete", desc: "删除 Webhook", detail: "删除指定的事件通知配置", params: [{k:"id",l:"Webhook ID",v:"51106"}] },
+        ]
+    },
+    {
+        name: "label", title: "标签管理",
+        desc: "管理疑修（Issue）的标签，用于分类和优先级标记",
+        color: "#fa8c16",
+        commands: [
+            { name: "list", desc: "列出所有标签", detail: "获取项目中所有疑修标签，包括标签颜色和关联的疑修数量", params: [] },
+            { name: "create", desc: "创建标签", detail: "新建一个疑修标签，可设置名称、颜色和描述。创建后点 +list 查看新标签的 ID", params: [{k:"name",l:"标签名",v:"test-label"},{k:"color",l:"颜色",v:"#ff6600"},{k:"description",l:"描述",v:"test"}] },
+            { name: "update", desc: "更新标签", detail: "修改标签的名称、颜色或描述。先点 +list 查看 ID", params: [{k:"id",l:"标签ID",v:"328745"},{k:"description",l:"新描述",v:"updated"}] },
+            { name: "delete", desc: "删除标签", detail: "删除指定的疑修标签。先点 +list 查看 ID", params: [{k:"id",l:"标签ID",v:"328745"}] },
+        ]
+    },
+    {
+        name: "commit", title: "提交记录",
+        desc: "查看仓库的代码提交历史、变更文件和逐行追溯",
+        color: "#52c41a",
+        commands: [
+            { name: "list", desc: "列出提交记录", detail: "查看仓库的所有代码提交历史，支持按分支/标签过滤和分页", params: [{k:"limit",l:"数量",v:"5"}] },
+            { name: "view", desc: "查看提交详情", detail: "查看某次提交修改了哪些文件，以及每个文件的增删行数。SHA 从 +list 获取", params: [{k:"sha",l:"提交SHA",v:"a82717bbf372aee48bbd1452c3d6be9256b0febf"}] },
+            { name: "diff", desc: "查看代码差异", detail: "查看某次提交的具体代码变更内容。SHA 从 +list 获取", params: [{k:"sha",l:"提交SHA",v:"a82717bbf372aee48bbd1452c3d6be9256b0febf"}] },
+            { name: "blame", desc: "逐行追溯", detail: "查看文件每一行代码是谁在什么时候、通过哪次提交修改的", params: [{k:"path",l:"文件路径",v:"README.md"}] },
+        ]
+    },
+    {
+        name: "wiki", title: "Wiki 页面管理",
+        desc: "管理项目维基页面，支持创建、查看、编辑和删除 Wiki 文档",
+        color: "#13c2c2",
+        commands: [
+            { name: "list", desc: "列出 Wiki 页面", detail: "获取项目中所有 Wiki 页面列表", params: [] },
+            { name: "view", desc: "查看 Wiki 页面", detail: "查看某个 Wiki 页面的详细内容", params: [{k:"name",l:"页面名称",v:"Home"}] },
+            { name: "create", desc: "创建 Wiki 页面", detail: "新建一个 Wiki 页面，内容自动进行 Base64 编码", params: [{k:"name",l:"页面标题",v:"TestPage"},{k:"content",l:"页面内容",v:"Hello Wiki!"},{k:"message",l:"提交信息",v:"create test page"}] },
+            { name: "update", desc: "更新 Wiki 页面", detail: "修改已有的 Wiki 页面内容，内容自动进行 Base64 编码", params: [{k:"name",l:"页面标题",v:"Home"},{k:"content",l:"新内容",v:"Updated content"},{k:"message",l:"提交信息",v:"update page"}] },
+            { name: "delete", desc: "删除 Wiki 页面", detail: "删除指定的 Wiki 页面（不可恢复）", params: [{k:"name",l:"页面标题",v:"TestPage"}] },
+        ]
+    },
+    {
+        name: "file", title: "文件管理",
+        desc: "管理仓库中的文件和目录，支持在线创建、编辑、删除和查看文件",
+        color: "#2f54eb",
+        commands: [
+            { name: "list", desc: "列出仓库文件", detail: "获取仓库指定路径下的文件和目录列表，支持分支选择和关键词搜索", params: [{k:"ref",l:"分支/标签",v:"master"}] },
+            { name: "tree", desc: "查看文件树", detail: "以树形结构浏览仓库目录，支持递归展开所有子目录", params: [{k:"sha",l:"分支/提交SHA",v:"master"},{k:"limit",l:"每页数量",v:"20"}] },
+            { name: "get", desc: "获取文件内容", detail: "查看指定文件或目录的内容详情", params: [{k:"path",l:"文件路径",v:"README.md"},{k:"ref",l:"分支",v:"master"}] },
+            { name: "create", desc: "创建文件", detail: "在仓库中新建文件，内容自动进行 Base64 编码", params: [{k:"path",l:"文件路径",v:"test/hello.txt"},{k:"content",l:"文件内容",v:"Hello World!"},{k:"message",l:"提交信息",v:"add test file"},{k:"branch",l:"目标分支",v:"master"}] },
+            { name: "delete", desc: "删除文件", detail: "删除仓库中的文件，需要提供文件的 blob SHA", params: [{k:"path",l:"文件路径",v:"test/hello.txt"},{k:"sha",l:"文件SHA",v:""},{k:"message",l:"提交信息",v:"delete test file"},{k:"branch",l:"目标分支",v:"master"}] },
+        ]
+    },
+    {
+        name: "member", title: "成员管理",
+        desc: "管理项目成员和组织成员，支持添加、移除、修改角色、批量组织邀请",
+        color: "#f5222d",
+        repoSelector: true,
+        commands: [
+            { name: "list", desc: "列出项目成员", detail: "获取项目中所有协作者的列表，返回每位成员的 id（数字）和 login（用户名）", params: [{k:"keyword",l:"搜索关键词",v:""}] },
+            { name: "users", desc: "🔍 按用户名搜索ID", module: "search", detail: "输入 GitLink 用户名搜索，返回的 user_id 就是添加/移除成员时需要的数字 ID", params: [{k:"keyword",l:"用户名",v:""}] },
+            { name: "add", desc: "添加成员", detail: "邀请用户加入项目成为协作者，user-id 为数字 ID（先点「搜索ID」查找）", params: [{k:"user-id",l:"用户数字ID",v:""}] },
+            { name: "remove", desc: "移除成员", detail: "将指定用户移出项目", params: [{k:"user-id",l:"用户数字ID",v:""}] },
+            { name: "update", desc: "修改成员角色", detail: "更改成员角色：Manager / Developer / Reporter", params: [{k:"user-id",l:"用户数字ID",v:""},{k:"role",l:"角色",v:"Developer"}] },
+            { name: "batch-add", desc: "批量添加成员", detail: "批量添加成员到项目，支持 --users 逗号分隔数字 ID 或 --from CSV 文件。建议先用预览模式确认", params: [{k:"users",l:"用户ID列表",v:"42,99"},{k:"dry-run",l:"预览模式",v:"true",bool:true}] },
+            { section: "────────── 组织成员 ──────────" },
+            { name: "info", desc: "🔍 输入组织名查ID", module: "org", detail: "输入组织的 name（如 e2e-test-org-1780389982），返回结果中的 id 字段就是组织 ID", params: [{k:"id",l:"组织名称（name）",v:"e2e-test-org-1780389982"}] },
+            { name: "members", desc: "查看组织成员", module: "org", detail: "查看指定组织的成员列表", params: [{k:"id",l:"组织ID",v:"151783"}] },
+            { name: "batch-invite", desc: "批量邀请加入组织", module: "org", detail: "批量邀请用户加入组织，支持用户名或数字ID，建议先开预览模式确认", params: [{k:"id",l:"组织ID（先用「查ID」获取）",v:"151783"},{k:"users",l:"用户名/ID列表",v:"chroe"},{k:"role",l:"角色",v:"member"},{k:"dry-run",l:"预览模式",v:"true",bool:true}] },
+        ]
+    },
+    {
+        name: "watch", title: "仓库关注",
+        desc: "关注仓库以接收更新通知，支持关注/取消关注和查看关注者列表",
+        color: "#faad14",
+        commands: [
+            { name: "watch", desc: "关注仓库", detail: "开始关注当前仓库，接收后续的事件通知", params: [] },
+            { name: "unwatch", desc: "取消关注", detail: "停止关注当前仓库，不再接收通知", params: [] },
+            { name: "watchers", desc: "查看关注者", detail: "列出关注了当前仓库的所有用户", params: [] },
+        ]
+    },
+    {
+        name: "star", title: "仓库点赞",
+        desc: "为仓库点赞（Star），表达对项目的认可和支持",
+        color: "#eb2f96",
+        commands: [
+            { name: "star", desc: "点赞仓库", detail: "为当前仓库点赞（Star）", params: [] },
+            { name: "unstar", desc: "取消点赞", detail: "取消对当前仓库的点赞", params: [] },
+            { name: "stars", desc: "查看点赞者", detail: "列为当前仓库点赞的所有用户", params: [] },
+        ]
+    },
+    {
+        name: "issue", title: "Issue 管理",
+        desc: "管理疑修（Issue）：关闭/重新打开/批量操作/设置标签和里程碑，支持逗号列表或 CSV 文件导入",
+        color: "#13c2c2",
+        commands: [
+            { name: "list", desc: "列出 Issue", detail: "列出项目中的 Issue，支持按状态过滤", params: [{k:"state",l:"状态(open/closed/all)",v:"open"},{k:"limit",l:"数量",v:"10"}] },
+            { name: "close", desc: "关闭 Issue", detail: "关闭指定编号的 Issue", params: [{k:"number",l:"Issue编号",v:"1"}] },
+            { name: "reopen", desc: "重新打开 Issue", detail: "重新打开已关闭的 Issue", params: [{k:"number",l:"Issue编号",v:"1"}] },
+            { name: "batch-close", desc: "批量关闭 Issue", detail: "按编号批量关闭 Issue，支持 --numbers 逗号分隔或 --from CSV 文件。开启预览模式可先查看将执行的操作而不实际执行", params: [{k:"numbers",l:"Issue编号",v:"1,2,3"},{k:"dry-run",l:"预览模式",v:"false",bool:true}] },
+            { name: "batch-reopen", desc: "批量重新打开 Issue", detail: "批量重新打开已关闭的 Issue，支持 --numbers 逗号分隔或 --from CSV 文件", params: [{k:"numbers",l:"Issue编号",v:"1,2,3"},{k:"dry-run",l:"预览模式",v:"false",bool:true}] },
+            { name: "batch-comment", desc: "批量评论 Issue", detail: "对多个 Issue 批量添加同一条评论，支持 --numbers 逗号分隔或 --from CSV 文件", params: [{k:"numbers",l:"Issue编号",v:"1,2,3"},{k:"body",l:"评论内容",v:"统一回复"},{k:"dry-run",l:"预览模式",v:"false",bool:true}] },
+
+        ]
+    },
+
+    {
+        name: "repo", title: "批量仓库管理",
+        desc: "批量创建、Fork 和删除仓库，支持逗号分隔列表或 CSV 文件批量导入。创建用仓库名，Fork/删除用 owner/repo 格式",
+        color: "#722ed1",
+        commands: [
+            { name: "batch-create", desc: "批量创建仓库", detail: "批量创建仓库到你自己的账号下，支持 --repos 逗号分隔仓库名或 --from CSV 文件。可统一设置描述和私有性", params: [{k:"repos",l:"仓库名称",v:"repo1,repo2"},{k:"description",l:"描述",v:"批量创建的仓库"},{k:"private",l:"私有",v:"false"},{k:"dry-run",l:"预览模式",v:"true",bool:true}] },
+            { name: "batch-fork", desc: "批量 Fork 仓库", detail: "批量 Fork 其他人的仓库到你的账号下，使用 owner/repo 格式", params: [{k:"repos",l:"仓库标识",v:"wxhwwla/calc-framework,kaysen/tutoring-prep"},{k:"dry-run",l:"预览模式",v:"true",bool:true}] },
+            { name: "batch-delete", desc: "批量删除仓库", detail: "批量删除你名下的仓库，使用 owner/repo 格式。⚠️ 危险操作，不可恢复", params: [{k:"repos",l:"仓库标识",v:"yetja/repo1,yetja/repo2"},{k:"dry-run",l:"预览模式",v:"true",bool:true}] },
+        ]
+    },
+
+];
+
+const container = document.getElementById('modules');
+
+MODULES.forEach(mod => {
+    const card = document.createElement('div');
+    card.className = 'module-card';
+    const cmdHTML = mod.commands.map(cmd => {
+        if (cmd.section) {
+            return `<div class="cmd-section">${cmd.section}</div>`;
+        }
+        const uid = cmd.module ? `${mod.name}-${cmd.module}-${cmd.name}` : `${mod.name}-${cmd.name}`;
+        const paramsHTML = cmd.params.map(p => {
+            if (p.bool) {
+                return `<div class="param-group"><label>${p.l}</label><select id="p-${uid}-${p.k}"><option value="false"${p.v!=='true'?' selected':''}>否</option><option value="true"${p.v==='true'?' selected':''}>是</option></select></div>`;
+            }
+            return `<div class="param-group"><label>${p.l}</label><input id="p-${uid}-${p.k}" value="${p.v}" placeholder="${p.l}"></div>`;
+        }).join('');
+        return `
+        <div class="cmd-row">
+            <div class="cmd-top">
+                <span class="cmd-name">+${cmd.name}</span>
+                <span class="cmd-desc">${cmd.desc}</span>
+                <button class="cmd-toggle" onclick="toggleDetail('${uid}')">详情</button>
+            </div>
+            <div class="cmd-detail" id="detail-${uid}">${cmd.detail}</div>
+            <div class="cmd-params" id="params-${uid}">
+                ${paramsHTML}
+                <button class="run-btn" onclick="runCommand('${mod.name}','${cmd.name}','${uid}')" id="btn-${uid}">▶ 运行</button>
+            </div>
+            <div class="result-panel" id="result-${uid}"></div>
+        </div>`;
+    }).join('');
+
+    card.innerHTML = `
+        <div class="module-header" onclick="toggleModule(this)">
+            <h3><span style="color:${mod.color};font-size:1.3em;">&#9632;</span> ${mod.title} <span class="tag">${mod.commands.length} 个命令</span></h3>
+            <span class="arrow">&#9660;</span>
+        </div>
+        <div class="module-body collapsed">
+            <p style="padding:12px 20px;color:#666;font-size:0.9em;border-bottom:1px solid #f0f0f0;background:#fafbfc;">${mod.desc}</p>
+            ${mod.repoSelector ? `<div style="padding:8px 20px;border-bottom:1px solid #f0f0f0;background:#f6ffed;display:flex;gap:10px;align-items:center;font-size:0.9em;"><label style="white-space:nowrap;color:#52c41a;">📦 仓库:</label><input id="repo-owner-${mod.name}" value="chroe" placeholder="owner" style="width:90px;padding:4px 8px;border:1px solid #d9d9d9;border-radius:4px;">/<input id="repo-name-${mod.name}" value="gitlink-cli" placeholder="repo" style="width:150px;padding:4px 8px;border:1px solid #d9d9d9;border-radius:4px;"></div>` : ''}
+            ${cmdHTML}
+        </div>`;
+    container.appendChild(card);
+});
+
+function toggleModule(header) {
+    const body = header.nextElementSibling;
+    const arrow = header.querySelector('.arrow');
+    body.classList.toggle('collapsed');
+    arrow.classList.toggle('open');
+}
+
+function toggleDetail(uid) {
+    const detail = document.getElementById(`detail-${uid}`);
+    const params = document.getElementById(`params-${uid}`);
+    detail.classList.toggle('show');
+    params.classList.toggle('show');
+}
+
+function getArgs(uid, params) {
+    return params.map(p => {
+        const val = document.getElementById(`p-${uid}-${p.k}`).value.trim();
+        // Boolean flag: only pass --flag when value is "true", omit for false
+        if (p.bool) {
+            return val === 'true' ? `--${p.k}` : '';
+        }
+        if (!val) return '';
+        // Use = syntax for bool values (pflag requires it)
+        if (val === 'true' || val === 'false') {
+            return `--${p.k}=${val}`;
+        }
+        if (val.includes(' ')) {
+            return `--${p.k} "${val}"`;
+        }
+        return `--${p.k} ${val}`;
+    }).filter(Boolean).join(' ');
+}
+
+async function runCommand(module, command, uid) {
+    const btn = document.getElementById(`btn-${uid}`);
+    const panel = document.getElementById(`result-${uid}`);
+    const mod = MODULES.find(m => m.name === module);
+    const cmd = mod.commands.find(c => {
+        // match by uid suffix to handle cross-module commands correctly
+        const expectedUid = c.module ? `${module}-${c.module}-${c.name}` : `${module}-${c.name}`;
+        return expectedUid === uid;
+    });
+    if (!cmd) return;
+    const args = getArgs(uid, cmd.params);
+    const apiModule = cmd.module || module;
+
+    btn.disabled = true;
+    btn.textContent = '运行中...';
+
+    let url = `/api/run?module=${apiModule}&command=${command}&format=${currentFormat}`;
+    // 如果卡片有仓库选择器，传入 owner/repo
+    if (mod.repoSelector) {
+        const ownerEl = document.getElementById(`repo-owner-${module}`);
+        const repoEl = document.getElementById(`repo-name-${module}`);
+        if (ownerEl && repoEl) {
+            url += `&owner=${encodeURIComponent(ownerEl.value.trim())}`;
+            url += `&repo=${encodeURIComponent(repoEl.value.trim())}`;
+        }
+    }
+    if (args) url += `&args=${encodeURIComponent(args)}`;
+
+    try {
+        const resp = await fetch(url);
+        const data = await resp.json();
+        const statusClass = data.ok ? 'ok' : 'err';
+        const statusText = data.ok ? '成功' : '失败';
+
+        let output, isTable = false;
+        if (!data.ok && data.error) {
+            output = data.error;
+        } else if (data.output === null || data.output === undefined) {
+            output = '（操作完成，无返回数据）';
+        } else if (typeof data.output === 'string') {
+            output = data.output || '（操作完成，无返回数据）';
+            if (currentFormat === 'table' && /^.+\n-{2,}/.test(output)) {
+                isTable = true;
+            }
+        } else {
+            const s = JSON.stringify(data.output, null, 2);
+            output = (s === 'null' || s === '{}' || s === '""') ? '（操作完成，无返回数据）' : s;
+        }
+        const bodyHTML = isTable
+            ? `<div class="result-body" style="overflow-x:auto">${tableToHtml(output)}</div>`
+            : `<div class="result-body"><pre>${escapeHtml(output)}</pre></div>`;
+        panel.innerHTML = `
+            <div class="result-toolbar">
+                <span class="cmd-text">$ ${data.command || module + ' +' + command}</span>
+                <span class="status ${statusClass}">${statusText}</span>
+                <span class="close-btn" onclick="panel.classList.remove('show')">&times;</span>
+            </div>
+            ${bodyHTML}`;
+        panel.classList.add('show');
+    } catch (e) {
+        panel.innerHTML = `
+            <div class="result-toolbar">
+                <span class="cmd-text">$ ${module} +${command}</span>
+                <span class="status err">请求失败</span>
+                <span class="close-btn" onclick="panel.classList.remove('show')">&times;</span>
+            </div>
+            <div class="result-body"><pre>${escapeHtml(e.message)}</pre></div>`;
+        panel.classList.add('show');
+    }
+
+    btn.disabled = false;
+    btn.textContent = '▶ 运行';
+}
+
+function tableToHtml(text) {
+    const lines = text.trim().split('\n');
+    if (lines.length < 2) return `<pre>${escapeHtml(text)}</pre>`;
+
+    // Split on 2+ spaces — tabwriter pads columns with spaces
+    const splitRow = (line) => line.split(/\s{2,}/).map(c => c.trim()).filter(c => c !== '');
+
+    const headers = splitRow(lines[0]);
+    if (headers.length < 2) return `<pre>${escapeHtml(text)}</pre>`;
+
+    const thead = `<thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>`;
+    const tbody = ['<tbody>'];
+    for (let i = 2; i < lines.length; i++) {
+        const cells = splitRow(lines[i]);
+        tbody.push(`<tr>${cells.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`);
+    }
+    tbody.push('</tbody>');
+    return `<table>${thead}${tbody.join('')}</table>`;
+}
+
+function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>

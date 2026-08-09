@@ -1,0 +1,80 @@
+```mermaid
+gitGraph
+  commit id: "main 起点"
+  branch pr-2
+  checkout pr-2
+  commit id: "PR#2: 本次实现：search +issues — 搜索 Issue"
+  checkout main
+  merge pr-2
+  branch pr-3
+  checkout pr-3
+  commit id: "PR#3: 创建 webhook 领域 + 实现 `+update`"
+  checkout main
+  merge pr-3
+  branch pr-5
+  checkout pr-5
+  commit id: "PR#5: release download 功能（新增）  在 rel"
+  checkout main
+  merge pr-5
+  branch pr-4
+  checkout pr-4
+  commit id: "PR#4: label 领域原来只有 3 个命令（list/create"
+  checkout main
+  merge pr-4
+  branch pr-6
+  checkout pr-6
+  commit id: "PR#6: release download 命令 新增 downloa✨创新"
+  checkout main
+  merge pr-6
+  branch pr-12
+  checkout pr-12
+  commit id: "PR#12: feat: 实现 batch issue 批量操作命令✨创新"
+  checkout main
+  merge pr-12
+  branch pr-8
+  checkout pr-8
+  commit id: "PR#8: 文件描述符泄漏等修改"
+  checkout main
+  merge pr-8
+  branch pr-7
+  checkout pr-7
+  commit id: "PR#7: 代码片段管理功能"
+  checkout main
+  merge pr-7
+  branch pr-14
+  checkout pr-14
+  commit id: "PR#14: feat: 补全 21 个 Shortcut + 修正批量操✨创新"
+  checkout main
+  merge pr-14
+  branch pr-15
+  checkout pr-15
+  commit id: "PR#15: 修改编译"
+  checkout main
+  merge pr-15
+  branch pr-16
+  checkout pr-16
+  commit id: "PR#16: 新增skills✨创新"
+  checkout main
+  merge pr-16
+  branch pr-18
+  checkout pr-18
+  commit id: "PR#18: feat: 合并 upstream/master 并对齐风格✨创新"
+  checkout main
+  merge pr-18
+  branch pr-19
+  checkout pr-19
+  commit id: "PR#19: 新增skills"
+  checkout main
+  merge pr-19
+  branch pr-20
+  checkout pr-20
+  commit id: "PR#20: 注册重编激活 25 域、新增 6 个 Skill、补全索引与"
+  checkout main
+  merge pr-20
+  branch pr-21
+  checkout pr-21
+  commit id: "PR#21: 验证部分内容，作出相关修改"
+  checkout main
+  merge pr-21
+  commit id: "HEAD"
+```

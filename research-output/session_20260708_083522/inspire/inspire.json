@@ -1,0 +1,181 @@
+{
+  "scenario": "inspire",
+  "mode": "repo",
+  "repo": "whale_hihihi/gitlink-cli",
+  "gap_topics": [
+    "reinforcement_learning",
+    "devops"
+  ],
+  "needed_languages": [
+    "Dockerfile",
+    "Go",
+    "HTML",
+    "JavaScript",
+    "Mermaid",
+    "Python",
+    "Shell",
+    "go"
+  ],
+  "gap_signals": [],
+  "candidates": [
+    {
+      "login": "wbtiger",
+      "score": 47.9,
+      "topic_overlap": 0.707,
+      "language_match": 0.0,
+      "activity_level": "high",
+      "repo_languages": [],
+      "repo_count": 15,
+      "reasons": [
+        "覆盖缺口主题: devops",
+        "本仓库活跃贡献者"
+      ]
+    },
+    {
+      "login": "Mengz",
+      "score": 30.9,
+      "topic_overlap": 0.0,
+      "language_match": 0.091,
+      "activity_level": "high",
+      "repo_languages": [
+        "c++",
+        "go",
+        "markdown",
+        "python"
+      ],
+      "repo_count": 15,
+      "reasons": [
+        "语言匹配: go",
+        "本仓库活跃贡献者",
+        "协作开放度高(fork=5)"
+      ]
+    },
+    {
+      "login": "muel",
+      "score": 28.4,
+      "topic_overlap": 0.0,
+      "language_match": 0.111,
+      "activity_level": "high",
+      "repo_languages": [
+        "go",
+        "typescript"
+      ],
+      "repo_count": 5,
+      "reasons": [
+        "语言匹配: go",
+        "本仓库活跃贡献者",
+        "协作开放度高(fork=4)"
+      ]
+    },
+    {
+      "login": "puygob236",
+      "score": 22.4,
+      "topic_overlap": 0.0,
+      "language_match": 0.111,
+      "activity_level": "high",
+      "repo_languages": [
+        "go",
+        "typescript"
+      ],
+      "repo_count": 3,
+      "reasons": [
+        "语言匹配: go",
+        "本仓库活跃贡献者",
+        "协作开放度高(fork=2)"
+      ]
+    },
+    {
+      "login": "baoerjun",
+      "score": 22.3,
+      "topic_overlap": 0.0,
+      "language_match": 0.111,
+      "activity_level": "high",
+      "repo_languages": [
+        "go",
+        "javascript"
+      ],
+      "repo_count": 4,
+      "reasons": [
+        "语言匹配: go",
+        "本仓库活跃贡献者",
+        "协作开放度高(fork=2)"
+      ]
+    },
+    {
+      "login": "Surponess",
+      "score": 19.6,
+      "topic_overlap": 0.0,
+      "language_match": 0.1,
+      "activity_level": "high",
+      "repo_languages": [
+        "go",
+        "javascript",
+        "markdown"
+      ],
+      "repo_count": 3,
+      "reasons": [
+        "语言匹配: go",
+        "本仓库活跃贡献者",
+        "协作开放度高(fork=1)"
+      ]
+    },
+    {
+      "login": "whale",
+      "score": 14.8,
+      "topic_overlap": 0.0,
+      "language_match": 0.0,
+      "activity_level": "high",
+      "repo_languages": [],
+      "repo_count": 0,
+      "reasons": [
+        "本仓库活跃贡献者"
+      ]
+    },
+    {
+      "login": "wauxing",
+      "score": 14.7,
+      "topic_overlap": 0.0,
+      "language_match": 0.0,
+      "activity_level": "high",
+      "repo_languages": [],
+      "repo_count": 0,
+      "reasons": [
+        "本仓库活跃贡献者"
+      ]
+    }
+  ],
+  "innovation_points": [
+    {
+      "description": "feat: 合并 upstream/master 并对齐风格 — 行为修复 + i18n 化",
+      "evidence": "PR #18 「feat: 合并 upstream/master 并对齐风格 — 行为修复 + i18n 化」 改动 151 文件，合并于 2026-06-15",
+      "category": "大规模重构/新特性"
+    },
+    {
+      "description": "修改知识图谱构建方法",
+      "evidence": "PR #31 「修改知识图谱构建方法」 改动 111 文件，合并于 2026-07-07",
+      "category": "大规模重构/新特性"
+    },
+    {
+      "description": "feat: 补全 21 个 Shortcut + 修正批量操作 + 文档/代码全面清理",
+      "evidence": "PR #14 「feat: 补全 21 个 Shortcut + 修正批量操作 + 文档/代码全面清理」 改动 31 文件，合并于 2026-06-03",
+      "category": "大规模重构/新特性"
+    },
+    {
+      "description": "新增skills",
+      "evidence": "PR #16 「新增skills」 改动 26 文件，合并于 2026-06-12",
+      "category": "大规模重构/新特性"
+    },
+    {
+      "description": "新增demo",
+      "evidence": "PR #24 「新增demo」 改动 19 文件，合并于 2026-07-06",
+      "category": "大规模重构/新特性"
+    },
+    {
+      "description": "feat: 实现 batch issue 批量操作命令",
+      "evidence": "PR #12 「feat: 实现 batch issue 批量操作命令」 改动 14 文件，合并于 2026-06-01",
+      "category": "大规模重构/新特性"
+    }
+  ],
+  "idea": null,
+  "llm_used": false
+}

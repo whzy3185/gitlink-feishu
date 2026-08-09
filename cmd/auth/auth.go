@@ -2,11 +2,15 @@ package auth
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -34,6 +38,7 @@ func NewAuthCmd(translators ...*i18n.Translator) *cobra.Command {
 	cmd.AddCommand(newLoginCmd(tr))
 	cmd.AddCommand(newLogoutCmd(tr))
 	cmd.AddCommand(newStatusCmd(tr))
+	cmd.AddCommand(newCheckinCmd(tr))
 	return cmd
 }
 
@@ -180,4 +185,100 @@ func newStatusCmd(tr *i18n.Translator) *cobra.Command {
 			return err
 		},
 	}
+}
+
+func newCheckinCmd(tr *i18n.Translator) *cobra.Command {
+	var intervalMinutes int
+
+	cmd := &cobra.Command{
+		Use:   "checkin",
+		Short: tr.T("cmd.auth.checkin.short"),
+		Long:  tr.T("cmd.auth.checkin.long"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runCheckin(cmd.OutOrStdout(), intervalMinutes, tr)
+		},
+	}
+	cmd.Flags().IntVarP(&intervalMinutes, "time", "t", 30, tr.T("flag.auth.checkin.time"))
+	return cmd
+}
+
+func runCheckin(out io.Writer, intervalMinutes int, tr *i18n.Translator) error {
+	// Check if user is logged in
+	token, err := loadToken()
+	if err != nil || token == "" {
+		if os.Getenv(envTokenVar) == "" {
+			return errors.New(tr.T("error.auth.not_logged_in"))
+		}
+	}
+
+	// Convert minutes to duration
+	interval := time.Duration(intervalMinutes) * time.Minute
+
+	// Print startup message
+	fmt.Fprintln(out, tr.Tf("output.auth.checkin.start", i18n.Args{"interval": intervalMinutes}))
+	fmt.Fprintln(out, tr.T("output.auth.checkin.stop_hint"))
+
+	// Setup signal handling for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		fmt.Fprintln(out, "\n"+tr.T("output.auth.checkin.stopping"))
+		cancel()
+	}()
+
+	// Create ticker
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	// Do first check immediately
+	if err := doCheckin(out, tr, interval); err != nil {
+		fmt.Fprintln(out, tr.Tf("error.auth.checkin.failed", i18n.Args{"message": err.Error()}))
+	}
+
+	// Then check periodically
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Fprintln(out, tr.T("output.auth.checkin.stopped"))
+			return nil
+		case <-ticker.C:
+			if err := doCheckin(out, tr, interval); err != nil {
+				fmt.Fprintln(out, tr.Tf("error.auth.checkin.failed", i18n.Args{"message": err.Error()}))
+			}
+		}
+	}
+}
+
+func doCheckin(out io.Writer, tr *i18n.Translator, interval time.Duration) error {
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	fmt.Fprintf(out, "[%s] "+tr.T("output.auth.checkin.checking")+"\n", timestamp)
+
+	user, err := internalAuth.GetCurrentUser()
+	if err != nil {
+		return err
+	}
+
+	login, _ := user["login"].(string)
+	name, _ := user["name"].(string)
+
+	if login != "" {
+		msg := tr.Tf("output.auth.checkin.success", i18n.Args{"login": login})
+		if name != "" {
+			msg = fmt.Sprintf("%s (%s)", msg, name)
+		}
+		fmt.Fprintf(out, "[%s] %s\n", timestamp, msg)
+	} else {
+		fmt.Fprintf(out, "[%s] "+tr.T("output.auth.checkin.success_no_user")+"\n", timestamp)
+	}
+
+	// Print next refresh time
+	nextTime := time.Now().Add(interval).Format("2006-01-02 15:04:05")
+	fmt.Fprintln(out, tr.Tf("output.auth.checkin.interval", i18n.Args{"time": nextTime}))
+
+	return nil
 }

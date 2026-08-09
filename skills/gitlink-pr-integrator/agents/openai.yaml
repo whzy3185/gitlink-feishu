@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR 集成检查"
+  short_description: "评估 PR 是否能安全并入主线，分析冲突、发布影响和合并后动作。"
+  default_prompt: "Use $gitlink-pr-integrator 评估这个 GitLink PR 的集成就绪度，执行合并态验证、冲突风险分析、发布影响判断和合并后动作梳理，不要回写远端。"

@@ -1,0 +1,100 @@
+{
+  "ok": true,
+  "data": {
+    "headmaps": [
+      {
+        "contributions": 7,
+        "date": "2026-05-11"
+      },
+      {
+        "contributions": 2,
+        "date": "2026-05-12"
+      },
+      {
+        "contributions": 12,
+        "date": "2026-05-13"
+      },
+      {
+        "contributions": 5,
+        "date": "2026-05-14"
+      },
+      {
+        "contributions": 161,
+        "date": "2026-05-17"
+      },
+      {
+        "contributions": 3,
+        "date": "2026-05-19"
+      },
+      {
+        "contributions": 9,
+        "date": "2026-05-20"
+      },
+      {
+        "contributions": 6,
+        "date": "2026-05-21"
+      },
+      {
+        "contributions": 31,
+        "date": "2026-05-24"
+      },
+      {
+        "contributions": 18,
+        "date": "2026-05-25"
+      },
+      {
+        "contributions": 35,
+        "date": "2026-05-27"
+      },
+      {
+        "contributions": 21,
+        "date": "2026-05-28"
+      },
+      {
+        "contributions": 9,
+        "date": "2026-06-02"
+      },
+      {
+        "contributions": 29,
+        "date": "2026-06-03"
+      },
+      {
+        "contributions": 20,
+        "date": "2026-06-04"
+      },
+      {
+        "contributions": 6,
+        "date": "2026-06-05"
+      },
+      {
+        "contributions": 22,
+        "date": "2026-06-08"
+      },
+      {
+        "contributions": 46,
+        "date": "2026-06-09"
+      },
+      {
+        "contributions": 48,
+        "date": "2026-06-10"
+      },
+      {
+        "contributions": 29,
+        "date": "2026-06-11"
+      },
+      {
+        "contributions": 28,
+        "date": "2026-06-12"
+      },
+      {
+        "contributions": 8,
+        "date": "2026-06-13"
+      },
+      {
+        "contributions": 14,
+        "date": "2026-06-14"
+      }
+    ],
+    "total_contributions": 569
+  }
+}

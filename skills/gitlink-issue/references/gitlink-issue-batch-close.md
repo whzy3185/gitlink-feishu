@@ -17,6 +17,12 @@ gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --numbers 42,43
 
 # 从 CSV 文件读取 Issue 编号
 gitlink-cli issue +batch-close --owner Gitlink --repo forgeplus --from issues.csv
+
+# 按搜索条件批量关闭
+gitlink-cli issue +batch-close --search "已过期" --state open --dry-run
+
+# 确认执行
+gitlink-cli issue +batch-close --numbers 42,43 --confirm
 ```
 
 ## CSV 格式
@@ -42,13 +48,19 @@ number,title
 |------|------|------|
 | `--numbers, -n` | 否 | 逗号分隔的 Issue 编号，例如 `1,2,3` |
 | `--from` | 否 | 包含 Issue 编号的 CSV 文件 |
+| `--search` | 否 | 搜索关键词，匹配的 Issue 将被关闭 |
+| `--state` | 否 | 配合 `--search` 过滤状态 |
+| `--label` | 否 | 配合 `--search` 过滤标签 |
 | `--dry-run` | 否 | 仅预览计划操作，不关闭 Issue |
+| `--confirm` | 否 | 确认执行 |
+| `--max` | 否 | 最大处理数量（默认 100） |
+| `--delay` | 否 | 请求间隔毫秒数（默认 0） |
 | `--owner` | 否 | 仓库所有者（自动从 git remote 解析） |
 | `--repo` | 否 | 仓库名称（自动从 git remote 解析） |
 | `--format` | 否 | 输出格式: `json`/`table`/`yaml` |
 | `--debug` | 否 | 开启调试输出 |
 
-`--numbers` 和 `--from` 至少提供一个。两者同时提供时，会按顺序合并并去重。
+`--numbers`、`--from`、`--search` 至少提供一个。多个来源同时提供时，会按顺序合并并去重。
 
 ## 输出
 

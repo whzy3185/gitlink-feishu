@@ -36,7 +36,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "id", Short: "i", Usage: tr.T("flag.org.id_or_login"), Required: true},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
-				id, _ := ctx.RequireArg("id")
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
 				env, err := ctx.CallAPI("GET", fmt.Sprintf("/organizations/%s", id), nil)
 				if err != nil {
 					return err
@@ -53,11 +56,37 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
-				id, _ := ctx.RequireArg("id")
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
 				env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("/organizations/%s/organization_users", id), q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "teams",
+			Description: tr.T("cmd.org.teams.short"),
+			Flags: []common.Flag{
+				{Name: "id", Short: "i", Usage: tr.T("flag.org.id"), Required: true},
+				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
+				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				id, err := ctx.RequireArg("id")
+				if err != nil {
+					return err
+				}
+				q := url.Values{}
+				q.Set("page", ctx.Arg("page"))
+				q.Set("limit", ctx.Arg("limit"))
+				env, err := ctx.CallAPIWithQuery("GET", fmt.Sprintf("/organizations/%s/teams", id), q)
 				if err != nil {
 					return err
 				}
@@ -72,7 +101,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				{Name: "description", Short: "d", Usage: tr.T("flag.description")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
-				name, _ := ctx.RequireArg("name")
+				name, err := ctx.RequireArg("name")
+				if err != nil {
+					return err
+				}
 				payload := map[string]interface{}{
 					"name": name,
 				}

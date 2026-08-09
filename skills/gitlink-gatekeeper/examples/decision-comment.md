@@ -14,7 +14,7 @@
 gitlink-cli pr +view  -i 277 --owner Gitlink --repo forgeplus --format json
 gitlink-cli pr +files -i 277 --owner Gitlink --repo forgeplus --format json
 gitlink-cli pr +diff  -i 277 --owner Gitlink --repo forgeplus --format json
-gitlink-cli api GET /Gitlink/forgeplus/pulls/277/commits --format json
+gitlink-cli pr +commits -i 277 --owner Gitlink --repo forgeplus --format json
 gitlink-cli ci +builds --owner Gitlink --repo forgeplus --format json
 ```
 

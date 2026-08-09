@@ -1,6 +1,6 @@
 ---
 name: gitlink-issue-triage
-version: 1.0.0
+version: 1.1.0
 description: "Issue 智能分拣：自动分析仓库 Issue 列表，按类型、紧急度、复杂度分类，生成分拣报告和维护建议。当用户需要整理 Issue、分类 Issue、Issue 分拣、Issue 优先级排序时触发。"
 metadata:
   requires:
@@ -11,7 +11,7 @@ metadata:
 # gitlink-issue-triage（Issue 智能分拣）
 
 **CRITICAL — 开始前必须先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md)，其中包含认证、权限处理和 API 注意事项。**
-**CRITICAL — 本 Skill 为只读操作，不会修改任何 Issue。无需用户额外确认即可执行。**
+**CRITICAL — `issue +series-update` 为写操作，会批量修改 Issue 状态。执行前需确认用户意图。**
 **CRITICAL — GitLink 操作只能用 `gitlink-cli`。禁止用 `gh`（GitHub CLI）操作 GitLink 资源。**
 
 > **前置条件：** 先阅读 [`../gitlink-shared/SKILL.md`](../gitlink-shared/SKILL.md) 了解认证和全局参数。
@@ -25,7 +25,9 @@ metadata:
 1. **类型分类** — 判断每个 Issue 是 Bug、功能请求、文档问题还是使用咨询
 2. **紧急度评估** — 根据关键词和优先级字段标注紧急程度
 3. **复杂度预估** — 根据描述详尽程度评估修复难度
-4. **行动建议** — 给出具体处理建议（立即修复/需讨论/可关闭/适合作入门任务）
+4. **活动日志分析** — 通过 `issue +journals` 查看 Issue 活动历史
+5. **行动建议** — 给出具体处理建议（立即修复/需讨论/可关闭/适合作入门任务）
+6. **批量操作** — 支持通过 `issue +series-update` 批量更新 Issue 状态
 
 ---
 
@@ -70,6 +72,22 @@ gitlink-cli issue +view --owner <owner> --repo <repo> --number <project_issues_i
 | 复杂度 | `description` 长度 | 描述的详细程度、是否有复现步骤 |
 | 活跃度 | `comment_journals_count`, `updated_at` | 讨论热度和最后活跃时间 |
 | 分配状态 | `assigners` | 是否已有人负责 |
+
+### Step 3.5：活动日志分析（v1.1 新增）
+
+对高优先级 Issue（urgent/high），获取活动日志以了解处理进展：
+
+```bash
+gitlink-cli issue +journals --owner <owner> --repo <repo> --number <project_issues_index> --format json
+```
+
+从 `journals` 数组中提取：
+- 最近一次状态变更时间和操作者
+- 最近一次评论时间和作者
+- 是否有 @提及等待回复
+- 是否有分配变更记录
+
+> ⚠️ **控制调用量**：仅对 urgent/high 级别的 Issue 获取活动日志。日志数据可能较大，只提取关键时间节点。
 
 ### Step 4：分类规则
 
@@ -120,6 +138,20 @@ gitlink-cli issue +view --owner <owner> --repo <repo> --number <project_issues_i
 
 将所有分析结果组织输出。
 
+### Step 6：批量操作（v1.1 新增，可选，需确认）
+
+根据分拣结果，可批量更新 Issue 状态：
+
+```bash
+gitlink-cli issue +series-update --owner <owner> --repo <repo> --ids <id1,id2,id3> --status closed --format json
+```
+
+> ⚠️ **写操作**：执行前需向用户展示将要操作的 Issue 列表，获得确认后再执行。
+
+典型使用场景：
+- 批量关闭 `close-candidate` 列表中的 Issue
+- 批量将 `good-first-issue` 标记为 open（确保状态正确）
+
 ---
 
 ## 输出模板
@@ -151,39 +183,30 @@ gitlink-cli issue +view --owner <owner> --repo <repo> --number <project_issues_i
 
 > 如本段为空，输出：*当前无紧急 Issue，状态健康。*
 
-| # | 标题 | 类型 | 紧急度 | 复杂度 | 建议 | 备注 |
-|---|------|------|--------|--------|------|------|
-| {{number}} | {{subject}} | bug | urgent | medium | fix-now | |
-| ... | ... | ... | ... | ... | ... | ... |
+| # | 标题 | 类型 | 紧急度 | 复杂度 | 上次活动 | 建议 | 备注 |
+|---|------|------|--------|--------|----------|------|------|
+| {{number}} | {{subject}} | bug | urgent | medium | {{last_journal_time}} | fix-now | |
+| ... | ... | ... | ... | ... | ... | ... | ... |
 
 ## 🟡 建议近期处理
 
-> 如本段为空，输出：*当前无高优先级 Issue。*
-
-| # | 标题 | 类型 | 紧急度 | 复杂度 | 建议 | 备注 |
-|---|------|------|--------|--------|------|------|
-| ... | ... | bug/feature | high/normal | easy/medium | investigate/implement | |
+| # | 标题 | 类型 | 紧急度 | 复杂度 | 上次活动 | 建议 | 备注 |
+|---|------|------|--------|--------|----------|------|------|
+| ... | ... | bug/feature | high/normal | easy/medium | ... | investigate/implement | |
 
 ## 🟢 可延迟 / 需讨论
 
-> 如本段为空，输出：*所有 Issue 均已明确，无需额外讨论。*
-
-| # | 标题 | 类型 | 紧急度 | 复杂度 | 建议 | 备注 |
-|---|------|------|--------|--------|------|------|
-| ... | ... | question/feature | normal/low | medium/hard | discuss | |
+| # | 标题 | 类型 | 紧急度 | 复杂度 | 上次活动 | 建议 | 备注 |
+|---|------|------|--------|--------|----------|------|------|
+| ... | ... | question/feature | normal/low | medium/hard | ... | discuss | |
 
 ## ⭐ 适合入门（Good First Issue）
-
-> 如本段为空，输出：*暂无完全符合条件的入门 Issue。建议在后续工作中拆分出简单子任务。*
 
 | # | 标题 | 类型 | 复杂度 | 推荐理由 |
 |---|------|------|--------|----------|
 | {{number}} | {{subject}} | bug/docs | easy | 范围明确，单文件修改 |
-| ... | ... | ... | ... | ... |
 
 ## ⚠️ 候选关闭（90+ 天无活动）
-
-> 如本段为空，输出：*无长期不活跃的 Issue。*
 
 | # | 标题 | 最后更新 | 建议 |
 |---|------|----------|------|
@@ -194,11 +217,18 @@ gitlink-cli issue +view --owner <owner> --repo <repo> --number <project_issues_i
 ## 📋 维护建议
 
 1. **立即行动**：{{urgent_count}} 个紧急 Issue 需要优先处理
-2. **本周目标**：建议处理 {{suggested_this_week}} 个 Issue（suggested_this_week = 建议近期处理段中的 Issue 数量，即 bug+normal/high + feature+清晰描述 的总数）
-3. **社区引导**：{{good_first_issue_count}} 个 Issue 适合标记为 good first issue，吸引新贡献者
-4. **清理计划**：{{close_candidate_count}} 个 Issue 长期无活动，建议批量确认后关闭
-5. {{#if no_tags}}本仓库未使用 Issue 标签系统，建议建立标签体系（bug/feature/docs/question/meta/help-wanted/good-first-issue）以提升管理效率{{/if}}
-6. {{#if status_anomalies}}本批次有 {{status_anomaly_count}} 个 Issue 状态异常（status_id=0），建议在平台上手动确认{{/if}}
+2. **本周目标**：建议处理 {{suggested_this_week}} 个 Issue
+3. **社区引导**：{{good_first_issue_count}} 个 Issue 适合标记为 good first issue
+4. **清理计划**：{{close_candidate_count}} 个 Issue 长期无活动，建议批量关闭
+5. {{#if no_tags}}本仓库未使用 Issue 标签系统，建议建立标签体系{{/if}}
+6. {{#if status_anomalies}}本批次有 {{status_anomaly_count}} 个 Issue 状态异常（status_id=0）{{/if}}
+
+### 批量操作建议
+
+> 如无适用操作，输出：*当前无需批量操作。*
+
+以下 Issue 建议批量关闭（已确认超 90 天无活动）：
+`gitlink-cli issue +series-update --owner <owner> --repo <repo> --ids {{close_ids}} --status closed`
 ```
 
 ---
@@ -212,15 +242,18 @@ gitlink-cli issue +view --owner <owner> --repo <repo> --number <project_issues_i
 | 全部 Issue 无标签/无优先级 | 分类完全依赖标题和描述关键词分析，并在报告末尾建议建立标签体系 |
 | `description` 为空或仅含图片/附件链接 | 标注"描述缺失"，类型仅根据标题判断，复杂度标为 hard，建议标记为 discuss |
 | `status_id` = 0（未知） | 纳入分析但标注"状态异常" |
+| `issue +journals` 返回空 | 标注"无活动日志"，不阻塞分析 |
 
 ---
 
 ## 注意事项
 
 - ✅ **所有命令使用 `--format json`**，确保可解析
-- ✅ **`issue +view` 使用 `--number`（网页编号）**，非数据库 ID
-- ✅ **本 Skill 为纯只读分析**，不会修改任何 Issue
-- ✅ **Owner/repo 优先从 `git remote` 自动解析**，无 git 上下文时询问用户
+- ✅ **`issue +view` 和 `+journals` 使用 `--number`（网页编号）**，非数据库 ID
+- ✅ **本 Skill 以只读分析为主**，批量操作需确认后执行
+- ✅ **Owner/repo 优先从 `git remote` 自动解析**
 - ⚠️ **`issue +list --state open` 过滤不准确**，必须客户端按 `status_id` 二次过滤
+- ⚠️ **`issue +journals` 仅对 urgent/high Issue 调用**，控制 API 调用量
+- ⚠️ **`issue +series-update` 为写操作**，需用户确认，使用逗号分隔的 Issue ID
 - ⚠️ **分类规则是启发式的**，AI 应根据实际内容做判断，不要机械匹配关键词
-- ⚠️ **Issue 数量多时分批处理**，超过 50 条建议先按更新时间排序，优先分析最近活跃的
+- ⚠️ **Issue 数量多时分批处理**，超过 50 条建议先按更新时间排序

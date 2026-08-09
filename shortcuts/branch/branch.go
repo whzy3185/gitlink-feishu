@@ -15,6 +15,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Name:        "list",
 			Description: tr.T("cmd.branch.list.short"),
 			Flags: []common.Flag{
+				{Name: "keyword", Short: "k", Usage: tr.T("flag.branch.keyword")},
 				{Name: "page", Short: "p", Usage: tr.T("flag.page"), Default: "1"},
 				{Name: "limit", Short: "l", Usage: tr.T("flag.limit"), Default: "20"},
 			},
@@ -25,7 +26,25 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				q := url.Values{}
 				q.Set("page", ctx.Arg("page"))
 				q.Set("limit", ctx.Arg("limit"))
+				if keyword := ctx.Arg("keyword"); keyword != "" {
+					q.Set("keyword", keyword)
+				}
 				env, err := ctx.CallAPIWithQuery("GET", "/v1"+ctx.RepoPath()+"/branches", q)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "all",
+			Description: tr.T("cmd.branch.all.short"),
+			Flags:       []common.Flag{},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", "/v1"+ctx.RepoPath()+"/branches/all", nil)
 				if err != nil {
 					return err
 				}
@@ -37,7 +56,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 			Description: tr.T("cmd.branch.create.short"),
 			Flags: []common.Flag{
 				{Name: "name", Short: "n", Usage: tr.T("flag.branch.name"), Required: true},
-				{Name: "from", Short: "f", Usage: tr.T("flag.branch.from"), Default: "master"},
+				{Name: "from", Short: "f", Usage: tr.T("flag.branch.from")},
 			},
 			Run: func(ctx *common.RuntimeContext) error {
 				if err := ctx.ResolveOwnerRepo(); err != nil {
@@ -46,7 +65,10 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				name, _ := ctx.RequireArg("name")
 				from := ctx.Arg("from")
 				if from == "" {
-					from = "master"
+					var err error
+					if from, err = ctx.DefaultBranch(); err != nil {
+						return err
+					}
 				}
 				payload := map[string]interface{}{
 					"new_branch_name": name,
@@ -74,6 +96,42 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 					"branch_name": name,
 				}
 				env, err := ctx.CallAPI("POST", "/v1"+ctx.RepoPath()+"/branches/delete", payload)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "all",
+			Description: tr.T("cmd.branch.all.short"),
+			Flags:       []common.Flag{},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", "/v1"+ctx.RepoPath()+"/branches/all", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
+		{
+			Name:        "set-default",
+			Description: tr.T("cmd.branch.set_default.short"),
+			Flags: []common.Flag{
+				{Name: "name", Short: "n", Usage: tr.T("flag.branch.name"), Required: true},
+			},
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				name, err := ctx.RequireArg("name")
+				if err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("PATCH", "/v1"+ctx.RepoPath()+"/branches/update_default_branch", map[string]interface{}{"name": name})
 				if err != nil {
 					return err
 				}

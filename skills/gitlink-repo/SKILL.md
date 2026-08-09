@@ -1,7 +1,7 @@
 ---
 name: gitlink-repo
 version: 1.0.0
-description: "仓库管理：创建、查看、Fork、删除仓库，查看 README、语言统计、贡献者、关注者，并执行关注/点赞等互动操作。当用户需要操作或分析 GitLink 仓库时触发。"
+description: "仓库管理：创建、查看、Fork、删除仓库，查看分支、提交、贡献者等。当用户需要操作 GitLink 仓库时触发。"
 metadata:
   requires:
     bins: ["gitlink-cli"]
@@ -22,18 +22,6 @@ metadata:
 |----------|------|----------|
 | `repo +list` | 仓库列表 | 否（公开项目） |
 | `repo +info` | 仓库详情 | 否（公开项目） |
-| `repo +readme` | README 内容 | 否（公开项目） |
-| `repo +tree` | 仓库文件树 | 否（公开项目） |
-| `repo +languages` | 仓库语言统计 | 否（公开项目） |
-| `repo +contributors` | 仓库贡献者列表 | 否（公开项目） |
-| `repo +contributor-stats` | 贡献者代码行统计 | 否（公开项目） |
-| `repo +code-stats` | 仓库代码统计 | 否（公开项目） |
-| `repo +watchers` | 关注者列表 | 否（公开项目） |
-| `repo +stargazers` | 点赞者列表 | 否（公开项目） |
-| `repo +follow` | 关注仓库 | 是 |
-| `repo +unfollow` | 取消关注仓库 | 是 |
-| `repo +like` | 点赞仓库 | 是 |
-| `repo +unlike` | 取消点赞仓库 | 是 |
 | `repo +create` | 创建仓库 | 是 |
 | `repo +fork` | Fork 仓库 | 是 |
 | `repo +delete` | 删除仓库 | 是 |
@@ -51,27 +39,6 @@ gitlink-cli repo +info
 # 列出用户的仓库
 gitlink-cli repo +list --user zhangsan
 
-# 查看文件树、语言占比和贡献者
-gitlink-cli repo +tree --owner Gitlink --repo forgeplus --ref master
-gitlink-cli repo +tree --owner Gitlink --repo forgeplus --path src --ref main
-gitlink-cli repo +languages --owner Gitlink --repo forgeplus
-gitlink-cli repo +contributors --owner Gitlink --repo forgeplus
-
-# 查看代码统计
-gitlink-cli repo +contributor-stats --owner Gitlink --repo forgeplus --ref master --pass-year 1
-gitlink-cli repo +code-stats --owner Gitlink --repo forgeplus --ref master
-
-# 查看社区关注数据
-gitlink-cli repo +watchers --owner Gitlink --repo forgeplus --start-at 1714521600 --end-at 1717200000
-gitlink-cli repo +stargazers --owner Gitlink --repo forgeplus --start-at 1714521600 --end-at 1717200000
-
-# 预览并执行仓库互动操作
-gitlink-cli repo +follow --owner Gitlink --repo forgeplus --dry-run
-gitlink-cli repo +follow --owner Gitlink --repo forgeplus
-gitlink-cli repo +unfollow --owner Gitlink --repo forgeplus --project-id 123
-gitlink-cli repo +like --owner Gitlink --repo forgeplus
-gitlink-cli repo +unlike --owner Gitlink --repo forgeplus --project-id 123
-
 # 创建仓库
 gitlink-cli repo +create --name my-project --description "项目描述"
 
@@ -87,14 +54,23 @@ gitlink-cli repo +delete --owner myuser --repo old-project
 Shortcuts 未覆盖的仓库操作可用 Raw API：
 
 ```bash
+# 获取 README
+gitlink-cli repo +readme
+
+# 获取贡献者列表
+gitlink-cli repo +contributors
+
+# 获取语言统计
+gitlink-cli repo +languages
+
 # 获取提交列表
-gitlink-cli api GET /:owner/:repo/commits --query 'page=1&limit=20'
+gitlink-cli repo +commits --query 'page=1&limit=20'
 
 # 获取标签列表
-gitlink-cli api GET /:owner/:repo/tags
+gitlink-cli repo +tags
 
 # 获取文件内容
-gitlink-cli api GET /:owner/:repo/raw/main/README.md
+gitlink-cli repo +raw --ref=main/README.md
 ```
 
 ## 注意事项

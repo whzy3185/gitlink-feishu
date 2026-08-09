@@ -1,0 +1,130 @@
+{
+  "ok": true,
+  "data": {
+    "additions": 166097,
+    "author_count": 9,
+    "authors": [
+      {
+        "additions": 163689,
+        "author": {
+          "email": "gahdritz@gmail.com",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/G/206_115_165/120.png",
+          "login": "Gustaf Ahdritz",
+          "name": "Gustaf Ahdritz",
+          "type": null
+        },
+        "commits": 534,
+        "deletions": 18066
+      },
+      {
+        "additions": 1422,
+        "author": {
+          "email": "sachinkadyan7@gmail.com",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/S/142_140_188/120.png",
+          "login": "Sachin Kadyan",
+          "name": "Sachin Kadyan",
+          "type": null
+        },
+        "commits": 51,
+        "deletions": 209
+      },
+      {
+        "additions": 917,
+        "author": {
+          "email": "gahdritz@gmail.com",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/G/52_240_224/120.png",
+          "login": "Gustaf",
+          "name": "Gustaf",
+          "type": null
+        },
+        "commits": 7,
+        "deletions": 188
+      },
+      {
+        "additions": 25,
+        "author": {
+          "email": "christina.floristean@gmail.com",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/C/88_149_110/120.png",
+          "login": "Christina Floristean",
+          "name": "Christina Floristean",
+          "type": null
+        },
+        "commits": 4,
+        "deletions": 29
+      },
+      {
+        "additions": 16,
+        "author": {
+          "email": "sachinkadyan7@gmail.com",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/S/81_191_129/120.png",
+          "login": "sachinkadyan7",
+          "name": "sachinkadyan7",
+          "type": null
+        },
+        "commits": 4,
+        "deletions": 5
+      },
+      {
+        "additions": 22,
+        "author": {
+          "email": "alquraishi@users.noreply.github.com",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/M/169_162_140/120.png",
+          "login": "Mohammed AlQuraishi",
+          "name": "Mohammed AlQuraishi",
+          "type": null
+        },
+        "commits": 1,
+        "deletions": 0
+      },
+      {
+        "additions": 0,
+        "author": {
+          "email": "97625454+jnwei@users.noreply.github.com",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/J/229_108_155/120.png",
+          "login": "Jennifer Wei",
+          "name": "Jennifer Wei",
+          "type": null
+        },
+        "commits": 1,
+        "deletions": 0
+      },
+      {
+        "additions": 1,
+        "author": {
+          "email": "0755dimitri@gmail.com",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/C/180_135_251/120.png",
+          "login": "controny",
+          "name": "controny",
+          "type": null
+        },
+        "commits": 1,
+        "deletions": 1
+      },
+      {
+        "additions": 5,
+        "author": {
+          "email": "yoels@il.ibm.com",
+          "id": null,
+          "image_url": "system/lets/letter_avatars/2/Y/62_200_234/120.png",
+          "login": "yoel shoshan",
+          "name": "yoel shoshan",
+          "type": null
+        },
+        "commits": 1,
+        "deletions": 5
+      }
+    ],
+    "change_files": null,
+    "commit_count": 604,
+    "commit_count_in_all_branches": 1427,
+    "deletions": 18503
+  }
+}

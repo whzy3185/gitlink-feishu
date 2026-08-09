@@ -76,6 +76,23 @@ func TestAnalyzeRepoReportPartialInput(t *testing.T) {
 	}
 }
 
+func TestAnalyzeRepoReportAggregatesPRRiskSources(t *testing.T) {
+	result := AnalyzeRepoReport(RepoReportInput{
+		Repository: "owner/repo",
+		PullRequests: []PRSummaryInput{{
+			Number: 1,
+			Title:  "fix: prevent secret token leak",
+			Source: "remote-read-only-fetch:list-metadata",
+		}},
+	}, "en")
+	if result.PRSummary.HighRisk != 1 {
+		t.Fatalf("HighRisk = %d, want 1", result.PRSummary.HighRisk)
+	}
+	if result.PRSummary.RiskSources["security-sensitive keyword"] != 1 {
+		t.Fatalf("RiskSources = %v, want security-sensitive keyword=1", result.PRSummary.RiskSources)
+	}
+}
+
 func TestAnalyzeRepoReportChinese(t *testing.T) {
 	result := AnalyzeRepoReport(sampleRepoReportInput(), "zh-CN")
 	if len(result.Recommendations) == 0 {

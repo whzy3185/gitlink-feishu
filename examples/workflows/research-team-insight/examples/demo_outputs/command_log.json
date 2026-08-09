@@ -1,0 +1,230 @@
+[
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/yystopf/statistics/develop",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:17:23+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/yystopf/statistics/major",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:17:29+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/yystopf/statistics/role",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:17:38+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/yystopf/statistics/activity",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:17:41+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/yystopf/headmaps",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:17:46+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "user",
+      "+info",
+      "--login",
+      "yystopf",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:17:55+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/jiangtx/statistics/develop",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:17:58+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/jiangtx/statistics/major",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:18:02+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/jiangtx/statistics/role",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:18:07+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/jiangtx/statistics/activity",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:18:15+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/jiangtx/headmaps",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:18:24+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "user",
+      "+info",
+      "--login",
+      "jiangtx",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:18:29+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/wangyue111/statistics/develop",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:18:32+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/wangyue111/statistics/major",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:18:34+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/wangyue111/statistics/role",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:18:37+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/wangyue111/statistics/activity",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:18:42+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "api",
+      "GET",
+      "/users/wangyue111/headmaps",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:18:46+08:00"
+  },
+  {
+    "command": [
+      "gitlink-cli",
+      "user",
+      "+info",
+      "--login",
+      "wangyue111",
+      "--format",
+      "json"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:18:49+08:00"
+  },
+  {
+    "command": [
+      "insight",
+      "render",
+      "team-report.html"
+    ],
+    "status": "ok",
+    "time": "2026-06-14T23:18:49+08:00"
+  }
+]

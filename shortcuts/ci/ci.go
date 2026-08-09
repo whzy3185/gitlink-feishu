@@ -1,6 +1,7 @@
 package ci
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 
@@ -96,7 +97,68 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "activate",
+			Description: tr.T("cmd.ci.activate.short"),
+			Flags:       ciControlFlags(tr, "flag.ci.activate_dry_run", "flag.ci.activate_yes"),
+			Run: func(ctx *common.RuntimeContext) error {
+				return runCIControl(ctx, "activate_ci", "POST", "activate", "activating CI changes repository CI state; run --dry-run first, then pass --yes to execute")
+			},
+		},
+		{
+			Name:        "deactivate",
+			Description: tr.T("cmd.ci.deactivate.short"),
+			Flags:       ciControlFlags(tr, "flag.ci.deactivate_dry_run", "flag.ci.deactivate_yes"),
+			Run: func(ctx *common.RuntimeContext) error {
+				return runCIControl(ctx, "deactivate_ci", "DELETE", "deactivate", "deactivating CI changes repository CI state; run --dry-run first, then pass --yes to execute")
+			},
+		},
+		{
+			Name:        "authorize",
+			Description: tr.T("cmd.ci.authorize.short"),
+			Run: func(ctx *common.RuntimeContext) error {
+				if err := ctx.ResolveOwnerRepo(); err != nil {
+					return err
+				}
+				env, err := ctx.CallAPI("GET", ctx.RepoPath()+"/ci_authorize", nil)
+				if err != nil {
+					return err
+				}
+				return ctx.Output(env)
+			},
+		},
 	}
+}
+
+func ciControlFlags(tr *i18n.Translator, dryRunKey, yesKey string) []common.Flag {
+	return []common.Flag{
+		{Name: "dry-run", Usage: tr.T(dryRunKey), Bool: true, Default: "false"},
+		{Name: "yes", Usage: tr.T(yesKey), Bool: true, Default: "false"},
+	}
+}
+
+func runCIControl(ctx *common.RuntimeContext, action, method, suffix, confirmMessage string) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	path := ctx.RepoPath() + "/" + suffix
+	if ctx.Arg("dry-run") == "true" {
+		return ctx.OutputData(map[string]interface{}{
+			"dry_run":    true,
+			"action":     action,
+			"method":     method,
+			"path":       path,
+			"repository": fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+		})
+	}
+	if ctx.Arg("yes") != "true" {
+		return errors.New(confirmMessage)
+	}
+	env, err := ctx.CallAPI(method, path, nil)
+	if err != nil {
+		return err
+	}
+	return ctx.Output(env)
 }
 
 func shortcutTranslator(translators ...*i18n.Translator) *i18n.Translator {

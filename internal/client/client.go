@@ -15,6 +15,7 @@ import (
 )
 
 type Client struct {
+	NoProgress bool
 	HTTP    *http.Client
 	BaseURL string
 	Debug   bool

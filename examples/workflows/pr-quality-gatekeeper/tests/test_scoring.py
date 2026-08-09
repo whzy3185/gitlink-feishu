@@ -244,5 +244,72 @@ class TestVerdictBoundaries(unittest.TestCase):
         self.assertEqual(decide_verdict(100, True, DEFAULT_POLICY), "REQUEST_CHANGES")
 
 
+evaluate_advisory_flags = gw.evaluate_advisory_flags
+
+
+def _copy_policy(**advisory):
+    """深拷一份默认策略并覆盖 advisory_flags，避免污染共享 dict。"""
+    p = _json.loads(_json.dumps(DEFAULT_POLICY))
+    p["advisory_flags"] = advisory
+    return p
+
+
+class TestAdvisoryFlags(unittest.TestCase):
+    """咨询标记（advisory）：加性、默认关闭、不参与评分/裁决、确定性。"""
+
+    def _input(self, n_files: int) -> ScoreInput:
+        # 一个干净的 PASS 输入（无 findings、有测试、CI 过、描述充分、关联 issue）
+        return _build(
+            pr_id="1", title="feat: x", desc_len=60, linked_issue=True,
+            n_files=n_files, src=1, tests=1, commits=(1, 1), ci="passing",
+            findings_counts={},
+        )
+
+    def test_default_off_is_backward_compatible(self):
+        # 默认策略未显式开启 → 返回空，行为与旧版完全一致
+        self.assertEqual(evaluate_advisory_flags(self._input(200), DEFAULT_POLICY), [])
+
+    def test_missing_section_returns_empty(self):
+        # 策略完全没有 advisory_flags 段（旧策略）→ 不报错、返回空
+        p = _json.loads(_json.dumps(DEFAULT_POLICY))
+        p.pop("advisory_flags", None)
+        self.assertEqual(evaluate_advisory_flags(self._input(200), p), [])
+
+    def test_enabled_below_threshold_no_flag(self):
+        p = _copy_policy(enabled=True, large_pr_files=30)
+        self.assertEqual(evaluate_advisory_flags(self._input(29), p), [])
+
+    def test_enabled_at_threshold_flags(self):
+        p = _copy_policy(enabled=True, large_pr_files=30)
+        flags = evaluate_advisory_flags(self._input(30), p)
+        self.assertEqual(len(flags), 1)
+        self.assertEqual(flags[0]["flag"], "large_pr_files")
+
+    def test_zero_threshold_disabled_even_if_enabled(self):
+        # large_pr_files=0 表示该标记不启用，即便 enabled=True
+        p = _copy_policy(enabled=True, large_pr_files=0)
+        self.assertEqual(evaluate_advisory_flags(self._input(500), p), [])
+
+    def test_advisory_does_not_change_verdict(self):
+        # 关键不变量：开 advisory 且触发标记，total 与 verdict 必须与不开时逐位一致
+        inp = self._input(50)
+        base_dims, base_fail, base_verdict = _run(inp)
+        p = _copy_policy(enabled=True, large_pr_files=30)
+        adv = evaluate_advisory_flags(inp, p)
+        self.assertEqual(len(adv), 1)                       # 确实触发了
+        dims = score_dimensions(inp, p)
+        verdict = decide_verdict(dims["total"], bool(evaluate_hard_gates(inp, p)), p)
+        self.assertEqual(dims["total"], base_dims["total"])  # 分数不变
+        self.assertEqual(verdict, base_verdict)              # 裁决不变
+
+    def test_deterministic(self):
+        # 同输入两次调用结果完全相同
+        p = _copy_policy(enabled=True, large_pr_files=10)
+        inp = self._input(20)
+        self.assertEqual(
+            evaluate_advisory_flags(inp, p), evaluate_advisory_flags(inp, p)
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

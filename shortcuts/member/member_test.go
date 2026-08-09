@@ -15,8 +15,8 @@ import (
 
 func TestMemberList(t *testing.T) {
 	server := newMemberTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assertRequest(t, r, "GET", "/owner/repo/collaborators.json")
-		writeJSON(t, w, map[string]interface{}{"total_count": 1, "members": []interface{}{}})
+		assertRequest(t, r, "GET", "/v1/owner/repo/collaborators.json")
+		writeJSON(t, w, map[string]interface{}{"total_count": 1, "collaborators": []interface{}{}})
 	})
 	defer server.Close()
 

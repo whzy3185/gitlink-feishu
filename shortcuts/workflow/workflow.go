@@ -23,8 +23,9 @@ func Shortcuts() []*common.Shortcut {
 	return []*common.Shortcut{
 		newTriageShortcut(),
 		newHealthShortcut(),
-		newPRSummaryShortcut(),
+		newPRSummaryShortcut(nil),
 		newRepoReportShortcut(),
+		newReviewContextShortcut(),
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gitlink-org/gitlink-cli/cmd/cmdutil"
+	"github.com/gitlink-org/gitlink-cli/internal/i18n"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
 )
 
@@ -32,11 +33,14 @@ const (
 type PRSummaryInput struct {
 	Repository   string          `json:"repository"`
 	Number       int             `json:"number"`
+	IssueID      int             `json:"issue_id,omitempty"`
 	Title        string          `json:"title"`
 	Author       string          `json:"author"`
 	State        string          `json:"state"`
 	BaseBranch   string          `json:"base_branch"`
 	HeadBranch   string          `json:"head_branch"`
+	CreatedAt    time.Time       `json:"created_at,omitempty"`
+	UpdatedAt    time.Time       `json:"updated_at,omitempty"`
 	Body         string          `json:"body,omitempty"`
 	ChangedFiles []PRChangedFile `json:"changed_files"`
 	Commits      []PRCommit      `json:"commits"`
@@ -75,6 +79,7 @@ type PRSummaryResult struct {
 	CommitCount       int      `json:"commit_count"`
 	ChangeType        string   `json:"change_type"`
 	RiskLevel         string   `json:"risk_level"`
+	RiskReasons       []string `json:"risk_reasons,omitempty"`
 	ReviewFocus       []string `json:"review_focus"`
 	TestSuggestions   []string `json:"test_suggestions"`
 	MergeChecklist    []string `json:"merge_checklist"`
@@ -82,18 +87,18 @@ type PRSummaryResult struct {
 	Source            string   `json:"source"`
 }
 
-func newPRSummaryShortcut() *common.Shortcut {
+func newPRSummaryShortcut(tr *i18n.Translator) *common.Shortcut {
 	return &common.Shortcut{
 		Name:        "pr-summary",
-		Description: "Generate a read-only pull request review summary",
+		Description: tr.T("cmd.workflow.pr-summary.short"),
 		Flags: []common.Flag{
-			{Name: "from", Usage: "Read PR summary input from a JSON file"},
-			{Name: "number", Short: "n", Usage: "Pull request number for remote read-only analysis"},
-			{Name: "include-commits", Usage: "Fetch commits in remote mode", Bool: true, Default: "true"},
-			{Name: "include-files", Usage: "Fetch changed files in remote mode", Bool: true, Default: "true"},
-			{Name: "max-files", Usage: "Maximum changed files to analyze", Default: "100"},
-			{Name: "max-commits", Usage: "Maximum commits to analyze", Default: "100"},
-			{Name: "lang", Usage: "Output language: en or zh-CN", Default: langEN},
+			{Name: "from", Usage: tr.T("flag.workflow.pr_summary.from")},
+			{Name: "number", Short: "n", Usage: tr.T("flag.workflow.pr_summary.number")},
+			{Name: "include-commits", Usage: tr.T("flag.workflow.pr_summary.include_commits"), Bool: true, Default: "true"},
+			{Name: "include-files", Usage: tr.T("flag.workflow.pr_summary.include_files"), Bool: true, Default: "true"},
+			{Name: "max-files", Usage: tr.T("flag.workflow.pr_summary.max_files"), Default: "100"},
+			{Name: "max-commits", Usage: tr.T("flag.workflow.pr_summary.max_commits"), Default: "100"},
+			{Name: "lang", Usage: tr.T("flag.workflow.pr_summary.lang"), Default: langEN},
 		},
 		Run: runPRSummary,
 	}
@@ -208,6 +213,7 @@ func AnalyzePRSummary(input PRSummaryInput, lang string) PRSummaryResult {
 		CommitCount:       len(input.Commits),
 		ChangeType:        changeType,
 		RiskLevel:         riskLevel,
+		RiskReasons:       riskReasons,
 		ReviewFocus:       reviewFocus,
 		TestSuggestions:   testSuggestions,
 		MergeChecklist:    mergeChecklist,

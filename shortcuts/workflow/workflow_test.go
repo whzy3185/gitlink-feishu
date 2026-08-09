@@ -31,6 +31,9 @@ func TestShortcutsExposesWorkflowCommands(t *testing.T) {
 	if !names["repo-report"] {
 		t.Fatal("Shortcuts missing repo-report")
 	}
+	if !names["release-notes"] {
+		t.Fatal("Shortcuts missing release-notes")
+	}
 }
 
 func TestRunTriageWithSingleIssueArgs(t *testing.T) {

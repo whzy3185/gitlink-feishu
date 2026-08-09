@@ -28,7 +28,7 @@ gitlink-cli pr +list --state open --format json
 ## Step 3：获取项目动态
 
 ```bash
-gitlink-cli api GET /:owner/:repo/activity --format json
+gitlink-cli repo +activity --format json
 ```
 
 ## Step 4：生成周报

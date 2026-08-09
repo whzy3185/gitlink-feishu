@@ -1,0 +1,4278 @@
+{
+  "scenario": "S2_research_knowledge_graph",
+  "keywords": [
+    "深度学习"
+  ],
+  "nodes": [
+    {
+      "id": "repo:dongeliu/dlvc",
+      "type": "repo",
+      "label": "dongeliu/dlvc",
+      "props": {
+        "language": "C++",
+        "stars": 0,
+        "forks": 0,
+        "description": "一种视频编解码原型系统，内嵌深度学习编码工具显著提高压缩效率。",
+        "readme_head": "This software package is the reference software for Deep Learning-Based Video Coding (DLVC). The reference software includes both encoder and decoder functionality.\n\nReference software is useful in ai"
+      }
+    },
+    {
+      "id": "repo:co63oc/mcTVM",
+      "type": "repo",
+      "label": "co63oc/mcTVM",
+      "props": {
+        "language": "Python",
+        "stars": 0,
+        "forks": 0,
+        "description": "mcTVM是MetaX-MACA生态下的开源深度学习编译框架项目，基于Apache TVM v0.18.0版本进行扩展开发，新增对沐曦（MetaX）GPU的专属支持，打通沐曦GPU与TVM框架的适配通道，实现深度学习模型在沐曦GPU上的高效编译、优化与部署。mcTVM助力完善沐曦GPU的软件生态，为开发者提供便捷、高效的深度学习模型部署解决方案，适用于人工智能、异构计算等相关领域的研发与应用场景。",
+        "readme_head": ""
+      }
+    },
+    {
+      "id": "repo:opensci/pDeep",
+      "type": "repo",
+      "label": "opensci/pDeep",
+      "props": {
+        "language": "Python",
+        "stars": 0,
+        "forks": 0,
+        "description": "pDeep是一种基于深度学习的质谱预测系统。",
+        "readme_head": "# pDeep\nPredicting MS/MS Spectra of Peptides with Deep Learning\n\nPlease visit https://github.com/pFindStudio/pDeep/tree/master/pDeep2 for the improved version of pDeep --- pDeep2.\n"
+      }
+    },
+    {
+      "id": "repo:Edgedev/Edge-Computing-Engine",
+      "type": "repo",
+      "label": "Edgedev/Edge-Computing-Engine",
+      "props": {
+        "language": "C++",
+        "stars": 4,
+        "forks": 1,
+        "description": "Edge : 一个开源的科学计算引擎",
+        "readme_head": "\n\n<div align=center><img src=\"https://github.com/AllenZYJ/Edge-Computing-Engine/blob/debian-gcc10-test/picture/01.svg\"/></div>\n# Edge-Engine\n\n\n\n## Edge : 一个开源的科学计算引擎\n\n[README for English_version](./RE"
+      }
+    },
+    {
+      "id": "repo:clj111/Edge-Computing-Engine",
+      "type": "repo",
+      "label": "clj111/Edge-Computing-Engine",
+      "props": {
+        "language": "C++",
+        "stars": 0,
+        "forks": 0,
+        "description": "Edge : 一个开源的科学计算引擎",
+        "readme_head": "#### 从命令行创建一个新的仓库\nnew line\n\n```bash\ntouch README.md\ngit init\ngit add README.md\ngit commit -m \"first commit\"\ngit remote add origin https://git.trustie.net/Edge/Edge-Computing-Engine.git\ngit push -u ori"
+      }
+    },
+    {
+      "id": "repo:AIEven/AIkun",
+      "type": "repo",
+      "label": "AIEven/AIkun",
+      "props": {
+        "language": "Python",
+        "stars": 0,
+        "forks": 0,
+        "description": "",
+        "readme_head": "# Frequency-domain-deep-learning\n## 频域深度学习入门教程\n\n## 概述\n\n这是一个用于在频域进行深度学习的入门教程，看完这个文档后，希望读者能够理解和掌握频域深度学习的核心概念、技术和应用。\n\n## 📖 适用人群\n\n- **初学者**: 对频域处理感兴趣的深度学习爱好者\n- **研究人员**: 希望将频域方法应用到研究中的学者\n- **工程师**: 需要在实际项"
+      }
+    },
+    {
+      "id": "repo:aaasdasd/aa",
+      "type": "repo",
+      "label": "aaasdasd/aa",
+      "props": {
+        "language": "Python3.6",
+        "stars": 0,
+        "forks": 0,
+        "description": "",
+        "readme_head": "# aa\n\n"
+      }
+    },
+    {
+      "id": "repo:njuiselab/Gandalf",
+      "type": "repo",
+      "label": "njuiselab/Gandalf",
+      "props": {
+        "language": "Python",
+        "stars": 0,
+        "forks": 0,
+        "description": "",
+        "readme_head": "# Gandalf\nSome codes and results about our paper, here is the structure of our directory:\n\n- **/src:** High level interface of out implementation of model generator across frameworks by JSON\n\n  - conf"
+      }
+    },
+    {
+      "id": "repo:CocytusXRS/AI_test",
+      "type": "repo",
+      "label": "CocytusXRS/AI_test",
+      "props": {
+        "language": "Jupyter notebook",
+        "stars": 0,
+        "forks": 0,
+        "description": "",
+        "readme_head": "\n\n## 自动化测试 ——  基于等价融合算子的深度学习框架差分测试技术 \n\n\n\n| 姓名   | 学号      |\n| ------ | --------- |\n| 徐润石 | 201250167 |\n| 于欣博 | 201250165 |\n| 刘云辉 | 201250166 |\n| 桂金鑫 | 201850107 |\n\n\n\n### 1.  深度学习框架选择 —— PyTorch\n\n#### "
+      }
+    },
+    {
+      "id": "repo:ly15927029790/CodeRecommendation",
+      "type": "repo",
+      "label": "ly15927029790/CodeRecommendation",
+      "props": {
+        "language": "Java",
+        "stars": 0,
+        "forks": 0,
+        "description": "代码生成式补全工具",
+        "readme_head": "## 项目概述:\n\n基于上下文分析和深度学习的代码生成式补全工具DeepAPIRec是一款由复旦大学软件工程实验室CodeWisdom团队推出的基于代码上下文和深度学习的智能化API代码推荐工具。DeepAPIRec考虑代码上下文中的API使用代码及其结构信息，并通过结合Child-Sum Tree-LSTM网络和N-ary LSTM网络作为API推荐的深度学习模型。此外，DeepAPIRec构建"
+      }
+    },
+    {
+      "id": "repo:Hua135/sam-optimizers",
+      "type": "repo",
+      "label": "Hua135/sam-optimizers",
+      "props": {
+        "language": "Python",
+        "stars": 0,
+        "forks": 0,
+        "description": "深度神经网络的泛化能力是机器学习领域的核心问题之一。传统优化算法如随机梯度下降（SGD）和Adam仅最小化训练损失值，容易导致模型收敛到尖锐的最小值点，从而影响泛化性能。近年来，锐度感知最小化（Sharpness-Aware Minimization, SAM）通过同时最小化损失值和损失锐度，有效提升了模型的泛化能力，但其计算开销约为传统优化器的两倍。本文系统研究了SAM及其两种高效变体——ESA",
+        "readme_head": "# sam-optimizers\n# 新型优化算法的实现与分析 - SAM系列优化器\n\n本项目实现了多种基于锐度感知最小化（Sharpness-Aware Minimization, SAM）的优化算法，并在CIFAR-10/100数据集上进行对比实验。\n\n## 实验环境\n\n### 硬件要求\n- AMD GPU (支持ROCm) 或 NVIDIA GPU (支持CUDA)\n- 至少8GB显存（推荐"
+      }
+    },
+    {
+      "id": "repo:ashh/jittor-chanshiguan-track2-straightpcf-denoise",
+      "type": "repo",
+      "label": "ashh/jittor-chanshiguan-track2-straightpcf-denoise",
+      "props": {
+        "language": "Python",
+        "stars": 0,
+        "forks": 0,
+        "description": "赛道二三维点云降噪项目，基于 StraightPCF 复现并改进三阶段耦合速度场方法：单速度预训练、双速度耦合训练、距离缩放模块精调。采用 patch 级迭代推理与稳健重建，保证输入输出点数一致。最佳提交成绩：72.63（CD 60.31 / P2S 84.96）。",
+        "readme_head": "# 赛道二点云降噪 —— 基于 StraightPCF 的三阶段耦合速度场降噪\n\n**赛道**：赛道二：基于深度学习的三维点云降噪任务  \n**团队名**：铲屎官\n\n本仓库为「计图（Jittor）点云降噪赛题」的参赛代码。任务是给定从三维物体表面采样并加入噪声的点云，预测每个点的位移向量，将含噪点「推回」真实物体表面附近，输出与输入点数严格一致的降噪点云。最终成绩由 Chamfer Distanc"
+      }
+    },
+    {
+      "id": "repo:shenyan/machineLearningTemplate",
+      "type": "repo",
+      "label": "shenyan/machineLearningTemplate",
+      "props": {
+        "language": "Python",
+        "stars": 1,
+        "forks": 0,
+        "description": "基于pytorch lightning的机器学习模板, 用于对机器学习算法进行训练, 验证, 测试等, 目前实现了神经网路, 深度学习, k折交叉, 自动保存训练信息等. ",
+        "readme_head": ""
+      }
+    },
+    {
+      "id": "topic:deep_learning",
+      "type": "topic",
+      "label": "deep_learning",
+      "props": {
+        "count": 11,
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "topic:scientific_computing",
+      "type": "topic",
+      "label": "scientific_computing",
+      "props": {
+        "count": 6,
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "topic:time_series",
+      "type": "topic",
+      "label": "time_series",
+      "props": {
+        "count": 3,
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "topic:computer_vision",
+      "type": "topic",
+      "label": "computer_vision",
+      "props": {
+        "count": 6,
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "topic:database",
+      "type": "topic",
+      "label": "database",
+      "props": {
+        "count": 3,
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "topic:machine_learning",
+      "type": "topic",
+      "label": "machine_learning",
+      "props": {
+        "count": 3,
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "topic:nlp",
+      "type": "topic",
+      "label": "nlp",
+      "props": {
+        "count": 2,
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "topic:devops",
+      "type": "topic",
+      "label": "devops",
+      "props": {
+        "count": 1,
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "topic:generative_ai",
+      "type": "topic",
+      "label": "generative_ai",
+      "props": {
+        "count": 2,
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "topic:reinforcement_learning",
+      "type": "topic",
+      "label": "reinforcement_learning",
+      "props": {
+        "count": 2,
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "topic:data_mining",
+      "type": "topic",
+      "label": "data_mining",
+      "props": {
+        "count": 1,
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "topic:autonomous_systems",
+      "type": "topic",
+      "label": "autonomous_systems",
+      "props": {
+        "count": 1,
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "topic:graph_learning",
+      "type": "topic",
+      "label": "graph_learning",
+      "props": {
+        "count": 1,
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:dong liu",
+      "type": "scholar",
+      "label": "dong liu",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:tianqi chen",
+      "type": "scholar",
+      "label": "tianqi chen",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:eric lunderberg",
+      "type": "scholar",
+      "label": "eric lunderberg",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:masahi",
+      "type": "scholar",
+      "label": "masahi",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:ruihang lai",
+      "type": "scholar",
+      "label": "ruihang lai",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:wuwei lin",
+      "type": "scholar",
+      "label": "wuwei lin",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:siyuan feng",
+      "type": "scholar",
+      "label": "siyuan feng",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:driazati",
+      "type": "scholar",
+      "label": "driazati",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:krzysztof parzyszek",
+      "type": "scholar",
+      "label": "krzysztof parzyszek",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:mehrdad hessar",
+      "type": "scholar",
+      "label": "mehrdad hessar",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:junru shao",
+      "type": "scholar",
+      "label": "junru shao",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:zhi",
+      "type": "scholar",
+      "label": "zhi",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:matthew brookhart",
+      "type": "scholar",
+      "label": "matthew brookhart",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:tqchen",
+      "type": "scholar",
+      "label": "tqchen",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:haichen shen",
+      "type": "scholar",
+      "label": "haichen shen",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:luke hutton",
+      "type": "scholar",
+      "label": "luke hutton",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:andrew reusch",
+      "type": "scholar",
+      "label": "andrew reusch",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:ziheng",
+      "type": "scholar",
+      "label": "ziheng",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:cody yu",
+      "type": "scholar",
+      "label": "cody yu",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:jalew",
+      "type": "scholar",
+      "label": "jalew",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:wen-feng zeng",
+      "type": "scholar",
+      "label": "wen-feng zeng",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:Edge",
+      "type": "scholar",
+      "label": "Edge",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:Edgedev",
+      "type": "scholar",
+      "label": "Edgedev",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:AIEven",
+      "type": "scholar",
+      "label": "AIEven",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:aaasdasd",
+      "type": "scholar",
+      "label": "aaasdasd",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:404notfound233",
+      "type": "scholar",
+      "label": "404notfound233",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:beginner401",
+      "type": "scholar",
+      "label": "beginner401",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:gandalf401",
+      "type": "scholar",
+      "label": "gandalf401",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:cloudy1225",
+      "type": "scholar",
+      "label": "cloudy1225",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:CocytusXRS",
+      "type": "scholar",
+      "label": "CocytusXRS",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:ly15927029790",
+      "type": "scholar",
+      "label": "ly15927029790",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:Hua135",
+      "type": "scholar",
+      "label": "Hua135",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:ash",
+      "type": "scholar",
+      "label": "ash",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:ashh",
+      "type": "scholar",
+      "label": "ashh",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    },
+    {
+      "id": "scholar:shenyan",
+      "type": "scholar",
+      "label": "shenyan",
+      "props": {
+        "language": "",
+        "stars": 0,
+        "forks": 0,
+        "description": ""
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "repo:dongeliu/dlvc",
+      "target": "topic:deep_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:co63oc/mcTVM",
+      "target": "topic:deep_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:co63oc/mcTVM",
+      "target": "topic:scientific_computing",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:opensci/pDeep",
+      "target": "topic:deep_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:opensci/pDeep",
+      "target": "topic:time_series",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:Edgedev/Edge-Computing-Engine",
+      "target": "topic:computer_vision",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:Edgedev/Edge-Computing-Engine",
+      "target": "topic:deep_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:Edgedev/Edge-Computing-Engine",
+      "target": "topic:scientific_computing",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:Edgedev/Edge-Computing-Engine",
+      "target": "topic:database",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:clj111/Edge-Computing-Engine",
+      "target": "topic:scientific_computing",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:AIEven/AIkun",
+      "target": "topic:machine_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:AIEven/AIkun",
+      "target": "topic:computer_vision",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:AIEven/AIkun",
+      "target": "topic:nlp",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:AIEven/AIkun",
+      "target": "topic:deep_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:AIEven/AIkun",
+      "target": "topic:scientific_computing",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:AIEven/AIkun",
+      "target": "topic:devops",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:njuiselab/Gandalf",
+      "target": "topic:computer_vision",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:njuiselab/Gandalf",
+      "target": "topic:generative_ai",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:njuiselab/Gandalf",
+      "target": "topic:reinforcement_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:njuiselab/Gandalf",
+      "target": "topic:deep_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:CocytusXRS/AI_test",
+      "target": "topic:computer_vision",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:CocytusXRS/AI_test",
+      "target": "topic:reinforcement_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:CocytusXRS/AI_test",
+      "target": "topic:deep_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:CocytusXRS/AI_test",
+      "target": "topic:scientific_computing",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:CocytusXRS/AI_test",
+      "target": "topic:time_series",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:CocytusXRS/AI_test",
+      "target": "topic:data_mining",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:ly15927029790/CodeRecommendation",
+      "target": "topic:generative_ai",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:ly15927029790/CodeRecommendation",
+      "target": "topic:deep_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:ly15927029790/CodeRecommendation",
+      "target": "topic:database",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:Hua135/sam-optimizers",
+      "target": "topic:machine_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:Hua135/sam-optimizers",
+      "target": "topic:computer_vision",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:Hua135/sam-optimizers",
+      "target": "topic:deep_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:Hua135/sam-optimizers",
+      "target": "topic:scientific_computing",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:Hua135/sam-optimizers",
+      "target": "topic:autonomous_systems",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:Hua135/sam-optimizers",
+      "target": "topic:database",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:ashh/jittor-chanshiguan-track2-straightpcf-denoise",
+      "target": "topic:computer_vision",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:ashh/jittor-chanshiguan-track2-straightpcf-denoise",
+      "target": "topic:nlp",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:ashh/jittor-chanshiguan-track2-straightpcf-denoise",
+      "target": "topic:deep_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:ashh/jittor-chanshiguan-track2-straightpcf-denoise",
+      "target": "topic:graph_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:ashh/jittor-chanshiguan-track2-straightpcf-denoise",
+      "target": "topic:time_series",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:shenyan/machineLearningTemplate",
+      "target": "topic:machine_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "repo:shenyan/machineLearningTemplate",
+      "target": "topic:deep_learning",
+      "type": "covers_topic",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:time_series",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:time_series",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:time_series",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:database",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:database",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:database",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:machine_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:machine_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:machine_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:nlp",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:nlp",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:devops",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:generative_ai",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:generative_ai",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:reinforcement_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:reinforcement_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:data_mining",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:autonomous_systems",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:deep_learning",
+      "target": "topic:graph_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:database",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:database",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:machine_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:machine_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:nlp",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:devops",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:reinforcement_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:time_series",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:data_mining",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:scientific_computing",
+      "target": "topic:autonomous_systems",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:time_series",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:time_series",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:time_series",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:time_series",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:time_series",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:time_series",
+      "target": "topic:reinforcement_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:time_series",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:time_series",
+      "target": "topic:data_mining",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:time_series",
+      "target": "topic:nlp",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:time_series",
+      "target": "topic:graph_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:database",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:database",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:machine_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:machine_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:nlp",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:nlp",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:devops",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:generative_ai",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:reinforcement_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:reinforcement_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:time_series",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:time_series",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:data_mining",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:autonomous_systems",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:computer_vision",
+      "target": "topic:graph_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:database",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:database",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:database",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:database",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:database",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:database",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:database",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:database",
+      "target": "topic:generative_ai",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:database",
+      "target": "topic:machine_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:database",
+      "target": "topic:autonomous_systems",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:machine_learning",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:machine_learning",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:machine_learning",
+      "target": "topic:nlp",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:machine_learning",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:machine_learning",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:machine_learning",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:machine_learning",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:machine_learning",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:machine_learning",
+      "target": "topic:devops",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:machine_learning",
+      "target": "topic:autonomous_systems",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:machine_learning",
+      "target": "topic:database",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:nlp",
+      "target": "topic:machine_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:nlp",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:nlp",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:nlp",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:nlp",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:nlp",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:nlp",
+      "target": "topic:devops",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:nlp",
+      "target": "topic:graph_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:nlp",
+      "target": "topic:time_series",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:devops",
+      "target": "topic:machine_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:devops",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:devops",
+      "target": "topic:nlp",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:devops",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:devops",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:generative_ai",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:generative_ai",
+      "target": "topic:reinforcement_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:generative_ai",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:generative_ai",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:generative_ai",
+      "target": "topic:database",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:reinforcement_learning",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:reinforcement_learning",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:reinforcement_learning",
+      "target": "topic:generative_ai",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:reinforcement_learning",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:reinforcement_learning",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:reinforcement_learning",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:reinforcement_learning",
+      "target": "topic:time_series",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:reinforcement_learning",
+      "target": "topic:data_mining",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:data_mining",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:data_mining",
+      "target": "topic:reinforcement_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:data_mining",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:data_mining",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:data_mining",
+      "target": "topic:time_series",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:autonomous_systems",
+      "target": "topic:machine_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:autonomous_systems",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:autonomous_systems",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:autonomous_systems",
+      "target": "topic:scientific_computing",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:autonomous_systems",
+      "target": "topic:database",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:graph_learning",
+      "target": "topic:computer_vision",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:graph_learning",
+      "target": "topic:nlp",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:graph_learning",
+      "target": "topic:deep_learning",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "topic:graph_learning",
+      "target": "topic:time_series",
+      "type": "related_to",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:dong liu",
+      "target": "repo:dongeliu/dlvc",
+      "type": "contributes_to",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.1078
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tianqi chen",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.046
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:eric lunderberg",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0339
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:masahi",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0207
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ruihang lai",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0194
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wuwei lin",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0177
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:siyuan feng",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0205
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:driazati",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0166
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:krzysztof parzyszek",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0148
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:mehrdad hessar",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.014
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0097
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:junru shao",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0103
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:zhi",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0097
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:matthew brookhart",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0096
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:tqchen",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0092
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:haichen shen",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0089
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:luke hutton",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0083
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:andrew reusch",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0086
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:cody yu",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ziheng",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "repo:co63oc/mcTVM",
+      "type": "contributes_to",
+      "weight": 0.0086
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:andrew reusch",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:driazati",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:eric lunderberg",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:haichen shen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:junru shao",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:krzysztof parzyszek",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:luke hutton",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:masahi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:matthew brookhart",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:mehrdad hessar",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:ruihang lai",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:siyuan feng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:tianqi chen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:tqchen",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:wuwei lin",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:zhi",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cody yu",
+      "target": "scholar:ziheng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:jalew",
+      "target": "repo:opensci/pDeep",
+      "type": "contributes_to",
+      "weight": 0.9615
+    },
+    {
+      "source": "scholar:jalew",
+      "target": "scholar:wen-feng zeng",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:wen-feng zeng",
+      "target": "repo:opensci/pDeep",
+      "type": "contributes_to",
+      "weight": 0.0385
+    },
+    {
+      "source": "scholar:wen-feng zeng",
+      "target": "scholar:jalew",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:Edge",
+      "target": "repo:Edgedev/Edge-Computing-Engine",
+      "type": "contributes_to",
+      "weight": 0.75
+    },
+    {
+      "source": "scholar:Edge",
+      "target": "repo:clj111/Edge-Computing-Engine",
+      "type": "contributes_to",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:Edge",
+      "target": "scholar:Edgedev",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:Edgedev",
+      "target": "repo:Edgedev/Edge-Computing-Engine",
+      "type": "contributes_to",
+      "weight": 0.25
+    },
+    {
+      "source": "scholar:Edgedev",
+      "target": "repo:Edgedev/Edge-Computing-Engine",
+      "type": "owns",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:Edgedev",
+      "target": "scholar:Edge",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:AIEven",
+      "target": "repo:AIEven/AIkun",
+      "type": "contributes_to",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:AIEven",
+      "target": "repo:AIEven/AIkun",
+      "type": "owns",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:aaasdasd",
+      "target": "repo:aaasdasd/aa",
+      "type": "contributes_to",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:aaasdasd",
+      "target": "repo:aaasdasd/aa",
+      "type": "owns",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:404notfound233",
+      "target": "repo:njuiselab/Gandalf",
+      "type": "contributes_to",
+      "weight": 0.5
+    },
+    {
+      "source": "scholar:404notfound233",
+      "target": "scholar:beginner401",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:404notfound233",
+      "target": "scholar:gandalf401",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:beginner401",
+      "target": "repo:njuiselab/Gandalf",
+      "type": "contributes_to",
+      "weight": 0.4167
+    },
+    {
+      "source": "scholar:beginner401",
+      "target": "scholar:404notfound233",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:beginner401",
+      "target": "scholar:gandalf401",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:gandalf401",
+      "target": "repo:njuiselab/Gandalf",
+      "type": "contributes_to",
+      "weight": 0.0833
+    },
+    {
+      "source": "scholar:gandalf401",
+      "target": "scholar:404notfound233",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:gandalf401",
+      "target": "scholar:beginner401",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:cloudy1225",
+      "target": "repo:CocytusXRS/AI_test",
+      "type": "contributes_to",
+      "weight": 0.5
+    },
+    {
+      "source": "scholar:cloudy1225",
+      "target": "scholar:CocytusXRS",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:CocytusXRS",
+      "target": "repo:CocytusXRS/AI_test",
+      "type": "contributes_to",
+      "weight": 0.5
+    },
+    {
+      "source": "scholar:CocytusXRS",
+      "target": "repo:CocytusXRS/AI_test",
+      "type": "owns",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:CocytusXRS",
+      "target": "scholar:cloudy1225",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ly15927029790",
+      "target": "repo:ly15927029790/CodeRecommendation",
+      "type": "contributes_to",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ly15927029790",
+      "target": "repo:ly15927029790/CodeRecommendation",
+      "type": "owns",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:Hua135",
+      "target": "repo:Hua135/sam-optimizers",
+      "type": "contributes_to",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:Hua135",
+      "target": "repo:Hua135/sam-optimizers",
+      "type": "owns",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ash",
+      "target": "repo:ashh/jittor-chanshiguan-track2-straightpcf-denoise",
+      "type": "contributes_to",
+      "weight": 0.75
+    },
+    {
+      "source": "scholar:ash",
+      "target": "scholar:ashh",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ashh",
+      "target": "repo:ashh/jittor-chanshiguan-track2-straightpcf-denoise",
+      "type": "contributes_to",
+      "weight": 0.25
+    },
+    {
+      "source": "scholar:ashh",
+      "target": "repo:ashh/jittor-chanshiguan-track2-straightpcf-denoise",
+      "type": "owns",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:ashh",
+      "target": "scholar:ash",
+      "type": "collaborates_with",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:shenyan",
+      "target": "repo:shenyan/machineLearningTemplate",
+      "type": "contributes_to",
+      "weight": 1.0
+    },
+    {
+      "source": "scholar:shenyan",
+      "target": "repo:shenyan/machineLearningTemplate",
+      "type": "owns",
+      "weight": 1.0
+    }
+  ],
+  "core_scholars": [
+    {
+      "login": "Edge",
+      "repo_count": 2
+    },
+    {
+      "login": "404notfound233",
+      "repo_count": 1
+    },
+    {
+      "login": "AIEven",
+      "repo_count": 1
+    },
+    {
+      "login": "CocytusXRS",
+      "repo_count": 1
+    },
+    {
+      "login": "Edgedev",
+      "repo_count": 1
+    },
+    {
+      "login": "Hua135",
+      "repo_count": 1
+    },
+    {
+      "login": "aaasdasd",
+      "repo_count": 1
+    },
+    {
+      "login": "andrew reusch",
+      "repo_count": 1
+    },
+    {
+      "login": "ash",
+      "repo_count": 1
+    },
+    {
+      "login": "ashh",
+      "repo_count": 1
+    },
+    {
+      "login": "beginner401",
+      "repo_count": 1
+    },
+    {
+      "login": "cloudy1225",
+      "repo_count": 1
+    },
+    {
+      "login": "cody yu",
+      "repo_count": 1
+    },
+    {
+      "login": "dong liu",
+      "repo_count": 1
+    },
+    {
+      "login": "driazati",
+      "repo_count": 1
+    }
+  ],
+  "core_teams": [],
+  "topic_heat": [
+    {
+      "topic": "deep_learning",
+      "count": 6
+    },
+    {
+      "topic": "scientific_computing",
+      "count": 3
+    },
+    {
+      "topic": "machine_learning",
+      "count": 2
+    },
+    {
+      "topic": "time_series",
+      "count": 1
+    },
+    {
+      "topic": "generative_ai",
+      "count": 1
+    },
+    {
+      "topic": "autonomous_systems",
+      "count": 1
+    },
+    {
+      "topic": "nlp",
+      "count": 1
+    }
+  ],
+  "meta": {
+    "keywords": [
+      "深度学习"
+    ],
+    "repo_count": 13,
+    "node_count": 61,
+    "edge_count": 553,
+    "scholar_count": 35,
+    "topic_count": 13
+  },
+  "trending_repos": [
+    {
+      "repo": "Edgedev/Edge-Computing-Engine",
+      "description": "Edge : 一个开源的科学计算引擎",
+      "language": "C++",
+      "stars": 4,
+      "forks": 1,
+      "updated": "",
+      "velocity": 0.0,
+      "score": 6.0
+    },
+    {
+      "repo": "shenyan/machineLearningTemplate",
+      "description": "基于pytorch lightning的机器学习模板, 用于对机器学习算法进行训练, 验证, 测试等, 目前实现了神经网路, 深度学习, k折交叉, 自动保存训练信息等. ",
+      "language": "Python",
+      "stars": 1,
+      "forks": 0,
+      "updated": "",
+      "velocity": 0.0,
+      "score": 1.0
+    },
+    {
+      "repo": "dongeliu/dlvc",
+      "description": "一种视频编解码原型系统，内嵌深度学习编码工具显著提高压缩效率。",
+      "language": "C++",
+      "stars": 0,
+      "forks": 0,
+      "updated": "",
+      "velocity": 0.0,
+      "score": 0.0
+    },
+    {
+      "repo": "co63oc/mcTVM",
+      "description": "mcTVM是MetaX-MACA生态下的开源深度学习编译框架项目，基于Apache TVM v0.18.0版本进行扩展开发，新增对沐曦（MetaX）GPU的专属支持，打通沐曦GPU与TVM框架的适配通道，实现深度学习模型在沐曦GPU上的高效编译、优化与部署。mcTVM助力完善沐曦",
+      "language": "Python",
+      "stars": 0,
+      "forks": 0,
+      "updated": "",
+      "velocity": 0.0,
+      "score": 0.0
+    },
+    {
+      "repo": "opensci/pDeep",
+      "description": "pDeep是一种基于深度学习的质谱预测系统。",
+      "language": "Python",
+      "stars": 0,
+      "forks": 0,
+      "updated": "",
+      "velocity": 0.0,
+      "score": 0.0
+    },
+    {
+      "repo": "clj111/Edge-Computing-Engine",
+      "description": "Edge : 一个开源的科学计算引擎",
+      "language": "C++",
+      "stars": 0,
+      "forks": 0,
+      "updated": "",
+      "velocity": 0.0,
+      "score": 0.0
+    },
+    {
+      "repo": "AIEven/AIkun",
+      "description": "",
+      "language": "Python",
+      "stars": 0,
+      "forks": 0,
+      "updated": "",
+      "velocity": 0.0,
+      "score": 0.0
+    },
+    {
+      "repo": "aaasdasd/aa",
+      "description": "",
+      "language": "Python3.6",
+      "stars": 0,
+      "forks": 0,
+      "updated": "",
+      "velocity": 0.0,
+      "score": 0.0
+    },
+    {
+      "repo": "njuiselab/Gandalf",
+      "description": "",
+      "language": "Python",
+      "stars": 0,
+      "forks": 0,
+      "updated": "",
+      "velocity": 0.0,
+      "score": 0.0
+    },
+    {
+      "repo": "CocytusXRS/AI_test",
+      "description": "",
+      "language": "Jupyter notebook",
+      "stars": 0,
+      "forks": 0,
+      "updated": "",
+      "velocity": 0.0,
+      "score": 0.0
+    },
+    {
+      "repo": "ly15927029790/CodeRecommendation",
+      "description": "代码生成式补全工具",
+      "language": "Java",
+      "stars": 0,
+      "forks": 0,
+      "updated": "",
+      "velocity": 0.0,
+      "score": 0.0
+    },
+    {
+      "repo": "Hua135/sam-optimizers",
+      "description": "深度神经网络的泛化能力是机器学习领域的核心问题之一。传统优化算法如随机梯度下降（SGD）和Adam仅最小化训练损失值，容易导致模型收敛到尖锐的最小值点，从而影响泛化性能。近年来，锐度感知最小化（Sharpness-Aware Minimization, SAM）通过同时最小化损失",
+      "language": "Python",
+      "stars": 0,
+      "forks": 0,
+      "updated": "",
+      "velocity": 0.0,
+      "score": 0.0
+    },
+    {
+      "repo": "ashh/jittor-chanshiguan-track2-straightpcf-denoise",
+      "description": "赛道二三维点云降噪项目，基于 StraightPCF 复现并改进三阶段耦合速度场方法：单速度预训练、双速度耦合训练、距离缩放模块精调。采用 patch 级迭代推理与稳健重建，保证输入输出点数一致。最佳提交成绩：72.63（CD 60.31 / P2S 84.96）。",
+      "language": "Python",
+      "stars": 0,
+      "forks": 0,
+      "updated": "",
+      "velocity": 0.0,
+      "score": 0.0
+    }
+  ],
+  "active_discussions": [
+    {
+      "repo": "Edgedev/Edge-Computing-Engine",
+      "type": "issue",
+      "number": 2,
+      "title": "实现基本矩阵类和深度学习pipeline测试",
+      "comments": 0,
+      "state": "{'id': 3, 'name': '已解决', 'pm_color': '#13b33e'}"
+    },
+    {
+      "repo": "Edgedev/Edge-Computing-Engine",
+      "type": "issue",
+      "number": 1,
+      "title": "welcome功能",
+      "comments": 0,
+      "state": "{'id': 3, 'name': '已解决', 'pm_color': '#13b33e'}"
+    }
+  ]
+}

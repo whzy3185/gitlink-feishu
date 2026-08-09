@@ -20,7 +20,7 @@ func TestShortcutsExposeExpectedCommands(t *testing.T) {
 	for _, shortcut := range Shortcuts() {
 		got[shortcut.Name] = true
 	}
-	for _, name := range []string{"bot-test", "notify", "weekly-report", "owner-digest", "contributor-digest", "doc-export", "bitable-schema", "bitable-records", "bitable-sync", "task-preview", "task-create"} {
+	for _, name := range []string{"bot-test", "notify", "weekly-report", "owner-digest", "contributor-digest", "app-check", "doc-check", "bitable-check", "task-check", "doc-export", "bitable-schema", "bitable-records", "bitable-sync", "task-preview", "task-create"} {
 		if !got[name] {
 			t.Fatalf("Shortcuts missing %s", name)
 		}
@@ -77,6 +77,18 @@ func TestBuildWorkflowCardIncludesDocButton(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readWorkflowReport returned error: %v", err)
 	}
+	report.PRSummary.RiskSources = map[string]int{"security-sensitive keyword": 2}
+	report.PRReviewAudit = &workflow.RepoPRReviewAudit{
+		Audited:             3,
+		Reviewed:            2,
+		Unreviewed:          1,
+		NeedsReReview:       1,
+		FormalReviews:       2,
+		ReviewerComments:    4,
+		SubmitterComments:   3,
+		ParticipantComments: 1,
+		SystemEvents:        2,
+	}
 	card := BuildWorkflowCard(report, parseList(defaultInclude), "", "en", "https://example.feishu.cn/wiki/node")
 	encoded, err := json.Marshal(card)
 	if err != nil {
@@ -84,6 +96,15 @@ func TestBuildWorkflowCardIncludesDocButton(t *testing.T) {
 	}
 	if !strings.Contains(string(encoded), "Open Feishu report") {
 		t.Fatalf("card missing doc button: %s", string(encoded))
+	}
+	if !strings.Contains(string(encoded), "Issues analyzed") || !strings.Contains(string(encoded), "not repository totals") {
+		t.Fatalf("card missing analyzed-count boundary: %s", string(encoded))
+	}
+	if !strings.Contains(string(encoded), "PR risk rule sources") || !strings.Contains(string(encoded), "security-sensitive keyword: 2") {
+		t.Fatalf("card missing PR risk sources: %s", string(encoded))
+	}
+	if !strings.Contains(string(encoded), "Reviewed PRs") || !strings.Contains(string(encoded), "Needs re-review") || !strings.Contains(string(encoded), "Reviewer comments: 4") {
+		t.Fatalf("card missing PR review audit: %s", string(encoded))
 	}
 }
 
@@ -186,6 +207,11 @@ func TestOwnerAndContributorDigestMapping(t *testing.T) {
 	if owner.IssueTotal != report.IssueSummary.Total || owner.PRTotal != report.PRSummary.Total {
 		t.Fatalf("owner digest counts = %+v", owner)
 	}
+	report.PRReviewAudit = &workflow.RepoPRReviewAudit{Audited: 2, Reviewed: 1, Unreviewed: 1, NeedsReReview: 1, FormalReviews: 1}
+	owner = BuildOwnerDigest(report, "https://tenant.feishu.cn/wiki/node")
+	if owner.PRReviewAudit == nil || owner.PRReviewAudit.Reviewed != 1 {
+		t.Fatalf("owner digest missing review audit: %+v", owner)
+	}
 	contributor := BuildContributorDigest(report, "")
 	if contributor.Role != "contributor" {
 		t.Fatalf("contributor digest role = %q", contributor.Role)
@@ -200,6 +226,9 @@ func TestOwnerAndContributorDigestMapping(t *testing.T) {
 	}
 	if !strings.Contains(string(encoded), "Open GitLink repository") {
 		t.Fatalf("owner card missing repository button: %s", string(encoded))
+	}
+	if !strings.Contains(string(encoded), "Issues analyzed") || !strings.Contains(string(encoded), "not repository totals") {
+		t.Fatalf("owner card missing analyzed-count boundary: %s", string(encoded))
 	}
 }
 
@@ -221,6 +250,21 @@ func TestTaskCandidatesAreStable(t *testing.T) {
 	}
 }
 
+func TestTaskPreviewOutputCountsTasks(t *testing.T) {
+	report := workflowReportFixture(t)
+	tasks := BuildTaskCandidates(report, "")
+	output := taskPreviewOutput(tasks)
+	if output.TaskCount != len(tasks) {
+		t.Fatalf("TaskCount = %d, want %d", output.TaskCount, len(tasks))
+	}
+	if output.Send {
+		t.Fatal("preview output must not be marked as send")
+	}
+	if !output.DryRun {
+		t.Fatal("preview output must be dry-run")
+	}
+}
+
 func TestBitableSyncOptionsRejectSendDryRun(t *testing.T) {
 	ctx := &common.RuntimeContext{Args: map[string]string{
 		"send":           "true",
@@ -231,6 +275,24 @@ func TestBitableSyncOptionsRejectSendDryRun(t *testing.T) {
 	}}
 	if _, err := bitableSyncOptionsFromContext(ctx); err == nil {
 		t.Fatal("expected --send --dry-run error")
+	}
+}
+
+func TestNormalizeBitableWriteFieldsFlattensStringSlices(t *testing.T) {
+	fields := normalizeBitableWriteFields(map[string]interface{}{
+		"unique_key":         "issue:test",
+		"recommended_action": []string{"first", "second"},
+		"review_focus":       []interface{}{"focus-a", "focus-b"},
+		"count":              2,
+	})
+	if fields["recommended_action"] != "first\nsecond" {
+		t.Fatalf("recommended_action = %#v", fields["recommended_action"])
+	}
+	if fields["review_focus"] != "focus-a\nfocus-b" {
+		t.Fatalf("review_focus = %#v", fields["review_focus"])
+	}
+	if fields["count"] != 2 {
+		t.Fatalf("count changed: %#v", fields["count"])
 	}
 }
 
@@ -280,6 +342,103 @@ func TestBitableSyncMockHTTP(t *testing.T) {
 	}
 	if !sawCreate {
 		t.Fatal("expected create request")
+	}
+}
+
+func TestAppCheckRemoteMockHTTP(t *testing.T) {
+	var sawToken bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost && r.URL.Path == "/auth/v3/tenant_access_token/internal" {
+			sawToken = true
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","tenant_access_token":"tenant-token","expire":7200}`))
+			return
+		}
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	oldBaseURL := openAPIBaseURL
+	openAPIBaseURL = server.URL
+	defer func() { openAPIBaseURL = oldBaseURL }()
+
+	ctx := &common.RuntimeContext{Args: map[string]string{
+		"app-id":      "cli_xxx",
+		"app-secret":  "secret",
+		"webhook-url": "https://open.feishu.cn/open-apis/bot/v2/hook/test",
+		"remote":      "true",
+	}}
+	if err := runFeishuAppCheck(ctx); err != nil {
+		t.Fatalf("runFeishuAppCheck returned error: %v", err)
+	}
+	if !sawToken {
+		t.Fatal("expected tenant token request")
+	}
+}
+
+func TestBitableCheckRemoteUsesSearchOnly(t *testing.T) {
+	var sawSearch bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/auth/v3/tenant_access_token/internal":
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","tenant_access_token":"tenant-token","expire":7200}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/bitable/v1/apps/base_token/tables/tbl_report/records/search":
+			sawSearch = true
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","data":{"items":[]}}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	oldBaseURL := openAPIBaseURL
+	openAPIBaseURL = server.URL
+	defer func() { openAPIBaseURL = oldBaseURL }()
+
+	ctx := &common.RuntimeContext{Args: map[string]string{
+		"app-id":          "cli_xxx",
+		"app-secret":      "secret",
+		"base-app-token":  "base_token",
+		"tables":          "reports",
+		"report-table-id": "tbl_report",
+		"remote":          "true",
+	}}
+	if err := runFeishuBitableCheck(ctx); err != nil {
+		t.Fatalf("runFeishuBitableCheck returned error: %v", err)
+	}
+	if !sawSearch {
+		t.Fatal("expected bitable search request")
+	}
+}
+
+func TestTaskCheckRemoteDoesNotCreateTask(t *testing.T) {
+	var requestCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost && r.URL.Path == "/auth/v3/tenant_access_token/internal" {
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","tenant_access_token":"tenant-token","expire":7200}`))
+			return
+		}
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	oldBaseURL := openAPIBaseURL
+	openAPIBaseURL = server.URL
+	defer func() { openAPIBaseURL = oldBaseURL }()
+
+	ctx := &common.RuntimeContext{Args: map[string]string{
+		"app-id":     "cli_xxx",
+		"app-secret": "secret",
+		"remote":     "true",
+	}}
+	if err := runFeishuTaskCheck(ctx); err != nil {
+		t.Fatalf("runFeishuTaskCheck returned error: %v", err)
+	}
+	if requestCount != 1 {
+		t.Fatalf("expected only tenant token request, got %d requests", requestCount)
 	}
 }
 
@@ -341,6 +500,23 @@ func TestTaskCreateMockHTTP(t *testing.T) {
 	}
 	if !sawTask {
 		t.Fatal("expected task create request")
+	}
+}
+
+func TestTaskCreateTableShowsResults(t *testing.T) {
+	var out strings.Builder
+	output := TaskOutput{Results: []TaskCreateResult{{
+		UniqueKey: "task:test",
+		Title:     "Review report",
+		TaskID:    "task_guid_123456",
+		Created:   true,
+	}}}
+	if err := renderTaskOutput(&out, output, "table"); err != nil {
+		t.Fatalf("renderTaskOutput returned error: %v", err)
+	}
+	rendered := out.String()
+	if !strings.Contains(rendered, "CREATED") || !strings.Contains(rendered, "task...3456") {
+		t.Fatalf("task table did not show result details: %s", rendered)
 	}
 }
 

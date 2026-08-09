@@ -1,0 +1,80 @@
+{
+  "scenario": "S5_progress_tracking",
+  "repo": "whale_hihihi/gitlink-cli",
+  "generated_at": "2026-07-08T00:12:31.323273+00:00",
+  "week_stats": {
+    "this_week": {
+      "commits": 44,
+      "issues_opened": 0,
+      "issues_closed": 0,
+      "issues_stale": 0,
+      "prs_opened": 9,
+      "prs_merged": 8,
+      "prs_open_stale": 0,
+      "contributors_active": 7,
+      "contributors_active_logins": [
+        "Surponess",
+        "baoerjun",
+        "wauxing",
+        "wbtiger",
+        "whale",
+        "whale_hihihi",
+        "yangsai01"
+      ]
+    },
+    "last_week": {
+      "commits": 4,
+      "issues_opened": 0,
+      "issues_closed": 0,
+      "issues_stale": 0,
+      "prs_opened": 2,
+      "prs_merged": 2,
+      "prs_open_stale": 0,
+      "contributors_active": 1,
+      "contributors_active_logins": [
+        "Surponess"
+      ]
+    },
+    "window": {
+      "this_week_start": "2026-07-01T00:12:31.323273+00:00",
+      "now": "2026-07-08T00:12:31.323273+00:00",
+      "last_week_start": "2026-06-24T00:12:31.323273+00:00",
+      "last_week_end": "2026-07-01T00:12:31.323273+00:00"
+    },
+    "total_contributors": 20
+  },
+  "trend": {
+    "commit_delta_pct": 1000.0,
+    "activity_level": "increasing",
+    "this_week_commits": 44,
+    "last_week_commits": 4
+  },
+  "milestones": [
+    {
+      "name": "完成批量成员邀请",
+      "open": 0,
+      "closed": 0,
+      "total": 0,
+      "completion_pct": 0.0,
+      "due_date": "2026-06-04T00:00:00+00:00",
+      "overdue": true,
+      "status": "open"
+    }
+  ],
+  "risk_warnings": [
+    {
+      "level": "critical",
+      "type": "overdue_milestone",
+      "message": "里程碑「完成批量成员邀请」已逾期（due 2026-06-04T00:00:00+00:00），完成率 0.0%",
+      "metric": 0.0,
+      "suggestion": "重新评估范围或顺延 deadline，并同步干系人。"
+    }
+  ],
+  "meta": {
+    "commits_fetched": 50,
+    "issues_fetched": 0,
+    "prs_fetched": 30,
+    "milestones_fetched": 1,
+    "contributors_fetched": 20
+  }
+}

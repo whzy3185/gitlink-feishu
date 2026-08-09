@@ -1,0 +1,6 @@
+repo,total_additions,total_deletions,commit_count,author_count,top1_author,top1_commits,top2_author,top2_commits,top3_author,top3_commits
+NSCCN/AlphaFold3,83809,16005,244,14,Augustin Zidek,206,Josh Abramson,11,James Spencer,9
+Supercomputing/alphafold,54960,9460,198,28,Augustin Zidek,67,Hamish Tomlinson,29,Ryan Pachauri,15
+NSCCN/AlphaFill,271596,64215,279,3,Maarten L. Hekkelman,274,IdaDeVries,4,rjoosten,1
+NSCCN/RoseTTAFold,423167,45227,34,2,Minkyung Baek,26,Minkyung Baek,8,,
+scnc/openfold,166097,18503,604,9,Gustaf Ahdritz,534,Sachin Kadyan,51,Gustaf,7

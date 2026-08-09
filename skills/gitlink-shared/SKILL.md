@@ -34,7 +34,7 @@ gitlink-cli auth logout
 
 - GitLink Token 有效期 **7 天**，过期需重新登录
 - Token 存储在 OS Keychain（macOS Keychain / Linux Secret Service / Windows Credential Manager）
-- Fallback 存储：`$GITLINK_CONFIG_DIR/credentials`（未设置时为 `~/.config/gitlink-cli/credentials`）
+- Fallback 存储：`~/.config/gitlink-cli/credentials`
 
 ### 认证错误处理
 
@@ -90,8 +90,7 @@ gitlink-cli auth login
 | 层级 | 格式 | 示例 | 适用场景 |
 |------|------|------|----------|
 | Shortcuts | `gitlink-cli <domain> +<verb>` | `gitlink-cli repo +info` | 高频操作，推荐优先使用 |
-| Raw API | `gitlink-cli api <METHOD> <PATH>` | `gitlink-cli api GET /users/me` | Shortcuts 未覆盖的接口 |
-| Raw API 批处理 | `gitlink-cli api --batch-file <file>` | `gitlink-cli api --batch-file plan.json --dry-run` | 对未封装接口做可审计的批量自动化 |
+| Raw API | `gitlink-cli api <METHOD> <PATH>` | `gitlink-cli user +me` | Shortcuts 未覆盖的接口 |
 
 ## GitLink API 注意事项
 
@@ -120,7 +119,7 @@ gitlink-cli auth login
 ```bash
 # content 必须 base64 编码
 CONTENT=$(echo -n "文件内容" | base64)
-gitlink-cli api POST /:owner/:repo/create_file --body '{
+gitlink-cli repo +create-file --body '{
   "filepath": "path/to/file.md",
   "content": "<base64编码>",
   "branch": "feature-branch",
@@ -132,11 +131,11 @@ gitlink-cli api POST /:owner/:repo/create_file --body '{
 
 ```bash
 # Step 1: 获取文件 SHA
-gitlink-cli api GET /:owner/:repo/sub_entries --query 'filepath=path/to/file.md&ref=branch-name'
+gitlink-cli repo +files --query 'filepath=path/to/file.md&ref=branch-name'
 # 从返回的 entries.sha 获取 SHA 值
 
 # Step 2: 更新文件（content 必须 base64 编码）
-gitlink-cli api PUT /:owner/:repo/update_file --body '{
+gitlink-cli repo +update-file --body '{
   "filepath": "path/to/file.md",
   "content": "<base64编码>",
   "sha": "<从sub_entries获取的sha>",
@@ -149,7 +148,7 @@ gitlink-cli api PUT /:owner/:repo/update_file --body '{
 
 ```bash
 # 需要文件 SHA
-gitlink-cli api DELETE /:owner/:repo/delete_file --body '{
+gitlink-cli repo +delete-file --body '{
   "filepath": "path/to/file.md",
   "sha": "<sha>",
   "branch": "master",

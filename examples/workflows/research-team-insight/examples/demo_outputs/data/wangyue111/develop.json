@@ -1,0 +1,31 @@
+{
+  "ok": true,
+  "data": {
+    "platform": {
+      "activity": 99,
+      "contribution": 99,
+      "experience": 99,
+      "influence": 99,
+      "language": 98
+    },
+    "user": {
+      "activity": 62,
+      "contribution": 92,
+      "each_language_score": {
+        "C++": 75,
+        "Cpp": 66,
+        "Go": 66,
+        "Python": 66
+      },
+      "experience": 81,
+      "influence": 60,
+      "language": 77,
+      "languages_percent": {
+        "C++": 0.5,
+        "Cpp": 0.17,
+        "Go": 0.17,
+        "Python": 0.17
+      }
+    }
+  }
+}

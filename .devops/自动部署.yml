@@ -1,0 +1,42 @@
+  version: 2
+  name: 自动部署
+  description: ""
+  global:
+    concurrent: 1
+  trigger:
+    webhook: gitlink@1.0.0
+    event:
+      - ref: push
+        ruleset-operator: AND
+  workflow:
+    - ref: start
+      name: 开始
+      task: start
+    - ref: git_clone_0
+      name: git clone
+      task: git_clone@1.2.9
+      input:
+        username: ((gitlink_cli.ylly_git_user))
+        password: ((gitlink_cli.ylly_git_pass))
+        remote_url: '"https://gitlink.org.cn/ylly/gitlink-cli.git"'
+        ref: '"refs/heads/master"'
+        commit_id: '""'
+        depth: 1
+      needs:
+        - start
+    - ref: ssh_cmd_0
+      name: ssh执行命令
+      task: ssh_cmd@1.1.1
+      input:
+        ssh_ip: '"8.136.61.14"'
+        ssh_port: '"22"'
+        ssh_user: '"root"'
+        ssh_private_key: ((gitlink_cli.ecs_ssh_key))
+        ssh_cmd: '"cd /opt/gitlink-cli && git pull && go build -o /usr/local/bin/gitlink-cli . && gitlink-cli version"'
+      needs:
+        - git_clone_0
+    - ref: end
+      name: 结束
+      task: end
+      needs:
+        - ssh_cmd_0

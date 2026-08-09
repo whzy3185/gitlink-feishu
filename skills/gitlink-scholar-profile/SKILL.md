@@ -3,9 +3,9 @@ name: gitlink-scholar-profile
 version: 1.0.0
 description: "学者/团队科研画像：跨仓库聚合分析 GitLink 用户或组织的科研产出，生成影响力雷达图与代表性成果报告。当用户需要了解某学者/团队的科研产出全貌、评估科研影响力时触发。"
 metadata:
-requires:
-bins: ["gitlink-cli"]
-cliHelp: "gitlink-cli user --help"
+  requires:
+    bins: ["gitlink-cli"]
+  cliHelp: "gitlink-cli user --help"
 ---
 
 # gitlink-scholar-profile（学者/团队科研画像）

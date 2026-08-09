@@ -58,14 +58,22 @@ type TaskCreateResult struct {
 }
 
 func BuildTaskCandidates(report workflow.RepoReportResult, docURL string) []TaskCandidate {
+	return buildTaskCandidates(report, docURL, defaultLang)
+}
+
+func BuildTaskCandidatesLocalized(report workflow.RepoReportResult, docURL string, lang string) []TaskCandidate {
+	return buildTaskCandidates(report, docURL, lang)
+}
+
+func buildTaskCandidates(report workflow.RepoReportResult, docURL string, lang string) []TaskCandidate {
 	tasks := []TaskCandidate{}
 	repoURL := gitlinkRepoURL(report.Repository)
 	for i, recommendation := range report.Recommendations {
-		title := firstNonEmpty(recommendation, "Review workflow recommendation")
+		title := firstNonEmpty(localizeFeishuText(recommendation, lang), "Review workflow recommendation")
 		tasks = append(tasks, TaskCandidate{
 			UniqueKey:   stableKey("task", report.Repository, "recommendation", fmt.Sprintf("%d", i+1)),
 			Title:       title,
-			Description: "Workflow recommendation from gitlink-cli repo report.",
+			Description: feishuLabel(lang, "task_description_default"),
 			SourceType:  "recommendation",
 			SourceKey:   fmt.Sprintf("recommendation-%d", i+1),
 			Repository:  report.Repository,
@@ -80,8 +88,8 @@ func BuildTaskCandidates(report workflow.RepoReportResult, docURL string) []Task
 	if report.IssueSummary.HighRisk > 0 {
 		tasks = append(tasks, TaskCandidate{
 			UniqueKey:   stableKey("task", report.Repository, "issues", "high-risk"),
-			Title:       fmt.Sprintf("Triage %d high-risk GitLink issues", report.IssueSummary.HighRisk),
-			Description: "High-risk issue bucket from workflow report. Review GitLink issues before routine work.",
+			Title:       localizeFeishuText(fmt.Sprintf("Triage %d high-risk GitLink issues", report.IssueSummary.HighRisk), lang),
+			Description: localizeFeishuText("High-risk issue bucket from workflow report. Review GitLink issues before routine work.", lang),
 			SourceType:  "issues",
 			SourceKey:   "issues-high-risk",
 			Repository:  report.Repository,
@@ -96,8 +104,8 @@ func BuildTaskCandidates(report workflow.RepoReportResult, docURL string) []Task
 	if report.IssueSummary.MissingInfo > 0 {
 		tasks = append(tasks, TaskCandidate{
 			UniqueKey:   stableKey("task", report.Repository, "issues", "missing-info"),
-			Title:       fmt.Sprintf("Request missing information for %d issues", report.IssueSummary.MissingInfo),
-			Description: "Some issues need reproduction steps, logs, version details, or command output.",
+			Title:       localizeFeishuText(fmt.Sprintf("Request missing information for %d issues", report.IssueSummary.MissingInfo), lang),
+			Description: feishuLabel(lang, "task_missing_info_desc"),
 			SourceType:  "issues",
 			SourceKey:   "issues-missing-info",
 			Repository:  report.Repository,
@@ -112,8 +120,8 @@ func BuildTaskCandidates(report workflow.RepoReportResult, docURL string) []Task
 	if report.PRSummary.HighRisk > 0 {
 		tasks = append(tasks, TaskCandidate{
 			UniqueKey:   stableKey("task", report.Repository, "prs", "high-risk"),
-			Title:       fmt.Sprintf("Review %d high-risk pull requests", report.PRSummary.HighRisk),
-			Description: "High-risk PR bucket from workflow report. Check review focus and merge readiness.",
+			Title:       localizeFeishuText(fmt.Sprintf("Review %d high-risk pull requests", report.PRSummary.HighRisk), lang),
+			Description: feishuLabel(lang, "task_pr_high_risk_desc"),
 			SourceType:  "prs",
 			SourceKey:   "prs-high-risk",
 			Repository:  report.Repository,
@@ -128,8 +136,8 @@ func BuildTaskCandidates(report workflow.RepoReportResult, docURL string) []Task
 	if len(report.PRSummary.ReviewFocus) > 0 {
 		tasks = append(tasks, TaskCandidate{
 			UniqueKey:   stableKey("task", report.Repository, "prs", "review-focus"),
-			Title:       "Review PR focus areas",
-			Description: strings.Join(limitStrings(report.PRSummary.ReviewFocus, 8), "\n"),
+			Title:       localizeFeishuText("Review PR focus areas", lang),
+			Description: strings.Join(limitStrings(localizeFeishuLines(report.PRSummary.ReviewFocus, lang), 8), "\n"),
 			SourceType:  "prs",
 			SourceKey:   "prs-review-focus",
 			Repository:  report.Repository,
@@ -144,8 +152,8 @@ func BuildTaskCandidates(report workflow.RepoReportResult, docURL string) []Task
 	if len(tasks) == 0 {
 		tasks = append(tasks, TaskCandidate{
 			UniqueKey:   stableKey("task", report.Repository, "report", "review"),
-			Title:       "Review GitLink workflow report",
-			Description: "No high-risk task candidates were detected. Keep a regular owner review cadence.",
+			Title:       localizeFeishuText("Review GitLink workflow report", lang),
+			Description: feishuLabel(lang, "task_review_report_desc"),
 			SourceType:  "report",
 			SourceKey:   "report-review",
 			Repository:  report.Repository,
@@ -158,6 +166,15 @@ func BuildTaskCandidates(report workflow.RepoReportResult, docURL string) []Task
 		})
 	}
 	return dedupeTasks(tasks)
+}
+
+func taskPreviewOutput(tasks []TaskCandidate) TaskOutput {
+	return TaskOutput{
+		Mode:      "preview",
+		DryRun:    true,
+		TaskCount: len(tasks),
+		Tasks:     tasks,
+	}
 }
 
 func taskCreateOptionsFromContext(ctx *common.RuntimeContext) (TaskCreateOptions, error) {
@@ -262,6 +279,17 @@ func writeTaskMarkdown(w io.Writer, output TaskOutput) error {
 
 func writeTaskTable(w io.Writer, output TaskOutput) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if len(output.Results) > 0 {
+		if _, err := fmt.Fprintln(tw, "KEY\tCREATED\tTASK_ID\tTITLE\tERROR"); err != nil {
+			return err
+		}
+		for _, result := range output.Results {
+			if _, err := fmt.Fprintf(tw, "%s\t%t\t%s\t%s\t%s\n", result.UniqueKey, result.Created, redactToken(result.TaskID), result.Title, result.Error); err != nil {
+				return err
+			}
+		}
+		return tw.Flush()
+	}
 	if _, err := fmt.Fprintln(tw, "KEY\tPRIORITY\tSOURCE\tTITLE"); err != nil {
 		return err
 	}

@@ -1,0 +1,178 @@
+========================================
+  社区运营自动化工作流日志
+  仓库: GitLink/gitlink-cli
+  后端: gitlink
+  执行时间: 2026-07-10 15:03 ~ 15:15
+  执行范围: Step 1 (Issue 分拣) + Step 2 (社区周报)，不含 Step 3 (Release Notes)
+  状态: 仅 dry-run 预览，未执行写回 ⚠️
+========================================
+
+----------------------------------------
+  Step 0: 环境检测 + 参数收集
+----------------------------------------
+
+[CHECK] gitlink-cli auth status → 已登录为 Angel123456 ✓
+[CHECK] gitlink-cli --version → 版本可用 ✓
+[CHECK] gitlink-cli repo +info → 仓库 GitLink/gitlink-cli 确认 (24 Issue, 37 贡献者, 12 Release, 408 PR) ✓
+[CHECK] 子 Skill 可用性 → gitlink-issue-triage-rules / gitlink-community-report 全部可用 ✓
+
+环境检测结果:
+  - 后端: gitlink
+  - 认证用户: Angel123456
+  - 仓库: GitLink/gitlink-cli (组织仓库, 24 Issue, 37 贡献者)
+  - 子 Skill: 2 个 (不含 gitlink-release-notes)
+
+----------------------------------------
+  Step 1: Issue 自动分类分拣
+----------------------------------------
+
+[CMD] gitlink-cli issue +list --owner GitLink --repo gitlink-cli --state open --format json
+[RESULT] 开放 Issue 共 14 条: #2,#5,#6,#14,#15,#17,#18,#20,#21,#22,#23,#24,#25,#26
+
+[CMD] gitlink-cli label +list --owner GitLink --repo gitlink-cli --format json
+[RESULT] 标签映射 (10 个): 缺陷(298652) / 功能(298653) / 疑问(298654) / 支持(298655) / 任务(298656) / 协助(298657) / 搁置(298658) / 文档(298659) / 测试(298660) / 重复(298661)
+
+[CMD] gitlink-cli member +list --owner GitLink --repo gitlink-cli --format json
+[RESULT] ⚠️ 403 权限不足，无法获取成员列表
+[NOTE] 本次仅打标签 + 设置优先级，不分配责任人
+
+[CMD] gitlink-cli issue +view → 回读 #2,#5,#6,#14,#15,#17,#18,#20,#21,#22,#23,#24,#25,#26 详情
+
+[ANALYSIS] 规则评估结果 (mode=hybrid):
+
+| Issue | 标题                                                | 建议分类 | 建议标签 | 标签ID | 责任人 | 优先级 | 优先级ID | 命中规则       | LLM兜底 |
+|-------|-----------------------------------------------------|---------|---------|--------|--------|--------|---------|---------------|--------|
+| #26   | v1 标签 show/destroy 的存在性预检失效               | 缺陷     | 缺陷     | 298652 | 仅打标签 | high   | 3       | bug-default   | —      |
+| #25   | 平台缺口：archive/raw 下载端点不可用                 | 缺陷     | 缺陷     | 298652 | 仅打标签 | high   | 3       | bug-default   | —      |
+| #24   | wiki 开放接口写操作不支持 PAT 鉴权                  | 缺陷     | 缺陷     | 298652 | 仅打标签 | high   | 3       | bug-default   | —      |
+| #20   | bug: api 命令单次调用不替换 :owner/:repo 占位符     | 缺陷     | 缺陷     | 298652 | 仅打标签 | high   | 3       | bug-default   | —      |
+| #18   | giklink-cli issue +update后状态框变红色              | 缺陷     | 缺陷     | 298652 | 仅打标签 | high   | 3       | bug-default   | —      |
+| #15   | issue +view 返回的数据与网页显示不一致               | 缺陷     | 缺陷     | 298652 | 仅打标签 | normal | 2       | bug-default   | —      |
+| #5    | skill认领任务时描述信息消失                          | 缺陷     | 缺陷     | 298652 | 仅打标签 | high   | 3       | bug-default   | —      |
+| #14   | pr +view 返回中缺少PR关闭时间                        | 缺陷     | 缺陷     | 298652 | 仅打标签 | normal | 2       | bug-default   | —      |
+| #21   | dataset 快捷命令需要的后端 API 支持                  | 功能     | 功能     | 298653 | 仅打标签 | normal | 2       | —             | ✓      |
+| #17   | API是否支持自动读取仓库内文件？                      | 疑问     | 疑问     | 298654 | 仅打标签 | normal | 2       | question-default| —     |
+
+[SKIP] #2 — 讨论帖，不参与分拣
+[SKIP] #22 — PR 汇报类（"Mengz 提交 PR 统计汇总"），不参与分拣
+[SKIP] #23 — PR 汇报类（已有"文档"标签），不参与分拣
+[NOTE] #6 — Agent 自动化类，建议打 功能 标签，但分类存疑
+
+[DRY-RUN] dry-run 预览已展示
+[USER_CONFIRM] ⚠️ 用户选择取消 (cancel) — 未执行写回
+
+Step 1 汇总:
+  - 开放 Issue: 14 条
+  - 需分拣 Issue: 10 条
+  - 规则命中: 7 条 (bug-default: #26,#25,#24,#20,#18,#5,#14) + 1 条 (question-default: #17)
+  - LLM 兜底: 2 条 (#21 功能需求, #6 Agent 类)
+  - 跳过: 4 条 (#2 讨论帖, #22/#23 PR 汇报类)
+  - ⚠️ 仓库成员权限不足 (403)，无法分配责任人
+  - ⚠️ 写回: 未执行（用户取消）
+
+----------------------------------------
+  Step 2: 社区周报生成与发布
+----------------------------------------
+
+[CMD] gitlink-cli issue +list --owner GitLink --repo gitlink-cli --state closed --format json
+[RESULT] 已关闭 Issue: 10 条
+
+[CMD] gitlink-cli release +list --owner GitLink --repo gitlink-cli --format json
+[RESULT] 累计 Release: 12 (v0.2.0, v0.1.18, v0.1.17, v0.1.14, v0.1.13, v0.1.12, v0.1.11, v0.1.10, v0.1.9, v0.1.8, v0.1.5, v0.1.3)
+
+统计结果 (PERIOD=7天, 2026-07-03 ~ 2026-07-10):
+  - 开放 Issue: 14
+  - 已关闭 Issue: 10
+  - 本周新建: 5 (#22,#23,#24,#25,#26)
+  - 本周关闭: 0
+  - 标签分布: 文档:1, 无标签:13
+  - 累计 Release: 12 (本周无新 Release)
+  - 高优先级待办: 无 (所有开放 Issue 优先级均为"正常")
+
+本周报预览内容:
+
+  # 社区周报 | GitLink/gitlink-cli
+  **统计周期:** 2026-07-03 ~ 2026-07-10
+
+  ## 概览
+  - 开放 Issue: 14
+  - 已关闭 Issue: 10
+  - 本周新建: 5 (#22,#23,#24,#25,#26)
+  - 本周关闭: 0
+  - 标签分布: 文档:1, 无标签:13
+  - 累计 Release: 12 (本周无新 Release)
+
+  ## 本周新建 Issue
+  - #22 Mengz 提交 PR 统计汇总
+  - #23 [文档] GitLink-CLI 团队 PR 贡献与进展汇总
+  - #24 wiki 开放接口写操作不支持 PAT 鉴权
+  - #25 平台缺口：archive/raw 下载端点不可用
+  - #26 v1 标签 show/destroy 的存在性预检失效
+
+  ## 本周关闭 Issue
+  - 无
+
+  ## 最近 Release
+  - v0.2.0 (2026-06-09)
+  - v0.1.18 (2026-05-19)
+  - v0.1.17 (2026-05-19)
+  - ...
+
+[DRY-RUN] dry-run 预览已展示
+[USER_CONFIRM] ⚠️ 用户选择取消 (cancel) — 未发布周报 Issue
+
+Step 2 汇总:
+  - 开放 Issue: 14 / 已关闭: 10
+  - 本周新建: 5 / 本周关闭: 0
+  - 标签分布: 文档:1, 无标签:13
+  - 累计 Release: 12 (本周无新 Release)
+  - ⚠️ 周报: 未发布（用户取消）
+
+----------------------------------------
+  工作流串联的 CLI 命令清单
+----------------------------------------
+
+| #  | CLI 命令                                       | 所属步骤       | 状态      |
+|----|------------------------------------------------|---------------|-----------|
+| 1  | gitlink-cli auth status                        | Step 0 认证   | ✓         |
+| 2  | gitlink-cli repo +info                         | Step 0 仓库   | ✓         |
+| 3  | gitlink-cli issue +list (open)                 | Step 1 列Issue | ✓         |
+| 4  | gitlink-cli label +list                        | Step 1 标签   | ✓         |
+| 5  | gitlink-cli member +list                       | Step 1 成员   | ⚠️ 403    |
+| 6  | gitlink-cli issue +view (×14)                  | Step 1 回读   | ✓         |
+| 7  | gitlink-cli api PATCH                          | Step 1 写回   | ✗ 未执行  |
+| 8  | gitlink-cli issue +comment                     | Step 1 审计   | ✗ 未执行  |
+| 9  | gitlink-cli issue +list (closed)               | Step 2 采集   | ✓         |
+| 10 | gitlink-cli release +list                      | Step 2 采集   | ✓         |
+| 11 | gitlink-cli issue +create                      | Step 2 周报   | ✗ 未执行  |
+
+----------------------------------------
+  差异对比：与示例1 (Angel123456/gitlink-cli) 的区别
+----------------------------------------
+
+| 维度         | 示例1 (Angel123456/gitlink-cli) | 示例2 (GitLink/gitlink-cli) |
+|-------------|----------------------------------|------------------------------|
+| 仓库类型     | 个人仓库 (Owner权限)              | 组织仓库 (受限权限)           |
+| Issue 数量   | 7 (开放) / 0 (关闭)              | 14 (开放) / 10 (关闭)        |
+| 成员列表     | 3 人，可获取                      | 403 权限不足，无法获取         |
+| 标签数量     | 3 个 (缺陷/功能/疑问)             | 10 个 (含支持/任务/协助等)     |
+| 责任人分配   | ✓ 按角色分配成功                  | ✗ 仅打标签，不分配责任人       |
+| 写回执行     | ✓ 3 条 Issue 全部写回成功         | ✗ 用户取消，未执行写回         |
+| 周报发布     | ✓ Issue #14 创建成功              | ✗ 用户取消，未发布             |
+| Release Notes| ✓ v2026.07.10-2 创建成功          | — 未执行此步骤                |
+| 关键障碍     | 无                                | 组织仓库权限不足 (403)         |
+
+----------------------------------------
+  关键经验
+----------------------------------------
+
+- 组织仓库 (GitLink/*) 的 member+list 需要 Maintainer 权限，普通开发者角色返回 403
+- 权限不足时，分拣策略调整为：仅打标签 + 设置优先级，不分配责任人
+- dry-run 模式可安全预览分拣结果，用户取消时不会产生任何写操作
+- 大型仓库 (14+ 开放 Issue) 的分拣分析需要逐条回读详情，耗时较长
+- 标签体系越丰富（10 个标签），分拣可用的分类维度越多
+
+========================================
+  工作流完成 ⚠️
+  GitLink/gitlink-cli — 仅 dry-run 预览，未执行写回
+========================================

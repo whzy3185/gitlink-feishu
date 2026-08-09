@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "data": {
+    "role": {
+      "developer": {
+        "count": 20,
+        "percent": 0
+      },
+      "manager": {
+        "count": 86,
+        "percent": 0
+      },
+      "owner": {
+        "count": 20719,
+        "percent": 0.99
+      },
+      "reporter": {
+        "count": 1,
+        "percent": 0
+      }
+    },
+    "total_projects_count": 20826
+  }
+}

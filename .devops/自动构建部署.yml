@@ -1,0 +1,42 @@
+version: 2
+name: 自动构建部署
+description: "代码提交自动触发 - 增量拉取 + Docker镜像构建与部署"
+global:
+  concurrent: 1
+trigger:
+  webhook: gitlink@1.0.0
+  event:
+    - ref: push
+      ruleset-operator: AND
+workflow:
+  - ref: start
+    name: 开始
+    task: start
+  - ref: ssh_cmd_0
+    name: ssh增量拉取并部署
+    task: ssh_cmd@1.1.1
+    input:
+      ssh_pass: ((deploy_server.password))
+      ssh_ip: '"121.41.222.73"'
+      ssh_port: '"22"'
+      ssh_user: '"root"'
+      ssh_cmd: '"if [ -d /root/gitlink-cli/.git ]; then cd /root/gitlink-cli && git fetch origin && git checkout master && git reset --hard origin/master; else rm -rf /root/gitlink-cli && git clone https://gitlink.org.cn/whale_hihihi/gitlink-cli.git /root/gitlink-cli && cd /root/gitlink-cli && git checkout master; fi && docker stop gitlink-cli 2>/dev/null; docker rm gitlink-cli 2>/dev/null; docker rmi gitlink-cli:latest 2>/dev/null; docker build --no-cache -t gitlink-cli:latest . && docker run -d --name gitlink-cli -p 8080:8080 $([ -f /root/.gitlink-env ] && echo --env-file /root/.gitlink-env) gitlink-cli:latest && echo Deploy success"'
+    needs:
+      - start
+  - ref: ssh_cmd_1
+    name: 构建并部署demo网页(8000)
+    task: ssh_cmd@1.1.1
+    input:
+      ssh_pass: ((deploy_server.password))
+      ssh_ip: '"121.41.222.73"'
+      ssh_port: '"22"'
+      ssh_user: '"root"'
+      ssh_cmd: '"cd /root/gitlink-cli && docker stop gitlink-cli-demo 2>/dev/null; docker rm gitlink-cli-demo 2>/dev/null; docker rmi gitlink-cli-demo:latest 2>/dev/null; (docker build --no-cache -f demo/Dockerfile -t gitlink-cli-demo:latest . && docker run -d --name gitlink-cli-demo -p 8000:8000 --restart unless-stopped gitlink-cli-demo:latest && echo Demo deploy success at http://121.41.222.73:8000) || echo Demo deploy FAILED non-blocking, main :8080 unaffected"'
+    needs:
+      - ssh_cmd_0
+  - ref: end
+    name: 结束
+    task: end
+    needs:
+      - ssh_cmd_0
+      - ssh_cmd_1

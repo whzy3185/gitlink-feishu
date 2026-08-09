@@ -66,6 +66,7 @@ Results:
 - repo report returns a partial report when at least one enabled section succeeds
 - repo report returns an error when all enabled fetched sections fail
 - repo report issue and PR limits are covered
+- release notes local JSON input, deterministic categorization, markdown/table/json renderers, and compare fetch are covered
 
 ## Manual Command Examples
 
@@ -111,6 +112,8 @@ gitlink-cli workflow +pr-summary --owner Gitlink --repo gitlink-cli --number 1 -
 gitlink-cli workflow +pr-summary --from shortcuts/workflow/testdata/pr_summary.json --format json
 gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
 gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format json
+gitlink-cli workflow +release-notes --from shortcuts/workflow/testdata/release_notes.json --format markdown
+gitlink-cli workflow +release-notes --owner Gitlink --repo gitlink-cli --from-ref v0.1.0 --to-ref master --version v0.2.0 --format json
 ```
 
 ## Remote Manual Verification
@@ -128,6 +131,7 @@ gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report
 - `workflow +health` still supports local parameters or a local JSON file via `--from`.
 - `workflow +pr-summary` supports local JSON input and read-only GitLink fetch mode.
 - `workflow +repo-report` supports local JSON input and partial read-only GitLink fetch aggregation.
+- `workflow +release-notes` supports local JSON input and read-only GitLink compare fetch mode.
 - Remote `workflow +repo-report` PR aggregation currently uses PR list metadata only;
   detailed file and commit analysis remains available through `workflow +pr-summary --number`.
 - `json/table/markdown` are rendered inside the workflow package, not by the global formatter.
@@ -162,6 +166,7 @@ gitlink-cli workflow +triage --from shortcuts/workflow/testdata/issue_bug.json -
 gitlink-cli workflow +health --from shortcuts/workflow/testdata/health_good.json --format markdown
 gitlink-cli workflow +pr-summary --from shortcuts/workflow/testdata/pr_summary.json --format markdown
 gitlink-cli workflow +repo-report --from shortcuts/workflow/testdata/repo_report.json --format markdown
+gitlink-cli workflow +release-notes --from shortcuts/workflow/testdata/release_notes.json --format markdown
 ```
 
 Read-only remote smoke commands:
@@ -171,4 +176,5 @@ gitlink-cli workflow +triage --owner Gitlink --repo gitlink-cli --state open --l
 gitlink-cli workflow +health --owner Gitlink --repo gitlink-cli --stale-days 30 --format table
 gitlink-cli workflow +pr-summary --owner Gitlink --repo gitlink-cli --number 1 --format markdown
 gitlink-cli workflow +repo-report --owner Gitlink --repo gitlink-cli --format markdown
+gitlink-cli workflow +release-notes --owner Gitlink --repo gitlink-cli --from-ref v0.1.0 --to-ref master --format markdown
 ```

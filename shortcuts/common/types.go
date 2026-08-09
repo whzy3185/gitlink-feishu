@@ -105,6 +105,20 @@ func (ctx *RuntimeContext) OutputData(data interface{}) error {
 	return output.Print(output.SuccessEnvelope(data, nil), ctx.Format)
 }
 
+// DefaultBranch fetches the repository's default branch, falling back to "master".
+func (ctx *RuntimeContext) DefaultBranch() (string, error) {
+	env, err := ctx.CallAPI("GET", ctx.RepoPath(), nil)
+	if err != nil {
+		return "", err
+	}
+	if data, ok := env.Data.(map[string]interface{}); ok {
+		if branch, ok := data["default_branch"].(string); ok && branch != "" {
+			return branch, nil
+		}
+	}
+	return "master", nil
+}
+
 // RepoPath returns the API path prefix for the current owner/repo.
 func (ctx *RuntimeContext) RepoPath() string {
 	return fmt.Sprintf("/%s/%s", ctx.Owner, ctx.Repo)

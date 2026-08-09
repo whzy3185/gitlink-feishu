@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "data": {
+    "platform": {
+      "activity": 99,
+      "contribution": 99,
+      "experience": 99,
+      "influence": 99,
+      "language": 98
+    },
+    "user": {
+      "activity": 60,
+      "contribution": 72,
+      "each_language_score": {
+        "Go": 71
+      },
+      "experience": 71,
+      "influence": 60,
+      "language": 66,
+      "languages_percent": {
+        "Go": 1
+      }
+    }
+  }
+}

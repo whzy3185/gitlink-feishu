@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
@@ -28,8 +27,7 @@ func FetchIssuesForTriage(ctx *common.RuntimeContext, opts TriageFetchOptions) (
 		state = "open"
 	}
 
-	query := url.Values{}
-	query.Set("state", state)
+	query := issueListQuery(state)
 	query.Set("limit", fmt.Sprintf("%d", limit))
 	query.Set("page", fmt.Sprintf("%d", page))
 	if len(opts.Labels) > 0 {

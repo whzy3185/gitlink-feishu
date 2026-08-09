@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -324,12 +326,82 @@ func TestReleaseUpdateRejectsInvalidBoolBeforeFetch(t *testing.T) {
 	}
 }
 
+func TestReleaseDownload(t *testing.T) {
+	tmpDir := t.TempDir()
+	assetContent := "binary-payload-here"
+
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/owner/repo/releases/1.json":
+			common.WriteJSON(t, w, map[string]interface{}{
+				"id":       float64(1),
+				"tag_name": "v1.0",
+				"name":     "First release",
+				"assets": []interface{}{
+					map[string]interface{}{
+						"url":      "/assets/app.tar.gz",
+						"filename": "app.tar.gz",
+					},
+				},
+			})
+		case r.Method == "GET" && r.URL.Path == "/assets/app.tar.gz":
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Write([]byte(assetContent))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{
+		"id":     "1",
+		"output": tmpDir,
+	})
+	err := common.RunShortcut(t, Shortcuts(), "download", ctx)
+	if err != nil {
+		t.Fatalf("download failed: %v", err)
+	}
+
+	// Verify file was written
+	data, err := os.ReadFile(filepath.Join(tmpDir, "app.tar.gz"))
+	if err != nil {
+		t.Fatalf("failed to read downloaded file: %v", err)
+	}
+	if string(data) != assetContent {
+		t.Errorf("file content mismatch: got %q, want %q", string(data), assetContent)
+	}
+}
+
+func TestReleaseDownloadNoAssets(t *testing.T) {
+	server := common.NewTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/owner/repo/releases/2.json" {
+			common.WriteJSON(t, w, map[string]interface{}{
+				"id":       float64(2),
+				"tag_name": "v2.0",
+				"name":     "Empty release",
+				"assets":   []interface{}{},
+			})
+		} else {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer server.Close()
+
+	ctx := common.NewTestContext(t, server, "owner", "repo", map[string]string{
+		"id": "2",
+	})
+	err := common.RunShortcut(t, Shortcuts(), "download", ctx)
+	if err != nil {
+		t.Fatalf("download with no assets failed: %v", err)
+	}
+}
+
 func TestReleaseShortcutNames(t *testing.T) {
 	got := map[string]bool{}
 	for _, shortcut := range Shortcuts() {
 		got[shortcut.Name] = true
 	}
-	want := []string{"list", "create", "edit", "view", "update", "delete"}
+	want := []string{"list", "create", "edit", "view", "update", "delete", "download"}
 	for _, name := range want {
 		if !got[name] {
 			t.Fatalf("missing shortcut %q in %v", name, got)
@@ -452,4 +524,5 @@ func ExampleShortcuts() {
 	// view
 	// update
 	// delete
+	// download
 }

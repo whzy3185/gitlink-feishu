@@ -14,6 +14,10 @@ import (
 // defaultLabelColor is used when the caller does not provide a color.
 const defaultLabelColor = "#1E90FF"
 
+// labelListPageSize is the page size fetchLabel requests while paging the list
+// endpoint. A short page that returns fewer rows than this marks the last page.
+const labelListPageSize = 50
+
 // hexColorPattern matches #RGB and #RRGGBB hex color values.
 var hexColorPattern = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
 
@@ -91,7 +95,89 @@ func Shortcuts() []*common.Shortcut {
 				return ctx.Output(env)
 			},
 		},
+		{
+			Name:        "clone",
+			Description: "Clone all issue labels from a source repository into the current one",
+			Flags: []common.Flag{
+				{Name: "source", Short: "s", Usage: "Source repository as owner/repo", Required: true},
+				{Name: "force", Short: "f", Usage: "Overwrite labels that already exist in the target", Bool: true},
+			},
+			Run: runClone,
+		},
 	}
+}
+
+// runClone copies every label from a source repository into the current one.
+//
+// It is a pure composition of the existing list and create/update endpoints:
+// the target labels are listed first so that name collisions follow gh's
+// semantics — skipped by default, and overwritten (updated in place, which
+// preserves the label id and its issue associations) only under --force.
+func runClone(ctx *common.RuntimeContext) error {
+	if err := ctx.ResolveOwnerRepo(); err != nil {
+		return err
+	}
+	source, err := ctx.RequireArg("source")
+	if err != nil {
+		return err
+	}
+	srcOwner, srcRepo, err := splitOwnerRepo(source)
+	if err != nil {
+		return err
+	}
+	force := ctx.Arg("force") == "true"
+
+	srcLabels, err := fetchLabelsForRepo(ctx, srcOwner, srcRepo)
+	if err != nil {
+		return err
+	}
+	dstLabels, err := fetchLabelsForRepo(ctx, ctx.Owner, ctx.Repo)
+	if err != nil {
+		return err
+	}
+	existing := make(map[string]map[string]interface{}, len(dstLabels))
+	for _, tag := range dstLabels {
+		existing[stringFromMap(tag, "name")] = tag
+	}
+
+	created := []string{}
+	updated := []string{}
+	skipped := []string{}
+	for _, tag := range srcLabels {
+		name := stringFromMap(tag, "name")
+		if name == "" {
+			continue
+		}
+		payload := map[string]interface{}{
+			"name":        name,
+			"description": stringFromMap(tag, "description"),
+			"color":       firstNonEmpty(stringFromMap(tag, "color"), defaultLabelColor),
+		}
+		if dst, ok := existing[name]; ok {
+			if !force {
+				skipped = append(skipped, name)
+				continue
+			}
+			id := labelIDString(dst["id"])
+			if _, err := ctx.CallAPI("PATCH", repoLabelItemPath(ctx.Owner, ctx.Repo, id), payload); err != nil {
+				return err
+			}
+			updated = append(updated, name)
+			continue
+		}
+		if _, err := ctx.CallAPI("POST", labelPath(ctx), payload); err != nil {
+			return err
+		}
+		created = append(created, name)
+	}
+
+	return ctx.OutputData(map[string]interface{}{
+		"source":  fmt.Sprintf("%s/%s", srcOwner, srcRepo),
+		"target":  fmt.Sprintf("%s/%s", ctx.Owner, ctx.Repo),
+		"created": created,
+		"updated": updated,
+		"skipped": skipped,
+	})
 }
 
 func runCreate(ctx *common.RuntimeContext) error {
@@ -142,7 +228,7 @@ func runUpdate(ctx *common.RuntimeContext) error {
 	if name == "" {
 		return fmt.Errorf("could not resolve label name for id %s; pass --name explicitly", id)
 	}
-	color := firstNonEmpty(ctx.Arg("color"), stringFromMap(current, "color"), defaultLabelColor)
+	color := firstNonEmpty(ctx.Arg("color"), stringFromMap(current, "color"))
 	if err := validateColor(color); err != nil {
 		return err
 	}
@@ -164,40 +250,122 @@ func runUpdate(ctx *common.RuntimeContext) error {
 }
 
 // fetchLabel looks up a single label by id from the list endpoint. GitLink does
-// not expose a single-label GET, so we page through the list and match by id.
-// A nil result (label not found) is not an error: the caller falls back to the
-// flags it was given.
+// not expose a single-label GET, so we page through the list and match by id. A
+// label beyond the first page must still be found, otherwise update would PATCH
+// the server's real name/description/color away with defaults, so an id that is
+// absent after the whole list is exhausted is reported as an error.
 func fetchLabel(ctx *common.RuntimeContext, id string) (map[string]interface{}, error) {
-	env, err := ctx.CallAPI("GET", labelPath(ctx), nil)
-	if err != nil {
-		return nil, err
-	}
-	data, ok := env.Data.(map[string]interface{})
-	if !ok {
-		return nil, nil
-	}
-	rawTags, ok := data["issue_tags"].([]interface{})
-	if !ok {
-		return nil, nil
-	}
-	for _, raw := range rawTags {
-		tag, ok := raw.(map[string]interface{})
+	for page := 1; ; page++ {
+		q := url.Values{}
+		q.Set("page", strconv.Itoa(page))
+		q.Set("limit", strconv.Itoa(labelListPageSize))
+		env, err := ctx.CallAPIWithQuery("GET", labelPath(ctx), q)
+		if err != nil {
+			return nil, err
+		}
+		data, ok := env.Data.(map[string]interface{})
 		if !ok {
-			continue
+			break
 		}
-		if labelIDString(tag["id"]) == id {
-			return tag, nil
+		rawTags, ok := data["issue_tags"].([]interface{})
+		if !ok {
+			break
+		}
+		for _, raw := range rawTags {
+			tag, ok := raw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if labelIDString(tag["id"]) == id {
+				return tag, nil
+			}
+		}
+		if len(rawTags) < labelListPageSize {
+			break
 		}
 	}
-	return nil, nil
+	return nil, fmt.Errorf("label id %s not found in this repository's issue labels", id)
+}
+
+// labelPageSize bounds each page of the issue_tags list walk. It mirrors the
+// workflow fetchers so a repo with many labels is still copied in full.
+const labelPageSize = 100
+
+// fetchLabelsForRepo returns every label of an arbitrary owner/repo, walking the
+// paginated issue_tags list so a source or target with more than one page of
+// labels is still mirrored completely. A page without an issue_tags array ends
+// the walk rather than erroring, so an empty or unrecognized repo reads as "no
+// labels".
+func fetchLabelsForRepo(ctx *common.RuntimeContext, owner, repo string) ([]map[string]interface{}, error) {
+	path := repoLabelPath(owner, repo)
+	labels := []map[string]interface{}{}
+	// Track ids across pages so the walk terminates even if the endpoint were
+	// to ignore the page/limit params and re-serve the full list every time.
+	seen := map[string]bool{}
+	for page := 1; ; page++ {
+		q := url.Values{}
+		q.Set("page", strconv.Itoa(page))
+		q.Set("limit", strconv.Itoa(labelPageSize))
+		env, err := ctx.CallAPIWithQuery("GET", path, q)
+		if err != nil {
+			return nil, err
+		}
+		data, ok := env.Data.(map[string]interface{})
+		if !ok {
+			break
+		}
+		rawTags, ok := data["issue_tags"].([]interface{})
+		if !ok {
+			break
+		}
+		added := 0
+		for _, raw := range rawTags {
+			tag, ok := raw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			id := labelIDString(tag["id"])
+			if id != "" && seen[id] {
+				continue
+			}
+			if id != "" {
+				seen[id] = true
+			}
+			labels = append(labels, tag)
+			added++
+		}
+		if added < labelPageSize {
+			break
+		}
+	}
+	return labels, nil
 }
 
 func labelPath(ctx *common.RuntimeContext) string {
-	return fmt.Sprintf("/v1/%s/%s/issue_tags", ctx.Owner, ctx.Repo)
+	return repoLabelPath(ctx.Owner, ctx.Repo)
 }
 
 func labelItemPath(ctx *common.RuntimeContext, id string) string {
-	return fmt.Sprintf("%s/%s", labelPath(ctx), url.PathEscape(id))
+	return repoLabelItemPath(ctx.Owner, ctx.Repo, id)
+}
+
+func repoLabelPath(owner, repo string) string {
+	return fmt.Sprintf("/v1/%s/%s/issue_tags", owner, repo)
+}
+
+func repoLabelItemPath(owner, repo, id string) string {
+	return fmt.Sprintf("%s/%s", repoLabelPath(owner, repo), url.PathEscape(id))
+}
+
+// splitOwnerRepo parses an "owner/repo" reference, tolerating a leading slash
+// and an extra trailing path so that a full repo URL path still resolves.
+func splitOwnerRepo(source string) (string, string, error) {
+	trimmed := strings.Trim(strings.TrimSpace(source), "/")
+	parts := strings.SplitN(trimmed, "/", 3)
+	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", fmt.Errorf("invalid --source %q: expected owner/repo", source)
+	}
+	return parts[0], parts[1], nil
 }
 
 func validateColor(color string) error {

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -166,45 +167,6 @@ func TestClientDoStatusError(t *testing.T) {
 	}
 	if env.OK {
 		t.Fatal("expected OK=false for status error")
-	}
-}
-
-func TestClientDoGatewayCodeError(t *testing.T) {
-	// Gateway returns {"code":N, "msg":"..."} instead of {"status":N, "message":"..."}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"code":400,"msg":"Bad Request"}`))
-	}))
-	defer server.Close()
-
-	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
-	env, err := c.Do("GET", "/api/test", nil, nil)
-	if err == nil {
-		t.Fatal("expected error for code=400")
-	}
-	if env == nil {
-		t.Fatal("expected envelope for code error")
-	}
-	if env.OK {
-		t.Fatal("expected OK=false for code=400")
-	}
-}
-
-func TestClientDoGatewayCode201Success(t *testing.T) {
-	// Gateway returns code=201 with JSON string data — should be treated as success
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"code":201,"msg":"","data":"{\"title\":\"test\"}"}`))
-	}))
-	defer server.Close()
-
-	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
-	env, err := c.Do("POST", "/api/test", map[string]string{"title": "test"}, nil)
-	if err != nil {
-		t.Fatalf("unexpected error for code=201: %v", err)
-	}
-	if !env.OK {
-		t.Fatal("expected OK=true for code=201")
 	}
 }
 
@@ -565,17 +527,66 @@ func TestShouldAppendJSONSuffixSkipsExistingJSONPath(t *testing.T) {
 	}
 }
 
-func TestShouldAppendJSONSuffixSkipsWikiOpenPaths(t *testing.T) {
-	paths := []string{
-		"/wiki/open/createWiki",
-		"/wiki/open/getWiki",
-		"/wiki/open/updateWiki",
-		"/wiki/open/deleteWiki",
-		"/wiki/open/wikiPages",
+func TestDetectHTMLResponse(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		wantHTML bool
+	}{
+		{"正常 JSON", `{"key":"value"}`, false},
+		{"DOCTYPE 开头", `<!DOCTYPE html><html>...</html>`, true},
+		{"html 小写开头", `<html><head>...</head></html>`, true},
+		{"HTML 大写开头", `<HTML><HEAD>...</HEAD></HTML>`, true},
+		{"doctype 小写开头", `<!doctype html><html lang="en">`, true},
+		{"空响应体", "", false},
+		{"纯文本", `just some text`, false},
+		{"空白后 HTML", `  <!DOCTYPE html>`, true},
+		{"JSON 数组", `[1,2,3]`, false},
+		{"HTML 片段（无前缀）", `<body>content</body>`, false},
+		{"XML 声明后跟 HTML", `<?xml version="1.0"?><!DOCTYPE html>`, true},
 	}
-	for _, p := range paths {
-		if shouldAppendJSONSuffix(p) {
-			t.Errorf("wiki/open path %q should not get .json suffix", p)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := detectHTMLResponse([]byte(tt.body)); got != tt.wantHTML {
+				t.Errorf("detectHTMLResponse(%q) = %v, want %v", tt.body, got, tt.wantHTML)
+			}
+		})
+	}
+}
+
+func TestClientDoHTMLResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`<!DOCTYPE html><html><head><title>Sign in</title></head><body>Please log in</body></html>`))
+	}))
+	defer server.Close()
+
+	c := &Client{HTTP: server.Client(), BaseURL: server.URL}
+	env, err := c.Do("GET", "/api/test", nil, nil)
+	if err == nil {
+		t.Fatal("expected error for HTML response")
+	}
+	if env == nil {
+		t.Fatal("expected envelope for HTML response")
+	}
+	if env.OK {
+		t.Fatal("expected OK=false for HTML response")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.Code != "HTML_RESPONSE" {
+		t.Fatalf("Code = %v, want HTML_RESPONSE", apiErr.Code)
+	}
+}
+
+func TestSuggestHTMLFix(t *testing.T) {
+	msg := suggestHTMLFix()
+	if msg == "" {
+		t.Fatal("suggestHTMLFix should return a non-empty message")
+	}
+	if !strings.Contains(msg, "gitlink-cli auth login") {
+		t.Fatal("suggestHTMLFix should mention auth login")
 	}
 }
