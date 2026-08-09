@@ -1,0 +1,19 @@
+{
+  "schema_version": "feishu.review-bindings/v1",
+  "bindings": [
+    {
+	  "chat_id": "oc_fixture_review",
+	  "repository": "test-owner/test-repo",
+      "enabled": true,
+      "admin_user_ids": [
+		"ou_fixture_admin"
+      ],
+      "allowed_user_ids": [
+		"ou_fixture_admin",
+		"ou_fixture_reviewer"
+      ],
+      "deadline_hours": 24,
+      "binding_revision": "fixture-v1"
+    }
+  ]
+}

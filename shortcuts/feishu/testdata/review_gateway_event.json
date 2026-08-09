@@ -1,0 +1,9 @@
+{
+	"event_id": "evt_review_fixture",
+	"message_id": "om_review_fixture",
+  "event_type": "message",
+	"chat_id": "oc_fixture_review",
+  "chat_type": "group",
+	"user_id": "ou_fixture_reviewer",
+	"content": "查看 PR #42"
+}
