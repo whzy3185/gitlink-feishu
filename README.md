@@ -118,7 +118,7 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 
 Deployments may keep the default local-confirmation flow or explicitly enable identity-gated direct execution; direct execution is allowed only when the Gateway Credential's `/users/me` identity matches the user's bound GitLink login, and GitLink still enforces repository permissions.
 
-See the [Feishu Review Gateway deployment and usage guide](./docs/feishu-review-gateway.zh-CN.md) for permissions, credentials, bindings, controlled actions, service deployment, and operations.
+See the [Feishu Review Gateway technical report](./docs/feishu-review-gateway-technical-report.zh-CN.md) for architecture and security, and the [deployment and usage guide](./docs/feishu-review-gateway.zh-CN.md) for permissions, credentials, bindings, controlled actions, service deployment, and operations.
 
 ## Installation & Quick Start
 
