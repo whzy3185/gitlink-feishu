@@ -46,6 +46,54 @@ CREATE TABLE IF NOT EXISTS review_collaboration_items (
     PRIMARY KEY(chat_id, repository, pr_number)
 );
 
+CREATE TABLE IF NOT EXISTS review_event_inbox (
+    delivery_id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    pr_number INTEGER NOT NULL,
+    head_sha TEXT NOT NULL DEFAULT '',
+    payload_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TEXT NOT NULL,
+    lease_owner TEXT NOT NULL DEFAULT '',
+    lease_expires_at TEXT NOT NULL DEFAULT '',
+    error_summary TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS review_event_inbox_ready
+    ON review_event_inbox(status, next_attempt_at, lease_expires_at);
+
+CREATE TABLE IF NOT EXISTS review_operations (
+    operation_id TEXT PRIMARY KEY,
+    dedupe_key TEXT NOT NULL UNIQUE,
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 5,
+    next_attempt_at TEXT NOT NULL,
+    lease_owner TEXT NOT NULL DEFAULT '',
+    lease_expires_at TEXT NOT NULL DEFAULT '',
+    mutation_status TEXT NOT NULL DEFAULT 'not_started',
+    reconciliation_state TEXT NOT NULL DEFAULT 'not_required',
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS review_operations_ready
+    ON review_operations(status, next_attempt_at, lease_expires_at);
+
+CREATE TABLE IF NOT EXISTS review_dead_letters (
+    dead_letter_id TEXT PRIMARY KEY,
+    source_type TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    error_summary TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS review_gateway_jobs (
     job_id TEXT PRIMARY KEY,
     dedupe_key TEXT NOT NULL,
