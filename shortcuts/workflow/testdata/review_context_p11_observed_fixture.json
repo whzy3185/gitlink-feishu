@@ -1,0 +1,81 @@
+{
+  "repository": "sample/repository",
+  "pull_request": 14,
+  "source": "observed-read-only-sanitized",
+  "sections": [
+    "pr",
+    "files",
+    "versions",
+    "reviews",
+    "threads"
+  ],
+  "pr": {
+    "id": 4200,
+    "base": "master",
+    "head": "contributor/batch-workflow",
+    "create_user": "contributor",
+    "is_original": true,
+    "merged": false,
+    "pull_request_staus": "open",
+    "state": "open",
+    "status": 0
+  },
+  "files": [
+    {
+      "addition": 12,
+      "deletion": 2,
+      "isBin": false,
+      "isCreated": false,
+      "isDeleted": false,
+      "name": "shortcuts/workflow/example.go",
+      "old_name": "shortcuts/workflow/example.go",
+      "type": 2
+    }
+  ],
+  "versions": [
+    {
+      "id": 5001,
+      "add_line_num": 12,
+      "base_commit_sha": "base000000000000000000000000000000000001",
+      "commits_count": 2,
+      "created_time": 1785122000,
+      "del_line_num": 2,
+      "files_count": 1,
+      "head_commit_sha": "head000000000000000000000000000000000001",
+      "start_commit_sha": "base000000000000000000000000000000000001",
+      "updated_time": 1785122334
+    }
+  ],
+  "reviews": [
+    {
+      "commit_id": null,
+      "content": "Approved after checking the batch workflow.",
+      "created_at": "2026-05-23 21:14",
+      "id": 68,
+      "reviewer": {
+        "id": 7001,
+        "login": "reviewer",
+        "name": "Reviewer",
+        "type": "User"
+      },
+      "status": "approved"
+    }
+  ],
+  "threads": [
+    {
+      "commit_id": null,
+      "created_at": "2026-05-23 20:50",
+      "id": "469647",
+      "line_code": "",
+      "need_respond": false,
+      "content": "Please confirm the dry-run behavior before merging.",
+      "parent_id": "",
+      "path": "",
+      "review_id": "",
+      "state": "opened",
+      "updated_at": "2026-05-23 20:50",
+      "author_id": "7002",
+      "author": "contributor"
+    }
+  ]
+}

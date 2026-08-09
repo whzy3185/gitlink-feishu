@@ -1,0 +1,113 @@
+{
+  "repository": "owner/repo",
+  "pull_request": 42,
+  "source": "local-fixture",
+  "sections": [
+    "pr",
+    "files",
+    "versions",
+    "reviews",
+    "threads"
+  ],
+  "pr": {
+    "id": 4242,
+    "create_user": "contributor",
+    "state": "open",
+    "pull_request_staus": "open",
+    "status": 0,
+    "merged": false,
+    "base": "master",
+    "head": "feature/review-context"
+  },
+  "files": [
+    {
+      "filename": "shortcuts/workflow/review_context.go"
+    },
+    {
+      "filename": "shortcuts/workflow/review_context_models.go"
+    }
+  ],
+  "versions": [
+    {
+      "id": 100,
+      "head_commit_sha": "old456def123",
+      "base_commit_sha": "base123def456",
+      "files_count": 1,
+      "commits_count": 1,
+      "add_line_num": 20,
+      "del_line_num": 2,
+      "created_time": 1785031539,
+      "updated_time": 1785031539
+    },
+    {
+      "id": 101,
+      "head_commit_sha": "abc123def456",
+      "base_commit_sha": "base123def456",
+      "files_count": 2,
+      "commits_count": 2,
+      "add_line_num": 42,
+      "del_line_num": 5,
+      "created_time": 1785122334,
+      "updated_time": 1785122334
+    }
+  ],
+  "reviews": [
+    {
+      "id": 1,
+      "status": "rejected",
+      "commit_id": "abc123def456",
+      "created_at": "2026-07-29T07:30:00Z",
+      "user": {
+        "id": 71,
+        "login": "reviewer-one"
+      }
+    },
+    {
+      "id": 2,
+      "status": "approved",
+      "commit_id": "abc123def456",
+      "created_at": "2026-07-29T08:00:00Z",
+      "user": {
+        "id": 71,
+        "login": "reviewer-one"
+      }
+    },
+    {
+      "id": 3,
+      "status": "rejected",
+      "commit_id": "old456def123",
+      "created_at": "2026-07-28T08:00:00Z",
+      "user": {
+        "id": 72,
+        "login": "reviewer-two"
+      }
+    }
+  ],
+  "threads": [
+    {
+      "id": "10",
+      "review_id": "1",
+      "author": "reviewer-one",
+      "author_id": "71",
+      "content": "Please add a regression test for the error path.",
+      "type": "problem",
+      "state": "opened",
+      "need_respond": true,
+      "path": "shortcuts/workflow/review_context.go",
+      "line_code": "new:42",
+      "commit_id": "abc123def456",
+      "created_at": "2026-07-29T08:30:00Z"
+    },
+    {
+      "id": "11",
+      "review_id": "2",
+      "author": "reviewer-two",
+      "author_id": "72",
+      "content": "The documentation wording has been updated.",
+      "state": "resolved",
+      "path": "README.md",
+      "commit_id": "old456def123",
+      "created_at": "2026-07-28T09:00:00Z"
+    }
+  ]
+}
