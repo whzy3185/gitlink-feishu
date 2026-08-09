@@ -61,6 +61,41 @@ type CreatedTask struct {
 	TaskID string `json:"task_id,omitempty"`
 }
 
+func (c OpenAPIClient) GetUserDisplayName(ctx context.Context, tenantToken, openID string) (string, error) {
+	tenantToken = strings.TrimSpace(tenantToken)
+	openID = strings.TrimSpace(openID)
+	if tenantToken == "" || openID == "" {
+		return "", fmt.Errorf("Feishu tenant token and open_id are required")
+	}
+	path := fmt.Sprintf("/contact/v3/users/%s?user_id_type=open_id", url.PathEscape(openID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint(path), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantToken)
+	var response struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			User struct {
+				Name        string `json:"name"`
+				DisplayName string `json:"display_name"`
+			} `json:"user"`
+		} `json:"data"`
+	}
+	if err := c.doJSON(req, &response); err != nil {
+		return "", err
+	}
+	if response.Code != 0 {
+		return "", fmt.Errorf("Feishu user lookup returned code %d: %s", response.Code, response.Msg)
+	}
+	name := firstNonEmpty(response.Data.User.Name, response.Data.User.DisplayName)
+	if strings.TrimSpace(name) == "" {
+		return "", fmt.Errorf("Feishu user lookup returned no display name")
+	}
+	return strings.TrimSpace(name), nil
+}
+
 func NewOpenAPIClient(httpClient *http.Client) OpenAPIClient {
 	if httpClient == nil {
 		httpClient = http.DefaultClient

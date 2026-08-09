@@ -19,7 +19,7 @@ func reviewGatewayResultSendInput(job ReviewGatewayJob, result ReviewGatewayExec
 	if result.Status == "failed" || result.ReviewData == nil {
 		return input
 	}
-	card, err := buildReviewGatewayPRCard(job, *result.ReviewData)
+	card, err := buildReviewGatewayPRCard(job, result)
 	if err != nil {
 		return input
 	}
@@ -29,7 +29,8 @@ func reviewGatewayResultSendInput(job ReviewGatewayJob, result ReviewGatewayExec
 	return input
 }
 
-func buildReviewGatewayPRCard(job ReviewGatewayJob, data ReviewData) (string, error) {
+func buildReviewGatewayPRCard(job ReviewGatewayJob, result ReviewGatewayExecutionResult) (string, error) {
+	data := *result.ReviewData
 	rows := []string{
 		fmt.Sprintf("**作者**：%s", reviewGatewayCardValue(data.Author)),
 		fmt.Sprintf("**状态**：%s", reviewGatewayPRStateDisplay(data.State)),
@@ -44,6 +45,14 @@ func buildReviewGatewayPRCard(job ReviewGatewayJob, data ReviewData) (string, er
 		rows = append(rows, "**审查者**：")
 		for _, reviewer := range data.ReviewerSummaries {
 			rows = append(rows, "- "+reviewGatewayReviewerDisplay(reviewer))
+		}
+	}
+	if item := result.Collaboration; item != nil {
+		rows = append(rows,
+			fmt.Sprintf("**负责人**：%s", firstNonEmpty(item.AssignedDisplayName, "无")),
+		)
+		if item.DueAt != "" {
+			rows = append(rows, fmt.Sprintf("**审查截止**：%s", item.DueAt))
 		}
 	}
 	elements := []map[string]interface{}{{

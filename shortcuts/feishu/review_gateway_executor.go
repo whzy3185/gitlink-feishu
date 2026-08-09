@@ -12,37 +12,41 @@ import (
 const reviewGatewayResultSchema = "feishu.review-result/v1"
 
 type ReviewGatewayExecutionResult struct {
-	SchemaVersion     string              `json:"schema_version"`
-	JobID             string              `json:"job_id"`
-	Status            string              `json:"status"`
-	Mode              string              `json:"mode"`
-	Action            string              `json:"action"`
-	Repository        string              `json:"repository,omitempty"`
-	PRNumber          int                 `json:"pr_number,omitempty"`
-	RequestedBy       string              `json:"requested_by"`
-	ReadOnlyGitLink   bool                `json:"read_only_gitlink"`
-	MutatesGitLink    bool                `json:"mutates_gitlink"`
-	CompletedAt       string              `json:"completed_at"`
-	Message           string              `json:"message,omitempty"`
-	CollectionStatus  string              `json:"collection_status,omitempty"`
-	Partial           bool                `json:"partial,omitempty"`
-	HeadSHA           string              `json:"head_sha,omitempty"`
-	SourceFingerprint string              `json:"source_fingerprint,omitempty"`
-	ReviewStage       string              `json:"review_stage,omitempty"`
-	Decision          string              `json:"decision,omitempty"`
-	ReviewCount       int                 `json:"review_count,omitempty"`
-	ThreadCount       int                 `json:"thread_count,omitempty"`
-	OpenThreadCount   int                 `json:"open_thread_count,omitempty"`
-	ReviewData        *ReviewData         `json:"review_data,omitempty"`
-	SnapshotPlan      *ReviewSnapshotPlan `json:"snapshot_plan,omitempty"`
-	Error             string              `json:"error,omitempty"`
-	AttemptCount      int                 `json:"attempt_count,omitempty"`
+	SchemaVersion     string                   `json:"schema_version"`
+	JobID             string                   `json:"job_id"`
+	Status            string                   `json:"status"`
+	Mode              string                   `json:"mode"`
+	Action            string                   `json:"action"`
+	Repository        string                   `json:"repository,omitempty"`
+	PRNumber          int                      `json:"pr_number,omitempty"`
+	RequestedBy       string                   `json:"requested_by"`
+	ReadOnlyGitLink   bool                     `json:"read_only_gitlink"`
+	MutatesGitLink    bool                     `json:"mutates_gitlink"`
+	CompletedAt       string                   `json:"completed_at"`
+	Message           string                   `json:"message,omitempty"`
+	CollectionStatus  string                   `json:"collection_status,omitempty"`
+	Partial           bool                     `json:"partial,omitempty"`
+	HeadSHA           string                   `json:"head_sha,omitempty"`
+	SourceFingerprint string                   `json:"source_fingerprint,omitempty"`
+	ReviewStage       string                   `json:"review_stage,omitempty"`
+	Decision          string                   `json:"decision,omitempty"`
+	ReviewCount       int                      `json:"review_count,omitempty"`
+	ThreadCount       int                      `json:"thread_count,omitempty"`
+	OpenThreadCount   int                      `json:"open_thread_count,omitempty"`
+	ReviewData        *ReviewData              `json:"review_data,omitempty"`
+	SnapshotPlan      *ReviewSnapshotPlan      `json:"snapshot_plan,omitempty"`
+	Collaboration     *ReviewCollaborationItem `json:"collaboration,omitempty"`
+	Error             string                   `json:"error,omitempty"`
+	AttemptCount      int                      `json:"attempt_count,omitempty"`
 }
 
 type ReviewGatewayExecutor struct {
-	Runtime      *common.RuntimeContext
-	DataProvider ReviewDataProvider
-	Now          func() time.Time
+	Runtime       *common.RuntimeContext
+	DataProvider  ReviewDataProvider
+	Collaboration ReviewCollaborationStore
+	Collaborators ReviewRepositoryCollaboratorReader
+	DisplayNames  FeishuDisplayNameResolver
+	Now           func() time.Time
 }
 
 func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {
@@ -94,6 +98,15 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 			return reviewGatewayExecutionFailure(result, fmt.Errorf("explicit repository queries require a confirmed public repository"))
 		}
 		populateReviewGatewayResult(&result, data)
+		if e.Collaboration != nil {
+			item, itemErr := e.Collaboration.GetCollaborationItem(ctx, job.ChatID, job.Repository, job.PRNumber)
+			if itemErr != nil {
+				return reviewGatewayExecutionFailure(result, itemErr)
+			}
+			if item.SchemaVersion != "" {
+				result.Collaboration = &item
+			}
+		}
 		plan := PlanReviewSnapshotSync(data, nil)
 		result.SnapshotPlan = &plan
 		result.Message = "已完成 GitLink PR 只读查询。"
@@ -107,10 +120,80 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		result.Message = fmt.Sprintf("当前群已绑定仓库 %s。", job.Repository)
 	case "plan_bind_repository":
 		result.Message = fmt.Sprintf("已生成仓库绑定预览：%s；未修改远程资源。", job.Repository)
+	case "claim_review", "release_review", "set_review_deadline", "clear_review_deadline":
+		if !job.CollaborationAuthorized || strings.TrimSpace(job.GitLinkLogin) == "" {
+			return reviewGatewayExecutionFailure(result, fmt.Errorf("当前飞书用户尚未绑定 GitLink 身份"))
+		}
+		if e.Collaboration == nil {
+			return reviewGatewayExecutionFailure(result, fmt.Errorf("review collaboration store is required"))
+		}
+		owner, repo, err := splitReviewGatewayRepository(job.Repository)
+		if err != nil {
+			return reviewGatewayExecutionFailure(result, err)
+		}
+		provider := e.DataProvider
+		if provider == nil {
+			provider = GitLinkReviewDataProvider{}
+		}
+		if _, err := provider.FetchReviewData(ctx, e.Runtime, ReviewDataRequest{Owner: owner, Repository: repo, PullRequest: job.PRNumber}); err != nil {
+			return reviewGatewayExecutionFailure(result, err)
+		}
+		if job.Action == "claim_review" {
+			reader := e.Collaborators
+			if reader == nil {
+				reader = GitLinkReviewRepositoryCollaboratorReader{}
+			}
+			collaborators, err := reader.ListRepositoryCollaborators(ctx, e.Runtime, owner, repo)
+			if err != nil {
+				return reviewGatewayExecutionFailure(result, err)
+			}
+			if !reviewLoginIsCollaborator(job.GitLinkLogin, collaborators) {
+				return reviewGatewayExecutionFailure(result, fmt.Errorf("绑定的 GitLink 用户不是当前仓库协作者"))
+			}
+		}
+		if e.DisplayNames != nil {
+			if name, err := e.DisplayNames.ResolveFeishuDisplayName(ctx, job.RequestedBy); err == nil {
+				job.RequestedDisplayName = name
+			}
+		}
+		if job.RequestedDisplayName == "" {
+			job.RequestedDisplayName = job.GitLinkLogin
+		}
+		item, err := e.Collaboration.ApplyCollaborationAction(ctx, job, now().UTC())
+		if err != nil {
+			return reviewGatewayExecutionFailure(result, err)
+		}
+		result.Collaboration = &item
+		result.Message = formatReviewCollaborationOutcome(item)
 	default:
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("unsupported review gateway action %q", job.Action))
 	}
 	return result, nil
+}
+
+func formatReviewCollaborationOutcome(item ReviewCollaborationItem) string {
+	switch item.ActionOutcome {
+	case "claimed":
+		return fmt.Sprintf("PR #%d 已由 %s 负责", item.PRNumber, firstNonEmpty(item.AssignedDisplayName, "飞书成员"))
+	case "already_claimed_by_self":
+		return fmt.Sprintf("PR #%d 当前已由你负责", item.PRNumber)
+	case "released":
+		return fmt.Sprintf("PR #%d 已取消负责人", item.PRNumber)
+	case "already_unassigned":
+		return fmt.Sprintf("PR #%d 当前没有负责人", item.PRNumber)
+	case "deadline_set":
+		return fmt.Sprintf("PR #%d 审查截止时间已设置为 %s", item.PRNumber, item.DueAt)
+	case "deadline_updated":
+		return fmt.Sprintf("PR #%d 审查截止时间已更新为 %s", item.PRNumber, item.DueAt)
+	case "deadline_unchanged":
+		return fmt.Sprintf("PR #%d 审查截止时间仍为 %s", item.PRNumber, item.DueAt)
+	case "deadline_cleared":
+		return fmt.Sprintf("PR #%d 的审查截止时间已清除", item.PRNumber)
+	case "deadline_absent":
+		return fmt.Sprintf("PR #%d 当前没有设置审查截止时间", item.PRNumber)
+	default:
+		return fmt.Sprintf("PR #%d 协作状态已更新", item.PRNumber)
+	}
 }
 
 func reviewGatewayExecutionFailure(result ReviewGatewayExecutionResult, err error) (ReviewGatewayExecutionResult, error) {

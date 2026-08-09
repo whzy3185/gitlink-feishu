@@ -259,7 +259,13 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 
 	channel := newFeishuReviewGatewayChannel(appID, appSecret, bindings)
 	replyDispatcher := NewReviewGatewayReplyDispatcher(channel, store, output, queueSize)
-	executor := &ReviewGatewayExecutor{Runtime: runtime}
+	executor := &ReviewGatewayExecutor{
+		Runtime:       runtime,
+		Collaboration: store,
+		DisplayNames: ReviewFeishuDisplayNameResolver{
+			Client: NewOpenAPIClient(nil), AppID: appID, AppSecret: appSecret,
+		},
+	}
 	queue := NewReviewGatewayQueue(gateway, store, queueSize, func(outcome ReviewGatewayJobOutcome) {
 		output.TryEmit(outcome.Result)
 		if !outcome.WillRetry {

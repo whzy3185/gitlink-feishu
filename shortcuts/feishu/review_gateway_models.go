@@ -43,41 +43,48 @@ type ReviewChatBinding struct {
 }
 
 type ReviewGatewayBindings struct {
-	SchemaVersion string              `json:"schema_version"`
-	Bindings      []ReviewChatBinding `json:"bindings"`
+	SchemaVersion    string                  `json:"schema_version"`
+	Bindings         []ReviewChatBinding     `json:"bindings"`
+	IdentityBindings []ReviewIdentityBinding `json:"identity_bindings,omitempty"`
 }
 
 type ReviewGatewayIntent struct {
 	Name               string `json:"name"`
 	Repository         string `json:"repository,omitempty"`
 	PRNumber           int    `json:"pr_number,omitempty"`
+	Argument           string `json:"argument,omitempty"`
 	ExplicitRepository bool   `json:"explicit_repository,omitempty"`
 }
 
 type ReviewGatewayJob struct {
-	SchemaVersion         string `json:"schema_version"`
-	JobID                 string `json:"job_id"`
-	DedupeKey             string `json:"dedupe_key"`
-	Status                string `json:"status"`
-	Mode                  string `json:"mode"`
-	Action                string `json:"action"`
-	Repository            string `json:"repository,omitempty"`
-	PRNumber              int    `json:"pr_number,omitempty"`
-	ChatID                string `json:"chat_id"`
-	RequestedBy           string `json:"requested_by"`
-	SourceEventID         string `json:"source_event_id,omitempty"`
-	SourceMessageID       string `json:"source_message_id,omitempty"`
-	CreatedAt             string `json:"created_at"`
-	MutatesGitLink        bool   `json:"mutates_gitlink"`
-	CollaborationMutation bool   `json:"collaboration_mutation"`
-	RequiresAdmin         bool   `json:"requires_admin"`
-	RequirePublicRepo     bool   `json:"require_public_repository,omitempty"`
-	AttemptCount          int    `json:"attempt_count"`
-	MaxAttempts           int    `json:"max_attempts"`
-	NextAttemptAt         string `json:"next_attempt_at,omitempty"`
-	LeaseOwner            string `json:"lease_owner,omitempty"`
-	LeaseExpiresAt        string `json:"lease_expires_at,omitempty"`
-	HandlerLatencyMs      int64  `json:"handler_latency_ms,omitempty"`
+	SchemaVersion           string `json:"schema_version"`
+	JobID                   string `json:"job_id"`
+	DedupeKey               string `json:"dedupe_key"`
+	Status                  string `json:"status"`
+	Mode                    string `json:"mode"`
+	Action                  string `json:"action"`
+	Repository              string `json:"repository,omitempty"`
+	PRNumber                int    `json:"pr_number,omitempty"`
+	ChatID                  string `json:"chat_id"`
+	RequestedBy             string `json:"requested_by"`
+	SourceEventID           string `json:"source_event_id,omitempty"`
+	SourceMessageID         string `json:"source_message_id,omitempty"`
+	CreatedAt               string `json:"created_at"`
+	MutatesGitLink          bool   `json:"mutates_gitlink"`
+	CollaborationMutation   bool   `json:"collaboration_mutation"`
+	RequiresAdmin           bool   `json:"requires_admin"`
+	RequirePublicRepo       bool   `json:"require_public_repository,omitempty"`
+	AttemptCount            int    `json:"attempt_count"`
+	MaxAttempts             int    `json:"max_attempts"`
+	NextAttemptAt           string `json:"next_attempt_at,omitempty"`
+	LeaseOwner              string `json:"lease_owner,omitempty"`
+	LeaseExpiresAt          string `json:"lease_expires_at,omitempty"`
+	HandlerLatencyMs        int64  `json:"handler_latency_ms,omitempty"`
+	Argument                string `json:"argument,omitempty"`
+	GitLinkLogin            string `json:"gitlink_login,omitempty"`
+	RequestedDisplayName    string `json:"requested_display_name,omitempty"`
+	CollaborationAuthorized bool   `json:"collaboration_authorized,omitempty"`
+	CollaborationAdmin      bool   `json:"collaboration_admin,omitempty"`
 }
 
 type ReviewGatewayEventRef struct {
@@ -141,20 +148,25 @@ type MemoryReviewGatewayDeduper struct {
 }
 
 type ReviewGateway struct {
-	bindings map[string]ReviewChatBinding
-	admins   map[string]bool
-	deduper  ReviewGatewayDeduper
-	now      func() time.Time
-	stale    time.Duration
+	bindings   map[string]ReviewChatBinding
+	admins     map[string]bool
+	identities map[string]ReviewIdentityBinding
+	deduper    ReviewGatewayDeduper
+	now        func() time.Time
+	stale      time.Duration
 }
 
 var (
-	reviewGatewayRepositoryPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
-	reviewGatewayPRPattern         = regexp.MustCompile(`(?i)^查看\s*PR\s*#?(\d+)$`)
-	reviewGatewayScopedPRPattern   = regexp.MustCompile(`(?i)^查看\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`)
-	reviewGatewayRefreshPattern    = regexp.MustCompile(`(?i)^刷新\s*PR\s*#?(\d+)$`)
-	reviewGatewayBindPattern       = regexp.MustCompile(`(?i)^绑定仓库\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$`)
-	reviewGatewayIntentPatterns    = []struct {
+	reviewGatewayRepositoryPattern    = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+	reviewGatewayPRPattern            = regexp.MustCompile(`(?i)^查看\s*PR\s*#?(\d+)$`)
+	reviewGatewayScopedPRPattern      = regexp.MustCompile(`(?i)^查看\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`)
+	reviewGatewayRefreshPattern       = regexp.MustCompile(`(?i)^刷新\s*PR\s*#?(\d+)$`)
+	reviewGatewayClaimPattern         = regexp.MustCompile(`(?i)^领取\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`)
+	reviewGatewayReleasePattern       = regexp.MustCompile(`(?i)^(?:取消领取|释放)\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`)
+	reviewGatewayDeadlinePattern      = regexp.MustCompile(`(?i)^设置\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+(?:审查截止|截止)\s+(\d{4}-\d{2}-\d{2})$`)
+	reviewGatewayClearDeadlinePattern = regexp.MustCompile(`(?i)^清除\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+审查截止$`)
+	reviewGatewayBindPattern          = regexp.MustCompile(`(?i)^绑定仓库\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$`)
+	reviewGatewayIntentPatterns       = []struct {
 		pattern *regexp.Regexp
 		name    string
 	}{
@@ -213,11 +225,23 @@ func NewReviewGateway(bindings ReviewGatewayBindings, config ReviewGatewayConfig
 		deduper = NewMemoryReviewGatewayDeduper()
 	}
 	result := &ReviewGateway{
-		bindings: map[string]ReviewChatBinding{},
-		admins:   stringSet(config.AdminUserIDs),
-		deduper:  deduper,
-		now:      config.Now,
-		stale:    config.StaleWindow,
+		bindings:   map[string]ReviewChatBinding{},
+		admins:     stringSet(config.AdminUserIDs),
+		identities: map[string]ReviewIdentityBinding{},
+		deduper:    deduper,
+		now:        config.Now,
+		stale:      config.StaleWindow,
+	}
+	for _, identity := range bindings.IdentityBindings {
+		identity.FeishuUserID = strings.TrimSpace(identity.FeishuUserID)
+		identity.GitLinkLogin = strings.TrimSpace(identity.GitLinkLogin)
+		if identity.FeishuUserID == "" || identity.GitLinkLogin == "" {
+			return nil, fmt.Errorf("review identity binding requires feishu_user_id and gitlink_login")
+		}
+		if _, exists := result.identities[identity.FeishuUserID]; exists {
+			return nil, fmt.Errorf("duplicate review identity binding for user %q", identity.FeishuUserID)
+		}
+		result.identities[identity.FeishuUserID] = identity
 	}
 	for _, binding := range bindings.Bindings {
 		binding.ChatID = strings.TrimSpace(binding.ChatID)
@@ -288,6 +312,15 @@ func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEven
 		intent.Name = "unsupported_command"
 	}
 	receipt.Intent = intent
+	if isReviewCollaborationAction(intent.Name) {
+		identity, ok := g.identities[event.UserID]
+		if !ok || !identity.Enabled {
+			receipt.Reason = "collaboration_identity_required"
+			return receipt, nil
+		}
+		intent.Repository = strings.TrimSpace(intent.Repository)
+		receipt.Intent = intent
+	}
 
 	binding, bound := g.bindings[event.ChatID]
 	receipt.Bound = bound && binding.Enabled
@@ -301,7 +334,7 @@ func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEven
 			receipt.Reason = "chat_not_bound"
 			return receipt, nil
 		}
-		if !explicitPublicRead && len(binding.AllowedUserIDs) > 0 && !containsReviewGatewayString(binding.AllowedUserIDs, event.UserID) && !g.isAdmin(binding, event.UserID) {
+		if !explicitPublicRead && !isReviewCollaborationAction(intent.Name) && len(binding.AllowedUserIDs) > 0 && !containsReviewGatewayString(binding.AllowedUserIDs, event.UserID) && !g.isAdmin(binding, event.UserID) {
 			receipt.Reason = "sender_not_allowed"
 			return receipt, nil
 		}
@@ -339,6 +372,12 @@ func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEven
 	}
 
 	job := newReviewGatewayJob(event, intent, dedupeKey, now)
+	if isReviewCollaborationAction(intent.Name) {
+		identity := g.identities[event.UserID]
+		job.GitLinkLogin = identity.GitLinkLogin
+		job.CollaborationAuthorized = true
+		job.CollaborationAdmin = g.isAdmin(binding, event.UserID)
+	}
 	receipt.Accepted = true
 	receipt.Reason = "queued_preview"
 	receipt.Job = &job
@@ -369,6 +408,26 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 			Name: "read_review_context", Repository: match[1], PRNumber: number, ExplicitRepository: true,
 		}
 	}
+	for _, candidate := range []struct {
+		pattern *regexp.Regexp
+		name    string
+	}{
+		{reviewGatewayClaimPattern, "claim_review"},
+		{reviewGatewayReleasePattern, "release_review"},
+		{reviewGatewayDeadlinePattern, "set_review_deadline"},
+		{reviewGatewayClearDeadlinePattern, "clear_review_deadline"},
+	} {
+		match := candidate.pattern.FindStringSubmatch(content)
+		if len(match) < 3 {
+			continue
+		}
+		number, _ := strconv.Atoi(match[2])
+		intent := ReviewGatewayIntent{Name: candidate.name, Repository: match[1], PRNumber: number, ExplicitRepository: true}
+		if len(match) > 3 {
+			intent.Argument = match[3]
+		}
+		return intent
+	}
 	for _, rule := range reviewGatewayIntentPatterns {
 		match := rule.pattern.FindStringSubmatch(content)
 		if len(match) != 2 {
@@ -386,7 +445,7 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 }
 
 func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, dedupeKey string, now time.Time) ReviewGatewayJob {
-	collaborationMutation := intent.Name == "plan_bind_repository"
+	collaborationMutation := intent.Name == "plan_bind_repository" || isReviewCollaborationAction(intent.Name)
 	requiresAdmin := intent.Name == "plan_bind_repository"
 	jobSeed := strings.Join([]string{dedupeKey, intent.Name, intent.Repository, strconv.Itoa(intent.PRNumber)}, "\x00")
 	digest := sha256.Sum256([]byte(jobSeed))
@@ -410,6 +469,16 @@ func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, d
 		RequirePublicRepo:     intent.ExplicitRepository,
 		MaxAttempts:           3,
 		NextAttemptAt:         now.Format(time.RFC3339Nano),
+		Argument:              intent.Argument,
+	}
+}
+
+func isReviewCollaborationAction(action string) bool {
+	switch action {
+	case "claim_review", "release_review", "set_review_deadline", "clear_review_deadline":
+		return true
+	default:
+		return false
 	}
 }
 

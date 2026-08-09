@@ -221,6 +221,12 @@ func formatReviewGatewayResultReply(job ReviewGatewayJob, result ReviewGatewayEx
 		if data.GitLinkURL != "" {
 			lines = append(lines, "GitLink："+data.GitLinkURL)
 		}
+		if item := result.Collaboration; item != nil {
+			lines = append(lines, "负责人："+firstNonEmpty(item.AssignedDisplayName, "无"))
+			if item.DueAt != "" {
+				lines = append(lines, "审查截止："+item.DueAt)
+			}
+		}
 	} else {
 		lines = append(lines, firstNonEmpty(result.Message, "查询已完成"))
 	}

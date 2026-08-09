@@ -33,6 +33,19 @@ CREATE TABLE IF NOT EXISTS review_gateway_events (
 CREATE INDEX IF NOT EXISTS review_gateway_events_expires_at
     ON review_gateway_events(expires_at);
 
+CREATE TABLE IF NOT EXISTS review_collaboration_items (
+    repository TEXT NOT NULL,
+    pr_number INTEGER NOT NULL,
+    chat_id TEXT NOT NULL,
+    assigned_to TEXT NOT NULL DEFAULT '',
+    assigned_display_name TEXT NOT NULL DEFAULT '',
+    collaboration_status TEXT NOT NULL DEFAULT 'unassigned',
+    due_at TEXT NOT NULL DEFAULT '',
+    updated_by TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY(chat_id, repository, pr_number)
+);
+
 CREATE TABLE IF NOT EXISTS review_gateway_jobs (
     job_id TEXT PRIMARY KEY,
     dedupe_key TEXT NOT NULL,
