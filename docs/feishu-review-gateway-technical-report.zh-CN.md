@@ -313,6 +313,8 @@ Feishu 操作
 
 若 Gateway Credential 缺失、不可用或身份不匹配，系统不借用其他 Credential，不自动提升权限，也不降级为未校验写入；满足配置时可以回到本地确认流程。401 和 403 属于确定性失败。网络错误导致远端结果不确定时进入 `unknown`，禁止盲目重试。
 
+执行结果使用 `execution_path` 记录实际路径：Gateway 直接执行为 `gateway_direct`，需要本地 CLI 确认为 `local_confirmation`。回到本地确认时，`fallback_reason` 明确区分 `mode_local`、`credential_unavailable`、`identity_unverified` 和 `identity_mismatch`；这些字段用于审计和诊断，不改变 GitLink 服务端的最终权限判断。
+
 下面的真实链路结果显示普通 Review 已写入 GitLink，并由 GET 回读确认远端 Review 记录。该证据只证明此条普通 Review 链路，不外推为所有动作都完成了同等外部验证。
 
 ![飞书群内普通审查意见写入并通过 GitLink 回读验证](images/feishu-review-gateway/review-completed.png)
