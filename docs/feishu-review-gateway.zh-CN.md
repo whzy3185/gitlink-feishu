@@ -120,6 +120,12 @@ Gateway 主动建立 Feishu WebSocket 长连接。基础模式不需要公网 IP
 | Optional | 群列表读取 API 对应权限 | 仅供 `--discover-chats` 查找 Bot 可见群 | 不影响已配置群的运行 |
 | Optional | Base / DocX / Wiki / Task 对应权限 | 仅供协作资产投影 | 不影响核心 Review 链路 |
 
+以下两张图分别展示核心 Required Permission 已启用：第一项允许接收群聊中 @Bot 的消息，第二项允许 Bot 回复文本与 Review Card。
+
+![已启用接收群聊中 @Bot 消息的权限](images/feishu-review-gateway/feishu-permission-group-at.png)
+
+![已启用以应用身份发送消息的权限](images/feishu-review-gateway/feishu-permission-send-as-bot.png)
+
 企业成员名称读取使用：
 
 ```text
@@ -136,6 +142,14 @@ SDK 还通过 `GET /open-apis/bot/v3/info` 获取 Bot 自身身份，避免处�
 2. 使用携带 `command` payload 的交互卡片时，配置 `card.action.trigger`；
 3. 不要订阅本项目没有 Handler 的 `drive.file.bitable_record_changed_v1`。
 
+消息事件是群聊命令入口，必须订阅 `im.message.receive_v1`。
+
+![已订阅飞书消息接收事件](images/feishu-review-gateway/feishu-message-event.png)
+
+交互卡片回调仅在使用携带 `command` payload 的卡片动作时需要；基础查询和内置 PR 链接不依赖该回调。
+
+![已配置交互卡片动作回调](images/feishu-review-gateway/feishu-card-callback.png)
+
 `im.message.receive_v1` 是核心事件；`card.action.trigger` 是可选交互卡片回调。它们不是 Permission 名称。Gateway 已注册该回调并读取 Action Value 中的 `command`；当前内置 PR 链接按钮和本地确认流程不依赖此回调，也不会通过飞书按钮直接完成最终 GitLink 写入。
 
 ### 步骤 5：选择 Long Connection
@@ -146,6 +160,10 @@ SDK 还通过 `GET /open-apis/bot/v3/info` 获取 Bot 自身身份，避免处�
 
 Long Connection 由 Gateway 中的 `larkws.NewClient` 主动建立，不需要配置 HTTP Callback URL。
 
+下图展示事件与回调使用长连接接收。Gateway 运行后会主动建立 WebSocket 连接。
+
+![飞书事件与回调使用长连接](images/feishu-review-gateway/feishu-long-connection.png)
+
 ### 步骤 6：设置范围并发布
 
 1. 将目标用户或部门加入应用可用范围；
@@ -154,6 +172,10 @@ Long Connection 由 Gateway 中的 `larkws.NewClient` 主动建立，不需要�
 4. 将 Bot 加入目标群聊。
 
 未发布的新配置不会自动应用到正在使用的 Bot。
+
+下图显示企业自建应用已启用，且最新应用版本已经发布。只有已发布版本中的权限与事件配置才会对群内 Bot 生效。
+
+![飞书企业自建应用已启用并发布](images/feishu-review-gateway/feishu-app-enabled.png)
 
 ## 4. Credential 与运行配置
 
@@ -347,6 +369,10 @@ Review gateway ready
 
 Long Connection 建立后，SDK 日志会显示 WebSocket 已连接。若只有 `service_ready` 而 `/readyz` 仍返回 503，应继续检查 Feishu Channel、SQLite、配置和实例锁状态。
 
+下图为 Gateway 本地健康检查与就绪检查均通过的示例。`/healthz` 表示服务进程可用，`/readyz` 进一步确认飞书通道、SQLite 和后台处理组件可以工作。
+
+![Gateway 健康检查与就绪检查通过](images/feishu-review-gateway/gateway-health-ready.png)
+
 ### 只读离线模式
 
 用于本地 Fixture 或排障，不连接 Long Connection：
@@ -379,11 +405,19 @@ gitlink-cli feishu +review-gateway \
 
 5. 收到“GitLink PR Review 助手”命令列表后，再发送：
 
+下图展示群内帮助命令的真实回复，包含查询、协作与受控写操作的中文语法。
+
+![飞书群内帮助命令回复](images/feishu-review-gateway/bot-help.png)
+
 ```text
 @<BOT_NAME> 查看 <GITLINK_OWNER>/<GITLINK_REPO> PR #<PR_NUMBER>
 ```
 
 收到 PR 标题、状态、分支、当前版本、变更、Review、负责人和 GitLink 链接，表示消息接收、命令解析、GitLink GET 和飞书回复链路均已工作。
+
+下图展示一次真实 PR 查询回复。负责人来自飞书协作状态，审查者和当前结论来自 GitLink Review 数据。
+
+![飞书群内 PR 查询回复](images/feishu-review-gateway/pr-query.png)
 
 ### 部署完成检查
 
@@ -454,6 +488,10 @@ Gateway 先创建 ActionPlan，再使用当前 Gateway Credential 调用 `/users
 ```
 
 GitLink 服务端负责判断该 Credential 是否拥有 Review、Approve、Close 或 Merge 权限。明确的 401/403 会作为权限失败返回，不会切换到其他 Credential；写入结果不确定时进入 Unknown，并停止自动重试。
+
+下图展示普通审查意见完成写入并通过 GitLink GET 回读验证的结果。回复中的审查记录编号来自 GitLink 远端结果。
+
+![普通审查意见写入并完成远程回读](images/feishu-review-gateway/review-completed.png)
 
 ### 本地确认
 
