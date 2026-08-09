@@ -17,6 +17,15 @@ func reviewGatewayResultSendInput(job ReviewGatewayJob, result ReviewGatewayExec
 		Text:           formatReviewGatewayResultReply(job, result),
 	}
 	if result.Status == "failed" || result.ReviewData == nil {
+		if result.ActionPlan == nil {
+			return input
+		}
+	}
+	if result.ActionPlan != nil {
+		card, err := buildReviewActionPlanCard(job, *result.ActionPlan)
+		if err == nil {
+			input.MsgType, input.Card, input.Text = "interactive", card, ""
+		}
 		return input
 	}
 	card, err := buildReviewGatewayPRCard(job, result)
@@ -27,6 +36,76 @@ func reviewGatewayResultSendInput(job ReviewGatewayJob, result ReviewGatewayExec
 	input.Card = card
 	input.Text = ""
 	return input
+}
+
+func buildReviewActionPlanCard(job ReviewGatewayJob, plan ReviewActionPlan) (string, error) {
+	status := reviewActionPlanStatusDisplay(plan.Status)
+	title := fmt.Sprintf("%s PR #%d", reviewActionDisplayName(plan.Action), plan.PRNumber)
+	rows := []string{
+		fmt.Sprintf("**仓库**：%s", plan.Repository),
+		fmt.Sprintf("**操作**：%s", reviewActionDisplayName(plan.Action)),
+		fmt.Sprintf("**GitLink 身份**：%s", plan.GitLinkLogin),
+		fmt.Sprintf("**基于版本**：%s", truncateReviewGatewayText(plan.ExpectedHeadSHA, 12)),
+		fmt.Sprintf("**操作编号**：%s", plan.RequestID),
+		fmt.Sprintf("**状态**：%s", status),
+	}
+	switch plan.Action {
+	case reviewActionRejectClose:
+		rows = append(rows, "**高风险操作**：最终确认后将拒绝并关闭此 PR。")
+	case reviewActionMerge:
+		rows = append(rows, "**高风险操作**：最终确认后将合并此 PR，并修改目标分支内容。")
+	case reviewActionReject:
+		rows = append(rows, "最终确认后将提交“需要修改”审查结果，PR 保持开放。")
+	case reviewActionApprove:
+		rows = append(rows, "最终确认后将向 GitLink 提交“批准”审查结果。")
+	case reviewActionCommon:
+		rows = append(rows, "最终确认后将向 GitLink 提交一条普通审查意见。")
+	}
+	switch plan.Status {
+	case "pending_confirmation":
+		rows = append(rows,
+			"操作计划已经生成，当前尚未修改 GitLink。",
+			"请在已登录对应 GitLink 身份的本地 CLI 中完成最终确认。",
+			fmt.Sprintf("本地确认标识：`%s`", plan.PlanID),
+			"GitLink 权限将在执行时由 GitLink 服务端校验。",
+		)
+	case "completed":
+		rows = append(rows, "**结果**：操作已完成并通过 GitLink 回读验证")
+		if plan.ReviewID != "" {
+			rows = append(rows, "**审查记录**：#"+plan.ReviewID)
+		}
+	case "unknown_needs_reconciliation":
+		rows = append(rows, "操作结果暂无法确认。系统已停止自动重试，以避免重复写入。")
+	case "cancelled":
+		rows = append(rows, "操作已取消，本次未修改 GitLink。")
+	case "failed":
+		rows = append(rows, "操作未完成，请核对错误信息后重新生成计划。")
+	}
+	payload := map[string]interface{}{
+		"schema": "2.0",
+		"config": map[string]interface{}{"update_multi": true},
+		"header": map[string]interface{}{"title": map[string]interface{}{"tag": "plain_text", "content": title}},
+		"body":   map[string]interface{}{"elements": []map[string]interface{}{{"tag": "markdown", "content": strings.Join(rows, "\n")}}},
+	}
+	encoded, err := json.Marshal(payload)
+	return string(encoded), err
+}
+
+func reviewActionPlanStatusDisplay(status string) string {
+	switch status {
+	case "pending_confirmation":
+		return "待本地确认"
+	case "completed":
+		return "已完成"
+	case "cancelled":
+		return "已取消"
+	case "unknown_needs_reconciliation":
+		return "结果待核对"
+	case "failed":
+		return "执行失败"
+	default:
+		return "待确认"
+	}
 }
 
 func buildReviewGatewayPRCard(job ReviewGatewayJob, result ReviewGatewayExecutionResult) (string, error) {

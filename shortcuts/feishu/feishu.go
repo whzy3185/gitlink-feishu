@@ -37,6 +37,7 @@ func Shortcuts(translators ...*i18n.Translator) []*common.Shortcut {
 		newTaskPreviewShortcut(),
 		newTaskCreateShortcut(),
 		newReviewGatewayShortcut(),
+		newReviewConfirmLocalShortcut(),
 	}
 }
 

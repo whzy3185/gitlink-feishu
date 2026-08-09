@@ -94,6 +94,34 @@ CREATE TABLE IF NOT EXISTS review_dead_letters (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS review_action_plans (
+    plan_id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    source_job_id TEXT NOT NULL,
+    source_chat_id TEXT NOT NULL,
+    actor_id TEXT NOT NULL,
+    gitlink_login TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    pr_number INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    review_status TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL DEFAULT '',
+    expected_head_sha TEXT NOT NULL,
+    source_fingerprint TEXT NOT NULL,
+    status TEXT NOT NULL,
+    review_id TEXT NOT NULL DEFAULT '',
+    mutation_status TEXT NOT NULL DEFAULT 'none',
+    reconciliation_status TEXT NOT NULL DEFAULT 'not_required',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    lease_owner TEXT NOT NULL DEFAULT '',
+    lease_expires_at TEXT NOT NULL DEFAULT '',
+    error_summary TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS review_gateway_jobs (
     job_id TEXT PRIMARY KEY,
     dedupe_key TEXT NOT NULL,

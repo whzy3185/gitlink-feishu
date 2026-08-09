@@ -36,6 +36,7 @@ type ReviewGatewayExecutionResult struct {
 	ReviewData        *ReviewData              `json:"review_data,omitempty"`
 	SnapshotPlan      *ReviewSnapshotPlan      `json:"snapshot_plan,omitempty"`
 	Collaboration     *ReviewCollaborationItem `json:"collaboration,omitempty"`
+	ActionPlan        *ReviewActionPlan        `json:"action_plan,omitempty"`
 	Error             string                   `json:"error,omitempty"`
 	AttemptCount      int                      `json:"attempt_count,omitempty"`
 }
@@ -44,6 +45,7 @@ type ReviewGatewayExecutor struct {
 	Runtime       *common.RuntimeContext
 	DataProvider  ReviewDataProvider
 	Collaboration ReviewCollaborationStore
+	ActionPlans   *SQLiteReviewGatewayStore
 	Collaborators ReviewRepositoryCollaboratorReader
 	DisplayNames  FeishuDisplayNameResolver
 	Now           func() time.Time
@@ -113,7 +115,25 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		return result, nil
 
 	case "help":
-		result.Message = "支持：查看 PR #编号、刷新 PR #编号、查看绑定。GitLink 查询保持只读。"
+		result.Message = strings.Join([]string{
+			"GitLink PR Review 助手",
+			"",
+			"查询与协作",
+			"查看 <拥有者>/<仓库> PR #<编号>",
+			"领取 <拥有者>/<仓库> PR #<编号>",
+			"取消领取 <拥有者>/<仓库> PR #<编号>",
+			"设置 <拥有者>/<仓库> PR #<编号> 审查截止 <YYYY-MM-DD>",
+			"清除 <拥有者>/<仓库> PR #<编号> 审查截止",
+			"",
+			"受控写操作",
+			"提交审查意见 <拥有者>/<仓库> PR #<编号> <意见>",
+			"批准 <拥有者>/<仓库> PR #<编号> <说明>",
+			"需要修改 <拥有者>/<仓库> PR #<编号> <原因>",
+			"拒绝并关闭 <拥有者>/<仓库> PR #<编号> <原因>",
+			"合并 <拥有者>/<仓库> PR #<编号>",
+			"",
+			"受控写操作只生成计划，最终执行需要绑定的 GitLink 身份在本地确认。",
+		}, "\n")
 	case "unsupported_command":
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("不支持的命令，请发送“帮助”查看可用命令"))
 	case "show_binding":
@@ -165,6 +185,8 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		}
 		result.Collaboration = &item
 		result.Message = formatReviewCollaborationOutcome(item)
+	case "prepare_common_review", "prepare_review_approve", "prepare_review_reject", "prepare_reject_close", "prepare_merge":
+		return e.prepareControlledReviewAction(ctx, job, result, now().UTC())
 	default:
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("unsupported review gateway action %q", job.Action))
 	}

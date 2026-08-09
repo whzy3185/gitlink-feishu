@@ -64,6 +64,17 @@ func (d *ReviewGatewayReplyDispatcher) TryAcknowledge(job ReviewGatewayJob) bool
 	}
 }
 
+func (d *ReviewGatewayReplyDispatcher) TryNotice(event ReviewGatewayEvent, message string) bool {
+	message = strings.TrimSpace(message)
+	if d == nil || d.sender == nil || event.MessageID == "" || message == "" {
+		return false
+	}
+	return d.TryAcknowledge(ReviewGatewayJob{
+		JobID: "notice-" + event.MessageID, Action: "notice", Argument: message,
+		ChatID: event.ChatID, SourceMessageID: event.MessageID,
+	})
+}
+
 func (d *ReviewGatewayReplyDispatcher) Wake() {
 	if d == nil {
 		return
@@ -179,6 +190,9 @@ func (d *ReviewGatewayReplyDispatcher) deliverPendingReplies(ctx context.Context
 }
 
 func formatReviewGatewayAcknowledgement(job ReviewGatewayJob) string {
+	if job.Action == "notice" {
+		return strings.TrimSpace(job.Argument)
+	}
 	target := job.Repository
 	if job.PRNumber > 0 {
 		target = fmt.Sprintf("%s PR #%d", job.Repository, job.PRNumber)
@@ -188,6 +202,23 @@ func formatReviewGatewayAcknowledgement(job ReviewGatewayJob) string {
 		target,
 		job.JobID,
 	)
+}
+
+func formatReviewGatewayNotice(reason string) string {
+	switch reason {
+	case "collaboration_identity_required":
+		return "当前飞书账号尚未绑定 GitLink 身份，无法执行该操作。"
+	case "chat_not_bound":
+		return "当前群尚未配置可操作的 GitLink 仓库。"
+	case "sender_not_allowed":
+		return "当前账号无权在此群执行该命令。"
+	case "stale_event":
+		return "该消息事件已经过期，请重新发送命令。"
+	case "binding_requires_admin":
+		return "只有 Gateway 管理员可以修改仓库绑定。"
+	default:
+		return "请求未被接受，请发送“帮助”查看可用命令。"
+	}
 }
 
 func formatReviewGatewayResultReply(job ReviewGatewayJob, result ReviewGatewayExecutionResult) string {

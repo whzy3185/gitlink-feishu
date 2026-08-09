@@ -165,6 +165,11 @@ var (
 	reviewGatewayReleasePattern       = regexp.MustCompile(`(?i)^(?:取消领取|释放)\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`)
 	reviewGatewayDeadlinePattern      = regexp.MustCompile(`(?i)^设置\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+(?:审查截止|截止)\s+(\d{4}-\d{2}-\d{2})$`)
 	reviewGatewayClearDeadlinePattern = regexp.MustCompile(`(?i)^清除\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+审查截止$`)
+	reviewGatewayCommonReviewPattern  = regexp.MustCompile(`(?i)^(?:提交审查意见|review)\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:\s+PR\s*#?|#)(\d+)\s+(.+)$`)
+	reviewGatewayApprovePattern       = regexp.MustCompile(`(?i)^(?:批准|approve)\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:\s+PR\s*#?|#)(\d+)\s+(.+)$`)
+	reviewGatewayRejectPattern        = regexp.MustCompile(`(?i)^(?:需要修改|要求修改|reject)\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:\s+PR\s*#?|#)(\d+)\s+(.+)$`)
+	reviewGatewayRefusePattern        = regexp.MustCompile(`(?i)^(?:拒绝并关闭|refuse)\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:\s+PR\s*#?|#)(\d+)\s+(.+)$`)
+	reviewGatewayMergePattern         = regexp.MustCompile(`(?i)^(?:合并|merge)\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:\s+PR\s*#?|#)(\d+)$`)
 	reviewGatewayBindPattern          = regexp.MustCompile(`(?i)^绑定仓库\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$`)
 	reviewGatewayIntentPatterns       = []struct {
 		pattern *regexp.Regexp
@@ -312,7 +317,7 @@ func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEven
 		intent.Name = "unsupported_command"
 	}
 	receipt.Intent = intent
-	if isReviewCollaborationAction(intent.Name) {
+	if isReviewCollaborationAction(intent.Name) || isControlledReviewPrepareAction(intent.Name) {
 		identity, ok := g.identities[event.UserID]
 		if !ok || !identity.Enabled {
 			receipt.Reason = "collaboration_identity_required"
@@ -334,7 +339,7 @@ func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEven
 			receipt.Reason = "chat_not_bound"
 			return receipt, nil
 		}
-		if !explicitPublicRead && !isReviewCollaborationAction(intent.Name) && len(binding.AllowedUserIDs) > 0 && !containsReviewGatewayString(binding.AllowedUserIDs, event.UserID) && !g.isAdmin(binding, event.UserID) {
+		if !explicitPublicRead && !isReviewCollaborationAction(intent.Name) && !isControlledReviewPrepareAction(intent.Name) && len(binding.AllowedUserIDs) > 0 && !containsReviewGatewayString(binding.AllowedUserIDs, event.UserID) && !g.isAdmin(binding, event.UserID) {
 			receipt.Reason = "sender_not_allowed"
 			return receipt, nil
 		}
@@ -372,7 +377,7 @@ func (g *ReviewGateway) planContext(ctx context.Context, event ReviewGatewayEven
 	}
 
 	job := newReviewGatewayJob(event, intent, dedupeKey, now)
-	if isReviewCollaborationAction(intent.Name) {
+	if isReviewCollaborationAction(intent.Name) || isControlledReviewPrepareAction(intent.Name) {
 		identity := g.identities[event.UserID]
 		job.GitLinkLogin = identity.GitLinkLogin
 		job.CollaborationAuthorized = true
@@ -428,6 +433,27 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 		}
 		return intent
 	}
+	for _, candidate := range []struct {
+		pattern *regexp.Regexp
+		name    string
+	}{
+		{reviewGatewayCommonReviewPattern, "prepare_common_review"},
+		{reviewGatewayApprovePattern, "prepare_review_approve"},
+		{reviewGatewayRejectPattern, "prepare_review_reject"},
+		{reviewGatewayRefusePattern, "prepare_reject_close"},
+		{reviewGatewayMergePattern, "prepare_merge"},
+	} {
+		match := candidate.pattern.FindStringSubmatch(content)
+		if len(match) < 3 {
+			continue
+		}
+		number, _ := strconv.Atoi(match[2])
+		intent := ReviewGatewayIntent{Name: candidate.name, Repository: match[1], PRNumber: number, ExplicitRepository: true}
+		if len(match) > 3 {
+			intent.Argument = strings.TrimSpace(match[3])
+		}
+		return intent
+	}
 	for _, rule := range reviewGatewayIntentPatterns {
 		match := rule.pattern.FindStringSubmatch(content)
 		if len(match) != 2 {
@@ -476,6 +502,15 @@ func newReviewGatewayJob(event ReviewGatewayEvent, intent ReviewGatewayIntent, d
 func isReviewCollaborationAction(action string) bool {
 	switch action {
 	case "claim_review", "release_review", "set_review_deadline", "clear_review_deadline":
+		return true
+	default:
+		return false
+	}
+}
+
+func isControlledReviewPrepareAction(action string) bool {
+	switch action {
+	case "prepare_common_review", "prepare_review_approve", "prepare_review_reject", "prepare_reject_close", "prepare_merge":
 		return true
 	default:
 		return false

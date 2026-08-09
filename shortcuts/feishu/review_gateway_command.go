@@ -262,6 +262,7 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 	executor := &ReviewGatewayExecutor{
 		Runtime:       runtime,
 		Collaboration: store,
+		ActionPlans:   store,
 		DisplayNames: ReviewFeishuDisplayNameResolver{
 			Client: NewOpenAPIClient(nil), AppID: appID, AppSecret: appSecret,
 		},
@@ -353,6 +354,9 @@ func handleReviewGatewayInbound(
 		queue.ObserveHandlerLatency(receipt.Job.JobID, latencyMs)
 	}
 	output.TryEmit(receipt)
+	if !receipt.Accepted && receipt.Reason != "duplicate_event" {
+		replies.TryNotice(event, formatReviewGatewayNotice(receipt.Reason))
+	}
 	if receipt.Reason == "state_store_failed" {
 		return fmt.Errorf("review gateway callback persistence failed within %d ms", sqliteBudget.Milliseconds())
 	}
