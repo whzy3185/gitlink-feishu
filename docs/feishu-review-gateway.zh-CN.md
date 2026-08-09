@@ -19,7 +19,7 @@ GitLink 仍是仓库、PR、Review 和仓库权限的事实来源。领取 PR �
 - 展示 PR、版本、变更、Review、审查者和当前结论；
 - 领取、取消领取和维护审查截止时间；
 - 生成普通审查意见、批准、需要修改、拒绝并关闭、合并的 ActionPlan（受控操作计划）；
-- 在持有对应 GitLink Credential 的本地 CLI 中最终确认 ActionPlan；
+- 支持本地确认和身份一致时的 Gateway 自动直接执行两种 ActionPlan 执行方式；
 - 通过 GitLink GET 回读确认受控操作结果；
 - 使用 SQLite 持久化事件、任务、回复、协作状态和操作状态；
 - 提供健康检查、就绪检查、Metrics、备份和恢复能力。
@@ -325,6 +325,7 @@ gitlink-cli.exe feishu +review-gateway `
 | `--job-timeout-seconds` | `60` | 单个 GitLink 任务超时 |
 | `--handler-timeout-ms` | `2000` | 飞书入站处理总预算 |
 | `--sqlite-timeout-ms` | `500` | 入站 SQLite 写入预算 |
+| `--controlled-action-mode` | `local` | 受控操作执行模式：`local` 或 `auto` |
 | `--shutdown-timeout` | `30s` | 优雅关闭超时 |
 | `--admin-listen` | `127.0.0.1:8787` | 健康、就绪、Metrics 和只读管理接口 |
 
@@ -423,13 +424,40 @@ Reviewer 来自 GitLink 的真实 Review 记录，负责人来自飞书协作状
 @<BOT_NAME> 合并 <拥有者>/<仓库> PR #<编号>
 ```
 
-`需要修改` 只提交 Review 结论，PR 保持开放；`拒绝并关闭` 会关闭 PR。以上命令在飞书中只生成 ActionPlan，不会由普通卡片点击直接完成 GitLink 写入。
+`需要修改` 只提交 Review 结论，PR 保持开放；`拒绝并关闭` 会关闭 PR。以上命令始终先生成 ActionPlan；是否继续自动执行由部署的受控操作模式和身份校验结果决定。
 
 兼容命令 `review`、`approve`、`reject`、`refuse`、`merge` 仍可解析，但新文档和日常使用推荐中文正式命令。
 
 ## 10. Controlled Actions
 
-ActionPlan 把飞书中的操作意图冻结为可追踪的执行计划：
+ActionPlan 把飞书中的操作意图冻结为可追踪的执行计划。Gateway 提供两种执行方式，并始终复用同一套 Head、指纹、租约、单次写入、回读、Unknown 和 Reconciliation 保护。
+
+### 自动直接执行
+
+部署者显式增加以下参数后启用：
+
+```bash
+--controlled-action-mode auto
+```
+
+Gateway 先创建 ActionPlan，再使用当前 Gateway Credential 调用 `/users/me`。只有返回的 GitLink Login 与发起操作的飞书用户在 `ReviewIdentityBinding` 中绑定的 Login 一致，才会直接执行现有受控 Writer：
+
+```text
+飞书确定“做什么”
+  -> ActionPlan 冻结仓库、PR、操作人、GitLink Login、Head 和内容指纹
+  -> Gateway Credential 调用 /users/me
+  -> 身份一致
+  -> Head / 指纹 / Plan 状态 / Lease 校验
+  -> GitLink 单次写入
+  -> 有界 GET 回读
+  -> 飞书返回 completed / failed / unknown
+```
+
+GitLink 服务端负责判断该 Credential 是否拥有 Review、Approve、Close 或 Merge 权限。明确的 401/403 会作为权限失败返回，不会切换到其他 Credential；写入结果不确定时进入 Unknown，并停止自动重试。
+
+### 本地确认
+
+`local` 是默认模式，保持原有行为：
 
 ```text
 飞书确定“做什么”
@@ -437,6 +465,8 @@ ActionPlan 把飞书中的操作意图冻结为可追踪的执行计划：
   -> 本地 CLI 确认“由谁执行”
   -> GitLink 执行并通过 GET 回读确认结果
 ```
+
+即使配置为 `auto`，Gateway Credential 缺失、`/users/me` 无法验证身份或实际 Login 与绑定 Login 不一致时，也会安全回退到本地确认，且不会执行 GitLink 写入。
 
 在能够访问 Gateway 同一 SQLite 状态库的主机上，以绑定的 GitLink 身份登录，然后执行：
 
@@ -466,6 +496,8 @@ CLI 会调用 `/users/me` 核对当前 Credential 的 Login，并重新检查 Ex
 | cancelled | 计划已取消，没有执行 GitLink 写入 |
 
 同一计划具备租约、幂等和终态保护，不能重复执行。GitLink 仍负责最终权限判断。
+
+两种模式都不会让 Claim、Gateway Admin 或飞书群权限转化为 GitLink 仓库权限，也不会借用其他用户、Owner 或 Installation Credential。`ReviewIdentityBinding` 只保存飞书用户到 GitLink Login 的映射，不保存 Token。
 
 ## 11. 运行状态检查
 

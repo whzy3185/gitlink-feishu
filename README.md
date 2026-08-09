@@ -116,6 +116,8 @@ The official [GitLink](https://www.gitlink.org.cn) CLI tool — built for humans
 
 `gitlink-cli` can connect a Bot in an enterprise self-built Feishu App to GitLink Pull Request review collaboration. The shortest path is: enable the Feishu Bot and Long Connection, configure a chat/repository binding, then run `gitlink-cli feishu +review-gateway --listen`.
 
+Deployments may keep the default local-confirmation flow or explicitly enable identity-gated direct execution; direct execution is allowed only when the Gateway Credential's `/users/me` identity matches the user's bound GitLink login, and GitLink still enforces repository permissions.
+
 See the [Feishu Review Gateway deployment and usage guide](./docs/feishu-review-gateway.zh-CN.md) for permissions, credentials, bindings, controlled actions, service deployment, and operations.
 
 ## Installation & Quick Start
