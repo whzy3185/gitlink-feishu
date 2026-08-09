@@ -26,6 +26,18 @@ GitLink 仍是仓库、PR、Review 和仓库权限的事实来源。领取 PR �
 
 Base、DocX、Wiki 和 Task 是可选协作资产投影，不是核心 Bot -> Gateway -> GitLink 链路的前置条件。
 
+### 最短部署流程
+
+1. 创建企业自建 Feishu App；
+2. 启用 Bot；
+3. 开通 Permission 并订阅 Event；
+4. 选择 Long Connection；
+5. 发布应用版本并将 Bot 加入目标群；
+6. 准备 Feishu 与 GitLink Credential；
+7. 创建 `bindings.json`；
+8. 启动 Review Gateway；
+9. 在群内发送 `@<BOT_NAME> 帮助` 验证链路。
+
 ## 2. 部署前准备
 
 ### 2.1 GitLink 侧
@@ -143,11 +155,11 @@ Long Connection 由 Gateway 中的 `larkws.NewClient` 主动建立，不需要�
 
 未发布的新配置不会自动应用到正在使用的 Bot。
 
-## 4. Credential 与运行参数
+## 4. Credential 与运行配置
 
-| 参数 | 用途 | 必须 | 来源 | 敏感 |
+| 配置项 | 用途 | 必须 | 来源 | 敏感 |
 | --- | --- | --- | --- | --- |
-| `<FEISHU_APP_ID>` | 标识企业自建 App | 是 | 飞书开放平台“凭证与基础信息” | 是 |
+| `<FEISHU_APP_ID>` | 标识企业自建 App | 是 | 飞书开放平台“凭证与基础信息” | 否（建议不公开实际值） |
 | `<FEISHU_APP_SECRET>` | 换取 tenant access token、建立 SDK 连接 | 是 | 飞书开放平台“凭证与基础信息” | 是 |
 | `<GITLINK_TOKEN>` | 调用 GitLink API | 二选一 | GitLink 私人 Token，或交互登录存储 | 是 |
 | `<GITLINK_LOGIN>` | 绑定飞书用户与 GitLink 身份 | 协作/受控操作需要 | GitLink 用户名 | 否 |
@@ -220,6 +232,8 @@ gitlink-cli feishu +review-gateway --discover-chats
 
 该命令读取 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET`，调用飞书群列表 API，不修改群配置。若飞书返回权限错误，请按开放平台对“获取群列表”API 的当前提示开通对应 Optional 权限；本指南不猜测未由平台确认的正式 scope 名称。
 
+从输出中选择目标群的 `chat_id`，填入 `bindings.json` 的 `chat_id`。当前没有单独发现 `FEISHU_USER_OPEN_ID` 的 CLI 命令；启动 Gateway 后，让目标用户在已绑定群中发送一条新的 `@<BOT_NAME> 帮助`，从 Gateway 输出的入站回执 JSON 中读取 `event.user_id`，再填入 `identity_bindings[].feishu_user_id`。该值属于个人标识，不要写入公开日志、截图或 Git 历史。
+
 身份和权限必须分开理解：
 
 - ReviewIdentityBinding 只表示飞书用户对应哪个 GitLink Login；
@@ -261,6 +275,28 @@ gitlink-cli feishu +review-gateway --help
 
 ### 开发与快速验证
 
+启动前确认：
+
+- [ ] `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET` 已配置；
+- [ ] GitLink Credential 已准备；
+- [ ] `bindings.json` 已创建；
+- [ ] `bindings.json` 至少包含一个 `enabled=true` 的群绑定。
+
+最小可运行配置示例（完整 Binding 结构见[第 5 节](#5-repository-binding-与身份绑定)）：
+
+```bash
+export FEISHU_APP_ID="<FEISHU_APP_ID>"
+export FEISHU_APP_SECRET="<FEISHU_APP_SECRET>"
+export GITLINK_TOKEN="<GITLINK_TOKEN>"
+
+gitlink-cli feishu +review-gateway \
+  --listen \
+  --bindings "<DATA_DIR>/bindings.json" \
+  --state-db "<DATA_DIR>/review.db"
+```
+
+连接成功后，在已启用的绑定群发送 `@<BOT_NAME> 帮助`。
+
 Linux / macOS：
 
 ```bash
@@ -279,7 +315,7 @@ gitlink-cli.exe feishu +review-gateway `
   --state-db "<DATA_DIR>\review.db"
 ```
 
-`--state-db` 决定数据目录。Gateway 会自动创建父目录、SQLite 文件、表和索引，并启用 WAL；不需要手工执行数据库初始化脚本。
+`--state-db` 指定 SQLite 状态库路径。Gateway 会自动创建其父目录、SQLite 文件、表和索引，并启用 WAL，不需要手工执行数据库初始化脚本。
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -347,6 +383,16 @@ gitlink-cli feishu +review-gateway \
 ```
 
 收到 PR 标题、状态、分支、当前版本、变更、Review、负责人和 GitLink 链接，表示消息接收、命令解析、GitLink GET 和飞书回复链路均已工作。
+
+### 部署完成检查
+
+- [ ] Gateway 已启动并进入 ready 状态；
+- [ ] Feishu Long Connection 已建立；
+- [ ] `/healthz` 返回正常；
+- [ ] `/readyz` 返回 ready；
+- [ ] 群内 `@<BOT_NAME> 帮助` 能收到回复；
+- [ ] PR 查询能返回 GitLink 数据；
+- [ ] 需要协作功能时，Identity Binding 已配置。
 
 ## 9. 常用命令
 
@@ -498,7 +544,12 @@ sudo systemctl enable --now gitlink-feishu-review
 sudo systemctl status gitlink-feishu-review
 ```
 
-示例 unit 使用 `EnvironmentFile` 注入 Secret，并限制可写目录。
+示例 unit 使用 `EnvironmentFile` 注入 Secret，并限制可写目录。服务输出由 systemd 默认收集到 journal：
+
+```bash
+sudo journalctl -u gitlink-feishu-review -n 100 --no-pager
+sudo journalctl -u gitlink-feishu-review -f
+```
 
 ### 12.3 Windows Service
 
@@ -512,6 +563,8 @@ deploy/windows/review-gateway.env.example
 下载 WinSW 后，将其可执行文件、XML、`gitlink-cli.exe` 和 `bindings.json` 放入服务目录；WinSW 可执行文件与 XML 使用相同基础文件名。为服务账号配置 `FEISHU_APP_ID`、`FEISHU_APP_SECRET`、`GITLINK_TOKEN` 和 `FEISHU_REVIEW_ADMIN_TOKEN`，再按当前 WinSW 文档使用 `install`、`start`、`status` 和 `stop`。
 
 `review-gateway.env.example` 是变量清单模板，当前 XML 不会自动读取该文件。应使用 WinSW 或 Windows 服务账号支持的环境注入方式，不要把 Secret 直接写入 XML。
+
+示例 XML 启用了 `roll-by-size`，单文件阈值为 10240 KB，保留 8 个文件，但没有显式配置日志目录。实际目录和文件名由所用 WinSW 版本及服务目录决定，应在部署后的 WinSW 服务目录中确认，不要依赖本文猜测路径。
 
 ### 12.4 Nginx / Caddy
 
