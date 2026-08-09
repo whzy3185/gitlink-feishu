@@ -67,7 +67,7 @@ $env:GITLINK_TOKEN = "<GITLINK_TOKEN>"
 - App ID 与 App Secret；
 - Long Connection 接收方式；
 - 消息事件 `im.message.receive_v1`；
-- 使用交互卡片时的回调 `card.action.trigger`；
+- 使用携带 `command` payload 的交互卡片时，可选回调 `card.action.trigger`；
 - 应用可用范围和已发布的应用版本；
 - 已加入目标群聊的 Bot。
 
@@ -121,10 +121,10 @@ SDK 还通过 `GET /open-apis/bot/v3/info` 获取 Bot 自身身份，避免处�
 进入“事件与回调”：
 
 1. 订阅 `im.message.receive_v1`，用于接收群内 @Bot 消息；
-2. 使用 Review Card 或 Controlled Actions 时，配置 `card.action.trigger`；
+2. 使用携带 `command` payload 的交互卡片时，配置 `card.action.trigger`；
 3. 不要订阅本项目没有 Handler 的 `drive.file.bitable_record_changed_v1`。
 
-`im.message.receive_v1` 是事件；`card.action.trigger` 是交互卡片回调。它们不是 Permission 名称。
+`im.message.receive_v1` 是核心事件；`card.action.trigger` 是可选交互卡片回调。它们不是 Permission 名称。Gateway 已注册该回调并读取 Action Value 中的 `command`；当前内置 PR 链接按钮和本地确认流程不依赖此回调，也不会通过飞书按钮直接完成最终 GitLink 写入。
 
 ### 步骤 5：选择 Long Connection
 
