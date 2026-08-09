@@ -170,6 +170,13 @@ func (s *SQLiteReviewGatewayStore) FailReviewActionPlan(ctx context.Context, pla
 	return requireReviewGatewayJobUpdate(result, err, planID, "fail review action plan")
 }
 
+func (s *SQLiteReviewGatewayStore) FailPendingReviewActionPlan(ctx context.Context, planID string, failure error, now time.Time) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE review_action_plans
+		SET status='failed', mutation_status='none', error_summary=?, updated_at=?
+		WHERE plan_id=? AND status='pending_confirmation'`, redactReviewGatewayError(failure.Error()), reviewGatewayTimestamp(now), planID)
+	return requireReviewGatewayJobUpdate(result, err, planID, "fail pending review action plan")
+}
+
 func (s *SQLiteReviewGatewayStore) CancelReviewActionPlan(ctx context.Context, planID, actorID string, now time.Time) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE review_action_plans SET status='cancelled', updated_at=?
 		WHERE plan_id=? AND actor_id=? AND status='pending_confirmation'`, reviewGatewayTimestamp(now), planID, actorID)

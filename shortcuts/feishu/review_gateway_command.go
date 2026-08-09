@@ -82,6 +82,7 @@ func newReviewGatewayShortcut() *common.Shortcut {
 			{Name: "job-timeout-seconds", Usage: "Timeout for each GitLink GET-only job", Default: "60"},
 			{Name: "handler-timeout-ms", Usage: "Total Feishu callback persistence budget", Default: "2000"},
 			{Name: "sqlite-timeout-ms", Usage: "SQLite budget inside each Feishu callback", Default: "500"},
+			{Name: "controlled-action-mode", Usage: "Controlled action execution mode: local or auto", Default: "local"},
 		},
 		Run: runReviewGateway,
 	}
@@ -92,6 +93,10 @@ func runReviewGateway(runtime *common.RuntimeContext) error {
 	listen := parseBool(runtime.Arg("listen"))
 	executeReadOnly := parseBool(runtime.Arg("execute-read-only"))
 	discoverChats := parseBool(runtime.Arg("discover-chats"))
+	controlledActionMode, err := normalizeControlledActionMode(runtime.Arg("controlled-action-mode"))
+	if err != nil {
+		return err
+	}
 	if discoverChats {
 		if listen || fromEvent != "" || executeReadOnly {
 			return fmt.Errorf("--discover-chats cannot be combined with --listen, --from-event, or --execute-read-only")
@@ -144,7 +149,7 @@ func runReviewGateway(runtime *common.RuntimeContext) error {
 		}
 		jobCtx, cancel := context.WithTimeout(context.Background(), time.Duration(jobTimeoutSeconds)*time.Second)
 		defer cancel()
-		result, executeErr := (&ReviewGatewayExecutor{Runtime: runtime}).Execute(jobCtx, *receipt.Job)
+		result, executeErr := (&ReviewGatewayExecutor{Runtime: runtime, ControlledActionMode: controlledActionMode}).Execute(jobCtx, *receipt.Job)
 		if emitErr := output.Emit(result); emitErr != nil {
 			return emitErr
 		}
@@ -154,7 +159,7 @@ func runReviewGateway(runtime *common.RuntimeContext) error {
 	if enabledReviewGatewayBindingCount(bindings) == 0 {
 		return fmt.Errorf("--listen requires at least one enabled binding in --bindings")
 	}
-	return runReviewGatewayChannel(runtime, bindings, config, output)
+	return runReviewGatewayChannel(runtime, bindings, config, output, controlledActionMode)
 }
 
 func runReviewGatewayDiscoverChats(runtime *common.RuntimeContext, output *reviewGatewayJSONOutput) error {
@@ -217,7 +222,7 @@ func reviewGatewayStringPointer(value *string) string {
 	return strings.TrimSpace(*value)
 }
 
-func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGatewayBindings, config ReviewGatewayConfig, output *reviewGatewayJSONOutput) error {
+func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGatewayBindings, config ReviewGatewayConfig, output *reviewGatewayJSONOutput, controlledActionMode string) error {
 	appID := firstNonEmpty(runtime.Arg("app-id"), os.Getenv("FEISHU_APP_ID"))
 	appSecret := firstNonEmpty(runtime.Arg("app-secret"), os.Getenv("FEISHU_APP_SECRET"))
 	if appID == "" || appSecret == "" {
@@ -266,6 +271,7 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		DisplayNames: ReviewFeishuDisplayNameResolver{
 			Client: NewOpenAPIClient(nil), AppID: appID, AppSecret: appSecret,
 		},
+		ControlledActionMode: controlledActionMode,
 	}
 	queue := NewReviewGatewayQueue(gateway, store, queueSize, func(outcome ReviewGatewayJobOutcome) {
 		output.TryEmit(outcome.Result)
@@ -310,10 +316,16 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		)
 	})
 	channel.OnReady(func() {
+		message := "Feishu Channel SDK connected; inbound jobs are durable and replies are asynchronous."
+		if controlledActionMode == controlledActionModeAuto {
+			message += " Controlled actions may execute directly only after GitLink identity verification."
+		} else {
+			message += " Controlled actions require local confirmation."
+		}
 		output.TryEmit(reviewGatewayLifecycleEvent{
 			SchemaVersion: reviewGatewaySchemaVersion,
 			Type:          "ready",
-			Message:       "Feishu Channel SDK connected; inbound jobs are durable, replies are asynchronous, and GitLink execution remains GET-only.",
+			Message:       message,
 			ObservedAt:    time.Now().UTC().Format(time.RFC3339),
 		})
 	})
@@ -330,6 +342,17 @@ func runReviewGatewayChannel(runtime *common.RuntimeContext, bindings ReviewGate
 		return fmt.Errorf("Feishu review gateway channel stopped: %s", redactReviewGatewayError(err.Error()))
 	}
 	return nil
+}
+
+func normalizeControlledActionMode(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", controlledActionModeLocal:
+		return controlledActionModeLocal, nil
+	case controlledActionModeAuto:
+		return controlledActionModeAuto, nil
+	default:
+		return "", fmt.Errorf("--controlled-action-mode must be local or auto")
+	}
 }
 
 func handleReviewGatewayInbound(

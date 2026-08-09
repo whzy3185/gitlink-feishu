@@ -37,18 +37,21 @@ type ReviewGatewayExecutionResult struct {
 	SnapshotPlan      *ReviewSnapshotPlan      `json:"snapshot_plan,omitempty"`
 	Collaboration     *ReviewCollaborationItem `json:"collaboration,omitempty"`
 	ActionPlan        *ReviewActionPlan        `json:"action_plan,omitempty"`
+	ExecutionPath     string                   `json:"execution_path,omitempty"`
+	FallbackReason    string                   `json:"fallback_reason,omitempty"`
 	Error             string                   `json:"error,omitempty"`
 	AttemptCount      int                      `json:"attempt_count,omitempty"`
 }
 
 type ReviewGatewayExecutor struct {
-	Runtime       *common.RuntimeContext
-	DataProvider  ReviewDataProvider
-	Collaboration ReviewCollaborationStore
-	ActionPlans   *SQLiteReviewGatewayStore
-	Collaborators ReviewRepositoryCollaboratorReader
-	DisplayNames  FeishuDisplayNameResolver
-	Now           func() time.Time
+	Runtime              *common.RuntimeContext
+	DataProvider         ReviewDataProvider
+	Collaboration        ReviewCollaborationStore
+	ActionPlans          *SQLiteReviewGatewayStore
+	Collaborators        ReviewRepositoryCollaboratorReader
+	DisplayNames         FeishuDisplayNameResolver
+	ControlledActionMode string
+	Now                  func() time.Time
 }
 
 func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJob) (ReviewGatewayExecutionResult, error) {

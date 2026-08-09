@@ -2,11 +2,26 @@ package feishu
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/gitlink-org/gitlink-cli/internal/client"
 	"github.com/gitlink-org/gitlink-cli/shortcuts/common"
+)
+
+const (
+	controlledActionModeLocal = "local"
+	controlledActionModeAuto  = "auto"
+
+	reviewExecutionPathGatewayDirect     = "gateway_direct"
+	reviewExecutionPathLocalConfirmation = "local_confirmation"
+
+	reviewFallbackModeLocal             = "mode_local"
+	reviewFallbackCredentialUnavailable = "credential_unavailable"
+	reviewFallbackIdentityUnverified    = "identity_unverified"
+	reviewFallbackIdentityMismatch      = "identity_mismatch"
 )
 
 func (e *ReviewGatewayExecutor) prepareControlledReviewAction(ctx context.Context, job ReviewGatewayJob, result ReviewGatewayExecutionResult, now time.Time) (ReviewGatewayExecutionResult, error) {
@@ -49,6 +64,47 @@ func (e *ReviewGatewayExecutor) prepareControlledReviewAction(ctx context.Contex
 	result.HeadSHA = data.HeadSHA
 	result.SourceFingerprint = data.SourceFingerprint
 	result.Message = fmt.Sprintf("%s PR #%d 操作计划已生成；当前尚未修改 GitLink。", reviewActionDisplayName(action), job.PRNumber)
+	mode := strings.ToLower(strings.TrimSpace(e.ControlledActionMode))
+	if mode == "" {
+		mode = controlledActionModeLocal
+	}
+	if mode != controlledActionModeAuto {
+		result.ExecutionPath = reviewExecutionPathLocalConfirmation
+		result.FallbackReason = reviewFallbackModeLocal
+		return result, nil
+	}
+	if e.Runtime == nil || e.Runtime.Client == nil {
+		result.ExecutionPath = reviewExecutionPathLocalConfirmation
+		result.FallbackReason = reviewFallbackCredentialUnavailable
+		return result, nil
+	}
+	actualLogin, identityErr := fetchCurrentGitLinkLogin(e.Runtime)
+	if identityErr != nil {
+		result.ExecutionPath = reviewExecutionPathLocalConfirmation
+		result.FallbackReason = reviewFallbackIdentityUnverified
+		return result, nil
+	}
+	if !strings.EqualFold(actualLogin, plan.GitLinkLogin) {
+		result.ExecutionPath = reviewExecutionPathLocalConfirmation
+		result.FallbackReason = reviewFallbackIdentityMismatch
+		return result, nil
+	}
+	result.ExecutionPath = reviewExecutionPathGatewayDirect
+	updated, executeErr := executeReviewActionPlan(ctx, e.Runtime, e.ActionPlans, provider, plan, false, now)
+	result.ActionPlan = &updated
+	result.ReadOnlyGitLink = false
+	result.MutatesGitLink = updated.Status == "completed"
+	if executeErr != nil {
+		if updated.Status == "pending_confirmation" {
+			_ = e.ActionPlans.FailPendingReviewActionPlan(ctx, plan.PlanID, executeErr, now)
+			updated, _ = e.ActionPlans.GetReviewActionPlan(ctx, plan.PlanID)
+			result.ActionPlan = &updated
+		}
+		result.Status = "failed"
+		result.Error = redactReviewGatewayError(executeErr.Error())
+		return result, nil
+	}
+	result.Message = fmt.Sprintf("%s PR #%d 已完成并通过 GitLink 回读验证。", reviewActionDisplayName(action), job.PRNumber)
 	return result, nil
 }
 
@@ -145,6 +201,11 @@ func executeReviewActionPlan(
 	}
 	reviewID, mutationErr := mutateGitLinkReviewAction(runtime, plan)
 	if mutationErr != nil {
+		if isGitLinkPermissionFailure(mutationErr) {
+			_ = store.FailReviewActionPlan(ctx, plan.PlanID, leaseOwner, mutationErr, now)
+			updated, _ := store.GetReviewActionPlan(ctx, plan.PlanID)
+			return updated, fmt.Errorf("GitLink 拒绝该操作；当前身份没有所需权限，或当前 PR 状态不允许执行: %w", mutationErr)
+		}
 		_ = store.MarkReviewActionPlanUnknown(ctx, plan.PlanID, leaseOwner, mutationErr, now)
 		updated, _ := store.GetReviewActionPlan(ctx, plan.PlanID)
 		return updated, fmt.Errorf("GitLink 写入结果暂无法确认，已停止自动重试: %w", mutationErr)
@@ -161,6 +222,14 @@ func executeReviewActionPlan(
 		return updated, fmt.Errorf("GitLink 可能已写入但本地完成状态保存失败: %w", err)
 	}
 	return store.GetReviewActionPlan(ctx, plan.PlanID)
+}
+
+func isGitLinkPermissionFailure(err error) bool {
+	var apiErr *client.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	return apiErr.StatusCode == 401 || apiErr.StatusCode == 403
 }
 
 func fetchCurrentGitLinkLogin(runtime *common.RuntimeContext) (string, error) {

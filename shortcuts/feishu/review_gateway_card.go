@@ -22,7 +22,7 @@ func reviewGatewayResultSendInput(job ReviewGatewayJob, result ReviewGatewayExec
 		}
 	}
 	if result.ActionPlan != nil {
-		card, err := buildReviewActionPlanCard(job, *result.ActionPlan)
+		card, err := buildReviewActionPlanCard(job, *result.ActionPlan, result.ExecutionPath, result.FallbackReason, result.Error)
 		if err == nil {
 			input.MsgType, input.Card, input.Text = "interactive", card, ""
 		}
@@ -38,7 +38,7 @@ func reviewGatewayResultSendInput(job ReviewGatewayJob, result ReviewGatewayExec
 	return input
 }
 
-func buildReviewActionPlanCard(job ReviewGatewayJob, plan ReviewActionPlan) (string, error) {
+func buildReviewActionPlanCard(job ReviewGatewayJob, plan ReviewActionPlan, executionPath, fallbackReason, errorSummary string) (string, error) {
 	status := reviewActionPlanStatusDisplay(plan.Status)
 	title := fmt.Sprintf("%s PR #%d", reviewActionDisplayName(plan.Action), plan.PRNumber)
 	rows := []string{
@@ -63,6 +63,9 @@ func buildReviewActionPlanCard(job ReviewGatewayJob, plan ReviewActionPlan) (str
 	}
 	switch plan.Status {
 	case "pending_confirmation":
+		if executionPath == reviewExecutionPathLocalConfirmation {
+			rows = append(rows, reviewLocalConfirmationReason(fallbackReason))
+		}
 		rows = append(rows,
 			"操作计划已经生成，当前尚未修改 GitLink。",
 			"请在已登录对应 GitLink 身份的本地 CLI 中完成最终确认。",
@@ -80,6 +83,9 @@ func buildReviewActionPlanCard(job ReviewGatewayJob, plan ReviewActionPlan) (str
 		rows = append(rows, "操作已取消，本次未修改 GitLink。")
 	case "failed":
 		rows = append(rows, "操作未完成，请核对错误信息后重新生成计划。")
+		if strings.TrimSpace(errorSummary) != "" {
+			rows = append(rows, "**原因**："+truncateReviewGatewayText(errorSummary, 500))
+		}
 	}
 	payload := map[string]interface{}{
 		"schema": "2.0",
@@ -89,6 +95,19 @@ func buildReviewActionPlanCard(job ReviewGatewayJob, plan ReviewActionPlan) (str
 	}
 	encoded, err := json.Marshal(payload)
 	return string(encoded), err
+}
+
+func reviewLocalConfirmationReason(reason string) string {
+	switch reason {
+	case reviewFallbackIdentityMismatch:
+		return "当前 Gateway Credential 与绑定的 GitLink 身份不一致，已安全回退到本地确认。"
+	case reviewFallbackCredentialUnavailable:
+		return "当前 Gateway 没有可验证的 GitLink Credential，已安全回退到本地确认。"
+	case reviewFallbackIdentityUnverified:
+		return "当前 Gateway 无法验证 GitLink 身份，已安全回退到本地确认。"
+	default:
+		return "当前部署使用本地确认模式。"
+	}
 }
 
 func reviewActionPlanStatusDisplay(status string) string {

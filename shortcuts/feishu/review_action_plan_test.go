@@ -255,7 +255,7 @@ func TestReviewActionPlanCardSeparatesPendingCompletedAndUnknown(t *testing.T) {
 	} {
 		plan := base
 		plan.Status = test.status
-		card, err := buildReviewActionPlanCard(ReviewGatewayJob{}, plan)
+		card, err := buildReviewActionPlanCard(ReviewGatewayJob{}, plan, reviewExecutionPathLocalConfirmation, reviewFallbackModeLocal, "")
 		if err != nil {
 			t.Fatalf("build card: %v", err)
 		}
