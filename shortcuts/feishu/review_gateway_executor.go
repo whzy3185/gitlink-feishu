@@ -129,13 +129,15 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 			"清除 <拥有者>/<仓库> PR #<编号> 审查截止",
 			"",
 			"受控写操作",
+			"评论 <拥有者>/<仓库> PR #<编号> <内容>",
 			"提交审查意见 <拥有者>/<仓库> PR #<编号> <意见>",
 			"批准 <拥有者>/<仓库> PR #<编号> <说明>",
 			"需要修改 <拥有者>/<仓库> PR #<编号> <原因>",
 			"拒绝并关闭 <拥有者>/<仓库> PR #<编号> <原因>",
 			"合并 <拥有者>/<仓库> PR #<编号>",
 			"",
-			"受控写操作只生成计划，最终执行需要绑定的 GitLink 身份在本地确认。",
+			"“评论”发布到 PR 会话区；“提交审查意见”创建正式 Review 记录。",
+			"受控写操作根据部署模式由绑定的 GitLink 身份直接执行或转为本地确认。",
 		}, "\n")
 	case "unsupported_command":
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("不支持的命令，请发送“帮助”查看可用命令"))
@@ -188,7 +190,7 @@ func (e *ReviewGatewayExecutor) Execute(ctx context.Context, job ReviewGatewayJo
 		}
 		result.Collaboration = &item
 		result.Message = formatReviewCollaborationOutcome(item)
-	case "prepare_common_review", "prepare_review_approve", "prepare_review_reject", "prepare_reject_close", "prepare_merge":
+	case "prepare_review_comment", "prepare_common_review", "prepare_review_approve", "prepare_review_reject", "prepare_reject_close", "prepare_merge":
 		return e.prepareControlledReviewAction(ctx, job, result, now().UTC())
 	default:
 		return reviewGatewayExecutionFailure(result, fmt.Errorf("unsupported review gateway action %q", job.Action))

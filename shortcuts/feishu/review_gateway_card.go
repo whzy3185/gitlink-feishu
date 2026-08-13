@@ -50,6 +50,8 @@ func buildReviewActionPlanCard(job ReviewGatewayJob, plan ReviewActionPlan, exec
 		fmt.Sprintf("**状态**：%s", status),
 	}
 	switch plan.Action {
+	case reviewActionComment:
+		rows = append(rows, "最终确认后将在 GitLink PR 会话区发布一条评论。")
 	case reviewActionRejectClose:
 		rows = append(rows, "**高风险操作**：最终确认后将拒绝并关闭此 PR。")
 	case reviewActionMerge:
@@ -75,7 +77,11 @@ func buildReviewActionPlanCard(job ReviewGatewayJob, plan ReviewActionPlan, exec
 	case "completed":
 		rows = append(rows, "**结果**：操作已完成并通过 GitLink 回读验证")
 		if plan.ReviewID != "" {
-			rows = append(rows, "**审查记录**：#"+plan.ReviewID)
+			label := "审查记录"
+			if plan.Action == reviewActionComment {
+				label = "评论记录"
+			}
+			rows = append(rows, "**"+label+"**：#"+plan.ReviewID)
 		}
 	case "unknown_needs_reconciliation":
 		rows = append(rows, "操作结果暂无法确认。系统已停止自动重试，以避免重复写入。")

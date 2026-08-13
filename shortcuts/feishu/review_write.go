@@ -110,6 +110,8 @@ func (e *ReviewGatewayExecutor) prepareControlledReviewAction(ctx context.Contex
 
 func reviewActionFromPrepareJob(action string) string {
 	switch action {
+	case "prepare_review_comment":
+		return reviewActionComment
 	case "prepare_common_review":
 		return reviewActionCommon
 	case "prepare_review_approve":
@@ -127,6 +129,8 @@ func reviewActionFromPrepareJob(action string) string {
 
 func reviewActionDisplayName(action string) string {
 	switch action {
+	case reviewActionComment:
+		return "评论"
 	case reviewActionCommon:
 		return "提交审查意见"
 	case reviewActionApprove:
@@ -194,12 +198,30 @@ func executeReviewActionPlan(
 			return plan, fmt.Errorf("merge is blocked by an explicitly failed CI state")
 		}
 	}
+	commentIssueID := int64(0)
+	existingCommentID := ""
+	if plan.Action == reviewActionComment {
+		commentIssueID, err = fetchReviewActionIssueID(runtime, owner, repo, plan.PRNumber)
+		if err != nil {
+			return plan, err
+		}
+		existingCommentID, err = findReviewActionJournal(runtime, owner, repo, commentIssueID, plan, "")
+		if err != nil {
+			return plan, err
+		}
+	}
 	leaseOwner := "local-confirm-" + plan.RequestID
 	plan, err = store.AcquireReviewActionPlan(ctx, plan.PlanID, leaseOwner, now, time.Minute)
 	if err != nil {
 		return plan, err
 	}
-	reviewID, mutationErr := mutateGitLinkReviewAction(runtime, plan)
+	if existingCommentID != "" {
+		if err := store.CompleteReviewActionPlan(ctx, plan.PlanID, leaseOwner, existingCommentID, now); err != nil {
+			return plan, err
+		}
+		return store.GetReviewActionPlan(ctx, plan.PlanID)
+	}
+	reviewID, mutationErr := mutateGitLinkReviewAction(runtime, plan, commentIssueID)
 	if mutationErr != nil {
 		if isGitLinkPermissionFailure(mutationErr) {
 			_ = store.FailReviewActionPlan(ctx, plan.PlanID, leaseOwner, mutationErr, now)
@@ -210,7 +232,7 @@ func executeReviewActionPlan(
 		updated, _ := store.GetReviewActionPlan(ctx, plan.PlanID)
 		return updated, fmt.Errorf("GitLink 写入结果暂无法确认，已停止自动重试: %w", mutationErr)
 	}
-	verifiedID, readbackErr := verifyGitLinkReviewAction(ctx, runtime, provider, plan, reviewID)
+	verifiedID, readbackErr := verifyGitLinkReviewAction(ctx, runtime, provider, plan, reviewID, commentIssueID)
 	if readbackErr != nil {
 		_ = store.MarkReviewActionPlanUnknown(ctx, plan.PlanID, leaseOwner, readbackErr, now)
 		updated, _ := store.GetReviewActionPlan(ctx, plan.PlanID)
@@ -245,17 +267,25 @@ func fetchCurrentGitLinkLogin(runtime *common.RuntimeContext) (string, error) {
 	return login, nil
 }
 
-func mutateGitLinkReviewAction(runtime *common.RuntimeContext, plan ReviewActionPlan) (string, error) {
+func mutateGitLinkReviewAction(runtime *common.RuntimeContext, plan ReviewActionPlan, commentIssueID int64) (string, error) {
 	owner, repo, _ := splitReviewGatewayRepository(plan.Repository)
 	switch plan.Action {
-	case reviewActionCommon, reviewActionApprove, reviewActionReject:
-		content := plan.Content
-		marker := "Ref: " + plan.RequestID
-		if !strings.Contains(content, marker) {
-			content = strings.TrimSpace(content) + "\n\n" + marker
+	case reviewActionComment:
+		envelope, err := runtime.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", owner, repo, commentIssueID), map[string]interface{}{
+			"notes": reviewActionRemoteContent(plan),
+		})
+		if err != nil {
+			return "", err
 		}
+		item := reviewDataObject(envelope.Data)
+		id := firstReviewDataString(item, "id", "journal_id")
+		if id == "" {
+			return "", fmt.Errorf("GitLink comment POST succeeded without a journal ID")
+		}
+		return id, nil
+	case reviewActionCommon, reviewActionApprove, reviewActionReject:
 		envelope, err := runtime.CallAPI("POST", fmt.Sprintf("/v1/%s/%s/pulls/%d/reviews", owner, repo, plan.PRNumber), map[string]interface{}{
-			"content": content, "status": plan.ReviewStatus, "commit_id": plan.ExpectedHeadSHA,
+			"content": reviewActionRemoteContent(plan), "status": plan.ReviewStatus, "commit_id": plan.ExpectedHeadSHA,
 		})
 		if err != nil {
 			return "", err
@@ -273,10 +303,24 @@ func mutateGitLinkReviewAction(runtime *common.RuntimeContext, plan ReviewAction
 	}
 }
 
-func verifyGitLinkReviewAction(ctx context.Context, runtime *common.RuntimeContext, provider ReviewDataProvider, plan ReviewActionPlan, reviewID string) (string, error) {
+func verifyGitLinkReviewAction(ctx context.Context, runtime *common.RuntimeContext, provider ReviewDataProvider, plan ReviewActionPlan, reviewID string, commentIssueID int64) (string, error) {
 	owner, repo, _ := splitReviewGatewayRepository(plan.Repository)
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
+		if plan.Action == reviewActionComment {
+			id, err := findReviewActionJournal(runtime, owner, repo, commentIssueID, plan, reviewID)
+			if err != nil {
+				lastErr = err
+			} else if id != "" {
+				return id, nil
+			} else {
+				lastErr = fmt.Errorf("created PR comment was not found by bounded GET read-back")
+			}
+			if attempt < 2 {
+				time.Sleep(time.Duration(attempt+1) * 50 * time.Millisecond)
+			}
+			continue
+		}
 		data, err := provider.FetchReviewData(ctx, runtime, ReviewDataRequest{Owner: owner, Repository: repo, PullRequest: plan.PRNumber})
 		if err != nil {
 			lastErr = err
@@ -310,6 +354,66 @@ func verifyGitLinkReviewAction(ctx context.Context, runtime *common.RuntimeConte
 		}
 	}
 	return "", lastErr
+}
+
+func reviewActionRemoteContent(plan ReviewActionPlan) string {
+	content := strings.TrimSpace(plan.Content)
+	marker := "Ref: " + plan.RequestID
+	if !strings.Contains(content, marker) {
+		content += "\n\n" + marker
+	}
+	return content
+}
+
+func fetchReviewActionIssueID(runtime *common.RuntimeContext, owner, repository string, number int) (int64, error) {
+	envelope, err := runtime.CallAPI("GET", fmt.Sprintf("/%s/%s/pulls/%d", owner, repository, number), nil)
+	if err != nil {
+		return 0, fmt.Errorf("fetch pull request backing issue: %w", err)
+	}
+	root, _ := normalizeReviewDataJSON(envelope.Data).(map[string]interface{})
+	if nested, ok := root["data"].(map[string]interface{}); ok {
+		root = nested
+	}
+	issue, _ := root["issue"].(map[string]interface{})
+	id, ok := reviewDataNumericID(firstReviewDataString(issue, "id", "issue_id"))
+	if !ok || id <= 0 {
+		return 0, fmt.Errorf("GitLink pull request response missing backing issue ID")
+	}
+	return id, nil
+}
+
+func findReviewActionJournal(runtime *common.RuntimeContext, owner, repository string, issueID int64, plan ReviewActionPlan, expectedID string) (string, error) {
+	envelope, err := runtime.CallAPI("GET", fmt.Sprintf("/v1/%s/%s/issues/%d/journals", owner, repository, issueID), nil)
+	if err != nil {
+		return "", fmt.Errorf("read PR comment journals: %w", err)
+	}
+	wantContent := reviewActionRemoteContent(plan)
+	for _, item := range reviewDataList(envelope.Data) {
+		id := firstReviewDataString(item, "id", "journal_id")
+		if expectedID != "" && id != expectedID {
+			continue
+		}
+		if reviewActionContentWithoutRequestMarker(firstReviewDataString(item, "notes", "note", "content", "body")) != reviewActionContentWithoutRequestMarker(wantContent) {
+			continue
+		}
+		if actor := firstReviewDataActor(item, "user", "author", "creator"); actor != "" && !strings.EqualFold(actor, plan.GitLinkLogin) {
+			continue
+		}
+		return id, nil
+	}
+	return "", nil
+}
+
+func reviewActionContentWithoutRequestMarker(content string) string {
+	lines := strings.Split(strings.TrimSpace(content), "\n")
+	if len(lines) == 0 {
+		return ""
+	}
+	last := strings.TrimSpace(lines[len(lines)-1])
+	if len(last) == len("Ref: RW-XXXXXX") && strings.EqualFold(last[:len("Ref: RW-")], "Ref: RW-") {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 func fetchControlledMergeCIState(runtime *common.RuntimeContext, owner, repository string, number int) (string, error) {

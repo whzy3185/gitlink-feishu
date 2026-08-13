@@ -13,6 +13,7 @@ import (
 
 const (
 	reviewActionPlanSchema  = "feishu.review-action-plan/v1"
+	reviewActionComment     = "review_comment"
 	reviewActionCommon      = "review_common"
 	reviewActionApprove     = "review_approve"
 	reviewActionReject      = "review_reject"
@@ -77,6 +78,8 @@ func NewReviewActionPlan(job ReviewGatewayJob, data ReviewData, action, content 
 
 func normalizeReviewAction(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
+	case reviewActionComment:
+		return reviewActionComment
 	case reviewActionCommon:
 		return reviewActionCommon
 	case reviewActionApprove:

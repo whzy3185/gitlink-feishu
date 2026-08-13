@@ -165,6 +165,7 @@ var (
 	reviewGatewayReleasePattern       = regexp.MustCompile(`(?i)^(?:取消领取|释放)\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)$`)
 	reviewGatewayDeadlinePattern      = regexp.MustCompile(`(?i)^设置\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+(?:审查截止|截止)\s+(\d{4}-\d{2}-\d{2})$`)
 	reviewGatewayClearDeadlinePattern = regexp.MustCompile(`(?i)^清除\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\s+PR\s*#?(\d+)\s+审查截止$`)
+	reviewGatewayCommentPattern       = regexp.MustCompile(`(?i)^(?:评论|comment)\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:\s+PR\s*#?|#)(\d+)\s+(.+)$`)
 	reviewGatewayCommonReviewPattern  = regexp.MustCompile(`(?i)^(?:提交审查意见|review)\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:\s+PR\s*#?|#)(\d+)\s+(.+)$`)
 	reviewGatewayApprovePattern       = regexp.MustCompile(`(?i)^(?:批准|approve)\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:\s+PR\s*#?|#)(\d+)\s+(.+)$`)
 	reviewGatewayRejectPattern        = regexp.MustCompile(`(?i)^(?:需要修改|要求修改|reject)\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:\s+PR\s*#?|#)(\d+)\s+(.+)$`)
@@ -437,6 +438,7 @@ func parseReviewGatewayIntent(content string) ReviewGatewayIntent {
 		pattern *regexp.Regexp
 		name    string
 	}{
+		{reviewGatewayCommentPattern, "prepare_review_comment"},
 		{reviewGatewayCommonReviewPattern, "prepare_common_review"},
 		{reviewGatewayApprovePattern, "prepare_review_approve"},
 		{reviewGatewayRejectPattern, "prepare_review_reject"},
@@ -510,7 +512,7 @@ func isReviewCollaborationAction(action string) bool {
 
 func isControlledReviewPrepareAction(action string) bool {
 	switch action {
-	case "prepare_common_review", "prepare_review_approve", "prepare_review_reject", "prepare_reject_close", "prepare_merge":
+	case "prepare_review_comment", "prepare_common_review", "prepare_review_approve", "prepare_review_reject", "prepare_reject_close", "prepare_merge":
 		return true
 	default:
 		return false

@@ -53,6 +53,7 @@ func completeActionReviewData() ReviewData {
 
 func TestParseControlledReviewCommandsAndAliases(t *testing.T) {
 	tests := []struct{ input, action, argument string }{
+		{"评论 owner/repo PR #42 visible comment", "prepare_review_comment", "visible comment"},
 		{"提交审查意见 owner/repo PR #42 looks good", "prepare_common_review", "looks good"},
 		{"批准 owner/repo PR #42 approved", "prepare_review_approve", "approved"},
 		{"需要修改 owner/repo PR #42 add tests", "prepare_review_reject", "add tests"},
@@ -64,6 +65,7 @@ func TestParseControlledReviewCommandsAndAliases(t *testing.T) {
 		{"reject owner/repo#42 add tests", "prepare_review_reject", "add tests"},
 		{"refuse owner/repo#42 invalid", "prepare_reject_close", "invalid"},
 		{"merge owner/repo#42", "prepare_merge", ""},
+		{"comment owner/repo#42 visible comment", "prepare_review_comment", "visible comment"},
 	}
 	for _, test := range tests {
 		intent := parseReviewGatewayIntent(test.input)

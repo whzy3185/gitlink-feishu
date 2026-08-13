@@ -93,6 +93,104 @@ func TestControlledActionAutoExecutesAllSupportedActions(t *testing.T) {
 	}
 }
 
+func TestControlledPRCommentWritesBackingIssueJournalAndReadsItBack(t *testing.T) {
+	store := openActionPlanTestStore(t)
+	defer store.Close()
+	now := time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)
+	posts := 0
+	posted := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimSuffix(r.URL.Path, ".json")
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && path == "/v1/users/me":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"code": 0, "data": map[string]interface{}{"login": "alice"}})
+		case r.Method == http.MethodGet && path == "/owner/repo/pulls/42":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"code":         0,
+				"issue":        map[string]interface{}{"id": 142301},
+				"pull_request": map[string]interface{}{"id": 42},
+			})
+		case r.Method == http.MethodGet && path == "/v1/owner/repo/issues/142301/journals":
+			journals := []map[string]interface{}{}
+			if posted != "" {
+				journals = append(journals, map[string]interface{}{
+					"id": 501, "notes": posted, "user": map[string]interface{}{"login": "alice"},
+				})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"code": 0, "journals": journals})
+		case r.Method == http.MethodPost && path == "/v1/owner/repo/issues/142301/journals":
+			posts++
+			var body map[string]interface{}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			posted, _ = body["notes"].(string)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"code": 0, "data": map[string]interface{}{"id": 501}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	runtime := &common.RuntimeContext{Client: &client.Client{BaseURL: server.URL, HTTP: server.Client()}}
+	result, err := (&ReviewGatewayExecutor{
+		Runtime: runtime, DataProvider: staticReviewDataProvider{data: completeActionReviewData()}, ActionPlans: store,
+		ControlledActionMode: controlledActionModeAuto, Now: func() time.Time { return now },
+	}).Execute(context.Background(), ReviewGatewayJob{
+		JobID: "job-comment", Action: "prepare_review_comment", Repository: "owner/repo", PRNumber: 42,
+		ChatID: "oc_fixture", RequestedBy: "ou_alice", GitLinkLogin: "alice", Argument: "visible PR conversation comment",
+	})
+	if err != nil || result.Status != "completed" || result.ActionPlan == nil || result.ActionPlan.Status != "completed" {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+	if result.ActionPlan.Action != reviewActionComment || result.ActionPlan.ReviewID != "501" || posts != 1 {
+		t.Fatalf("plan=%#v posts=%d", result.ActionPlan, posts)
+	}
+	if posted != "visible PR conversation comment\n\nRef: "+result.ActionPlan.RequestID {
+		t.Fatalf("posted content = %q", posted)
+	}
+	card, cardErr := buildReviewActionPlanCard(ReviewGatewayJob{}, *result.ActionPlan, result.ExecutionPath, result.FallbackReason, result.Error)
+	if cardErr != nil || !strings.Contains(card, "评论记录") || strings.Contains(card, "审查记录") {
+		t.Fatalf("card=%q err=%v", card, cardErr)
+	}
+}
+
+func TestControlledPRCommentExistingRequestMarkerDoesNotWriteAgain(t *testing.T) {
+	store := openActionPlanTestStore(t)
+	defer store.Close()
+	now := time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)
+	data := completeActionReviewData()
+	plan, _ := NewReviewActionPlan(ReviewGatewayJob{
+		JobID: "job-comment-duplicate", ChatID: "chat", RequestedBy: "user", GitLinkLogin: "alice",
+		Repository: "owner/repo", PRNumber: 42,
+	}, data, reviewActionComment, "visible PR conversation comment", now)
+	plan, _ = store.CreateReviewActionPlan(context.Background(), plan)
+	posts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimSuffix(r.URL.Path, ".json")
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && path == "/v1/users/me":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"code": 0, "data": map[string]interface{}{"login": "alice"}})
+		case r.Method == http.MethodGet && path == "/owner/repo/pulls/42":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"code": 0, "issue": map[string]interface{}{"id": 142301}})
+		case r.Method == http.MethodGet && path == "/v1/owner/repo/issues/142301/journals":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"code": 0, "journals": []map[string]interface{}{{
+				"id": 501, "notes": "visible PR conversation comment\n\nRef: RW-ABCDEF", "user": map[string]interface{}{"login": "alice"},
+			}}})
+		case r.Method == http.MethodPost:
+			posts++
+			http.Error(w, "unexpected mutation", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	runtime := &common.RuntimeContext{Client: &client.Client{BaseURL: server.URL, HTTP: server.Client()}}
+	updated, err := executeReviewActionPlan(context.Background(), runtime, store, staticReviewDataProvider{data: data}, plan, false, now.Add(time.Minute))
+	if err != nil || updated.Status != "completed" || updated.ReviewID != "501" || posts != 0 {
+		t.Fatalf("updated=%#v err=%v posts=%d", updated, err, posts)
+	}
+}
+
 func TestControlledActionAutoFallsBackWithoutSafeIdentityMatch(t *testing.T) {
 	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
 	for _, test := range []struct {
